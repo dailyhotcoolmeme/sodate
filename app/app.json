@@ -34,9 +34,11 @@
     ],
     "scheme": "sodate",
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": ""
+        "projectId": "1b634f2b-480e-4108-b994-c92c3a0dc4b4"
       }
-    }
+    },
+    "owner": "dailyhotcoolmeme"
   }
 }
