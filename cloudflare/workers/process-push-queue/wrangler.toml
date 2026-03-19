@@ -1,0 +1,11 @@
+name = "process-push-queue"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+account_id = "4c0f5d706177b84ade4d424a08ec46e8"
+
+[[queues.consumers]]
+queue = "push-notifications"
+max_batch_size = 100
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "push-notifications-dlq"

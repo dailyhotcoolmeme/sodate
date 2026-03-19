@@ -1,0 +1,12 @@
+name = "match-subscriptions"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+account_id = "4c0f5d706177b84ade4d424a08ec46e8"
+
+# 환경 변수는 secrets로 설정 (절대 여기에 값 입력 금지):
+#   wrangler secret put SUPABASE_URL
+#   wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+
+[[queues.producers]]
+binding = "PUSH_NOTIFICATIONS_QUEUE"
+queue = "push-notifications"

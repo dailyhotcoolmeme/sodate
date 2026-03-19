@@ -1,0 +1,50 @@
+name: Crawl Sodate Events
+
+on:
+  schedule:
+    - cron: '0 21 * * *'   # 매일 오전 06:00 KST (UTC 21:00 전날)
+    - cron: '0 3 * * *'    # 매일 오후 12:00 KST (UTC 03:00)
+    - cron: '0 9 * * *'    # 매일 오후 18:00 KST (UTC 09:00)
+  workflow_dispatch:         # 수동 실행
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('crawler/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          cd crawler
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Run crawlers
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          python main.py
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::크롤링 실패 — Supabase crawl_logs 및 GitHub Actions 로그를 확인하세요."
+          # TODO: Slack/Discord 웹훅 연동 가능

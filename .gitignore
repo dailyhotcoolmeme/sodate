@@ -1,0 +1,25 @@
+# 환경변수
+.env
+.env.local
+*.env
+
+# Node
+node_modules/
+.expo/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# EAS
+.eas/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Wrangler cache
+.wrangler/

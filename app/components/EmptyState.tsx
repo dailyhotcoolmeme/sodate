@@ -1,0 +1,60 @@
+import React from 'react'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { Colors } from '@/constants/colors'
+import { useFilterStore } from '@/stores/filterStore'
+
+export default function EmptyState() {
+  const resetFilters = useFilterStore((s) => s.resetFilters)
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.emoji}>💔</Text>
+      <Text style={styles.title}>조건에 맞는 소개팅이 없어요</Text>
+      <Text style={styles.subtitle}>
+        필터를 변경하거나 다른 지역을 선택해보세요
+      </Text>
+      <TouchableOpacity style={styles.btn} onPress={resetFilters}>
+        <Text style={styles.btnText}>필터 초기화</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+  },
+  emoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  btn: {
+    backgroundColor: Colors.surfaceHigh,
+    borderRadius: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  btnText: {
+    color: Colors.textPrimary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+})
