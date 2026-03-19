@@ -57,6 +57,10 @@ export function useEvents() {
       // 정렬
       if (sortBy === 'created') {
         query = query.order('created_at', { ascending: false })
+      } else if (sortBy === 'price_low') {
+        query = query.order('price_male', { ascending: true, nullsFirst: false })
+      } else if (sortBy === 'price_high') {
+        query = query.order('price_male', { ascending: false, nullsFirst: false })
       } else {
         query = query.order('event_date', { ascending: true })
       }

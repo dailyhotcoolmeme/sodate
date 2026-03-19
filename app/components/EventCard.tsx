@@ -78,15 +78,16 @@ export default function EventCard({ event }: Props) {
 
         {/* 날짜 + 지역 */}
         <View style={styles.metaRow}>
-          <Text style={styles.meta}>📅 {formatDate(event.event_date)}</Text>
-          <Text style={styles.meta}>📍 {event.location_region}</Text>
+          <Text style={styles.meta}>{formatDate(event.event_date)}</Text>
+          <Text style={styles.metaDot}>·</Text>
+          <Text style={styles.meta}>{event.location_region}</Text>
         </View>
 
         {/* 성비 + 가격 */}
         {(event.gender_ratio || event.price_male || event.price_female) && (
           <View style={styles.metaRow}>
             {event.gender_ratio && (
-              <Text style={styles.meta}>👫 {event.gender_ratio}</Text>
+              <Text style={styles.meta}>{event.gender_ratio}</Text>
             )}
             {event.price_male && (
               <Text style={styles.price}>
@@ -147,6 +148,7 @@ const styles = StyleSheet.create({
   },
   metaRow: { flexDirection: 'row', gap: 12, marginTop: 2 },
   meta: { fontSize: 13, color: Colors.textSecondary },
+  metaDot: { fontSize: 13, color: Colors.textTertiary, marginHorizontal: 4 },
   price: { fontSize: 13, color: Colors.textSecondary },
   tags: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
   cta: {

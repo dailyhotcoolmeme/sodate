@@ -16,7 +16,7 @@ interface FilterState {
   dateRange: 'all' | 'today' | 'week' | 'month'
   maxPrice: number | null
   themes: string[]
-  sortBy: 'date' | 'deadline' | 'created'
+  sortBy: 'date' | 'deadline' | 'created' | 'price_low' | 'price_high'
   recentFilters: FilterSnapshot[]
 
   setRegion: (region: string) => void

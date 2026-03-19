@@ -33,7 +33,7 @@ export default function RootLayout() {
       >
         <Stack.Screen
           name="index"
-          options={{ title: '소개팅모아', headerLargeTitle: true }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="event/[id]"
