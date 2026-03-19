@@ -18,6 +18,7 @@ import FilterSheet from '@/components/FilterSheet'
 import EmptyState from '@/components/EmptyState'
 import { useEvents } from '@/hooks/useEvents'
 import { useFilter } from '@/hooks/useFilter'
+import { useFavorites } from '@/hooks/useFavorites'
 import { Colors } from '@/constants/colors'
 import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
@@ -40,6 +41,7 @@ export default function HomeScreen() {
   const [filterVisible, setFilterVisible] = useState(false)
   const { region, themes, maxPrice, dateRange, activeFilterCount, regionLabel, setRegion, toggleTheme, resetFilters } = useFilter()
   const { sortBy, setSortBy } = useFilterStore()
+  const { favoriteIds, toggle: toggleFavorite } = useFavorites()
   const router = useRouter()
 
   const activeChips: { label: string; onRemove: () => void }[] = []
@@ -63,11 +65,11 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/reviews')}>
             <Text style={styles.iconText}>후기</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/favorites')}>
+            <Text style={styles.iconText}>관심</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/alerts')}>
             <Text style={styles.iconText}>알림</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/settings')}>
-            <Text style={styles.iconText}>설정</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -190,7 +192,13 @@ export default function HomeScreen() {
       ) : (
         <FlatList
           data={events}
-          renderItem={({ item }) => <EventCard event={item} />}
+          renderItem={({ item }) => (
+            <EventCard
+              event={item}
+              isFavorite={favoriteIds.has(item.id)}
+              onToggleFavorite={() => toggleFavorite(item.id)}
+            />
+          )}
           keyExtractor={(item) => item.id}
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={refetch} tintColor={Colors.primary} />

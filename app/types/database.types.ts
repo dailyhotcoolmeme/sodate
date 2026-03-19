@@ -206,6 +206,26 @@ export interface Database {
           updated_at?: string
         }
       }
+      favorites: {
+        Row: {
+          id: string
+          device_id: string
+          event_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          device_id: string
+          event_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          device_id?: string
+          event_id?: string
+          created_at?: string
+        }
+      }
       reviews: {
         Row: {
           id: string

@@ -9,6 +9,10 @@ from scrapers.yeonin import YeoninScraper
 from scrapers.emotional_orange import EmotionalOrangeScraper
 from scrapers.frip import FripScraper
 from scrapers.munto import MuntoScraper
+from scrapers.modparty import ModpartyScraper
+from scrapers.solooff import SolooffScraper
+from scrapers.talkblossom import TalkblossomScraper
+from scrapers.lovecasting import LovecastingScraper
 from utils.logger import get_logger
 
 logger = get_logger('main')
@@ -19,6 +23,10 @@ SCRAPERS = [
     EmotionalOrangeScraper,
     FripScraper,
     MuntoScraper,
+    ModpartyScraper,
+    SolooffScraper,
+    TalkblossomScraper,
+    LovecastingScraper,
 ]
 
 

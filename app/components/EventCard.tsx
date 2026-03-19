@@ -13,9 +13,12 @@ import type { EventWithCompany } from '@/lib/supabase'
 import DeadlineBadge from './DeadlineBadge'
 import ThemeTag from './ThemeTag'
 import CompanyBadge from './CompanyBadge'
+import FavoriteButton from './FavoriteButton'
 
 interface Props {
   event: EventWithCompany
+  isFavorite?: boolean
+  onToggleFavorite?: () => void
 }
 
 function formatDate(dateStr: string): string {
@@ -26,7 +29,7 @@ function formatDate(dateStr: string): string {
   ).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export default function EventCard({ event }: Props) {
+export default function EventCard({ event, isFavorite = false, onToggleFavorite }: Props) {
   const router = useRouter()
 
   const handleApply = () => openOutlink(event.source_url)
@@ -58,6 +61,18 @@ export default function EventCard({ event }: Props) {
         )}
         {daysLeft <= 3 && daysLeft >= 0 && (
           <DeadlineBadge daysLeft={daysLeft} />
+        )}
+        {/* 하트 버튼 — 오른쪽 상단 */}
+        {onToggleFavorite && (
+          <TouchableOpacity
+            style={styles.heartBtn}
+            onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.heartIcon, isFavorite && styles.heartIconActive]}>
+              {isFavorite ? '♥' : '♡'}
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -138,6 +153,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   imagePlaceholderText: { fontSize: 48 },
+  heartBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heartIcon: { fontSize: 20, color: '#fff' },
+  heartIconActive: { color: '#FF6B9D' },
   content: { padding: 16, gap: 4 },
   title: {
     fontSize: 16,

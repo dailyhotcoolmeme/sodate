@@ -44,6 +44,7 @@ export default function RootLayout() {
           options={{ title: '업체 정보' }}
         />
         <Stack.Screen name="reviews/index" options={{ headerShown: false }} />
+        <Stack.Screen name="favorites/index" options={{ headerShown: false }} />
         <Stack.Screen name="alerts" options={{ title: '알림 설정' }} />
         <Stack.Screen name="settings" options={{ title: '설정' }} />
         <Stack.Screen

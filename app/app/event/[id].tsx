@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import { useEventDetail } from '@/hooks/useEventDetail'
 import { useReviews } from '@/hooks/useReviews'
+import { useFavorites } from '@/hooks/useFavorites'
 import { openOutlink } from '@/lib/outlink'
 import { Colors } from '@/constants/colors'
 import ThemeTag from '@/components/ThemeTag'
@@ -33,6 +34,7 @@ export default function EventDetailScreen() {
 
   const companyId = event?.companies?.id ?? null
   const { reviews, loading: reviewsLoading } = useReviews(companyId, 3)
+  const { favoriteIds, toggle: toggleFavorite } = useFavorites()
 
   if (loading) {
     return (
@@ -80,14 +82,25 @@ export default function EventDetailScreen() {
       </View>
 
       <View style={styles.content}>
-        {/* 업체명 */}
-        {event.companies && (
+        {/* 업체명 + 하트 */}
+        <View style={styles.titleRow}>
+          {event.companies && (
+            <TouchableOpacity
+              onPress={() => router.push(`/company/${event.companies!.id}`)}
+              style={{ flex: 1 }}
+            >
+              <Text style={styles.company}>{event.companies.name} →</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
-            onPress={() => router.push(`/company/${event.companies!.id}`)}
+            style={[styles.heartBtn, favoriteIds.has(event.id) && styles.heartBtnActive]}
+            onPress={() => toggleFavorite(event.id)}
           >
-            <Text style={styles.company}>{event.companies.name} →</Text>
+            <Text style={[styles.heartIcon, favoriteIds.has(event.id) && styles.heartIconActive]}>
+              {favoriteIds.has(event.id) ? '♥' : '♡'}
+            </Text>
           </TouchableOpacity>
-        )}
+        </View>
 
         {/* 제목 */}
         <Text style={styles.title}>{event.title}</Text>
@@ -229,12 +242,32 @@ const styles = StyleSheet.create({
   },
   imagePlaceholderText: { fontSize: 64 },
   content: { padding: 20 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   company: {
     fontSize: 13,
     color: Colors.primary,
     fontWeight: '600',
-    marginBottom: 8,
   },
+  heartBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heartBtnActive: {
+    borderColor: '#FF6B9D',
+    backgroundColor: '#FF6B9D18',
+  },
+  heartIcon: { fontSize: 20, color: Colors.textTertiary },
+  heartIconActive: { color: '#FF6B9D' },
   title: {
     fontSize: 22,
     color: Colors.textPrimary,
