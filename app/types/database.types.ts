@@ -206,6 +206,53 @@ export interface Database {
           updated_at?: string
         }
       }
+      reviews: {
+        Row: {
+          id: string
+          company_id: string
+          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual'
+          author_name: string | null
+          author_url: string | null
+          content: string
+          rating: number | null
+          thumbnail_url: string | null
+          source_url: string
+          published_at: string | null
+          is_active: boolean
+          crawled_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual'
+          author_name?: string | null
+          author_url?: string | null
+          content: string
+          rating?: number | null
+          thumbnail_url?: string | null
+          source_url: string
+          published_at?: string | null
+          is_active?: boolean
+          crawled_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          source?: 'naver_blog' | 'instagram' | 'kakao' | 'manual'
+          author_name?: string | null
+          author_url?: string | null
+          content?: string
+          rating?: number | null
+          thumbnail_url?: string | null
+          source_url?: string
+          published_at?: string | null
+          is_active?: boolean
+          crawled_at?: string
+          created_at?: string
+        }
+      }
       crawl_logs: {
         Row: {
           id: string
@@ -274,6 +321,9 @@ export type AlertSubscriptionUpdate = Database['public']['Tables']['alert_subscr
 export type CrawlLog = Database['public']['Tables']['crawl_logs']['Row']
 export type CrawlLogInsert = Database['public']['Tables']['crawl_logs']['Insert']
 export type CrawlLogUpdate = Database['public']['Tables']['crawl_logs']['Update']
+
+export type Review = Database['public']['Tables']['reviews']['Row']
+export type ReviewInsert = Database['public']['Tables']['reviews']['Insert']
 
 // ─── 도메인 상수 ─────────────────────────────────────────────────────────────
 export const REGIONS = [

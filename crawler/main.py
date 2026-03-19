@@ -7,17 +7,18 @@ load_dotenv()
 from scrapers.lovematching import LoveMatchingScraper
 from scrapers.yeonin import YeoninScraper
 from scrapers.emotional_orange import EmotionalOrangeScraper
-# from scrapers.frip import FripScraper       # P2 — API 분석 후 활성화
-# from scrapers.munto import MuntoScraper     # P2 — Playwright 구현 후 활성화
+from scrapers.frip import FripScraper
+from scrapers.munto import MuntoScraper
 from utils.logger import get_logger
 
 logger = get_logger('main')
 
-# P1 스크래퍼 목록
 SCRAPERS = [
     LoveMatchingScraper,
     YeoninScraper,
     EmotionalOrangeScraper,
+    FripScraper,
+    MuntoScraper,
 ]
 
 

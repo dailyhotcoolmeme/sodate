@@ -9,10 +9,12 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import { useEventDetail } from '@/hooks/useEventDetail'
+import { useReviews } from '@/hooks/useReviews'
 import { openOutlink } from '@/lib/outlink'
 import { Colors } from '@/constants/colors'
 import ThemeTag from '@/components/ThemeTag'
 import DeadlineBadge from '@/components/DeadlineBadge'
+import ReviewCard from '@/components/ReviewCard'
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
@@ -28,6 +30,9 @@ export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { event, loading, error } = useEventDetail(id)
   const router = useRouter()
+
+  const companyId = event?.companies?.id ?? null
+  const { reviews, loading: reviewsLoading } = useReviews(companyId, 3)
 
   if (loading) {
     return (
@@ -89,17 +94,16 @@ export default function EventDetailScreen() {
 
         {/* 기본 정보 */}
         <View style={styles.infoCard}>
-          <InfoRow icon="📅" label="일시" value={formatDate(event.event_date)} />
-          <InfoRow icon="📍" label="지역" value={event.location_region} />
+          <InfoRow label="일시" value={formatDate(event.event_date)} />
+          <InfoRow label="지역" value={event.location_region} />
           {event.location_detail && (
-            <InfoRow icon="🗺️" label="장소" value={event.location_detail} />
+            <InfoRow label="장소" value={event.location_detail} />
           )}
           {event.gender_ratio && (
-            <InfoRow icon="👫" label="성비" value={event.gender_ratio} />
+            <InfoRow label="성비" value={event.gender_ratio} />
           )}
           {(event.capacity_male || event.capacity_female) && (
             <InfoRow
-              icon="👤"
               label="모집"
               value={[
                 event.capacity_male ? `남 ${event.capacity_male}명` : null,
@@ -111,7 +115,6 @@ export default function EventDetailScreen() {
           )}
           {(event.price_male || event.price_female) && (
             <InfoRow
-              icon="💰"
               label="참가비"
               value={[
                 event.price_male
@@ -127,7 +130,6 @@ export default function EventDetailScreen() {
           )}
           {event.age_range_min && (
             <InfoRow
-              icon="🎂"
               label="나이"
               value={`${event.age_range_min}세${event.age_range_max ? ` ~ ${event.age_range_max}세` : ' 이상'}`}
             />
@@ -162,24 +164,43 @@ export default function EventDetailScreen() {
           <Text style={styles.ctaBtnText}>신청하기 →</Text>
         </TouchableOpacity>
 
+        {/* 업체 후기 섹션 */}
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeader}>
+            <Text style={styles.sectionTitle}>
+              {event.companies?.name ?? '업체'} 후기
+            </Text>
+            {!reviewsLoading && reviews.length > 0 && (
+              <TouchableOpacity onPress={() => router.push('/reviews')}>
+                <Text style={styles.moreLink}>전체보기 →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {reviewsLoading ? (
+            <ActivityIndicator color={Colors.primary} style={{ marginVertical: 16 }} />
+          ) : reviews.length === 0 ? (
+            <View style={styles.emptyReviews}>
+              <Text style={styles.emptyReviewsText}>아직 등록된 후기가 없습니다</Text>
+            </View>
+          ) : (
+            <View style={styles.reviewsList}>
+              {reviews.map((review) => (
+                <ReviewCard key={review.id} review={review} />
+              ))}
+            </View>
+          )}
+        </View>
+
         <View style={{ height: 40 }} />
       </View>
     </ScrollView>
   )
 }
 
-function InfoRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: string
-  label: string
-  value: string
-}) {
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.infoRow}>
-      <Text style={styles.infoIcon}>{icon}</Text>
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue}>{value}</Text>
     </View>
@@ -233,11 +254,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  infoIcon: { fontSize: 16, width: 24 },
   infoLabel: {
     fontSize: 13,
     color: Colors.textTertiary,
-    width: 64,
+    width: 56,
     fontWeight: '500',
   },
   infoValue: {
@@ -267,12 +287,41 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
+    marginBottom: 28,
   },
   ctaBtnText: {
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
   },
+  reviewsSection: { gap: 0 },
+  reviewsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  moreLink: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  emptyReviews: {
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyReviewsText: {
+    fontSize: 13,
+    color: Colors.textTertiary,
+  },
+  reviewsList: { gap: 0, marginHorizontal: -20 },
   errorText: { color: Colors.error, fontSize: 15 },
   backLink: { color: Colors.primary, fontSize: 14 },
 })

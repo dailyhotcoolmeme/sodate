@@ -1,120 +1,115 @@
-"""프립 (frip.co.kr) 스크래퍼 — P2 (동적/API 방식, 기본 구조)"""
+"""프립 (frip.co.kr) 스크래퍼 — Playwright 기반"""
 import re
 import time
-import httpx
 from datetime import datetime
 from typing import Optional
+from playwright.sync_api import sync_playwright
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
-from utils.security import sanitize_text, sanitize_url
+from utils.security import sanitize_text
 
-# 프립 비공개 API 엔드포인트 (실제 분석 후 업데이트 필요)
-FRIP_SEARCH_API = 'https://api.frip.co.kr/products/search'
 FRIP_BASE_URL = 'https://frip.co.kr'
-
-# 소개팅 관련 검색 키워드
-SEARCH_KEYWORDS = ['로테이션 소개팅', '소개팅', '미팅']
+SEARCH_KEYWORDS = ['로테이션 소개팅', '소개팅 미팅']
+PRICE_RE = re.compile(r'([\d,]+)\s*원')
+DATE_RE = re.compile(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})')
+REGION_KW = ['강남', '홍대', '신촌', '잠실', '건대', '성수', '이태원', '합정', '여의도', '수원', '인천', '부산', '대구', '대전']
 
 
 class FripScraper(BaseScraper):
-    """
-    프립은 동적 렌더링 + 자체 API를 사용합니다.
-    실제 API 엔드포인트 및 파라미터는 브라우저 네트워크 탭 분석 후 업데이트 필요.
-    현재는 기본 구조만 제공합니다.
-    """
-
     def __init__(self):
         super().__init__('frip')
 
     def scrape(self) -> list[EventModel]:
         events = []
-        for keyword in SEARCH_KEYWORDS:
-            try:
-                fetched = self._fetch_by_keyword(keyword)
-                events.extend(fetched)
-                time.sleep(1.0)
-            except Exception as e:
-                self.logger.warning(f"프립 키워드 '{keyword}' 조회 실패: {e}")
-        # 중복 source_url 제거
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    ignore_https_errors=True,
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                )
+                page = context.new_page()
+
+                for keyword in SEARCH_KEYWORDS:
+                    try:
+                        search_url = f'{FRIP_BASE_URL}/search?keyword={keyword}'
+                        page.goto(search_url, timeout=20000)
+                        page.wait_for_load_state('networkidle', timeout=10000)
+                        time.sleep(2)
+
+                        links = page.eval_on_selector_all(
+                            'a[href*="/products/"]',
+                            'els => [...new Set(els.map(e => e.href))].filter(h => /\\/products\\/\\d+/.test(h))'
+                        )
+                        self.logger.info(f'프립 "{keyword}": {len(links)}개 링크 발견')
+
+                        for link in links[:6]:
+                            try:
+                                page.goto(link, timeout=15000)
+                                page.wait_for_load_state('networkidle', timeout=8000)
+
+                                title_el = page.query_selector('h1')
+                                title = title_el.inner_text().strip() if title_el else ''
+                                if not title or not any(kw in title for kw in ['소개팅', '미팅', '로테이션']):
+                                    continue
+
+                                body_text = page.inner_text('body')
+
+                                # 날짜 파싱
+                                event_dates = []
+                                for y, m, d in DATE_RE.findall(body_text):
+                                    try:
+                                        dt = datetime(int(y), int(m), int(d), 19, 0)
+                                        if dt > datetime.now():
+                                            event_dates.append(dt)
+                                    except ValueError:
+                                        pass
+
+                                # 가격 파싱
+                                raw_prices = [int(p.replace(',', '')) for p in PRICE_RE.findall(body_text)]
+                                price_vals = sorted(set(v for v in raw_prices if 10000 <= v <= 200000))
+                                price_male = price_vals[0] if price_vals else None
+                                price_female = price_vals[1] if len(price_vals) > 1 else price_male
+
+                                # 지역
+                                region = '서울'
+                                for r in REGION_KW:
+                                    if r in body_text:
+                                        region = r
+                                        break
+
+                                # 썸네일
+                                imgs = page.eval_on_selector_all('img[src*="http"]', 'els => els.map(e => e.src)')
+                                thumbnail = next((u for u in imgs if not u.endswith('.svg')), None)
+
+                                for event_date in (event_dates[:3] or [datetime.now().replace(hour=19, minute=0, second=0, microsecond=0)]):
+                                    events.append(EventModel(
+                                        title=sanitize_text(f'[프립] {title}', 80),
+                                        event_date=event_date,
+                                        location_region=region,
+                                        location_detail=None,
+                                        price_male=price_male,
+                                        price_female=price_female,
+                                        gender_ratio=None,
+                                        source_url=f'{link}#evt={event_date.strftime("%Y%m%d%H%M")}',
+                                        thumbnail_urls=[thumbnail] if thumbnail else [],
+                                        theme=['일반'],
+                                        seats_left_male=None,
+                                        seats_left_female=None,
+                                    ))
+                                time.sleep(1)
+                            except Exception as e:
+                                self.logger.warning(f'프립 상품 파싱 실패 {link}: {e}')
+
+                    except Exception as e:
+                        self.logger.warning(f'프립 검색 실패 ({keyword}): {e}')
+
+                browser.close()
+        except Exception as e:
+            self.logger.error(f'프립 크롤링 실패: {e}')
+
         seen: set[str] = set()
-        unique = []
-        for ev in events:
-            if ev.source_url not in seen:
-                seen.add(ev.source_url)
-                unique.append(ev)
+        unique = [ev for ev in events if ev.source_url not in seen and not seen.add(ev.source_url)]  # type: ignore
+        self.logger.info(f'프립 총 {len(unique)}개 이벤트')
         return unique
-
-    def _fetch_by_keyword(self, keyword: str) -> list[EventModel]:
-        """
-        프립 API 호출 (실제 엔드포인트 분석 후 구현).
-        현재는 stub으로 빈 리스트 반환.
-        """
-        self.logger.info(f"[frip] '{keyword}' 검색 중 (stub — API 분석 필요)")
-        # TODO: 실제 API 엔드포인트 분석 후 구현
-        # response = httpx.get(FRIP_SEARCH_API, params={'query': keyword, ...}, timeout=30)
-        # response.raise_for_status()
-        # data = response.json()
-        # return [self._parse_item(item) for item in data.get('items', [])]
-        return []
-
-    def _parse_item(self, item: dict) -> Optional[EventModel]:
-        """API 응답 아이템을 EventModel로 변환"""
-        title = sanitize_text(item.get('title', ''))
-        if not title:
-            return None
-
-        product_id = item.get('id') or item.get('productId')
-        source_url = f"{FRIP_BASE_URL}/products/{product_id}" if product_id else None
-        if not source_url:
-            return None
-
-        scheduled_at = item.get('scheduledAt') or item.get('startAt') or item.get('date')
-        event_date = self._parse_date(str(scheduled_at)) if scheduled_at else None
-        if not event_date:
-            return None
-
-        thumbnail = item.get('coverImageUrl') or item.get('imageUrl')
-        price = item.get('price') or item.get('salePrice')
-
-        return EventModel(
-            external_id=str(product_id),
-            title=title,
-            description=sanitize_text(item.get('description'), 500),
-            event_date=event_date,
-            location_region=self._extract_region(item.get('location', '') + ' ' + title),
-            price_male=int(price) if price else None,
-            price_female=int(price) if price else None,
-            source_url=source_url,
-            thumbnail_urls=[thumbnail] if thumbnail else [],
-            theme=self._extract_theme(title),
-        )
-
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
-        formats = [
-            '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%SZ',
-            '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d',
-        ]
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_str[:19], fmt)
-            except ValueError:
-                continue
-        return None
-
-    def _extract_region(self, text: str) -> str:
-        regions = ['강남', '역삼', '선릉', '홍대', '신촌', '연남', '을지로', '종로',
-                   '잠실', '건대', '성수', '이태원', '한남', '수원', '판교', '분당',
-                   '인천', '대전']
-        for region in regions:
-            if region in text:
-                return region
-        return '기타'
-
-    def _extract_theme(self, text: str) -> list[str]:
-        theme_map = {
-            '와인': '와인', '커피': '커피', '에세이': '에세이',
-            '전시': '전시', '사주': '사주', '보드게임': '보드게임', '쿠킹': '쿠킹',
-        }
-        themes = [t for k, t in theme_map.items() if k in text]
-        return themes if themes else ['일반']

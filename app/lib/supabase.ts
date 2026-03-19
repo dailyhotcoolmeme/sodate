@@ -8,4 +8,5 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 export type EventRow = Database['public']['Tables']['events']['Row']
 export type CompanyRow = Database['public']['Tables']['companies']['Row']
+export type ReviewRow = Database['public']['Tables']['reviews']['Row']
 export type EventWithCompany = EventRow & { companies: CompanyRow | null }

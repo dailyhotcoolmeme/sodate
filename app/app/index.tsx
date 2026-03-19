@@ -60,6 +60,9 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Text style={styles.logo}>소개팅모아</Text>
         <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/reviews')}>
+            <Text style={styles.iconText}>후기</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/alerts')}>
             <Text style={styles.iconText}>알림</Text>
           </TouchableOpacity>
