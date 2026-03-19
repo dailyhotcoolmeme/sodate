@@ -1,10 +1,12 @@
 """연인어때 (yeonin.co.kr) 스크래퍼"""
 import re
 import time
+import asyncio
 import httpx
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import Optional
+from playwright.sync_api import sync_playwright
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
@@ -19,163 +21,135 @@ class YeoninScraper(BaseScraper):
         super().__init__('yeonin')
 
     def scrape(self) -> list[EventModel]:
-        response = httpx.get(self.SCHEDULE_URL, timeout=30, follow_redirects=True)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-
         events = []
-        cards = soup.select(
-            '.schedule-item, .event-item, .program-card, '
-            '[class*="schedule"], [class*="event"], [class*="program"]'
-        )
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(ignore_https_errors=True, user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36')
+                page = context.new_page()
 
-        if not cards:
-            cards = [
-                a.parent for a in soup.select('a[href*="/detail/"], a[href*="/event/"]')
-            ]
+                # 1단계: 일정 목록 페이지에서 최신 월별 게시물 링크 수집
+                page.goto(self.SCHEDULE_URL, timeout=15000)
+                page.wait_for_load_state('networkidle', timeout=10000)
 
-        for card in cards:
-            try:
-                event = self._parse_card(card)
-                if event:
-                    events.append(event)
-                    time.sleep(0.5)
-            except Exception as e:
-                self.logger.warning(f"카드 파싱 실패: {e}")
+                soup = BeautifulSoup(page.content(), 'html.parser')
+                post_links = []
+                for a in soup.select('a[href*="bmode=view"]'):
+                    href = a.get('href', '')
+                    title = a.get_text(strip=True)
+                    if title and ('소개팅' in title or '일정' in title or '로테이션' in title):
+                        full_url = href if href.startswith('http') else self.BASE_URL + href
+                        post_links.append((title, full_url))
+
+                self.logger.info(f'일정 게시물 {len(post_links)}개 발견')
+
+                # 2단계: 최신 게시물 최대 3개만 파싱
+                for title, url in post_links[:3]:
+                    try:
+                        page.goto(url, timeout=15000)
+                        page.wait_for_load_state('networkidle', timeout=8000)
+                        content_text = page.inner_text('body')
+                        thumbnail_url = None
+                        imgs = page.eval_on_selector_all('img[src*="cdn.imweb"]', 'els => els.map(e => e.src)')
+                        if imgs:
+                            thumbnail_url = imgs[0]
+
+                        parsed = self._parse_post(title, content_text, url, thumbnail_url)
+                        events.extend(parsed)
+                        time.sleep(1)
+                    except Exception as e:
+                        self.logger.warning(f'게시물 파싱 실패 {url}: {e}')
+
+                browser.close()
+        except Exception as e:
+            self.logger.error(f'크롤링 실패: {e}')
+            raise
 
         return events
 
-    def _parse_card(self, card) -> Optional[EventModel]:
-        title_el = card.select_one('[class*="title"], h2, h3, h4, strong')
-        date_el = card.select_one('[class*="date"], time, [class*="time"]')
-        link_el = card.select_one('a[href]')
-        img_el = card.select_one('img')
-        price_el = card.select_one('[class*="price"], [class*="fee"], [class*="cost"]')
-        location_el = card.select_one('[class*="region"], [class*="location"], [class*="place"]')
-        ratio_el = card.select_one('[class*="ratio"], [class*="gender"]')
-        seat_el = card.select_one('[class*="seat"], [class*="remain"], [class*="left"]')
+    def _parse_post(self, post_title: str, content: str, source_url: str, thumbnail_url: Optional[str]) -> list[EventModel]:
+        """월별 일정 게시물 텍스트에서 개별 이벤트 추출"""
+        events = []
+        lines = [l.strip() for l in content.split('\n') if l.strip()]
 
-        if not title_el or not link_el:
-            return None
+        # 현재 연도/월 파악
+        year_match = re.search(r'(\d{4})년', post_title + content)
+        month_match = re.search(r'(\d{1,2})월', post_title)
+        current_year = int(year_match.group(1)) if year_match else datetime.now().year
+        current_month = int(month_match.group(1)) if month_match else datetime.now().month
 
-        title = sanitize_text(title_el.get_text(strip=True))
-        if not title:
-            return None
-
-        source_url = sanitize_url(link_el.get('href'), self.BASE_URL)
-        if not source_url:
-            return None
-
-        date_text = date_el.get_text(strip=True) if date_el else ''
-        event_date = self._parse_date(date_text)
-        if not event_date:
-            return None
-
-        location_text = location_el.get_text(strip=True) if location_el else title
-        price_text = price_el.get_text(strip=True) if price_el else ''
-        ratio_text = ratio_el.get_text(strip=True) if ratio_el else title
-
-        thumbnail_urls = []
-        if img_el:
-            img_url = sanitize_url(img_el.get('src') or img_el.get('data-src'), self.BASE_URL)
-            if img_url:
-                thumbnail_urls = [img_url]
-
-        seats_left = self._extract_seats(seat_el.get_text(strip=True) if seat_el else '')
-
-        return EventModel(
-            title=title,
-            event_date=event_date,
-            location_region=self._extract_region(location_text + ' ' + title),
-            location_detail=sanitize_text(location_text, 200),
-            price_male=self._extract_price(price_text, gender='male'),
-            price_female=self._extract_price(price_text, gender='female'),
-            gender_ratio=self._extract_ratio(ratio_text),
-            source_url=source_url,
-            thumbnail_urls=thumbnail_urls,
-            theme=self._extract_theme(title),
-            seats_left_male=seats_left,
-            seats_left_female=seats_left,
+        # 날짜 + 그룹 패턴 찾기
+        # 예: "3/15 로테이션 소개팅 A", "3월 22일", "3.15(토)"
+        date_pattern = re.compile(
+            r'(?:(\d{1,2})[월/.](\d{1,2})일?)\s*(?:\([월화수목금토일]\))?'
         )
 
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
-        date_str = date_str.strip()
-        formats = [
-            '%Y.%m.%d %H:%M', '%Y-%m-%d %H:%M', '%Y/%m/%d %H:%M',
-            '%Y.%m.%d', '%m월 %d일 %H:%M', '%m월%d일 %H시%M분',
-        ]
-        current_year = datetime.now().year
-        for fmt in formats:
-            try:
-                dt = datetime.strptime(date_str, fmt)
-                if dt.year == 1900:
-                    dt = dt.replace(year=current_year)
-                return dt
-            except ValueError:
+        # 가격 패턴
+        price_pattern = re.compile(r'(\d{2,3}),?(\d{3})원?|(\d{4,6})원')
+
+        # 지역 키워드
+        region_keywords = ['강남', '홍대', '신촌', '잠실', '건대', '성수', '수원', '인천', '부산', '대구', '대전']
+
+        for i, line in enumerate(lines):
+            date_match = date_pattern.search(line)
+            if not date_match:
                 continue
 
-        nums = re.findall(r'\d+', date_str)
-        if len(nums) >= 3:
             try:
-                idx = 0
-                year = int(nums[idx]) if len(nums[idx]) == 4 else current_year
-                if len(nums[idx]) != 4:
-                    month, day = int(nums[0]), int(nums[1])
-                    hour = int(nums[2]) if len(nums) > 2 else 19
-                    minute = int(nums[3]) if len(nums) > 3 else 0
-                else:
-                    month, day = int(nums[1]), int(nums[2])
-                    hour = int(nums[3]) if len(nums) > 3 else 19
-                    minute = int(nums[4]) if len(nums) > 4 else 0
-                return datetime(year, month, day, hour, minute)
+                m = int(date_match.group(1))
+                d = int(date_match.group(2))
+                # 월이 현재 월이거나 다음 달이면 사용
+                if m < 1 or m > 12 or d < 1 or d > 31:
+                    continue
+
+                event_date = datetime(current_year, m, d, 14, 0)
+                if event_date < datetime.now():
+                    continue
+
+                # 제목: 현재 줄 + 앞뒤 컨텍스트
+                context_lines = lines[max(0, i-1):i+3]
+                title_text = ' '.join(context_lines)[:100]
+                title = sanitize_text(f'[연인어때] {title_text}', 80)
+
+                # 가격 추출
+                price_text = ' '.join(lines[max(0, i-2):i+5])
+                prices = price_pattern.findall(price_text)
+                price_male = None
+                price_female = None
+                if prices:
+                    for p in prices:
+                        val = int(p[0] + p[1]) if p[0] else int(p[2]) if p[2] else 0
+                        if val > 10000:
+                            if price_male is None:
+                                price_male = val
+                            elif price_female is None:
+                                price_female = val
+
+                # 지역 추출
+                region = '서울'
+                for r in region_keywords:
+                    if r in title_text:
+                        region = r
+                        break
+
+                # source_url에 날짜+시간 포함하여 이벤트마다 유니크하게
+                unique_url = f"{source_url}#evt={event_date.strftime('%Y%m%d%H%M')}"
+                events.append(EventModel(
+                    title=title,
+                    event_date=event_date,
+                    location_region=region,
+                    location_detail=None,
+                    price_male=price_male,
+                    price_female=price_female,
+                    gender_ratio=None,
+                    source_url=unique_url,
+                    thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
+                    theme=['일반'],
+                    seats_left_male=None,
+                    seats_left_female=None,
+                ))
+
             except (ValueError, IndexError):
-                pass
-        return None
+                continue
 
-    def _extract_region(self, text: str) -> str:
-        regions = ['강남', '역삼', '선릉', '홍대', '신촌', '연남', '을지로', '종로',
-                   '잠실', '건대', '성수', '이태원', '한남', '수원', '판교', '분당',
-                   '인천', '대전']
-        for region in regions:
-            if region in text:
-                return region
-        return '기타'
-
-    def _extract_price(self, text: str, gender: str = 'male') -> Optional[int]:
-        if gender == 'male':
-            patterns = [r'남\s*[성자]?\s*:?\s*(\d{1,3}(?:,\d{3})*|\d+)\s*원',
-                        r'남\s*(\d{1,3}(?:,\d{3})*|\d+)']
-        else:
-            patterns = [r'여\s*[성자]?\s*:?\s*(\d{1,3}(?:,\d{3})*|\d+)\s*원',
-                        r'여\s*(\d{1,3}(?:,\d{3})*|\d+)']
-
-        for pat in patterns:
-            match = re.search(pat, text.replace(' ', ''))
-            if match:
-                return int(match.group(1).replace(',', ''))
-
-        # 공통 가격
-        match = re.search(r'(\d{1,3}(?:,\d{3})*|\d+)원', text.replace(' ', ''))
-        if match:
-            return int(match.group(1).replace(',', ''))
-        return None
-
-    def _extract_ratio(self, text: str) -> Optional[str]:
-        match = re.search(r'(\d+)\s*[:：]\s*(\d+)', text)
-        if match:
-            return f"{match.group(1)}:{match.group(2)}"
-        return None
-
-    def _extract_theme(self, text: str) -> list[str]:
-        theme_map = {
-            '와인': '와인', '커피': '커피', '에세이': '에세이',
-            '전시': '전시', '사주': '사주', '보드게임': '보드게임', '쿠킹': '쿠킹',
-        }
-        themes = [t for k, t in theme_map.items() if k in text]
-        return themes if themes else ['일반']
-
-    def _extract_seats(self, text: str) -> Optional[int]:
-        match = re.search(r'(\d+)\s*(?:석|자리|명)', text)
-        if match:
-            return int(match.group(1))
-        return None
+        return events

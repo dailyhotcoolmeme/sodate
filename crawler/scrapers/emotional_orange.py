@@ -16,7 +16,7 @@ class EmotionalOrangeScraper(BaseScraper):
     SCHEDULE_URL = 'https://emotional0ranges.com/schedule'
 
     def __init__(self):
-        super().__init__('emotional_orange')
+        super().__init__('emotional-orange')
 
     def scrape(self) -> list[EventModel]:
         headers = {
