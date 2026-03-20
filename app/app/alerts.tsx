@@ -70,15 +70,6 @@ export default function AlertsScreen() {
     },
     saveBtnDisabled: { opacity: 0.6 },
     saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-    testBtn: {
-      borderRadius: 12,
-      paddingVertical: 14,
-      alignItems: 'center',
-      marginTop: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    testBtnText: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
   }), [colors])
 
   const [selectedRegions, setSelectedRegions] = useState<string[]>([])
@@ -97,28 +88,6 @@ export default function AlertsScreen() {
     setSelectedThemes((prev) =>
       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
     )
-  }
-
-  const handleTestNotification = async () => {
-    const { status } = await Notifications.getPermissionsAsync()
-    if (status !== 'granted') {
-      const { status: requested } = await Notifications.requestPermissionsAsync()
-      if (requested !== 'granted') {
-        Alert.alert('알림 권한 필요', '설정에서 알림 권한을 허용해주세요.',
-          [{ text: '취소', style: 'cancel' }, { text: '설정 열기', onPress: () => Linking.openSettings() }]
-        )
-        return
-      }
-    }
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '새 소개팅 등록!',
-        body: '연인어때 강남 04/05(토) 일정이 등록됐어요. 마감 전에 확인하세요!',
-        data: { type: 'new_event' },
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3 },
-    })
-    Alert.alert('3초 후 알림이 옵니다', '앱을 홈 화면으로 내려서 확인해보세요.')
   }
 
   const handleSave = async () => {
@@ -256,9 +225,6 @@ export default function AlertsScreen() {
         <Text style={styles.saveBtnText}>{saving ? '저장 중...' : '알림 설정 저장'}</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.testBtn} onPress={handleTestNotification}>
-        <Text style={styles.testBtnText}>테스트 알림 보내기</Text>
-      </TouchableOpacity>
     </ScrollView>
     </View>
   )
