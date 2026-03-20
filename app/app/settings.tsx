@@ -76,7 +76,7 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>화면 설정</Text>
         <SettingRow
           iconName={isDark ? 'moon' : 'sunny'}
-          label="다크 모드"
+          label={isDark ? '다크 모드' : '라이트 모드'}
           right={
             <Switch
               value={isDark}
