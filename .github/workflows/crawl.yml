@@ -39,12 +39,75 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODPARTY_ID: ${{ secrets.MODPARTY_ID }}
+          MODPARTY_PW: ${{ secrets.MODPARTY_PW }}
         run: |
           cd crawler
           python main.py
+
+      - name: Run review crawlers (once a day, 21:00 UTC run only)
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.schedule, '0 21')
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          python reviews_main.py
+
+      - name: Process push queue (send notifications)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          # process-push-queue 3회 호출 (큐 완전 소진)
+          for i in 1 2 3; do
+            curl -sf -X POST \
+              "$SUPABASE_URL/functions/v1/process-push-queue" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Content-Type: application/json" || true
+            sleep 2
+          done
+
+      - name: Check deadline reminders
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python3 -c "
+          import os, httpx, json
+          from datetime import datetime, timedelta
+
+          url = os.environ['SUPABASE_URL']
+          key = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+          headers = {'apikey': key, 'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'}
+
+          # D-1 이벤트 조회
+          tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime('%Y-%m-%d')
+          resp = httpx.get(
+              f'{url}/rest/v1/events',
+              params={
+                  'select': 'id,title,event_date,location_region,company_id,source_url',
+                  'event_date': f'gte.{tomorrow}T00:00:00',
+                  'event_date2': f'lt.{tomorrow}T23:59:59',
+                  'is_active': 'eq.true',
+                  'is_closed': 'eq.false',
+              },
+              headers=headers, timeout=15
+          )
+          events = resp.json() if resp.status_code == 200 else []
+          print(f'D-1 이벤트: {len(events)}개')
+
+          for event in events:
+              edge_resp = httpx.post(
+                  f'{url}/functions/v1/match-subscriptions',
+                  json={'record': {**event, '_notification_type': 'deadline_reminder'}},
+                  headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
+                  timeout=15
+              )
+              print(f'마감 알림 큐: {edge_resp.status_code}')
+          "
 
       - name: Notify on failure
         if: failure()
         run: |
           echo "::error::크롤링 실패 — Supabase crawl_logs 및 GitHub Actions 로그를 확인하세요."
-          # TODO: Slack/Discord 웹훅 연동 가능
