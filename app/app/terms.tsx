@@ -20,7 +20,7 @@ export default function TermsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Text style={styles.title}>이용약관</Text>
-        <Text style={styles.date}>시행일: 2025년 1월 1일 | 최종 수정일: 2026년 3월 20일</Text>
+        <Text style={styles.date}>시행일: 2026년 3월 20일 | 최종 수정일: 2026년 3월 20일</Text>
 
         <Text style={styles.sectionTitle}>제1조 (목적)</Text>
         <Text style={styles.body}>
