@@ -83,7 +83,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>화면 설정</Text>
         <SettingRow
-          icon="🌙"
+          icon={isDark ? '●' : '○'}
           label="다크 모드"
           right={
             <Switch
@@ -100,13 +100,13 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>서비스 안내</Text>
         <SettingRow
-          icon="🔒"
+          icon="■"
           label="개인정보처리방침"
           onPress={handleOpenPrivacy}
         />
-        <SettingRow icon="📄" label="이용약관" onPress={handleOpenTerms} />
+        <SettingRow icon="□" label="이용약관" onPress={handleOpenTerms} />
         <SettingRow
-          icon="✉️"
+          icon="@"
           label="문의하기"
           value="hello@sodate.app"
           onPress={handleContact}
@@ -116,9 +116,9 @@ export default function SettingsScreen() {
       {/* 앱 정보 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>앱 정보</Text>
-        <SettingRow icon="📦" label="버전" value={APP_VERSION} />
+        <SettingRow icon="v" label="버전" value={APP_VERSION} />
         <SettingRow
-          icon="ℹ️"
+          icon="i"
           label="소개팅모아 소개"
           value="전국 로테이션 소개팅 일정 모음"
         />
@@ -181,7 +181,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       paddingVertical: 14,
       gap: 12,
     },
-    rowIcon: { fontSize: 18, width: 28 },
+    rowIcon: { fontSize: 18, width: 28, color: colors.textTertiary },
     rowLabel: {
       flex: 1,
       fontSize: 15,
