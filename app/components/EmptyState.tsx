@@ -47,7 +47,7 @@ export default function EmptyState() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.emoji}>💔</Text>
+      <Text style={styles.emoji}>♡</Text>
       <Text style={styles.title}>조건에 맞는 소개팅이 없어요</Text>
       <Text style={styles.subtitle}>
         필터를 변경하거나 다른 지역을 선택해보세요

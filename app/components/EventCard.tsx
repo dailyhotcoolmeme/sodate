@@ -118,7 +118,7 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
           />
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>💑</Text>
+            <Text style={styles.imagePlaceholderText}>♥</Text>
           </View>
         )}
         {daysLeft <= 3 && daysLeft >= 0 && (

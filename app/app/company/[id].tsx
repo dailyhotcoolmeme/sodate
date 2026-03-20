@@ -191,7 +191,7 @@ export default function CompanyDetailScreen() {
           )}
           {company.regions && company.regions.length > 0 && (
             <Text style={styles.companyRegions}>
-              📍 {company.regions.join(', ')}
+              · {company.regions.join(', ')}
             </Text>
           )}
         </View>
@@ -203,14 +203,14 @@ export default function CompanyDetailScreen() {
           style={[styles.actionBtn, styles.actionBtnOutline]}
           onPress={() => openOutlink(company.base_url)}
         >
-          <Text style={styles.actionBtnOutlineText}>🌐 홈페이지</Text>
+          <Text style={styles.actionBtnOutlineText}>홈페이지</Text>
         </TouchableOpacity>
         {company.instagram_url && (
           <TouchableOpacity
             style={[styles.actionBtn, styles.actionBtnOutline]}
             onPress={() => openOutlink(company.instagram_url!)}
           >
-            <Text style={styles.actionBtnOutlineText}>📷 인스타</Text>
+            <Text style={styles.actionBtnOutlineText}>인스타그램</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -229,7 +229,7 @@ export default function CompanyDetailScreen() {
                 : styles.actionBtnOutlineText
             }
           >
-            {subscribed ? '🔔 알림 ON' : '🔕 알림'}
+            {subscribed ? '● 알림 ON' : '○ 알림'}
           </Text>
         </TouchableOpacity>
       </View>
