@@ -349,6 +349,9 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/alerts')}>
             <Text style={styles.iconText}>알림</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/settings')}>
+            <Text style={styles.iconText}>설정</Text>
+          </TouchableOpacity>
         </View>
       </View>
 

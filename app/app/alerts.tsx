@@ -10,6 +10,7 @@ import {
   Linking,
 } from 'react-native'
 import * as Notifications from 'expo-notifications'
+import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -138,6 +139,11 @@ export default function AlertsScreen() {
           return
         }
         status = requested
+      }
+
+      if (!Device.isDevice) {
+        Alert.alert('시뮬레이터 제한', '실제 기기에서만 알림 구독 저장이 가능합니다.')
+        return
       }
 
       const tokenResult = await Notifications.getExpoPushTokenAsync({
