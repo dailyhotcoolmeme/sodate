@@ -9,20 +9,21 @@ import {
   Alert,
   Switch,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { useThemeStore } from '@/stores/themeStore'
 
 const APP_VERSION = '1.0.0'
 
 function SettingRow({
-  icon,
+  iconName,
   label,
   value,
   onPress,
   danger,
   right,
 }: {
-  icon: string
+  iconName: keyof typeof Ionicons.glyphMap
   label: string
   value?: string
   onPress?: () => void
@@ -38,13 +39,13 @@ function SettingRow({
       disabled={!onPress && !right}
       activeOpacity={onPress ? 0.7 : 1}
     >
-      <Text style={styles.rowIcon}>{icon}</Text>
+      <Ionicons name={iconName} size={20} color={danger ? colors.error : colors.textTertiary} style={styles.rowIcon} />
       <Text style={[styles.rowLabel, danger && styles.rowLabelDanger]}>
         {label}
       </Text>
       {value && <Text style={styles.rowValue}>{value}</Text>}
       {right}
-      {onPress && !right && <Text style={styles.rowArrow}>›</Text>}
+      {onPress && !right && <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
     </TouchableOpacity>
   )
 }
@@ -83,7 +84,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>화면 설정</Text>
         <SettingRow
-          icon={isDark ? '●' : '○'}
+          iconName={isDark ? 'moon' : 'sunny'}
           label="다크 모드"
           right={
             <Switch
@@ -100,13 +101,13 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>서비스 안내</Text>
         <SettingRow
-          icon="■"
+          iconName="shield-checkmark-outline"
           label="개인정보처리방침"
           onPress={handleOpenPrivacy}
         />
-        <SettingRow icon="□" label="이용약관" onPress={handleOpenTerms} />
+        <SettingRow iconName="document-text-outline" label="이용약관" onPress={handleOpenTerms} />
         <SettingRow
-          icon="@"
+          iconName="mail-outline"
           label="문의하기"
           value="hello@sodate.app"
           onPress={handleContact}
@@ -116,9 +117,9 @@ export default function SettingsScreen() {
       {/* 앱 정보 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>앱 정보</Text>
-        <SettingRow icon="v" label="버전" value={APP_VERSION} />
+        <SettingRow iconName="cube-outline" label="버전" value={APP_VERSION} />
         <SettingRow
-          icon="i"
+          iconName="information-circle-outline"
           label="소개팅모아 소개"
           value="전국 로테이션 소개팅 일정 모음"
         />
@@ -181,7 +182,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       paddingVertical: 14,
       gap: 12,
     },
-    rowIcon: { fontSize: 18, width: 28, color: colors.textTertiary },
+    rowIcon: { width: 28 },
     rowLabel: {
       flex: 1,
       fontSize: 15,
