@@ -6,10 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Linking,
-  Alert,
   Switch,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
 import { useThemeStore } from '@/stores/themeStore'
 
@@ -54,19 +54,10 @@ export default function SettingsScreen() {
   const colors = useColors()
   const { isDark, toggle } = useThemeStore()
   const styles = useMemo(() => makeStyles(colors), [colors])
-
-  const handleOpenPrivacy = () =>
-    Linking.openURL('https://sodate.app/privacy').catch(() =>
-      Alert.alert('오류', '페이지를 열 수 없습니다')
-    )
-
-  const handleOpenTerms = () =>
-    Linking.openURL('https://sodate.app/terms').catch(() =>
-      Alert.alert('오류', '페이지를 열 수 없습니다')
-    )
+  const router = useRouter()
 
   const handleContact = () =>
-    Linking.openURL('mailto:hello@sodate.app').catch(() =>
+    Linking.openURL('mailto:ourmine0319@gmail.com').catch(() =>
       Alert.alert('오류', '메일 앱을 열 수 없습니다')
     )
 
@@ -103,13 +94,17 @@ export default function SettingsScreen() {
         <SettingRow
           iconName="shield-checkmark-outline"
           label="개인정보처리방침"
-          onPress={handleOpenPrivacy}
+          onPress={() => router.push('/privacy')}
         />
-        <SettingRow iconName="document-text-outline" label="이용약관" onPress={handleOpenTerms} />
+        <SettingRow
+          iconName="document-text-outline"
+          label="이용약관"
+          onPress={() => router.push('/terms')}
+        />
         <SettingRow
           iconName="mail-outline"
           label="문의하기"
-          value="hello@sodate.app"
+          value="ourmine0319@gmail.com"
           onPress={handleContact}
         />
       </View>
