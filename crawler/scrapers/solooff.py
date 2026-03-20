@@ -40,11 +40,19 @@ class SolooffScraper(BaseScraper):
                 soup = BeautifulSoup(page.content(), 'html.parser')
                 post_links = []
 
-                for a in soup.select('a[href*="bmode=view"]'):
+                # solo-off는 /26/?idx=N 패턴 사용
+                seen_idx = set()
+                for a in soup.select('a[href*="?idx="], a[href*="/26/"]'):
                     href = a.get('href', '')
                     title = a.get_text(strip=True)
-                    if not title:
+                    if not title or not href:
                         continue
+                    # 구독권/요금제 링크 제외
+                    if 'httpssolooffimwebme' in href or '구독' in title or 'BASIC' in title or 'PRESTIGE' in title:
+                        continue
+                    if href in seen_idx:
+                        continue
+                    seen_idx.add(href)
                     full_url = href if href.startswith('http') else self.BASE_URL + href
                     post_links.append((title, full_url))
 

@@ -14,6 +14,10 @@ const ALLOWED_OUTLINK_DOMAINS = [
   'somoim.co.kr',
   'booking.naver.com',
   'toss.im',
+  // 후기 링크
+  'instagram.com',
+  'blog.naver.com',
+  'naver.com',
 ]
 
 export function isAllowedOutlink(url: string): boolean {

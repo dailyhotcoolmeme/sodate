@@ -1,6 +1,6 @@
+import React, { useRef, useMemo } from 'react'
 import { TouchableOpacity, Text, StyleSheet, Animated } from 'react-native'
-import { useRef } from 'react'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 
 interface Props {
   isFavorite: boolean
@@ -10,6 +10,21 @@ interface Props {
 
 export default function FavoriteButton({ isFavorite, onToggle, size = 'md' }: Props) {
   const scale = useRef(new Animated.Value(1)).current
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    btn: {
+      borderRadius: 20,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    btnActive: {
+      borderColor: '#FF6B9D',
+      backgroundColor: '#FF6B9D18',
+    },
+  }), [colors])
 
   const handlePress = () => {
     Animated.sequence([
@@ -39,18 +54,3 @@ export default function FavoriteButton({ isFavorite, onToggle, size = 'md' }: Pr
     </TouchableOpacity>
   )
 }
-
-const styles = StyleSheet.create({
-  btn: {
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnActive: {
-    borderColor: '#FF6B9D',
-    backgroundColor: '#FF6B9D18',
-  },
-})

@@ -6,13 +6,16 @@ import * as Application from 'expo-application'
 const DEVICE_ID_KEY = 'sodate-device-id'
 
 async function getDeviceId(): Promise<string> {
-  let id = await AsyncStorage.getItem(DEVICE_ID_KEY)
-  if (!id) {
-    // expo-application의 안드로이드ID 또는 랜덤 UUID
-    id = Application.androidId
-      ?? `device-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    await AsyncStorage.setItem(DEVICE_ID_KEY, id)
+  const stored = await AsyncStorage.getItem(DEVICE_ID_KEY)
+  if (stored) return stored
+
+  let id: string
+  try {
+    id = Application.getAndroidId()
+  } catch {
+    id = `device-${Date.now()}-${Math.random().toString(36).slice(2)}`
   }
+  await AsyncStorage.setItem(DEVICE_ID_KEY, id)
   return id
 }
 
@@ -58,7 +61,7 @@ export function useFavorites() {
     } else {
       await supabase
         .from('favorites')
-        .insert({ device_id: deviceId, event_id: eventId })
+        .insert({ device_id: deviceId, event_id: eventId } as any)
     }
   }, [deviceId, favoriteIds])
 

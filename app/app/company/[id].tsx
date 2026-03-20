@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react'
 import {
   View,
   Text,
@@ -7,23 +8,139 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useCompany } from '@/hooks/useCompany'
 import { openOutlink } from '@/lib/outlink'
 import { useAlertStore } from '@/stores/alertStore'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 import EventCard from '@/components/EventCard'
 
 export default function CompanyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { data, loading, error } = useCompany(id)
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const { isSubscribed, subscribe, unsubscribe } = useAlertStore()
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    navHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+    backBtn: { paddingVertical: 4, alignSelf: 'flex-start' },
+    backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 16,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      padding: 20,
+      gap: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    logo: {
+      width: 60,
+      height: 60,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceHigh,
+    },
+    logoPlaceholder: {
+      width: 60,
+      height: 60,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    logoInitial: {
+      color: '#fff',
+      fontSize: 24,
+      fontWeight: '700',
+    },
+    headerInfo: { flex: 1 },
+    companyName: {
+      fontSize: 20,
+      color: colors.textPrimary,
+      fontWeight: '700',
+      marginBottom: 4,
+    },
+    companyDesc: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 18,
+      marginBottom: 4,
+    },
+    companyRegions: {
+      fontSize: 12,
+      color: colors.textTertiary,
+    },
+    actions: {
+      flexDirection: 'row',
+      padding: 16,
+      gap: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+      flexWrap: 'wrap',
+    },
+    actionBtn: {
+      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      alignItems: 'center',
+      borderWidth: 1,
+    },
+    actionBtnOutline: {
+      borderColor: colors.border,
+      backgroundColor: 'transparent',
+    },
+    actionBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    actionBtnOutlineText: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    actionBtnActiveText: {
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    eventsSection: {
+      paddingTop: 20,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      color: colors.textPrimary,
+      fontWeight: '700',
+      paddingHorizontal: 20,
+      marginBottom: 8,
+    },
+    noEvents: {
+      padding: 40,
+      alignItems: 'center',
+    },
+    noEventsText: {
+      color: colors.textTertiary,
+      fontSize: 14,
+    },
+    errorText: { color: colors.error, fontSize: 15 },
+    backLink: { color: colors.primary, fontSize: 14 },
+  }), [colors])
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={Colors.primary} />
+        <ActivityIndicator color={colors.primary} />
       </View>
     )
   }
@@ -45,6 +162,12 @@ export default function CompanyDetailScreen() {
   const subscribed = isSubscribed(company.id)
 
   return (
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <View style={styles.navHeader}>
+      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+        <Text style={styles.backText}>← 상세</Text>
+      </TouchableOpacity>
+    </View>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* 업체 헤더 */}
       <View style={styles.header}>
@@ -129,115 +252,6 @@ export default function CompanyDetailScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+    </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 20,
-    gap: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  logo: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceHigh,
-  },
-  logoPlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoInitial: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  headerInfo: { flex: 1 },
-  companyName: {
-    fontSize: 20,
-    color: Colors.textPrimary,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  companyDesc: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-    marginBottom: 4,
-  },
-  companyRegions: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-  },
-  actions: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-    flexWrap: 'wrap',
-  },
-  actionBtn: {
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  actionBtnOutline: {
-    borderColor: Colors.border,
-    backgroundColor: 'transparent',
-  },
-  actionBtnActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary,
-  },
-  actionBtnOutlineText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  actionBtnActiveText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  eventsSection: {
-    paddingTop: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    color: Colors.textPrimary,
-    fontWeight: '700',
-    paddingHorizontal: 20,
-    marginBottom: 8,
-  },
-  noEvents: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  noEventsText: {
-    color: Colors.textTertiary,
-    fontSize: 14,
-  },
-  errorText: { color: Colors.error, fontSize: 15 },
-  backLink: { color: Colors.primary, fontSize: 14 },
-})

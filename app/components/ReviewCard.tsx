@@ -1,7 +1,8 @@
+import React, { useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { Image } from 'expo-image'
 import { openOutlink } from '@/lib/outlink'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 import type { ReviewRow } from '@/lib/supabase'
 
 interface Props {
@@ -23,6 +24,47 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 export default function ReviewCard({ review, showCompany = false }: Props) {
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      marginHorizontal: 16,
+      marginVertical: 6,
+      overflow: 'hidden',
+    },
+    thumbnail: {
+      width: '100%',
+      height: 160,
+    },
+    body: { padding: 14, gap: 8 },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+    source: {
+      fontSize: 11,
+      color: colors.primary,
+      fontWeight: '600',
+      backgroundColor: colors.primary + '18',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+    },
+    company: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    ratingRow: { flexDirection: 'row', marginLeft: 'auto' },
+    star: { fontSize: 13, color: '#FFB800' },
+    content: {
+      fontSize: 14,
+      color: colors.textPrimary,
+      lineHeight: 21,
+    },
+    footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+    author: { fontSize: 12, color: colors.textTertiary },
+    date: { fontSize: 12, color: colors.textTertiary },
+  }), [colors])
+
   return (
     <TouchableOpacity
       style={styles.card}
@@ -61,43 +103,3 @@ export default function ReviewCard({ review, showCompany = false }: Props) {
     </TouchableOpacity>
   )
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    overflow: 'hidden',
-  },
-  thumbnail: {
-    width: '100%',
-    height: 160,
-  },
-  body: { padding: 14, gap: 8 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  source: {
-    fontSize: 11,
-    color: Colors.primary,
-    fontWeight: '600',
-    backgroundColor: Colors.primary + '18',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  company: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  ratingRow: { flexDirection: 'row', marginLeft: 'auto' },
-  star: { fontSize: 13, color: '#FFB800' },
-  content: {
-    fontSize: 14,
-    color: Colors.textPrimary,
-    lineHeight: 21,
-  },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  author: { fontSize: 12, color: Colors.textTertiary },
-  date: { fontSize: 12, color: Colors.textTertiary },
-})

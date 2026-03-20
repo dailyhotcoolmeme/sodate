@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react'
 import {
   View,
   Text,
@@ -6,8 +7,10 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Switch,
 } from 'react-native'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
+import { useThemeStore } from '@/stores/themeStore'
 
 const APP_VERSION = '1.0.0'
 
@@ -17,18 +20,22 @@ function SettingRow({
   value,
   onPress,
   danger,
+  right,
 }: {
   icon: string
   label: string
   value?: string
   onPress?: () => void
   danger?: boolean
+  right?: React.ReactNode
 }) {
+  const colors = useColors()
+  const styles = useMemo(() => makeStyles(colors), [colors])
   return (
     <TouchableOpacity
       style={styles.row}
       onPress={onPress}
-      disabled={!onPress}
+      disabled={!onPress && !right}
       activeOpacity={onPress ? 0.7 : 1}
     >
       <Text style={styles.rowIcon}>{icon}</Text>
@@ -36,12 +43,17 @@ function SettingRow({
         {label}
       </Text>
       {value && <Text style={styles.rowValue}>{value}</Text>}
-      {onPress && <Text style={styles.rowArrow}>›</Text>}
+      {right}
+      {onPress && !right && <Text style={styles.rowArrow}>›</Text>}
     </TouchableOpacity>
   )
 }
 
 export default function SettingsScreen() {
+  const colors = useColors()
+  const { isDark, toggle } = useThemeStore()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+
   const handleOpenPrivacy = () =>
     Linking.openURL('https://sodate.app/privacy').catch(() =>
       Alert.alert('오류', '페이지를 열 수 없습니다')
@@ -65,6 +77,23 @@ export default function SettingsScreen() {
         <Text style={styles.appDesc}>
           전국 소개팅 일정을 한눈에
         </Text>
+      </View>
+
+      {/* 화면 설정 */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>화면 설정</Text>
+        <SettingRow
+          icon="🌙"
+          label="다크 모드"
+          right={
+            <Switch
+              value={isDark}
+              onValueChange={toggle}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor="#fff"
+            />
+          }
+        />
       </View>
 
       {/* 서비스 안내 */}
@@ -109,72 +138,74 @@ export default function SettingsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  appInfo: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-  },
-  appName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.primary,
-    marginBottom: 4,
-  },
-  appDesc: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-  },
-  section: {
-    paddingTop: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 20,
-    marginBottom: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  rowIcon: { fontSize: 18, width: 28 },
-  rowLabel: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.textPrimary,
-  },
-  rowLabelDanger: { color: Colors.error },
-  rowValue: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-  },
-  rowArrow: {
-    fontSize: 20,
-    color: Colors.textTertiary,
-  },
-  disclaimer: {
-    margin: 20,
-    padding: 16,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-  },
-  disclaimerText: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-    lineHeight: 18,
-  },
-})
+function makeStyles(colors: ReturnType<typeof useColors>) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    appInfo: {
+      alignItems: 'center',
+      paddingVertical: 32,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    appName: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: colors.primary,
+      marginBottom: 4,
+    },
+    appDesc: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+    section: {
+      paddingTop: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    sectionTitle: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      paddingHorizontal: 20,
+      marginBottom: 4,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+      gap: 12,
+    },
+    rowIcon: { fontSize: 18, width: 28 },
+    rowLabel: {
+      flex: 1,
+      fontSize: 15,
+      color: colors.textPrimary,
+    },
+    rowLabelDanger: { color: colors.error },
+    rowValue: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+    rowArrow: {
+      fontSize: 20,
+      color: colors.textTertiary,
+    },
+    disclaimer: {
+      margin: 20,
+      padding: 16,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+    },
+    disclaimerText: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      lineHeight: 18,
+    },
+  })
+}

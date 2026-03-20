@@ -13,6 +13,10 @@ from scrapers.modparty import ModpartyScraper
 from scrapers.solooff import SolooffScraper
 from scrapers.talkblossom import TalkblossomScraper
 from scrapers.lovecasting import LovecastingScraper
+from scrapers.yeongyul import YeongyulScraper
+from scrapers.inssumparty import InssumPartyScraper
+from scrapers.twoyeonsi import TwoYeonsiScraper
+from scrapers.seolrem import SeolremScraper
 from utils.logger import get_logger
 
 logger = get_logger('main')
@@ -27,6 +31,10 @@ SCRAPERS = [
     SolooffScraper,
     TalkblossomScraper,
     LovecastingScraper,
+    YeongyulScraper,
+    InssumPartyScraper,
+    TwoYeonsiScraper,
+    SeolremScraper,
 ]
 
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef, useMemo } from 'react'
 import {
   View,
   Text,
@@ -7,19 +7,20 @@ import {
   FlatList,
   ScrollView,
   RefreshControl,
-  TextInput,
+  Animated,
   Platform,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import EventCard from '@/components/EventCard'
+import EventListItem from '@/components/EventListItem'
 import EventCardSkeleton from '@/components/EventCardSkeleton'
 import FilterSheet from '@/components/FilterSheet'
 import EmptyState from '@/components/EmptyState'
 import { useEvents } from '@/hooks/useEvents'
 import { useFilter } from '@/hooks/useFilter'
 import { useFavorites } from '@/hooks/useFavorites'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
 import { useFilterStore, type FilterState } from '@/stores/filterStore'
@@ -42,7 +43,284 @@ export default function HomeScreen() {
   const { region, themes, maxPrice, dateRange, activeFilterCount, regionLabel, setRegion, toggleTheme, resetFilters } = useFilter()
   const { sortBy, setSortBy } = useFilterStore()
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
+  const [showFab, setShowFab] = useState(false)
+  const flatListRef = useRef<FlatList>(null)
   const router = useRouter()
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    // 헤더
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+    },
+    logo: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: colors.textPrimary,
+      letterSpacing: -0.5,
+    },
+    headerRight: {
+      flexDirection: 'row',
+      gap: 4,
+    },
+    iconBtn: {
+      padding: 8,
+      borderRadius: 8,
+    },
+    iconText: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    // 검색바
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceHigh,
+      borderRadius: 14,
+      marginHorizontal: 16,
+      marginBottom: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 8,
+    },
+    searchIcon: {
+      fontSize: 15,
+    },
+    searchPlaceholder: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    filterBadge: {
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      width: 20,
+      height: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filterBadgeText: {
+      fontSize: 11,
+      color: '#fff',
+      fontWeight: '700',
+    },
+    filterIcon: {
+      fontSize: 14,
+    },
+    // 지역 탭
+    regionScroll: {
+      height: 52,
+      marginBottom: 2,
+    },
+    regionRow: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 4,
+      gap: 6,
+    },
+    regionChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 5,
+      borderRadius: 20,
+      backgroundColor: colors.surfaceHigh,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    regionChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    regionChipText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    regionChipTextActive: {
+      color: '#fff',
+      fontWeight: '700',
+    },
+    // 테마 칩
+    themeScroll: {
+      height: 52,
+      marginTop: 2,
+      marginBottom: 4,
+    },
+    themeRow: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 4,
+      gap: 6,
+    },
+    themeChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 16,
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    themeChipActive: {
+      backgroundColor: '#FF6B9D22',
+      borderColor: colors.primary,
+    },
+    themeChipText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    themeChipTextActive: {
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    moreFilterBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    moreFilterText: {
+      fontSize: 12,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    // 활성 필터
+    activeFilterRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingLeft: 16,
+      paddingRight: 8,
+      paddingVertical: 6,
+      gap: 8,
+    },
+    activeChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primary + '22',
+      borderRadius: 14,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderWidth: 1,
+      borderColor: colors.primary + '44',
+    },
+    activeChipText: {
+      fontSize: 12,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    activeChipX: {
+      fontSize: 11,
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    resetBtn: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    resetText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    // 결과 수 + 정렬
+    resultRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingLeft: 16,
+      paddingRight: 4,
+      paddingVertical: 6,
+    },
+    resultText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: '500',
+      minWidth: 48,
+    },
+    sortRow: {
+      gap: 6,
+      alignItems: 'center',
+      paddingRight: 12,
+    },
+    sortChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    sortChipActive: {
+      backgroundColor: '#FF6B9D18',
+      borderColor: colors.primary,
+    },
+    sortChipText: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      fontWeight: '500',
+    },
+    sortChipTextActive: {
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    viewToggle: {
+      flexDirection: 'row',
+      gap: 2,
+      marginLeft: 6,
+      marginRight: 4,
+    },
+    viewBtn: {
+      width: 30,
+      height: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 6,
+    },
+    viewBtnActive: {
+      backgroundColor: colors.surfaceHigh,
+    },
+    viewBtnText: {
+      fontSize: 16,
+      color: colors.textTertiary,
+    },
+    viewBtnTextActive: {
+      color: colors.textPrimary,
+    },
+    fab: {
+      position: 'absolute',
+      right: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+      elevation: 6,
+    },
+    fabIcon: {
+      fontSize: 20,
+      color: '#fff',
+      fontWeight: '700',
+      lineHeight: 24,
+    },
+  }), [colors])
+
+  const scrollToTop = () => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
+  }
+
+  const onScroll = useCallback((e: any) => {
+    setShowFab(e.nativeEvent.contentOffset.y > 300)
+  }, [])
 
   const activeChips: { label: string; onRemove: () => void }[] = []
   if (region !== 'all') activeChips.push({ label: regionLabel, onRemove: () => setRegion('all') })
@@ -157,7 +435,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* ── 결과 수 + 정렬 ── */}
+      {/* ── 결과 수 + 정렬 + 뷰 토글 ── */}
       <View style={styles.resultRow}>
         {!loading && (
           <Text style={styles.resultText}>
@@ -182,6 +460,20 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+        <View style={styles.viewToggle}>
+          <TouchableOpacity
+            style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]}
+            onPress={() => setViewMode('card')}
+          >
+            <Text style={[styles.viewBtnText, viewMode === 'card' && styles.viewBtnTextActive]}>▦</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
+            onPress={() => setViewMode('list')}
+          >
+            <Text style={[styles.viewBtnText, viewMode === 'list' && styles.viewBtnTextActive]}>☰</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── 이벤트 리스트 ── */}
@@ -191,9 +483,18 @@ export default function HomeScreen() {
         </View>
       ) : (
         <FlatList
+          ref={flatListRef}
+          onScroll={onScroll}
+          scrollEventThrottle={100}
           data={events}
-          renderItem={({ item }) => (
+          renderItem={({ item }) => viewMode === 'card' ? (
             <EventCard
+              event={item}
+              isFavorite={favoriteIds.has(item.id)}
+              onToggleFavorite={() => toggleFavorite(item.id)}
+            />
+          ) : (
+            <EventListItem
               event={item}
               isFavorite={favoriteIds.has(item.id)}
               onToggleFavorite={() => toggleFavorite(item.id)}
@@ -201,7 +502,7 @@ export default function HomeScreen() {
           )}
           keyExtractor={(item) => item.id}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={refetch} tintColor={Colors.primary} />
+            <RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />
           }
           ListEmptyComponent={<EmptyState />}
           contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
@@ -210,224 +511,13 @@ export default function HomeScreen() {
       )}
 
       <FilterSheet visible={filterVisible} onClose={() => setFilterVisible(false)} />
+
+      {/* ── 맨위로 FAB ── */}
+      {showFab && (
+        <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 20 }]} onPress={scrollToTop} activeOpacity={0.85}>
+          <Text style={styles.fabIcon}>↑</Text>
+        </TouchableOpacity>
+      )}
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  // 헤더
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  logo: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  iconBtn: {
-    padding: 8,
-    borderRadius: 8,
-  },
-  iconText: {
-    fontSize: 18,
-  },
-  // 검색바
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surfaceHigh,
-    borderRadius: 14,
-    marginHorizontal: 16,
-    marginBottom: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 8,
-  },
-  searchIcon: {
-    fontSize: 15,
-  },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  filterBadge: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterBadgeText: {
-    fontSize: 11,
-    color: '#fff',
-    fontWeight: '700',
-  },
-  filterIcon: {
-    fontSize: 14,
-  },
-  // 지역 탭
-  regionScroll: {
-    maxHeight: 44,
-    marginBottom: 2,
-  },
-  regionRow: {
-    paddingHorizontal: 16,
-    gap: 6,
-    alignItems: 'center',
-  },
-  regionChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceHigh,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  regionChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  regionChipText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  regionChipTextActive: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  // 테마 칩
-  themeScroll: {
-    maxHeight: 40,
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  themeRow: {
-    paddingHorizontal: 16,
-    gap: 6,
-    alignItems: 'center',
-  },
-  themeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 16,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  themeChipActive: {
-    backgroundColor: '#FF6B9D22',
-    borderColor: Colors.primary,
-  },
-  themeChipText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  themeChipTextActive: {
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  moreFilterBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  moreFilterText: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  // 활성 필터
-  activeFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 16,
-    paddingRight: 8,
-    paddingVertical: 6,
-    gap: 8,
-  },
-  activeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary + '22',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: Colors.primary + '44',
-  },
-  activeChipText: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  activeChipX: {
-    fontSize: 11,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  resetBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  resetText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  // 결과 수 + 정렬
-  resultRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 16,
-    paddingRight: 4,
-    paddingVertical: 6,
-  },
-  resultText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-    minWidth: 48,
-  },
-  sortRow: {
-    gap: 6,
-    alignItems: 'center',
-    paddingRight: 12,
-  },
-  sortChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  sortChipActive: {
-    backgroundColor: '#FF6B9D18',
-    borderColor: Colors.primary,
-  },
-  sortChipText: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-    fontWeight: '500',
-  },
-  sortChipTextActive: {
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-})

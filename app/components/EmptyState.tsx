@@ -1,10 +1,49 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 import { useFilterStore } from '@/stores/filterStore'
 
 export default function EmptyState() {
   const resetFilters = useFilterStore((s) => s.resetFilters)
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 80,
+      paddingHorizontal: 32,
+    },
+    emoji: {
+      fontSize: 48,
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 20,
+      marginBottom: 24,
+    },
+    btn: {
+      backgroundColor: colors.surfaceHigh,
+      borderRadius: 10,
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+    },
+    btnText: {
+      color: colors.textPrimary,
+      fontWeight: '600',
+      fontSize: 14,
+    },
+  }), [colors])
 
   return (
     <View style={styles.container}>
@@ -19,42 +58,3 @@ export default function EmptyState() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-    paddingHorizontal: 32,
-  },
-  emoji: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  btn: {
-    backgroundColor: Colors.surfaceHigh,
-    borderRadius: 10,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  btnText: {
-    color: Colors.textPrimary,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-})

@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { Image } from 'expo-image'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 
 interface Props {
   name: string
@@ -9,6 +9,38 @@ interface Props {
 }
 
 export default function CompanyBadge({ name, logoUrl }: Props) {
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    logo: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+    },
+    logoPlaceholder: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    logoInitial: {
+      color: '#fff',
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    name: {
+      fontSize: 12,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+  }), [colors])
+
   return (
     <View style={styles.container}>
       {logoUrl ? (
@@ -26,34 +58,3 @@ export default function CompanyBadge({ name, logoUrl }: Props) {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  logo: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-  },
-  logoPlaceholder: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoInitial: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  name: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-})

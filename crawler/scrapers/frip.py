@@ -1,19 +1,55 @@
-"""프립 (frip.co.kr) 스크래퍼 — Playwright 기반"""
+"""프립 (frip.co.kr) 스크래퍼 — GraphQL API 기반"""
 import re
-import time
 from datetime import datetime
 from typing import Optional
-from playwright.sync_api import sync_playwright
+
+import httpx
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
 
-FRIP_BASE_URL = 'https://frip.co.kr'
-SEARCH_KEYWORDS = ['로테이션 소개팅', '소개팅 미팅']
-PRICE_RE = re.compile(r'([\d,]+)\s*원')
-DATE_RE = re.compile(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})')
-REGION_KW = ['강남', '홍대', '신촌', '잠실', '건대', '성수', '이태원', '합정', '여의도', '수원', '인천', '부산', '대구', '대전']
+FRIP_GQL = 'https://gql.frip.co.kr/graphql'
+FRIP_BASE = 'https://frip.co.kr'
+
+# 소셜/소개팅모임 카테고리 ID
+CATEGORY_IDS = [2841]
+
+PRICE_RE = re.compile(r'[\d.]+')
+REGION_KW = ['강남', '서초', '홍대', '신촌', '잠실', '건대', '성수', '이태원', '합정', '여의도',
+             '마포', '종로', '용산', '동작', '관악', '수원', '인천', '부산', '대구', '대전']
+
+GQL_QUERY = '''
+query ProductContainer($filter: ListingProductFilterV4, $size: Int, $page: Int) {
+  product {
+    listingProductsV4(size: $size, page: $page, filter: $filter) {
+      pageInfo { hasNextPage }
+      totalCount
+      edges {
+        node {
+          id
+          title
+          areaName
+          salePrice
+          scheduleFirstDate
+          headerContents {
+            content {
+              thumbnail(width: 500, height: 500, crop: FILL, fetchFormat: AUTO)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+'''
+
+GQL_HEADERS = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Origin': 'https://frip.co.kr',
+    'Referer': 'https://frip.co.kr/',
+}
 
 
 class FripScraper(BaseScraper):
@@ -23,89 +59,12 @@ class FripScraper(BaseScraper):
     def scrape(self) -> list[EventModel]:
         events = []
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                context = browser.new_context(
-                    ignore_https_errors=True,
-                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-                )
-                page = context.new_page()
-
-                for keyword in SEARCH_KEYWORDS:
-                    try:
-                        search_url = f'{FRIP_BASE_URL}/search?keyword={keyword}'
-                        page.goto(search_url, timeout=20000)
-                        page.wait_for_load_state('networkidle', timeout=10000)
-                        time.sleep(2)
-
-                        links = page.eval_on_selector_all(
-                            'a[href*="/products/"]',
-                            'els => [...new Set(els.map(e => e.href))].filter(h => /\\/products\\/\\d+/.test(h))'
-                        )
-                        self.logger.info(f'프립 "{keyword}": {len(links)}개 링크 발견')
-
-                        for link in links[:6]:
-                            try:
-                                page.goto(link, timeout=15000)
-                                page.wait_for_load_state('networkidle', timeout=8000)
-
-                                title_el = page.query_selector('h1')
-                                title = title_el.inner_text().strip() if title_el else ''
-                                if not title or not any(kw in title for kw in ['소개팅', '미팅', '로테이션']):
-                                    continue
-
-                                body_text = page.inner_text('body')
-
-                                # 날짜 파싱
-                                event_dates = []
-                                for y, m, d in DATE_RE.findall(body_text):
-                                    try:
-                                        dt = datetime(int(y), int(m), int(d), 19, 0)
-                                        if dt > datetime.now():
-                                            event_dates.append(dt)
-                                    except ValueError:
-                                        pass
-
-                                # 가격 파싱
-                                raw_prices = [int(p.replace(',', '')) for p in PRICE_RE.findall(body_text)]
-                                price_vals = sorted(set(v for v in raw_prices if 10000 <= v <= 200000))
-                                price_male = price_vals[0] if price_vals else None
-                                price_female = price_vals[1] if len(price_vals) > 1 else price_male
-
-                                # 지역
-                                region = '서울'
-                                for r in REGION_KW:
-                                    if r in body_text:
-                                        region = r
-                                        break
-
-                                # 썸네일
-                                imgs = page.eval_on_selector_all('img[src*="http"]', 'els => els.map(e => e.src)')
-                                thumbnail = next((u for u in imgs if not u.endswith('.svg')), None)
-
-                                for event_date in (event_dates[:3] or [datetime.now().replace(hour=19, minute=0, second=0, microsecond=0)]):
-                                    events.append(EventModel(
-                                        title=sanitize_text(f'[프립] {title}', 80),
-                                        event_date=event_date,
-                                        location_region=region,
-                                        location_detail=None,
-                                        price_male=price_male,
-                                        price_female=price_female,
-                                        gender_ratio=None,
-                                        source_url=f'{link}#evt={event_date.strftime("%Y%m%d%H%M")}',
-                                        thumbnail_urls=[thumbnail] if thumbnail else [],
-                                        theme=['일반'],
-                                        seats_left_male=None,
-                                        seats_left_female=None,
-                                    ))
-                                time.sleep(1)
-                            except Exception as e:
-                                self.logger.warning(f'프립 상품 파싱 실패 {link}: {e}')
-
-                    except Exception as e:
-                        self.logger.warning(f'프립 검색 실패 ({keyword}): {e}')
-
-                browser.close()
+            nodes = self._fetch_all_products()
+            self.logger.info(f'프립 상품 {len(nodes)}개 수집')
+            for node in nodes:
+                ev = self._node_to_event(node)
+                if ev:
+                    events.append(ev)
         except Exception as e:
             self.logger.error(f'프립 크롤링 실패: {e}')
 
@@ -113,3 +72,91 @@ class FripScraper(BaseScraper):
         unique = [ev for ev in events if ev.source_url not in seen and not seen.add(ev.source_url)]  # type: ignore
         self.logger.info(f'프립 총 {len(unique)}개 이벤트')
         return unique
+
+    def _fetch_all_products(self) -> list[dict]:
+        nodes: list[dict] = []
+        page = 1
+        with httpx.Client(timeout=20) as client:
+            while True:
+                variables = {
+                    'filter': {'categoryIds': CATEGORY_IDS, 'orderType': 'LATEST'},
+                    'size': 24,
+                    'page': page,
+                }
+                resp = client.post(
+                    FRIP_GQL,
+                    json={'operationName': 'ProductContainer', 'query': GQL_QUERY, 'variables': variables},
+                    headers=GQL_HEADERS,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                lp = data['data']['product']['listingProductsV4']
+                nodes.extend(e['node'] for e in lp['edges'])
+                if not lp['pageInfo']['hasNextPage']:
+                    break
+                page += 1
+        return nodes
+
+    def _node_to_event(self, node: dict) -> Optional[EventModel]:
+        try:
+            ts = node.get('scheduleFirstDate')
+            if not ts:
+                return None
+
+            event_date = datetime.fromtimestamp(int(ts) / 1000)
+            if event_date < datetime.now():
+                return None
+
+            title = node.get('title') or ''
+            if not any(kw in title for kw in ['소개팅', '미팅', '로테이션', '파티', '번개', '썸', '솔로']):
+                return None
+
+            area = node.get('areaName') or ''
+            region = '서울'
+            for kw in REGION_KW:
+                if kw in area or kw in title:
+                    region = kw
+                    break
+
+            sale_price = node.get('salePrice')
+            price: Optional[int] = None
+            if sale_price:
+                try:
+                    price = int(float(str(sale_price)))
+                except (ValueError, TypeError):
+                    pass
+
+            product_id = node.get('id')
+            source_url = f'{FRIP_BASE}/products/{product_id}#evt={event_date.strftime("%Y%m%d%H%M")}'
+
+            # 썸네일
+            thumbnails: list[str] = []
+            for hc in node.get('headerContents') or []:
+                thumb = (hc.get('content') or {}).get('thumbnail')
+                if thumb:
+                    thumbnails.append(thumb)
+                    break
+
+            theme = ['일반']
+            if '와인' in title:
+                theme = ['와인']
+            elif '쿠킹' in title or '요리' in title:
+                theme = ['쿠킹']
+
+            return EventModel(
+                title=sanitize_text(f'[프립] {title}', 80),
+                event_date=event_date,
+                location_region=region,
+                location_detail=area or None,
+                price_male=price,
+                price_female=price,
+                gender_ratio=None,
+                source_url=source_url,
+                thumbnail_urls=thumbnails,
+                theme=theme,
+                seats_left_male=None,
+                seats_left_female=None,
+            )
+        except Exception as e:
+            self.logger.warning(f'프립 노드 파싱 실패: {e}')
+            return None

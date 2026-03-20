@@ -3,12 +3,16 @@ import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Colors } from '@/constants/colors'
+import { useThemeStore } from '@/stores/themeStore'
+import { usePushNotification } from '@/hooks/usePushNotification'
 
 const ONBOARDING_KEY = 'sodate-onboarding-done'
 
 export default function RootLayout() {
   const router = useRouter()
+  usePushNotification()
+  const { isDark, colors, load } = useThemeStore()
+  useEffect(() => { load() }, [])
 
   useEffect(() => {
     async function checkOnboarding() {
@@ -22,12 +26,12 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: Colors.background },
-          headerTintColor: Colors.textPrimary,
-          contentStyle: { backgroundColor: Colors.background },
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.textPrimary,
+          contentStyle: { backgroundColor: colors.background },
           headerShadowVisible: false,
         }}
       >
@@ -37,19 +41,19 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="event/[id]"
-          options={{ title: '소개팅 상세' }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="company/[id]"
-          options={{ title: '업체 정보' }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen name="reviews/index" options={{ headerShown: false }} />
         <Stack.Screen name="favorites/index" options={{ headerShown: false }} />
-        <Stack.Screen name="alerts" options={{ title: '알림 설정' }} />
+        <Stack.Screen name="alerts" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ title: '설정' }} />
         <Stack.Screen
           name="onboarding"
-          options={{ headerShown: false, gestureEnabled: false }}
+          options={{ headerShown: false, gestureEnabled: false, contentStyle: { backgroundColor: colors.background } }}
         />
       </Stack>
     </SafeAreaProvider>

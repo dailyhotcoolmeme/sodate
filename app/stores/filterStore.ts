@@ -88,4 +88,4 @@ export const useFilterStore = create<FilterState>()(
   )
 )
 
-export type { FilterSnapshot }
+export type { FilterSnapshot, FilterState }

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { openOutlink } from '@/lib/outlink'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
 import DeadlineBadge from './DeadlineBadge'
 import ThemeTag from './ThemeTag'
@@ -21,6 +21,14 @@ interface Props {
   onToggleFavorite?: () => void
 }
 
+function cleanTitle(title: string): string {
+  return title
+    .replace(/^\[[^\]]+\]\s*/, '')
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F000}-\u{1FFFF}]|\u200d/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
   const days = ['일', '월', '화', '수', '목', '금', '토']
@@ -31,6 +39,60 @@ function formatDate(dateStr: string): string {
 
 export default function EventCard({ event, isFavorite = false, onToggleFavorite }: Props) {
   const router = useRouter()
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      marginHorizontal: 16,
+      marginVertical: 8,
+      overflow: 'hidden',
+    },
+    imageContainer: { position: 'relative' },
+    image: { width: '100%', height: 200 },
+    imagePlaceholder: {
+      width: '100%',
+      height: 200,
+      backgroundColor: colors.surfaceHigh,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    imagePlaceholderText: { fontSize: 48 },
+    heartBtn: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      borderRadius: 20,
+      width: 36,
+      height: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heartIcon: { fontSize: 20, color: '#fff' },
+    heartIconActive: { color: '#FF6B9D' },
+    content: { padding: 16, gap: 4 },
+    title: {
+      fontSize: 16,
+      color: colors.textPrimary,
+      fontWeight: '700',
+      marginVertical: 6,
+      lineHeight: 22,
+    },
+    metaRow: { flexDirection: 'row', gap: 12, marginTop: 2 },
+    meta: { fontSize: 13, color: colors.textSecondary },
+    metaDot: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 4 },
+    price: { fontSize: 13, color: colors.textSecondary },
+    tags: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
+    cta: {
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: 'center',
+      marginTop: 12,
+    },
+    ctaText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  }), [colors])
 
   const handleApply = () => openOutlink(event.source_url)
   const handleCardPress = () => router.push(`/event/${event.id}`)
@@ -88,7 +150,7 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
 
         {/* 제목 */}
         <Text style={styles.title} numberOfLines={2}>
-          {event.title}
+          {cleanTitle(event.title)}
         </Text>
 
         {/* 날짜 + 지역 */}
@@ -134,57 +196,3 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
     </TouchableOpacity>
   )
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    overflow: 'hidden',
-  },
-  imageContainer: { position: 'relative' },
-  image: { width: '100%', height: 200 },
-  imagePlaceholder: {
-    width: '100%',
-    height: 200,
-    backgroundColor: Colors.surfaceHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  imagePlaceholderText: { fontSize: 48 },
-  heartBtn: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 20,
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heartIcon: { fontSize: 20, color: '#fff' },
-  heartIconActive: { color: '#FF6B9D' },
-  content: { padding: 16, gap: 4 },
-  title: {
-    fontSize: 16,
-    color: Colors.textPrimary,
-    fontWeight: '700',
-    marginVertical: 6,
-    lineHeight: 22,
-  },
-  metaRow: { flexDirection: 'row', gap: 12, marginTop: 2 },
-  meta: { fontSize: 13, color: Colors.textSecondary },
-  metaDot: { fontSize: 13, color: Colors.textTertiary, marginHorizontal: 4 },
-  price: { fontSize: 13, color: Colors.textSecondary },
-  tags: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
-  cta: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  ctaText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-})

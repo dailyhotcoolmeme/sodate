@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import * as Notifications from 'expo-notifications'
 import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
 import { supabase } from '@/lib/supabase'
@@ -21,6 +21,65 @@ import { supabase } from '@/lib/supabase'
 export default function AlertsScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+    backBtn: { paddingVertical: 4, alignSelf: 'flex-start' },
+    backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+    headerTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5, marginTop: 4 },
+    scroll: { flex: 1 },
+    content: { padding: 16, paddingBottom: 40 },
+    sectionTitle: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontWeight: '700',
+      marginTop: 24,
+      marginBottom: 4,
+    },
+    hint: { color: colors.textTertiary, fontSize: 12, marginBottom: 12 },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    chip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+    chipText: { color: colors.textSecondary, fontSize: 13 },
+    chipTextSelected: { color: '#fff', fontWeight: '600' },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    label: { color: colors.textPrimary, fontSize: 15 },
+    subLabel: { color: colors.textTertiary, fontSize: 12, marginTop: 2 },
+    saveBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 16,
+      alignItems: 'center',
+      marginTop: 32,
+    },
+    saveBtnDisabled: { opacity: 0.6 },
+    saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    testBtn: {
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    testBtnText: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
+  }), [colors])
+
   const [selectedRegions, setSelectedRegions] = useState<string[]>([])
   const [selectedThemes, setSelectedThemes] = useState<string[]>([])
   const [notifyNew, setNotifyNew] = useState(true)
@@ -166,7 +225,7 @@ export default function AlertsScreen() {
         <Switch
           value={notifyNew}
           onValueChange={setNotifyNew}
-          trackColor={{ true: Colors.primary, false: Colors.border }}
+          trackColor={{ true: colors.primary, false: colors.border }}
           thumbColor="#fff"
         />
       </View>
@@ -178,7 +237,7 @@ export default function AlertsScreen() {
         <Switch
           value={notifyDeadline}
           onValueChange={setNotifyDeadline}
-          trackColor={{ true: Colors.primary, false: Colors.border }}
+          trackColor={{ true: colors.primary, false: colors.border }}
           thumbColor="#fff"
         />
       </View>
@@ -198,61 +257,3 @@ export default function AlertsScreen() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-  backBtn: { paddingVertical: 4, alignSelf: 'flex-start' },
-  backText: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5, marginTop: 4 },
-  scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 40 },
-  sectionTitle: {
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 24,
-    marginBottom: 4,
-  },
-  hint: { color: Colors.textTertiary, fontSize: 12, marginBottom: 12 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { color: Colors.textSecondary, fontSize: 13 },
-  chipTextSelected: { color: '#fff', fontWeight: '600' },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-  },
-  label: { color: Colors.textPrimary, fontSize: 15 },
-  subLabel: { color: Colors.textTertiary, fontSize: 12, marginTop: 2 },
-  saveBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  testBtn: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  testBtnText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
-})

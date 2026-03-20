@@ -40,24 +40,136 @@ class LovecastingScraper(BaseScraper):
         return events
 
     def _scrape_category(self, category_url: str) -> list[EventModel]:
-        """카테고리 페이지에서 게시물 목록 수집 후 파싱"""
-        post_links = self._collect_links_static(category_url)
+        """카테고리 페이지 본문에서 직접 날짜 파싱 (러브캐스팅은 단일 페이지 구조)"""
+        # 1차: 페이지 본문 직접 파싱
+        events = self._fetch_and_parse('러브캐스팅', category_url)
+        if events:
+            self.logger.info(f'러브캐스팅 {category_url} — {len(events)}개 이벤트 파싱')
+            return events
 
+        # 2차: 신청 링크들 수집 → 개별 파싱
+        post_links = self._collect_links_static(category_url)
         if not post_links:
             self.logger.info(f'정적 수집 실패, Playwright 시도: {category_url}')
             post_links = self._collect_links_playwright(category_url)
 
-        self.logger.info(f'러브캐스팅 {category_url} — {len(post_links)}개 게시물 발견')
-
-        events = []
-        for title, url in post_links[:6]:
+        self.logger.info(f'러브캐스팅 {category_url} — {len(post_links)}개 링크 발견')
+        for title, url in post_links[:8]:
             try:
+                # URL 자체에 날짜 정보가 있는 경우 URL에서 직접 파싱
+                ev = self._event_from_url(title, url)
+                if ev:
+                    events.append(ev)
+                    continue
                 parsed = self._fetch_and_parse(title, url)
                 events.extend(parsed)
-                time.sleep(1)
+                time.sleep(0.5)
             except Exception as e:
                 self.logger.warning(f'게시물 파싱 실패 {url}: {e}')
         return events
+
+    def _fetch_thumbnail(self, url: str) -> Optional[str]:
+        """페이지에서 썸네일 이미지 URL 추출"""
+        try:
+            resp = httpx.get(url, timeout=10, follow_redirects=True,
+                             headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'})
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            og = soup.select_one('meta[property="og:image"]')
+            if og and og.get('content'):
+                return og['content']
+            for img in soup.select('img'):
+                src = img.get('src') or img.get('data-src', '')
+                if not src:
+                    continue
+                low = src.lower()
+                if any(skip in low for skip in ['logo', 'icon', 'facebook', 'gravatar', '.gif']):
+                    continue
+                if 'wp-content/uploads' in src or 'cdn' in src:
+                    return src if src.startswith('http') else urljoin(self.BASE_URL, src)
+        except Exception:
+            pass
+        return None
+
+    def _event_from_url(self, title: str, url: str) -> Optional[EventModel]:
+        """URL 슬러그에서 날짜 추출. 예: /26-03-21-커피/ → 2026-03-21"""
+        from urllib.parse import unquote
+        slug = unquote(url.rstrip('/').split('/')[-1])
+
+        # 패턴1: YY-MM-DD (예: 26-03-21)
+        m = re.search(r'(\d{2})-(\d{2})-(\d{2})', slug)
+        if m:
+            yy, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            year = 2000 + yy
+            if 1 <= mo <= 12 and 1 <= d <= 31:
+                try:
+                    event_date = datetime(year, mo, d, 14, 0)
+                    if event_date < datetime.now():
+                        return None
+                    # 지역
+                    region = '서울'
+                    for r in self.REGION_KEYWORDS:
+                        if r in slug or r in title:
+                            region = r
+                            break
+                    # 썸네일 fetch
+                    thumbnail_url = self._fetch_thumbnail(url)
+                    ev_title = sanitize_text(f'[러브캐스팅] {title or slug}', 80)
+                    return EventModel(
+                        title=ev_title,
+                        event_date=event_date,
+                        location_region=region,
+                        location_detail=None,
+                        price_male=None,
+                        price_female=None,
+                        gender_ratio=None,
+                        source_url=f'{url}#evt={event_date.strftime("%Y%m%d%H%M")}',
+                        thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
+                        theme=['일반'],
+                        seats_left_male=None,
+                        seats_left_female=None,
+                    )
+                except ValueError:
+                    pass
+
+        # 패턴2: N월-N일
+        m = re.search(r'(\d{1,2})월.{0,3}(\d{1,2})일', slug)
+        if not m:
+            return None
+
+        mo, d = int(m.group(1)), int(m.group(2))
+        if not (1 <= mo <= 12 and 1 <= d <= 31):
+            return None
+
+        year = datetime.now().year
+        try:
+            event_date = datetime(year, mo, d, 14, 0)
+            if event_date < datetime.now():
+                event_date = datetime(year + 1, mo, d, 14, 0)
+        except ValueError:
+            return None
+
+        # 지역
+        region = '서울'
+        for r in self.REGION_KEYWORDS:
+            if r in slug or r in title:
+                region = r
+                break
+
+        thumbnail_url = self._fetch_thumbnail(url)
+        return EventModel(
+            title=sanitize_text(f'[러브캐스팅] {title or slug}', 80),
+            event_date=event_date,
+            location_region=region,
+            location_detail=None,
+            price_male=None,
+            price_female=None,
+            gender_ratio=None,
+            source_url=f'{url}#evt={event_date.strftime("%Y%m%d%H%M")}',
+            thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
+            theme=['일반'],
+            seats_left_male=None,
+            seats_left_female=None,
+        )
 
     def _collect_links_static(self, category_url: str) -> list[tuple[str, str]]:
         """httpx로 WordPress 카테고리 페이지 정적 수집"""
@@ -97,53 +209,34 @@ class LovecastingScraper(BaseScraper):
         return links
 
     def _extract_links_from_soup(self, soup: BeautifulSoup) -> list[tuple[str, str]]:
-        """WordPress 게시물 링크 추출"""
+        """러브캐스팅 이벤트 링크 추출 — 신청하기 버튼 링크 우선"""
         links = []
         seen = set()
 
-        # WordPress 표준 셀렉터들
-        selectors = [
-            '.elementor-post a.elementor-post__thumbnail__link',
-            '.elementor-post .elementor-post__title a',
-            'article a[rel="bookmark"]',
-            '.post a[href*="lovecasting.co.kr"]',
-            'h2.entry-title a',
-            'h3.entry-title a',
-            '.wp-block-post-title a',
-        ]
+        skip_words = ['/category/', '/tag/', '/author/', '커피미팅/', '호프미팅/', 'mailto:', '#']
+        skip_texts = ['신청하기', '로그인', '회원가입', '공지사항', '후기', '카카오', '문의']
 
-        for sel in selectors:
-            for a in soup.select(sel):
-                href = a.get('href', '')
-                title = a.get_text(strip=True) or a.get('title', '') or ''
-                if not href:
-                    continue
-                # 카테고리/태그 페이지 제외
-                if any(skip in href for skip in ['/category/', '/tag/', '/author/']):
-                    continue
-                full_url = href if href.startswith('http') else urljoin(self.BASE_URL, href)
-                if full_url not in seen:
-                    seen.add(full_url)
-                    links.append((title.strip(), full_url))
+        for a in soup.select('a[href]'):
+            href = a.get('href', '')
+            text = a.get_text(strip=True)
+            if not href or not text:
+                continue
+            if any(s in href for s in skip_words):
+                continue
+            if any(s in text for s in skip_texts):
+                continue
+            if not href.startswith('http') and not href.startswith('/'):
+                continue
+            # 날짜가 포함된 URL (예: /1월-20일-와인...)이거나 일반 포스트 URL
+            if not href.startswith('http'):
+                href = urljoin(self.BASE_URL, href)
+            if 'lovecasting.co.kr' not in href:
+                continue
+            if href not in seen:
+                seen.add(href)
+                links.append((text, href))
 
-        # fallback: article 태그 내 링크
-        if not links:
-            for article in soup.select('article, .elementor-post, .post'):
-                a = article.select_one('a[href]')
-                if not a:
-                    continue
-                href = a.get('href', '')
-                title_el = article.select_one('h1, h2, h3, h4, .entry-title, [class*="title"]')
-                title = title_el.get_text(strip=True) if title_el else a.get_text(strip=True)
-                if not href or not title:
-                    continue
-                if any(skip in href for skip in ['/category/', '/tag/', '/author/']):
-                    continue
-                full_url = href if href.startswith('http') else urljoin(self.BASE_URL, href)
-                if full_url not in seen:
-                    seen.add(full_url)
-                    links.append((title.strip(), full_url))
-
+        # 보완: 페이지 본문 전체를 직접 파싱하도록 빈 리스트로 반환 허용
         return links
 
     def _fetch_and_parse(self, post_title: str, url: str) -> list[EventModel]:

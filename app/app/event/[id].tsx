@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react'
 import {
   View,
   Text,
@@ -7,12 +8,13 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useEventDetail } from '@/hooks/useEventDetail'
 import { useReviews } from '@/hooks/useReviews'
 import { useFavorites } from '@/hooks/useFavorites'
 import { openOutlink } from '@/lib/outlink'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 import ThemeTag from '@/components/ThemeTag'
 import DeadlineBadge from '@/components/DeadlineBadge'
 import ReviewCard from '@/components/ReviewCard'
@@ -31,6 +33,150 @@ export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { event, loading, error } = useEventDetail(id)
   const router = useRouter()
+  const insets = useSafeAreaInsets()
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.background },
+    header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+    backBtn: { paddingVertical: 4, alignSelf: 'flex-start' },
+    backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 16,
+    },
+    imageContainer: { position: 'relative' },
+    image: { width: '100%', aspectRatio: 4 / 3 },
+    imagePlaceholder: {
+      width: '100%',
+      aspectRatio: 4 / 3,
+      backgroundColor: colors.surfaceHigh,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    imagePlaceholderText: { fontSize: 64 },
+    content: { padding: 20 },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    company: {
+      fontSize: 13,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    heartBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heartBtnActive: {
+      borderColor: '#FF6B9D',
+      backgroundColor: '#FF6B9D18',
+    },
+    heartIcon: { fontSize: 20, color: colors.textTertiary },
+    heartIconActive: { color: '#FF6B9D' },
+    title: {
+      fontSize: 22,
+      color: colors.textPrimary,
+      fontWeight: '800',
+      lineHeight: 30,
+      marginBottom: 20,
+    },
+    infoCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      gap: 12,
+      marginBottom: 20,
+    },
+    infoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    infoLabel: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      width: 56,
+      fontWeight: '500',
+    },
+    infoValue: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.textPrimary,
+      fontWeight: '500',
+    },
+    tagsSection: { marginBottom: 20 },
+    sectionLabel: {
+      fontSize: 13,
+      color: colors.textTertiary,
+      fontWeight: '600',
+      marginBottom: 8,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    tags: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+    descSection: { marginBottom: 20 },
+    description: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      lineHeight: 22,
+    },
+    ctaBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 16,
+      alignItems: 'center',
+      marginBottom: 28,
+    },
+    ctaBtnText: {
+      color: '#fff',
+      fontWeight: '700',
+      fontSize: 16,
+    },
+    reviewsSection: { gap: 0 },
+    reviewsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    sectionTitle: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    moreLink: {
+      fontSize: 13,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    emptyReviews: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 20,
+      alignItems: 'center',
+    },
+    emptyReviewsText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+    reviewsList: { gap: 0, marginHorizontal: -20 },
+    errorText: { color: colors.error, fontSize: 15 },
+    backLink: { color: colors.primary, fontSize: 14 },
+  }), [colors])
 
   const companyId = event?.companies?.id ?? null
   const { reviews, loading: reviewsLoading } = useReviews(companyId, 3)
@@ -39,7 +185,7 @@ export default function EventDetailScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={Colors.primary} />
+        <ActivityIndicator color={colors.primary} />
       </View>
     )
   }
@@ -62,6 +208,13 @@ export default function EventDetailScreen() {
   )
 
   return (
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      {/* 헤더 */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Text style={styles.backText}>← 홈</Text>
+        </TouchableOpacity>
+      </View>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* 썸네일 */}
       <View style={styles.imageContainer}>
@@ -107,13 +260,13 @@ export default function EventDetailScreen() {
 
         {/* 기본 정보 */}
         <View style={styles.infoCard}>
-          <InfoRow label="일시" value={formatDate(event.event_date)} />
-          <InfoRow label="지역" value={event.location_region} />
+          <InfoRow label="일시" value={formatDate(event.event_date)} styles={styles} />
+          <InfoRow label="지역" value={event.location_region} styles={styles} />
           {event.location_detail && (
-            <InfoRow label="장소" value={event.location_detail} />
+            <InfoRow label="장소" value={event.location_detail} styles={styles} />
           )}
           {event.gender_ratio && (
-            <InfoRow label="성비" value={event.gender_ratio} />
+            <InfoRow label="성비" value={event.gender_ratio} styles={styles} />
           )}
           {(event.capacity_male || event.capacity_female) && (
             <InfoRow
@@ -124,6 +277,7 @@ export default function EventDetailScreen() {
               ]
                 .filter(Boolean)
                 .join(' / ')}
+              styles={styles}
             />
           )}
           {(event.price_male || event.price_female) && (
@@ -139,12 +293,14 @@ export default function EventDetailScreen() {
               ]
                 .filter(Boolean)
                 .join(' / ')}
+              styles={styles}
             />
           )}
           {event.age_range_min && (
             <InfoRow
               label="나이"
               value={`${event.age_range_min}세${event.age_range_max ? ` ~ ${event.age_range_max}세` : ' 이상'}`}
+              styles={styles}
             />
           )}
         </View>
@@ -191,7 +347,7 @@ export default function EventDetailScreen() {
           </View>
 
           {reviewsLoading ? (
-            <ActivityIndicator color={Colors.primary} style={{ marginVertical: 16 }} />
+            <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
           ) : reviews.length === 0 ? (
             <View style={styles.emptyReviews}>
               <Text style={styles.emptyReviewsText}>아직 등록된 후기가 없습니다</Text>
@@ -208,10 +364,11 @@ export default function EventDetailScreen() {
         <View style={{ height: 40 }} />
       </View>
     </ScrollView>
+    </View>
   )
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, styles }: { label: string; value: string; styles: any }) {
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -219,142 +376,3 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  imageContainer: { position: 'relative' },
-  image: { width: '100%', height: 260 },
-  imagePlaceholder: {
-    width: '100%',
-    height: 260,
-    backgroundColor: Colors.surfaceHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  imagePlaceholderText: { fontSize: 64 },
-  content: { padding: 20 },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  company: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  heartBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heartBtnActive: {
-    borderColor: '#FF6B9D',
-    backgroundColor: '#FF6B9D18',
-  },
-  heartIcon: { fontSize: 20, color: Colors.textTertiary },
-  heartIconActive: { color: '#FF6B9D' },
-  title: {
-    fontSize: 22,
-    color: Colors.textPrimary,
-    fontWeight: '800',
-    lineHeight: 30,
-    marginBottom: 20,
-  },
-  infoCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-    marginBottom: 20,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  infoLabel: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-    width: 56,
-    fontWeight: '500',
-  },
-  infoValue: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.textPrimary,
-    fontWeight: '500',
-  },
-  tagsSection: { marginBottom: 20 },
-  sectionLabel: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-    fontWeight: '600',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  tags: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  descSection: { marginBottom: 20 },
-  description: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 22,
-  },
-  ctaBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  ctaBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  reviewsSection: { gap: 0 },
-  reviewsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  moreLink: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  emptyReviews: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyReviewsText: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-  },
-  reviewsList: { gap: 0, marginHorizontal: -20 },
-  errorText: { color: Colors.error, fontSize: 15 },
-  backLink: { color: Colors.primary, fontSize: 14 },
-})

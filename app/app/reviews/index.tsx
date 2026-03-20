@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   View,
   Text,
@@ -10,10 +10,11 @@ import {
   Dimensions,
 } from 'react-native'
 import { Image } from 'expo-image'
+import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { openOutlink } from '@/lib/outlink'
 import { useAllReviews } from '@/hooks/useReviews'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 import type { ReviewRow } from '@/lib/supabase'
 
 const { width: SCREEN_W } = Dimensions.get('window')
@@ -29,6 +30,38 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 function ReviewThumb({ review }: { review: ReviewWithCompany }) {
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    thumb: { width: THUMB_W },
+    thumbImg: { width: THUMB_W, height: THUMB_W * 0.75, borderRadius: 10 },
+    thumbPlaceholder: {
+      width: THUMB_W,
+      height: THUMB_W * 0.75,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceHigh,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    thumbPlaceholderIcon: { fontSize: 14, color: colors.textTertiary, fontWeight: '600' },
+    thumbOverlay: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 6,
+    },
+    thumbSource: {
+      fontSize: 11,
+      color: colors.primary,
+      fontWeight: '600',
+      backgroundColor: colors.primary + '18',
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    thumbRating: { fontSize: 12, color: '#FFB800' },
+    thumbContent: { fontSize: 12, color: colors.textSecondary, marginTop: 4, lineHeight: 17 },
+  }), [colors])
+
   return (
     <TouchableOpacity
       style={styles.thumb}
@@ -39,7 +72,7 @@ function ReviewThumb({ review }: { review: ReviewWithCompany }) {
         <Image source={{ uri: review.thumbnail_url }} style={styles.thumbImg} contentFit="cover" />
       ) : (
         <View style={styles.thumbPlaceholder}>
-          <Text style={styles.thumbPlaceholderIcon}>💬</Text>
+          <Text style={styles.thumbPlaceholderIcon}>후기</Text>
         </View>
       )}
       <View style={styles.thumbOverlay}>
@@ -54,6 +87,21 @@ function ReviewThumb({ review }: { review: ReviewWithCompany }) {
 }
 
 function CompanySection({ name, reviews }: { name: string; reviews: ReviewWithCompany[] }) {
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    section: { marginTop: 20 },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      marginBottom: 10,
+    },
+    sectionName: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+    sectionCount: { fontSize: 12, color: colors.textTertiary },
+    thumbRow: { paddingHorizontal: 16, gap: 10 },
+  }), [colors])
+
   if (reviews.length === 0) return null
   return (
     <View style={styles.section}>
@@ -81,8 +129,38 @@ const TAB_SOURCES: Record<string, string | null> = {
 
 export default function ReviewsScreen() {
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const { reviews, loading } = useAllReviews(80)
   const [activeTab, setActiveTab] = useState('전체')
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 12,
+    },
+    backBtn: { paddingVertical: 4, marginBottom: 8, alignSelf: 'flex-start' },
+    backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+    title: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5 },
+    subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+    tabScroll: { flexShrink: 0 },
+    tabRow: { paddingHorizontal: 16, gap: 8, alignItems: 'flex-start' },
+    tab: {
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: 20,
+      backgroundColor: colors.surfaceHigh,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    tabText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
+    tabTextActive: { color: '#fff', fontWeight: '700' },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+    emptyText: { fontSize: 16, color: colors.textSecondary, fontWeight: '600' },
+    emptySubText: { fontSize: 13, color: colors.textTertiary },
+  }), [colors])
 
   // 필터링
   const filterSource = TAB_SOURCES[activeTab]
@@ -104,6 +182,9 @@ export default function ReviewsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* 헤더 */}
       <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+          <Text style={styles.backText}>← 홈</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>후기 모아보기</Text>
         <Text style={styles.subtitle}>실제 참여자들의 솔직한 후기</Text>
       </View>
@@ -130,7 +211,7 @@ export default function ReviewsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={Colors.primary} />
+          <ActivityIndicator color={colors.primary} />
         </View>
       ) : sections.length === 0 ? (
         <View style={styles.center}>
@@ -150,68 +231,3 @@ export default function ReviewsScreen() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  title: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
-  tabScroll: { maxHeight: 44 },
-  tabRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
-  tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceHigh,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  tabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  tabText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
-  tabTextActive: { color: '#fff', fontWeight: '700' },
-  section: { marginTop: 20 },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  sectionName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
-  sectionCount: { fontSize: 12, color: Colors.textTertiary },
-  thumbRow: { paddingHorizontal: 16, gap: 10 },
-  thumb: { width: THUMB_W },
-  thumbImg: { width: THUMB_W, height: THUMB_W * 0.75, borderRadius: 10 },
-  thumbPlaceholder: {
-    width: THUMB_W,
-    height: THUMB_W * 0.75,
-    borderRadius: 10,
-    backgroundColor: Colors.surfaceHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  thumbPlaceholderIcon: { fontSize: 32 },
-  thumbOverlay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  thumbSource: {
-    fontSize: 11,
-    color: Colors.primary,
-    fontWeight: '600',
-    backgroundColor: Colors.primary + '18',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  thumbRating: { fontSize: 12, color: '#FFB800' },
-  thumbContent: { fontSize: 12, color: Colors.textSecondary, marginTop: 4, lineHeight: 17 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  emptyText: { fontSize: 16, color: Colors.textSecondary, fontWeight: '600' },
-  emptySubText: { fontSize: 13, color: Colors.textTertiary },
-})

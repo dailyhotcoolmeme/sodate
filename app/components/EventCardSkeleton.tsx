@@ -1,9 +1,31 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useMemo } from 'react'
 import { View, StyleSheet, Animated } from 'react-native'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 
 export default function EventCardSkeleton() {
   const opacity = useRef(new Animated.Value(0.4)).current
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      marginHorizontal: 16,
+      marginVertical: 8,
+      overflow: 'hidden',
+    },
+    image: {
+      width: '100%',
+      height: 200,
+      backgroundColor: colors.surfaceHigh,
+    },
+    content: {
+      padding: 16,
+    },
+    line: {
+      backgroundColor: colors.surfaceHigh,
+      borderRadius: 4,
+    },
+  }), [colors])
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -37,25 +59,3 @@ export default function EventCardSkeleton() {
     </Animated.View>
   )
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    overflow: 'hidden',
-  },
-  image: {
-    width: '100%',
-    height: 200,
-    backgroundColor: Colors.surfaceHigh,
-  },
-  content: {
-    padding: 16,
-  },
-  line: {
-    backgroundColor: Colors.surfaceHigh,
-    borderRadius: 4,
-  },
-})

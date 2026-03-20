@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Modal,
   Platform,
 } from 'react-native'
-import { Colors } from '@/constants/colors'
+import { useColors } from '@/hooks/useColors'
 import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
 import { useFilterStore, type FilterSnapshot } from '@/stores/filterStore'
@@ -49,6 +49,95 @@ export default function FilterSheet({ visible, onClose }: Props) {
     applyRecentFilter,
     resetFilters,
   } = useFilterStore()
+  const colors = useColors()
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+      paddingTop: Platform.OS === 'android' ? 16 : 0,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    headerTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    resetText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    applyText: {
+      fontSize: 14,
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    section: {
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.divider,
+    },
+    sectionTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      marginBottom: 12,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    chipRow: {
+      flexDirection: 'row',
+      gap: 8,
+      flexWrap: 'wrap',
+    },
+    chipGrid: {
+      flexDirection: 'row',
+      gap: 8,
+      flexWrap: 'wrap',
+    },
+    chip: {
+      backgroundColor: colors.surfaceHigh,
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    chipSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    chipText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    chipTextSelected: {
+      color: '#fff',
+      fontWeight: '700',
+    },
+    recentChip: {
+      backgroundColor: colors.surfaceHigh,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginRight: 8,
+    },
+    recentChipText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+  }), [colors])
 
   const handleApply = () => {
     saveRecentFilter()
@@ -77,7 +166,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* 최근 필터 */}
           {recentFilters.length > 0 && (
-            <Section title="최근 필터">
+            <Section title="최근 필터" styles={styles}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.chipRow}>
                   {recentFilters.map((f: FilterSnapshot) => (
@@ -104,7 +193,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
           )}
 
           {/* 지역 */}
-          <Section title="지역">
+          <Section title="지역" styles={styles}>
             <View style={styles.chipGrid}>
               {REGIONS.map((r) => (
                 <Chip
@@ -112,13 +201,14 @@ export default function FilterSheet({ visible, onClose }: Props) {
                   label={r.label}
                   selected={region === r.id}
                   onPress={() => setRegion(r.id)}
+                  styles={styles}
                 />
               ))}
             </View>
           </Section>
 
           {/* 날짜 */}
-          <Section title="날짜">
+          <Section title="날짜" styles={styles}>
             <View style={styles.chipRow}>
               {DATE_RANGES.map((d) => (
                 <Chip
@@ -126,13 +216,14 @@ export default function FilterSheet({ visible, onClose }: Props) {
                   label={d.label}
                   selected={dateRange === d.id}
                   onPress={() => setDateRange(d.id)}
+                  styles={styles}
                 />
               ))}
             </View>
           </Section>
 
           {/* 테마 */}
-          <Section title="테마">
+          <Section title="테마" styles={styles}>
             <View style={styles.chipGrid}>
               {THEMES.map((t) => (
                 <Chip
@@ -140,13 +231,14 @@ export default function FilterSheet({ visible, onClose }: Props) {
                   label={t.label}
                   selected={themes.includes(t.id)}
                   onPress={() => toggleTheme(t.id)}
+                  styles={styles}
                 />
               ))}
             </View>
           </Section>
 
           {/* 가격 */}
-          <Section title="최대 가격">
+          <Section title="최대 가격" styles={styles}>
             <View style={styles.chipRow}>
               {PRICE_OPTIONS.map((p) => (
                 <Chip
@@ -154,6 +246,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
                   label={p.label}
                   selected={maxPrice === p.value}
                   onPress={() => setMaxPrice(p.value)}
+                  styles={styles}
                 />
               ))}
             </View>
@@ -169,9 +262,11 @@ export default function FilterSheet({ visible, onClose }: Props) {
 function Section({
   title,
   children,
+  styles,
 }: {
   title: string
   children: React.ReactNode
+  styles: any
 }) {
   return (
     <View style={styles.section}>
@@ -185,10 +280,12 @@ function Chip({
   label,
   selected,
   onPress,
+  styles,
 }: {
   label: string
   selected: boolean
   onPress: () => void
+  styles: any
 }) {
   return (
     <TouchableOpacity
@@ -201,92 +298,3 @@ function Chip({
     </TouchableOpacity>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingTop: Platform.OS === 'android' ? 16 : 0,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  resetText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  applyText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  section: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  chipGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  chip: {
-    backgroundColor: Colors.surfaceHigh,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  chipText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  chipTextSelected: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  recentChip: {
-    backgroundColor: Colors.surfaceHigh,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginRight: 8,
-  },
-  recentChipText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-})
