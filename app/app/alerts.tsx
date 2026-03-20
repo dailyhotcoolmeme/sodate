@@ -7,15 +7,20 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  Linking,
 } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import Constants from 'expo-constants'
+import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors } from '@/constants/colors'
 import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
 import { supabase } from '@/lib/supabase'
 
 export default function AlertsScreen() {
+  const insets = useSafeAreaInsets()
+  const router = useRouter()
   const [selectedRegions, setSelectedRegions] = useState<string[]>([])
   const [selectedThemes, setSelectedThemes] = useState<string[]>([])
   const [notifyNew, setNotifyNew] = useState(true)
@@ -34,13 +39,46 @@ export default function AlertsScreen() {
     )
   }
 
+  const handleTestNotification = async () => {
+    const { status } = await Notifications.getPermissionsAsync()
+    if (status !== 'granted') {
+      const { status: requested } = await Notifications.requestPermissionsAsync()
+      if (requested !== 'granted') {
+        Alert.alert('알림 권한 필요', '설정에서 알림 권한을 허용해주세요.',
+          [{ text: '취소', style: 'cancel' }, { text: '설정 열기', onPress: () => Linking.openSettings() }]
+        )
+        return
+      }
+    }
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '새 소개팅 등록!',
+        body: '연인어때 강남 04/05(토) 일정이 등록됐어요. 마감 전에 확인하세요!',
+        data: { type: 'new_event' },
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3 },
+    })
+    Alert.alert('3초 후 알림이 옵니다', '앱을 홈 화면으로 내려서 확인해보세요.')
+  }
+
   const handleSave = async () => {
     setSaving(true)
     try {
-      const { status } = await Notifications.getPermissionsAsync()
+      let { status } = await Notifications.getPermissionsAsync()
       if (status !== 'granted') {
-        Alert.alert('알림 권한 필요', '설정에서 알림 권한을 허용해주세요.')
-        return
+        const { status: requested } = await Notifications.requestPermissionsAsync()
+        if (requested !== 'granted') {
+          Alert.alert(
+            '알림 권한 필요',
+            '알림을 받으려면 설정에서 권한을 허용해주세요.',
+            [
+              { text: '취소', style: 'cancel' },
+              { text: '설정 열기', onPress: () => Linking.openSettings() },
+            ]
+          )
+          return
+        }
+        status = requested
       }
 
       const tokenResult = await Notifications.getExpoPushTokenAsync({
@@ -69,8 +107,15 @@ export default function AlertsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.sectionTitle}>📍 관심 지역</Text>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.header}>
+      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
+        <Text style={styles.backText}>← 홈</Text>
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>알림 설정</Text>
+    </View>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <Text style={styles.sectionTitle}>관심 지역</Text>
       <Text style={styles.hint}>선택하지 않으면 전국 알림을 받습니다</Text>
       <View style={styles.chipRow}>
         {REGIONS.filter((r) => r.id !== 'all').map((region) => (
@@ -91,7 +136,7 @@ export default function AlertsScreen() {
         ))}
       </View>
 
-      <Text style={styles.sectionTitle}>🎭 관심 테마</Text>
+      <Text style={styles.sectionTitle}>관심 테마</Text>
       <Text style={styles.hint}>선택하지 않으면 모든 테마 알림을 받습니다</Text>
       <View style={styles.chipRow}>
         {THEMES.map((theme) => (
@@ -112,7 +157,7 @@ export default function AlertsScreen() {
         ))}
       </View>
 
-      <Text style={styles.sectionTitle}>🔔 알림 종류</Text>
+      <Text style={styles.sectionTitle}>알림 종류</Text>
       <View style={styles.row}>
         <View>
           <Text style={styles.label}>새 일정 알림</Text>
@@ -145,12 +190,22 @@ export default function AlertsScreen() {
       >
         <Text style={styles.saveBtnText}>{saving ? '저장 중...' : '알림 설정 저장'}</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity style={styles.testBtn} onPress={handleTestNotification}>
+        <Text style={styles.testBtnText}>테스트 알림 보내기</Text>
+      </TouchableOpacity>
     </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  backBtn: { paddingVertical: 4, alignSelf: 'flex-start' },
+  backText: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5, marginTop: 4 },
+  scroll: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
   sectionTitle: {
     color: Colors.textPrimary,
@@ -191,4 +246,13 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  testBtn: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  testBtnText: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
 })
