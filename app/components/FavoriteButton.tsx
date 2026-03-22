@@ -1,5 +1,6 @@
 import React, { useRef, useMemo } from 'react'
-import { TouchableOpacity, Text, StyleSheet, Animated } from 'react-native'
+import { TouchableOpacity, StyleSheet, Animated } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 
 interface Props {
@@ -48,9 +49,13 @@ export default function FavoriteButton({ isFavorite, onToggle, size = 'md' }: Pr
         isFavorite && styles.btnActive,
       ]}
     >
-      <Animated.Text style={[{ fontSize: iconSize }, { transform: [{ scale }] }]}>
-        {isFavorite ? '♥' : '♡'}
-      </Animated.Text>
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Ionicons
+          name="heart"
+          size={iconSize}
+          color={isFavorite ? '#FF6B9D' : colors.textTertiary}
+        />
+      </Animated.View>
     </TouchableOpacity>
   )
 }

@@ -13,14 +13,18 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.sodate.app"
+      "bundleIdentifier": "com.sodate.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundColor": "#0F0F0F"
+        "backgroundColor": "#FFF0F5"
       },
-      "package": "com.sodate.app"
+      "package": "com.sodate.app",
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",

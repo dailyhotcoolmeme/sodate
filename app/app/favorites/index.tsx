@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -7,6 +8,7 @@ import EventCard from '@/components/EventCard'
 import EventListItem from '@/components/EventListItem'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
+import { track } from '@/lib/analytics'
 
 type ViewMode = 'card' | 'list'
 
@@ -15,6 +17,8 @@ export default function FavoritesScreen() {
   const router = useRouter()
   const { events, loading } = useFavoriteEvents()
   const { favoriteIds, toggle } = useFavorites()
+
+  React.useEffect(() => { track('screen_view', { properties: { screen: 'favorites' } }) }, [])
   const [viewMode, setViewMode] = useState<ViewMode>('card')
   const colors = useColors()
   const styles = useMemo(() => StyleSheet.create({
@@ -27,7 +31,7 @@ export default function FavoritesScreen() {
       paddingTop: 8,
       marginBottom: 8,
     },
-    backBtn: { paddingVertical: 4, paddingRight: 8 },
+    backBtn: { paddingVertical: 4, paddingRight: 8, flexDirection: 'row', alignItems: 'center', gap: 2 },
     backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
     toggleRow: { flexDirection: 'row', gap: 2 },
     viewBtn: {
@@ -53,20 +57,20 @@ export default function FavoritesScreen() {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-            <Text style={styles.backText}>← 홈</Text>
+            <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>홈</Text>
           </TouchableOpacity>
           <View style={styles.toggleRow}>
             <TouchableOpacity
               style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]}
               onPress={() => setViewMode('card')}
             >
-              <Text style={[styles.viewBtnText, viewMode === 'card' && styles.viewBtnTextActive]}>▦</Text>
+              <Ionicons name="grid-outline" size={18} color={viewMode === 'card' ? colors.textPrimary : colors.textTertiary} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
               onPress={() => setViewMode('list')}
             >
-              <Text style={[styles.viewBtnText, viewMode === 'list' && styles.viewBtnTextActive]}>☰</Text>
+              <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? colors.textPrimary : colors.textTertiary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -82,7 +86,7 @@ export default function FavoritesScreen() {
         </View>
       ) : events.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyIcon}>♡</Text>
+          <Ionicons name="heart-outline" size={48} color={colors.primary} />
           <Text style={styles.emptyText}>아직 관심 소개팅이 없습니다</Text>
           <Text style={styles.emptySubText}>이벤트 카드의 하트를 눌러 저장하세요</Text>
         </View>

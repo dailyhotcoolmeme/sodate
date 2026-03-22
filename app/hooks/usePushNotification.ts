@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import { Platform } from 'react-native'
+import { router } from 'expo-router'
 import { supabase } from '@/lib/supabase'
 
 Notifications.setNotificationHandler({
@@ -31,7 +32,10 @@ export function usePushNotification() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data
-        if (data?.source_url) {
+        if (data?.event_id) {
+          // 이벤트 상세 화면으로 이동
+          router.push(`/event/${data.event_id}`)
+        } else if (data?.source_url) {
           import('@/lib/outlink').then(({ openOutlink }) => {
             openOutlink(data.source_url as string)
           })

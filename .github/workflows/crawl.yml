@@ -54,6 +54,15 @@ jobs:
           cd crawler
           python reviews_main.py
 
+      - name: QA — 크롤링 결과 검증
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          python qa_validator.py
+        continue-on-error: true   # WARN만 있을 때 전체 워크플로우 중단 방지
+
       - name: Process push queue (send notifications)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -69,6 +78,7 @@ jobs:
           done
 
       - name: Check deadline reminders
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.schedule, '0 9')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -81,17 +91,18 @@ jobs:
           key = os.environ['SUPABASE_SERVICE_ROLE_KEY']
           headers = {'apikey': key, 'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'}
 
-          # D-1 이벤트 조회
-          tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime('%Y-%m-%d')
+          # D-1 이벤트 조회 (KST 기준 내일)
+          KST = timezone(timedelta(hours=9))
+          tomorrow_kst = (datetime.now(KST) + timedelta(days=1)).strftime('%Y-%m-%d')
           resp = httpx.get(
               f'{url}/rest/v1/events',
-              params={
-                  'select': 'id,title,event_date,location_region,company_id,source_url',
-                  'event_date': f'gte.{tomorrow}T00:00:00',
-                  'event_date2': f'lt.{tomorrow}T23:59:59',
-                  'is_active': 'eq.true',
-                  'is_closed': 'eq.false',
-              },
+              params=[
+                  ('select', 'id,title,event_date,location_region,company_id,source_url'),
+                  ('event_date', f'gte.{tomorrow_kst}T00:00:00+09:00'),
+                  ('event_date', f'lt.{tomorrow_kst}T23:59:59+09:00'),
+                  ('is_active', 'eq.true'),
+                  ('is_closed', 'eq.false'),
+              ],
               headers=headers, timeout=15
           )
           events = resp.json() if resp.status_code == 200 else []

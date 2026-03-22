@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import {
   View,
   Text,
@@ -8,7 +9,9 @@ import {
   TouchableOpacity,
   Alert,
   Linking,
+  Platform,
 } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
@@ -18,6 +21,9 @@ import { useColors } from '@/hooks/useColors'
 import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
 import { supabase } from '@/lib/supabase'
+import { track } from '@/lib/analytics'
+
+const ALERT_SETTINGS_KEY = 'sodate-alert-settings'
 
 export default function AlertsScreen() {
   const insets = useSafeAreaInsets()
@@ -26,7 +32,7 @@ export default function AlertsScreen() {
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-    backBtn: { paddingVertical: 4, alignSelf: 'flex-start' },
+    backBtn: { paddingVertical: 4, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 2 },
     backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
     headerTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5, marginTop: 4 },
     scroll: { flex: 1 },
@@ -77,6 +83,23 @@ export default function AlertsScreen() {
   const [notifyNew, setNotifyNew] = useState(true)
   const [notifyDeadline, setNotifyDeadline] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [loadingExisting, setLoadingExisting] = useState(true)
+
+  // AsyncStorage에서 로컬 설정 불러오기
+  React.useEffect(() => {
+    AsyncStorage.getItem(ALERT_SETTINGS_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const saved = JSON.parse(raw)
+          setSelectedRegions(saved.regions ?? [])
+          setSelectedThemes(saved.themes ?? [])
+          setNotifyNew(saved.notify_new ?? true)
+          setNotifyDeadline(saved.notify_deadline ?? true)
+        } catch {}
+      }
+      setLoadingExisting(false)
+    })
+  }, [])
 
   const toggleRegion = (id: string) => {
     setSelectedRegions((prev) =>
@@ -119,6 +142,11 @@ export default function AlertsScreen() {
         projectId: Constants.expoConfig?.extra?.eas?.projectId,
       })
 
+      // 토큰이 DB에 없을 수 있으므로 먼저 등록
+      await supabase.functions.invoke('register-push-token', {
+        body: { token: tokenResult.data, platform: Platform.OS },
+      })
+
       const { error } = await supabase.functions.invoke('save-alert-subscription', {
         body: {
           token: tokenResult.data,
@@ -131,6 +159,22 @@ export default function AlertsScreen() {
 
       if (error) throw error
 
+      // AsyncStorage에 로컬 저장 (다음 진입 시 즉시 복원)
+      await AsyncStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({
+        regions: selectedRegions,
+        themes: selectedThemes,
+        notify_new: notifyNew,
+        notify_deadline: notifyDeadline,
+      }))
+
+      track('alert_subscribe', {
+        properties: {
+          regions: selectedRegions,
+          themes: selectedThemes,
+          notify_new: notifyNew,
+          notify_deadline: notifyDeadline,
+        },
+      })
       Alert.alert('저장 완료', '알림 설정이 저장되었습니다.')
     } catch (e) {
       console.error('알림 설정 저장 실패:', e)
@@ -140,11 +184,17 @@ export default function AlertsScreen() {
     }
   }
 
+  if (loadingExisting) return (
+    <View style={[styles.container, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' }]}>
+      <Text style={{ color: colors.textTertiary, fontSize: 14 }}>설정 불러오는 중...</Text>
+    </View>
+  )
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
     <View style={styles.header}>
       <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-        <Text style={styles.backText}>← 홈</Text>
+        <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>홈</Text>
       </TouchableOpacity>
       <Text style={styles.headerTitle}>알림 설정</Text>
     </View>

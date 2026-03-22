@@ -31,8 +31,8 @@ serve(async (_req) => {
     const notifications = tokens.map((token: string) => ({
       to: token,
       title: payload.type === 'new_event'
-        ? `🎉 새 소개팅 - ${payload.location_region}`
-        : `⏰ 마감 임박 - ${payload.location_region}`,
+        ? `소개팅모아 - ${payload.location_region} 새 일정`
+        : `소개팅모아 - ${payload.location_region} 마감 임박`,
       body: payload.event_title,
       data: {
         event_id: payload.event_id,

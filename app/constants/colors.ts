@@ -40,7 +40,7 @@ export const LightColors = {
   text: '#111111',
 } as const
 
-export type AppColors = typeof DarkColors
+export type AppColors = typeof DarkColors | typeof LightColors
 
 // 하위 호환용 기본값 (다크)
 export const Colors = DarkColors

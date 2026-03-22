@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { useFilterStore } from '@/stores/filterStore'
 
@@ -47,7 +48,7 @@ export default function EmptyState() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.emoji}>♡</Text>
+      <Ionicons name="heart" size={48} color="#FF6B9D" style={{ marginBottom: 16 }} />
       <Text style={styles.title}>조건에 맞는 소개팅이 없어요</Text>
       <Text style={styles.subtitle}>
         필터를 변경하거나 다른 지역을 선택해보세요

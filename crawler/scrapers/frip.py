@@ -1,6 +1,6 @@
 """프립 (frip.co.kr) 스크래퍼 — GraphQL API 기반"""
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -103,8 +103,8 @@ class FripScraper(BaseScraper):
             if not ts:
                 return None
 
-            event_date = datetime.fromtimestamp(int(ts) / 1000)
-            if event_date < datetime.now():
+            event_date = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc)
+            if event_date < datetime.now(timezone.utc):
                 return None
 
             title = node.get('title') or ''

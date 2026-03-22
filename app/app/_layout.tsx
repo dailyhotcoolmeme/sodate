@@ -3,6 +3,7 @@ import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Notifications from 'expo-notifications'
 import { useThemeStore } from '@/stores/themeStore'
 import { usePushNotification } from '@/hooks/usePushNotification'
 
@@ -22,6 +23,17 @@ export default function RootLayout() {
       }
     }
     checkOnboarding()
+  }, [])
+
+  // 앱이 종료된 상태에서 알림 탭으로 실행된 경우 처리
+  useEffect(() => {
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (!response) return
+      const data = response.notification.request.content.data
+      if (data?.event_id) {
+        router.push(`/event/${data.event_id}`)
+      }
+    })
   }, [])
 
   return (

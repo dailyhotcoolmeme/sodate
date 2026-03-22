@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import {
   View,
   Text,
@@ -16,6 +17,13 @@ import { useAlertStore } from '@/stores/alertStore'
 import { useColors } from '@/hooks/useColors'
 import EventCard from '@/components/EventCard'
 
+function cleanText(text: string): string {
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F000}-\u{1FFFF}]|\u200d/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export default function CompanyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { data, loading, error } = useCompany(id)
@@ -26,7 +34,7 @@ export default function CompanyDetailScreen() {
   const styles = useMemo(() => StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     navHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-    backBtn: { paddingVertical: 4, alignSelf: 'flex-start' },
+    backBtn: { paddingVertical: 4, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 2 },
     backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
     container: {
       flex: 1,
@@ -152,7 +160,7 @@ export default function CompanyDetailScreen() {
           {error ?? '업체를 찾을 수 없습니다'}
         </Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backLink}>← 돌아가기</Text>
+          <Text style={styles.backLink}>돌아가기</Text>
         </TouchableOpacity>
       </View>
     )
@@ -165,7 +173,7 @@ export default function CompanyDetailScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
     <View style={styles.navHeader}>
       <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-        <Text style={styles.backText}>← 상세</Text>
+        <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>상세</Text>
       </TouchableOpacity>
     </View>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -183,10 +191,10 @@ export default function CompanyDetailScreen() {
           </View>
         )}
         <View style={styles.headerInfo}>
-          <Text style={styles.companyName}>{company.name}</Text>
+          <Text style={styles.companyName}>{cleanText(company.name)}</Text>
           {company.description && (
             <Text style={styles.companyDesc} numberOfLines={2}>
-              {company.description}
+              {cleanText(company.description)}
             </Text>
           )}
           {company.regions && company.regions.length > 0 && (

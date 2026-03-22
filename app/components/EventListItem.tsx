@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { openOutlink } from '@/lib/outlink'
@@ -16,8 +17,9 @@ interface Props {
 // 렌더링 깨지는 이모지/특수문자 제거 (Hermes 호환)
 function cleanTitle(title: string): string {
   return title
-    .replace(/^\[[^\]]+\]\s*/, '')  // [업체명] 접두어 제거
+    .replace(/^\[[^\]]+\]\s*/, '')
     .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F000}-\u{1FFFF}]|\u200d/gu, '')
+    .replace(/_E\d+$/i, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -138,9 +140,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
           onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }}
           activeOpacity={0.8}
         >
-          <Text style={[styles.heartIcon, isFavorite && styles.heartActive]}>
-            {isFavorite ? '♥' : '♡'}
-          </Text>
+          <Ionicons name="heart" size={20} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
         </TouchableOpacity>
       )}
     </TouchableOpacity>

@@ -154,8 +154,8 @@ export default function FilterSheet({ visible, onClose }: Props) {
       <View style={styles.container}>
         {/* 헤더 */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={resetFilters}>
-            <Text style={styles.resetText}>초기화</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={styles.resetText}>닫기</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>필터</Text>
           <TouchableOpacity onPress={handleApply}>
@@ -252,7 +252,14 @@ export default function FilterSheet({ visible, onClose }: Props) {
             </View>
           </Section>
 
-          <View style={{ height: 40 }} />
+          <View style={{ paddingHorizontal: 20, paddingVertical: 16 }}>
+            <TouchableOpacity
+              onPress={resetFilters}
+              style={{ alignItems: 'center', paddingVertical: 12 }}
+            >
+              <Text style={styles.resetText}>필터 초기화</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </View>
     </Modal>

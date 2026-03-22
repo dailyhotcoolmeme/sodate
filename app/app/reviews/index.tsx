@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import {
   View,
   Text,
@@ -13,6 +14,7 @@ import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { openOutlink } from '@/lib/outlink'
+import { track } from '@/lib/analytics'
 import { useAllReviews } from '@/hooks/useReviews'
 import { useColors } from '@/hooks/useColors'
 import type { ReviewRow } from '@/lib/supabase'
@@ -65,7 +67,7 @@ function ReviewThumb({ review }: { review: ReviewWithCompany }) {
   return (
     <TouchableOpacity
       style={styles.thumb}
-      onPress={() => openOutlink(review.source_url)}
+      onPress={() => { track('review_click', { companyId: review.company_id, properties: { source: review.source } }); openOutlink(review.source_url) }}
       activeOpacity={0.82}
     >
       {review.thumbnail_url ? (
@@ -78,7 +80,11 @@ function ReviewThumb({ review }: { review: ReviewWithCompany }) {
       <View style={styles.thumbOverlay}>
         <Text style={styles.thumbSource}>{SOURCE_LABELS[review.source] ?? review.source}</Text>
         {review.rating && (
-          <Text style={styles.thumbRating}>{'★'.repeat(review.rating)}</Text>
+          <View style={{ flexDirection: 'row' }}>
+            {Array.from({ length: review.rating }).map((_, i) => (
+              <Ionicons key={i} name="star" size={12} color="#FFB800" />
+            ))}
+          </View>
         )}
       </View>
       <Text style={styles.thumbContent} numberOfLines={2}>{review.content}</Text>
@@ -132,6 +138,8 @@ export default function ReviewsScreen() {
   const router = useRouter()
   const { reviews, loading } = useAllReviews(80)
   const [activeTab, setActiveTab] = useState('전체')
+
+  React.useEffect(() => { track('screen_view', { properties: { screen: 'reviews' } }) }, [])
   const colors = useColors()
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -140,7 +148,7 @@ export default function ReviewsScreen() {
       paddingTop: 8,
       paddingBottom: 12,
     },
-    backBtn: { paddingVertical: 4, marginBottom: 8, alignSelf: 'flex-start' },
+    backBtn: { paddingVertical: 4, marginBottom: 8, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 2 },
     backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
     title: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5 },
     subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
@@ -183,7 +191,7 @@ export default function ReviewsScreen() {
       {/* 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Text style={styles.backText}>← 홈</Text>
+          <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>홈</Text>
         </TouchableOpacity>
         <Text style={styles.title}>후기 모아보기</Text>
         <Text style={styles.subtitle}>실제 참여자들의 솔직한 후기</Text>

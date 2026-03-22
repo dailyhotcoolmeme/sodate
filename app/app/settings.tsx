@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Linking,
   Switch,
+  Alert,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'

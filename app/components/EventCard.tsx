@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { openOutlink } from '@/lib/outlink'
@@ -25,6 +26,7 @@ function cleanTitle(title: string): string {
   return title
     .replace(/^\[[^\]]+\]\s*/, '')
     .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F000}-\u{1FFFF}]|\u200d/gu, '')
+    .replace(/_E\d+$/i, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -62,15 +64,19 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
       position: 'absolute',
       top: 10,
       right: 10,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      borderRadius: 20,
       width: 36,
       height: 36,
+      borderRadius: 18,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    heartIcon: { fontSize: 20, color: '#fff' },
-    heartIconActive: { color: '#FF6B9D' },
+    heartBtnActive: {
+      borderColor: '#FF6B9D',
+      backgroundColor: '#FF6B9D18',
+    },
     content: { padding: 16, gap: 4 },
     title: {
       fontSize: 16,
@@ -118,7 +124,7 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
           />
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>♥</Text>
+            <Ionicons name="heart" size={28} color="#FF6B9D" />
           </View>
         )}
         {daysLeft <= 3 && daysLeft >= 0 && (
@@ -127,13 +133,15 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
         {/* 하트 버튼 — 오른쪽 상단 */}
         {onToggleFavorite && (
           <TouchableOpacity
-            style={styles.heartBtn}
+            style={[styles.heartBtn, isFavorite && styles.heartBtnActive]}
             onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.heartIcon, isFavorite && styles.heartIconActive]}>
-              {isFavorite ? '♥' : '♡'}
-            </Text>
+            <Ionicons
+              name="heart"
+              size={18}
+              color={isFavorite ? '#FF6B9D' : colors.textTertiary}
+            />
           </TouchableOpacity>
         )}
       </View>
@@ -190,7 +198,7 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
 
         {/* 신청 버튼 */}
         <TouchableOpacity style={styles.cta} onPress={handleApply}>
-          <Text style={styles.ctaText}>신청하기 →</Text>
+          <Text style={styles.ctaText}>신청하기  ›</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>

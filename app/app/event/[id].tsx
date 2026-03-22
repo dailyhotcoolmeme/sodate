@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import {
   View,
   Text,
@@ -15,9 +16,18 @@ import { useReviews } from '@/hooks/useReviews'
 import { useFavorites } from '@/hooks/useFavorites'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
+import { track } from '@/lib/analytics'
 import ThemeTag from '@/components/ThemeTag'
 import DeadlineBadge from '@/components/DeadlineBadge'
 import ReviewCard from '@/components/ReviewCard'
+
+function cleanText(text: string): string {
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F000}-\u{1FFFF}]|\u200d/gu, '')
+    .replace(/_E\d+$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
@@ -38,7 +48,7 @@ export default function EventDetailScreen() {
   const styles = useMemo(() => StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-    backBtn: { paddingVertical: 4, alignSelf: 'flex-start' },
+    backBtn: { paddingVertical: 4, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 2 },
     backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
     container: {
       flex: 1,
@@ -182,6 +192,12 @@ export default function EventDetailScreen() {
   const { reviews, loading: reviewsLoading } = useReviews(companyId, 3)
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
 
+  useEffect(() => {
+    if (event) {
+      track('event_view', { eventId: event.id, companyId: event.company_id })
+    }
+  }, [event?.id])
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -197,7 +213,7 @@ export default function EventDetailScreen() {
           {error ?? '이벤트를 찾을 수 없습니다'}
         </Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backLink}>← 돌아가기</Text>
+          <Text style={styles.backLink}>돌아가기</Text>
         </TouchableOpacity>
       </View>
     )
@@ -212,7 +228,7 @@ export default function EventDetailScreen() {
       {/* 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Text style={styles.backText}>← 홈</Text>
+          <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>홈</Text>
         </TouchableOpacity>
       </View>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -226,7 +242,7 @@ export default function EventDetailScreen() {
           />
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>♥</Text>
+            <Ionicons name="heart" size={64} color="#FF6B9D" />
           </View>
         )}
         {daysLeft <= 3 && daysLeft >= 0 && (
@@ -242,21 +258,29 @@ export default function EventDetailScreen() {
               onPress={() => router.push(`/company/${event.companies!.id}`)}
               style={{ flex: 1 }}
             >
-              <Text style={styles.company}>{event.companies.name} →</Text>
+              <Text style={styles.company}>{event.companies.name} ›</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
             style={[styles.heartBtn, favoriteIds.has(event.id) && styles.heartBtnActive]}
-            onPress={() => toggleFavorite(event.id)}
+            onPress={() => {
+              track(favoriteIds.has(event.id) ? 'event_favorite_remove' : 'event_favorite_add', {
+                eventId: event.id, companyId: event.company_id,
+                properties: { from_screen: 'detail' },
+              })
+              toggleFavorite(event.id)
+            }}
           >
-            <Text style={[styles.heartIcon, favoriteIds.has(event.id) && styles.heartIconActive]}>
-              {favoriteIds.has(event.id) ? '♥' : '♡'}
-            </Text>
+            <Ionicons
+              name="heart"
+              size={20}
+              color={favoriteIds.has(event.id) ? '#FF6B9D' : colors.textTertiary}
+            />
           </TouchableOpacity>
         </View>
 
         {/* 제목 */}
-        <Text style={styles.title}>{event.title}</Text>
+        <Text style={styles.title}>{cleanText(event.title)}</Text>
 
         {/* 기본 정보 */}
         <View style={styles.infoCard}>
@@ -321,16 +345,19 @@ export default function EventDetailScreen() {
         {event.description && (
           <View style={styles.descSection}>
             <Text style={styles.sectionLabel}>상세 설명</Text>
-            <Text style={styles.description}>{event.description}</Text>
+            <Text style={styles.description}>{cleanText(event.description)}</Text>
           </View>
         )}
 
         {/* 신청 버튼 */}
         <TouchableOpacity
           style={styles.ctaBtn}
-          onPress={() => openOutlink(event.source_url)}
+          onPress={() => {
+            track('event_apply_click', { eventId: event.id, companyId: event.company_id })
+            openOutlink(event.source_url)
+          }}
         >
-          <Text style={styles.ctaBtnText}>신청하기 →</Text>
+          <Text style={styles.ctaBtnText}>신청하기 ›</Text>
         </TouchableOpacity>
 
         {/* 업체 후기 섹션 */}
@@ -341,7 +368,7 @@ export default function EventDetailScreen() {
             </Text>
             {!reviewsLoading && reviews.length > 0 && (
               <TouchableOpacity onPress={() => router.push('/reviews')}>
-                <Text style={styles.moreLink}>전체보기 →</Text>
+                <Text style={styles.moreLink}>전체보기 ›</Text>
               </TouchableOpacity>
             )}
           </View>

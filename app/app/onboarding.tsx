@@ -7,31 +7,36 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useColors } from '@/hooks/useColors'
 
-const { width, height } = Dimensions.get('window')
+const { width } = Dimensions.get('window')
 const ONBOARDING_KEY = 'sodate-onboarding-done'
 
-const SLIDES = [
+const SLIDES: { icon: keyof typeof Ionicons.glyphMap; color: string; title: string; subtitle: string }[] = [
   {
-    emoji: '♥',
+    icon: 'heart',
+    color: '#FF6B9D',
     title: '소개팅모아',
     subtitle: '전국 로테이션 소개팅 일정을\n한곳에서 모아보세요',
   },
   {
-    emoji: '◎',
+    icon: 'search',
+    color: '#A78BFA',
     title: '쉽게 찾고',
     subtitle: '지역·테마·가격으로 필터링해\n나에게 딱 맞는 소개팅을 찾아보세요',
   },
   {
-    emoji: '★',
+    icon: 'notifications',
+    color: '#FB923C',
     title: '빠르게 알림받고',
     subtitle: '관심 업체의 새 일정이 올라오면\n제일 먼저 알려드려요',
   },
   {
-    emoji: '→',
+    icon: 'arrow-forward-circle',
+    color: '#34D399',
     title: '바로 신청',
     subtitle: '마음에 드는 소개팅을 찾았다면\n한 번의 터치로 신청 페이지로 이동',
   },
@@ -63,9 +68,13 @@ export default function OnboardingScreen() {
       flex: 1,
       justifyContent: 'center',
     },
-    emoji: {
-      fontSize: 80,
-      marginBottom: 32,
+    iconCircle: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 40,
     },
     title: {
       fontSize: 28,
@@ -140,7 +149,9 @@ export default function OnboardingScreen() {
 
       {/* 슬라이드 내용 */}
       <View style={styles.slideContent}>
-        <Text style={styles.emoji}>{slide.emoji}</Text>
+        <View style={[styles.iconCircle, { backgroundColor: slide.color + '22' }]}>
+          <Ionicons name={slide.icon} size={60} color={slide.color} />
+        </View>
         <Text style={styles.title}>{slide.title}</Text>
         <Text style={styles.subtitle}>{slide.subtitle}</Text>
       </View>

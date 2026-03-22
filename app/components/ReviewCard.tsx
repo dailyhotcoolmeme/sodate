@@ -1,9 +1,17 @@
 import React, { useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { ReviewRow } from '@/lib/supabase'
+
+function cleanText(text: string): string {
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F000}-\u{1FFFF}]|\u200d/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 interface Props {
   review: ReviewRow & { companies?: { name: string; slug: string } | null }
@@ -87,12 +95,12 @@ export default function ReviewCard({ review, showCompany = false }: Props) {
           {review.rating && (
             <View style={styles.ratingRow}>
               {Array.from({ length: review.rating }).map((_, i) => (
-                <Text key={i} style={styles.star}>★</Text>
+                <Ionicons key={i} name="star" size={13} color="#FFB800" />
               ))}
             </View>
           )}
         </View>
-        <Text style={styles.content} numberOfLines={4}>{review.content}</Text>
+        <Text style={styles.content} numberOfLines={4}>{cleanText(review.content ?? '')}</Text>
         <View style={styles.footer}>
           {review.author_name && (
             <Text style={styles.author}>{review.author_name}</Text>

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react'
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Animated,
   Platform,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import EventCard from '@/components/EventCard'
@@ -24,6 +26,7 @@ import { useColors } from '@/hooks/useColors'
 import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
 import { useFilterStore, type FilterState } from '@/stores/filterStore'
+import { track } from '@/lib/analytics'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
 const SORT_OPTIONS: SortOption[] = [
@@ -48,6 +51,10 @@ export default function HomeScreen() {
   const flatListRef = useRef<FlatList>(null)
   const router = useRouter()
   const colors = useColors()
+
+  // 앱 오픈 트래킹
+  useEffect(() => { track('app_open') }, [])
+  useEffect(() => { track('screen_view', { properties: { screen_name: 'home' } }) }, [])
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
@@ -60,6 +67,16 @@ export default function HomeScreen() {
       justifyContent: 'space-between',
       paddingHorizontal: 16,
       paddingVertical: 10,
+    },
+    logoBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    logoIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
     },
     logo: {
       fontSize: 22,
@@ -120,19 +137,18 @@ export default function HomeScreen() {
     },
     // 지역 탭
     regionScroll: {
-      height: 52,
+      height: 34,
       marginBottom: 2,
     },
     regionRow: {
       paddingHorizontal: 16,
-      paddingTop: 8,
-      paddingBottom: 4,
+      alignItems: 'center',
       gap: 6,
     },
     regionChip: {
       paddingHorizontal: 14,
       paddingVertical: 5,
-      borderRadius: 20,
+      borderRadius: 18,
       backgroundColor: colors.surfaceHigh,
       borderWidth: 1,
       borderColor: colors.border,
@@ -152,20 +168,18 @@ export default function HomeScreen() {
     },
     // 테마 칩
     themeScroll: {
-      height: 52,
-      marginTop: 2,
-      marginBottom: 4,
+      height: 34,
+      marginBottom: 6,
     },
     themeRow: {
       paddingHorizontal: 16,
-      paddingTop: 8,
-      paddingBottom: 4,
+      alignItems: 'center',
       gap: 6,
     },
     themeChip: {
       paddingHorizontal: 12,
       paddingVertical: 5,
-      borderRadius: 16,
+      borderRadius: 18,
       backgroundColor: 'transparent',
       borderWidth: 1,
       borderColor: colors.border,
@@ -175,7 +189,7 @@ export default function HomeScreen() {
       borderColor: colors.primary,
     },
     themeChipText: {
-      fontSize: 12,
+      fontSize: 13,
       color: colors.textSecondary,
       fontWeight: '500',
     },
@@ -184,11 +198,11 @@ export default function HomeScreen() {
       fontWeight: '700',
     },
     moreFilterBtn: {
-      paddingHorizontal: 10,
+      paddingHorizontal: 14,
       paddingVertical: 5,
     },
     moreFilterText: {
-      fontSize: 12,
+      fontSize: 13,
       color: colors.primary,
       fontWeight: '600',
     },
@@ -322,6 +336,30 @@ export default function HomeScreen() {
     setShowFab(e.nativeEvent.contentOffset.y > 300)
   }, [])
 
+  const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
+    track(isCurrent ? 'event_favorite_remove' : 'event_favorite_add', {
+      eventId,
+      companyId,
+      properties: { from_screen: 'home' },
+    })
+    toggleFavorite(eventId)
+  }, [toggleFavorite])
+
+  const handleSortChange = useCallback((sortId: FilterState['sortBy']) => {
+    track('sort_change', { properties: { sort_by: sortId } })
+    setSortBy(sortId)
+  }, [setSortBy])
+
+  const handleRegionChange = useCallback((regionId: string) => {
+    track('filter_apply', { properties: { region: regionId, result_count: events.length } })
+    setRegion(regionId)
+  }, [setRegion, events.length])
+
+  const handleThemeToggle = useCallback((t: string) => {
+    track('filter_apply', { properties: { theme: t } })
+    toggleTheme(t)
+  }, [toggleTheme])
+
   const activeChips: { label: string; onRemove: () => void }[] = []
   if (region !== 'all') activeChips.push({ label: regionLabel, onRemove: () => setRegion('all') })
   themes.forEach((t) => {
@@ -338,7 +376,10 @@ export default function HomeScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* ── 상단 헤더 ── */}
       <View style={styles.header}>
-        <Text style={styles.logo}>소개팅모아</Text>
+        <TouchableOpacity style={styles.logoBtn} onPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })} activeOpacity={0.7}>
+          <Image source={require('../assets/logo-icon.png')} style={styles.logoIcon} contentFit="cover" />
+          <Text style={styles.logo}>소개팅모아</Text>
+        </TouchableOpacity>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/reviews')}>
             <Text style={styles.iconText}>후기</Text>
@@ -376,17 +417,18 @@ export default function HomeScreen() {
       </TouchableOpacity>
 
       {/* ── 지역 빠른 탭 ── */}
+      <View style={styles.regionScroll}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.regionRow}
-        style={styles.regionScroll}
+        style={{ flex: 1 }}
       >
         {REGIONS.map((r) => (
           <TouchableOpacity
             key={r.id}
             style={[styles.regionChip, region === r.id && styles.regionChipActive]}
-            onPress={() => setRegion(r.id)}
+            onPress={() => handleRegionChange(r.id)}
           >
             <Text style={[styles.regionChipText, region === r.id && styles.regionChipTextActive]}>
               {r.label}
@@ -394,19 +436,21 @@ export default function HomeScreen() {
           </TouchableOpacity>
         ))}
       </ScrollView>
+      </View>
 
       {/* ── 테마 빠른 칩 ── */}
+      <View style={styles.themeScroll}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.themeRow}
-        style={styles.themeScroll}
+        style={{ flex: 1 }}
       >
         {QUICK_THEMES.map((t) => (
           <TouchableOpacity
             key={t}
             style={[styles.themeChip, themes.includes(t) && styles.themeChipActive]}
-            onPress={() => toggleTheme(t)}
+            onPress={() => handleThemeToggle(t)}
           >
             <Text style={[styles.themeChipText, themes.includes(t) && styles.themeChipTextActive]}>
               {t}
@@ -420,6 +464,7 @@ export default function HomeScreen() {
           <Text style={styles.moreFilterText}>더보기 ›</Text>
         </TouchableOpacity>
       </ScrollView>
+      </View>
 
       {/* ── 활성 필터 칩 + 초기화 ── */}
       {activeChips.length > 0 && (
@@ -428,7 +473,7 @@ export default function HomeScreen() {
             {activeChips.map((chip, i) => (
               <TouchableOpacity key={i} style={styles.activeChip} onPress={chip.onRemove}>
                 <Text style={styles.activeChipText}>{chip.label}</Text>
-                <Text style={styles.activeChipX}> ✕</Text>
+                <Ionicons name="close" size={11} color={colors.primary} style={{ marginLeft: 4 }} />
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -455,7 +500,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={opt.id}
               style={[styles.sortChip, sortBy === opt.id && styles.sortChipActive]}
-              onPress={() => setSortBy(opt.id)}
+              onPress={() => handleSortChange(opt.id)}
             >
               <Text style={[styles.sortChipText, sortBy === opt.id && styles.sortChipTextActive]}>
                 {opt.label}
@@ -468,13 +513,13 @@ export default function HomeScreen() {
             style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]}
             onPress={() => setViewMode('card')}
           >
-            <Text style={[styles.viewBtnText, viewMode === 'card' && styles.viewBtnTextActive]}>▦</Text>
+            <Ionicons name="grid-outline" size={18} color={viewMode === 'card' ? colors.textPrimary : colors.textTertiary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
             onPress={() => setViewMode('list')}
           >
-            <Text style={[styles.viewBtnText, viewMode === 'list' && styles.viewBtnTextActive]}>☰</Text>
+            <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? colors.textPrimary : colors.textTertiary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -494,13 +539,13 @@ export default function HomeScreen() {
             <EventCard
               event={item}
               isFavorite={favoriteIds.has(item.id)}
-              onToggleFavorite={() => toggleFavorite(item.id)}
+              onToggleFavorite={() => handleToggleFavorite(item.id, item.company_id ?? undefined, favoriteIds.has(item.id))}
             />
           ) : (
             <EventListItem
               event={item}
               isFavorite={favoriteIds.has(item.id)}
-              onToggleFavorite={() => toggleFavorite(item.id)}
+              onToggleFavorite={() => handleToggleFavorite(item.id, item.company_id ?? undefined, favoriteIds.has(item.id))}
             />
           )}
           keyExtractor={(item) => item.id}
@@ -518,7 +563,7 @@ export default function HomeScreen() {
       {/* ── 맨위로 FAB ── */}
       {showFab && (
         <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 20 }]} onPress={scrollToTop} activeOpacity={0.85}>
-          <Text style={styles.fabIcon}>↑</Text>
+          <Ionicons name="chevron-up" size={22} color="#fff" />
         </TouchableOpacity>
       )}
     </View>

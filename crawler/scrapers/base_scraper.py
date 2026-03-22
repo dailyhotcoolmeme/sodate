@@ -1,7 +1,9 @@
 import time
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+KST = timezone(timedelta(hours=9))
 
 from models.event import EventModel
 from utils.supabase_client import get_supabase
@@ -42,9 +44,22 @@ class BaseScraper(ABC):
         for event in events:
             data = event.model_dump()
             data['company_id'] = company_id
-            data['crawled_at'] = datetime.utcnow().isoformat()
+            data['crawled_at'] = datetime.now(timezone.utc).isoformat()
+
             if isinstance(data['event_date'], datetime):
-                data['event_date'] = data['event_date'].isoformat()
+                dt = data['event_date']
+                if dt.tzinfo is None:
+                    # timezone 없는 datetime은 KST로 간주 후 UTC 변환
+                    dt = dt.replace(tzinfo=KST).astimezone(timezone.utc)
+                data['event_date'] = dt.isoformat()
+
+                # KST 기준 시간 검증: 소개팅 이벤트는 오전 10시 ~ 자정 사이
+                dt_kst = dt.astimezone(KST)
+                if not (10 <= dt_kst.hour <= 23):
+                    self.logger.warning(
+                        f"비정상 시간대 이벤트 건너뜀 ({dt_kst.strftime('%H:%M')} KST): {event.source_url}"
+                    )
+                    continue
 
             try:
                 result = (
