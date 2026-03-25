@@ -6,6 +6,10 @@ interface Event {
   id: string; title: string; company_id: string
   event_date: string; location_region: string
   price_male: number | null; price_female: number | null
+  age_range_min: number | null; age_range_max: number | null
+  age_group_label: string | null
+  participant_stats: Record<string, unknown> | null
+  seats_left_male: number | null; seats_left_female: number | null
   is_active: boolean; is_closed: boolean; is_featured: boolean
   companies: { name: string } | null
 }
@@ -22,14 +26,14 @@ export default function Events() {
   async function load() {
     const { data, error } = await supabase
       .from('events')
-      .select('id, title, company_id, event_date, location_region, price_male, price_female, is_active, is_closed, is_featured, companies(name)')
+      .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, is_featured, companies(name)')
       .order('event_date', { ascending: false })
       .limit(200)
     if (error) {
       // is_featured 컬럼 없을 경우 fallback
       const { data: data2 } = await supabase
         .from('events')
-        .select('id, title, company_id, event_date, location_region, price_male, price_female, is_active, is_closed, companies(name)')
+        .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, companies(name)')
         .order('event_date', { ascending: false })
         .limit(200)
       setEvents((data2 as any) ?? [])
@@ -98,6 +102,9 @@ export default function Events() {
                 <th className="px-4 py-3 text-left font-medium">날짜</th>
                 <th className="px-4 py-3 text-left font-medium">지역</th>
                 <th className="px-4 py-3 text-left font-medium">가격</th>
+                <th className="px-4 py-3 text-left font-medium">나이대</th>
+                <th className="px-4 py-3 text-center font-medium">잔여석</th>
+                <th className="px-4 py-3 text-center font-medium">현황</th>
                 <th className="px-4 py-3 text-center font-medium">노출</th>
                 <th className="px-4 py-3 text-center font-medium">추천</th>
                 <th className="px-4 py-3 text-center font-medium">액션</th>
@@ -116,6 +123,32 @@ export default function Events() {
                   <td className="px-4 py-3 text-gray-500 text-xs">{event.location_region}</td>
                   <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                     {event.price_male ? `남 ${event.price_male.toLocaleString()}` : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-xs whitespace-nowrap">
+                    {event.age_group_label ? (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-medium">{event.age_group_label}</span>
+                    ) : (event.age_range_min && event.age_range_max) ? (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-medium">{event.age_range_min}~{event.age_range_max}세</span>
+                    ) : (
+                      <span className="text-gray-300">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center text-xs whitespace-nowrap">
+                    {(event.seats_left_male != null || event.seats_left_female != null) ? (
+                      <span className="text-gray-600">
+                        {event.seats_left_male != null ? `남${event.seats_left_male}` : ''}
+                        {event.seats_left_male != null && event.seats_left_female != null ? '/' : ''}
+                        {event.seats_left_female != null ? `여${event.seats_left_female}` : ''}
+                      </span>
+                    ) : <span className="text-gray-300">-</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {event.participant_stats && (
+                      Object.keys(event.participant_stats).length > 0
+                        ? <span className="inline-block w-2 h-2 rounded-full bg-green-400" title="참가자 현황 있음" />
+                        : <span className="inline-block w-2 h-2 rounded-full bg-gray-200" title="현황 없음" />
+                    )}
+                    {!event.participant_stats && <span className="text-gray-300 text-xs">-</span>}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button onClick={() => toggleActive(event.id, event.is_active)}>
@@ -170,6 +203,7 @@ function EventForm({ initial, onClose, onSaved }: {
     location_region: initial?.location_region ?? '',
     price_male: initial?.price_male ?? '',
     price_female: initial?.price_female ?? '',
+    age_group_label: initial?.age_group_label ?? '',
     source_url: '',
   })
   const [saving, setSaving] = useState(false)
@@ -184,6 +218,7 @@ function EventForm({ initial, onClose, onSaved }: {
       ...form,
       price_male: form.price_male ? Number(form.price_male) : null,
       price_female: form.price_female ? Number(form.price_female) : null,
+      age_group_label: form.age_group_label || null,
       event_date: new Date(form.event_date).toISOString(),
     }
     if (initial) {
@@ -201,6 +236,7 @@ function EventForm({ initial, onClose, onSaved }: {
     ['지역', 'location_region', 'text'],
     ['남성 가격', 'price_male', 'number'],
     ['여성 가격', 'price_female', 'number'],
+    ['나이대 라벨', 'age_group_label', 'text'],
     ['신청 URL', 'source_url', 'url'],
   ]
 

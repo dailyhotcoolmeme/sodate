@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import {
   View,
@@ -20,6 +20,7 @@ import { track } from '@/lib/analytics'
 import ThemeTag from '@/components/ThemeTag'
 import DeadlineBadge from '@/components/DeadlineBadge'
 import ReviewCard from '@/components/ReviewCard'
+import ParticipantStatsSheet from '@/components/ParticipantStatsSheet'
 
 function cleanText(text: string): string {
   return text
@@ -149,12 +150,29 @@ export default function EventDetailScreen() {
       borderRadius: 14,
       paddingVertical: 16,
       alignItems: 'center',
-      marginBottom: 28,
+      marginBottom: 12,
     },
     ctaBtnText: {
       color: '#fff',
       fontWeight: '700',
       fontSize: 16,
+    },
+    participantBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      borderRadius: 14,
+      paddingVertical: 13,
+      marginBottom: 28,
+      borderWidth: 1.5,
+      borderColor: colors.secondary,
+      backgroundColor: '#9B59F511',
+    },
+    participantBtnText: {
+      color: colors.secondary,
+      fontWeight: '700',
+      fontSize: 15,
     },
     reviewsSection: { gap: 0 },
     reviewsHeader: {
@@ -191,6 +209,7 @@ export default function EventDetailScreen() {
   const companyId = event?.companies?.id ?? null
   const { reviews, loading: reviewsLoading } = useReviews(companyId, 3)
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
+  const [participantSheetVisible, setParticipantSheetVisible] = useState(false)
 
   useEffect(() => {
     if (event) {
@@ -360,6 +379,21 @@ export default function EventDetailScreen() {
           <Text style={styles.ctaBtnText}>신청하기 ›</Text>
         </TouchableOpacity>
 
+        {/* 참가자 현황 버튼 — participant_stats가 있을 때만 표시 */}
+        {event.participant_stats && (
+          <TouchableOpacity
+            style={styles.participantBtn}
+            onPress={() => {
+              track('participant_stats_view', { eventId: event.id })
+              setParticipantSheetVisible(true)
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="people-outline" size={18} color={colors.secondary} />
+            <Text style={styles.participantBtnText}>참가자 현황</Text>
+          </TouchableOpacity>
+        )}
+
         {/* 업체 후기 섹션 */}
         <View style={styles.reviewsSection}>
           <View style={styles.reviewsHeader}>
@@ -391,6 +425,15 @@ export default function EventDetailScreen() {
         <View style={{ height: 40 }} />
       </View>
     </ScrollView>
+
+    {/* 참가자 현황 바텀시트 */}
+    {event.participant_stats && (
+      <ParticipantStatsSheet
+        visible={participantSheetVisible}
+        onClose={() => setParticipantSheetVisible(false)}
+        stats={event.participant_stats}
+      />
+    )}
     </View>
   )
 }

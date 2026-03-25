@@ -16,6 +16,7 @@ interface FilterState {
   dateRange: 'all' | 'today' | 'week' | 'month'
   maxPrice: number | null
   themes: string[]
+  ageGroup: string
   sortBy: 'date' | 'deadline' | 'created' | 'price_low' | 'price_high'
   recentFilters: FilterSnapshot[]
 
@@ -23,6 +24,7 @@ interface FilterState {
   setDateRange: (range: FilterState['dateRange']) => void
   setMaxPrice: (price: number | null) => void
   toggleTheme: (theme: string) => void
+  setAgeGroup: (ageGroup: string) => void
   setSortBy: (sort: FilterState['sortBy']) => void
   saveRecentFilter: () => void
   applyRecentFilter: (snapshot: FilterSnapshot) => void
@@ -36,6 +38,7 @@ export const useFilterStore = create<FilterState>()(
       dateRange: 'all',
       maxPrice: null,
       themes: [],
+      ageGroup: 'all',
       sortBy: 'date',
       recentFilters: [],
 
@@ -48,6 +51,7 @@ export const useFilterStore = create<FilterState>()(
             ? s.themes.filter((t) => t !== theme)
             : [...s.themes, theme],
         })),
+      setAgeGroup: (ageGroup) => set({ ageGroup }),
       setSortBy: (sortBy) => set({ sortBy }),
 
       saveRecentFilter: () => {
@@ -78,6 +82,7 @@ export const useFilterStore = create<FilterState>()(
           dateRange: 'all',
           maxPrice: null,
           themes: [],
+          ageGroup: 'all',
           sortBy: 'date',
         }),
     }),

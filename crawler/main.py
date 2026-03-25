@@ -16,7 +16,9 @@ from scrapers.lovecasting import LovecastingScraper
 from scrapers.yeongyul import YeongyulScraper
 from scrapers.inssumparty import InssumPartyScraper
 from scrapers.twoyeonsi import TwoYeonsiScraper
-from scrapers.seolrem import SeolremScraper
+from scrapers.secretsalon import SecretSalonScraper
+from scrapers.flipo import FlipoScraper
+from scrapers.lovecommunity import LovecommunityLoco
 from utils.logger import get_logger
 
 logger = get_logger('main')
@@ -34,7 +36,9 @@ SCRAPERS = [
     YeongyulScraper,
     InssumPartyScraper,
     TwoYeonsiScraper,
-    SeolremScraper,
+    SecretSalonScraper,
+    FlipoScraper,
+    LovecommunityLoco,
 ]
 
 

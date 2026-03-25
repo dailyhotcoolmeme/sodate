@@ -11,6 +11,7 @@ from .yeongyul import YeongyulScraper
 from .inssumparty import InssumPartyScraper
 from .twoyeonsi import TwoYeonsiScraper
 from .seolrem import SeolremScraper
+from .lovecommunity import LovecommunityLoco
 
 __all__ = [
     'LoveMatchingScraper',
@@ -26,4 +27,5 @@ __all__ = [
     'InssumPartyScraper',
     'TwoYeonsiScraper',
     'SeolremScraper',
+    'LovecommunityLoco',
 ]

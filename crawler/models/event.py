@@ -22,6 +22,8 @@ class EventModel(BaseModel):
     age_range_min: Optional[int] = None
     age_range_max: Optional[int] = None
     format: Optional[str] = None
+    age_group_label: Optional[str] = None      # 나이대 그룹 라벨
+    participant_stats: Optional[dict] = None    # 참가자 현황 JSON
     source_url: str
     is_closed: bool = False
 

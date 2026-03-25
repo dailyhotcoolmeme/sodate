@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
@@ -6,7 +6,9 @@ import { useRouter } from 'expo-router'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
+import type { ParticipantStats } from '@/types/database.types'
 import DeadlineBadge from './DeadlineBadge'
+import ParticipantStatsSheet from './ParticipantStatsSheet'
 
 interface Props {
   event: EventWithCompany
@@ -35,6 +37,11 @@ const COMPANY_COLORS: Record<string, string> = {
   '문토': '#2D6A4F',
   '토크블라썸': '#F72585',
 }
+function hasParticipantData(stats: any): boolean {
+  if (!stats) return false
+  return (stats.male?.length > 0) || (stats.female?.length > 0) || stats.total_count !== undefined
+}
+
 function companyColor(name?: string): string {
   if (name && COMPANY_COLORS[name]) return COMPANY_COLORS[name]
   return '#3A3A3A'
@@ -51,6 +58,7 @@ const THUMB = 88
 export default function EventListItem({ event, isFavorite = false, onToggleFavorite }: Props) {
   const router = useRouter()
   const colors = useColors()
+  const [statsVisible, setStatsVisible] = useState(false)
   const styles = useMemo(() => StyleSheet.create({
     row: {
       flexDirection: 'row',
@@ -88,9 +96,19 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     title: { fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
     meta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     price: { fontSize: 12, color: colors.textSecondary },
+    ageText: { fontSize: 11, color: '#9B59F5', fontWeight: '600' },
     heart: { paddingLeft: 4, paddingTop: 2 },
     heartIcon: { fontSize: 18, color: colors.textTertiary },
     heartActive: { color: colors.primary },
+    rightCol: { alignItems: 'center', gap: 6 },
+    statsSmallBtn: {
+      borderWidth: 1,
+      borderColor: '#9B59F5',
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    statsSmallBtnText: { fontSize: 10, color: '#9B59F5' },
   }), [colors])
 
   const daysLeft = Math.ceil((new Date(event.event_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
@@ -131,17 +149,40 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
             {event.price_female ? `여 ${event.price_female.toLocaleString()}원` : ''}
           </Text>
         )}
+        {event.age_range_min != null && event.age_range_max != null && (
+          <Text style={styles.ageText}>{event.age_range_min}~{event.age_range_max}세</Text>
+        )}
       </View>
 
-      {/* 하트 */}
-      {onToggleFavorite && (
-        <TouchableOpacity
-          style={styles.heart}
-          onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="heart" size={20} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
-        </TouchableOpacity>
+      {/* 오른쪽 컬럼: 현황 버튼 + 하트 */}
+      <View style={styles.rightCol}>
+        {hasParticipantData(event.participant_stats) && (
+          <TouchableOpacity
+            style={styles.statsSmallBtn}
+            onPress={(e) => { e.stopPropagation?.(); setStatsVisible(true) }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.statsSmallBtnText}>현황</Text>
+          </TouchableOpacity>
+        )}
+        {onToggleFavorite && (
+          <TouchableOpacity
+            style={styles.heart}
+            onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="heart" size={20} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* 참가자 현황 바텀시트 */}
+      {hasParticipantData(event.participant_stats) && (
+        <ParticipantStatsSheet
+          visible={statsVisible}
+          onClose={() => setStatsVisible(false)}
+          stats={event.participant_stats as ParticipantStats}
+        />
       )}
     </TouchableOpacity>
   )

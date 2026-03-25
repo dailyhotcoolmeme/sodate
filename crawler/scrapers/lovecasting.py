@@ -25,6 +25,17 @@ class LovecastingScraper(BaseScraper):
     DATE_PATTERN_FULL = re.compile(r'(\d{4})[.\-](\d{1,2})[.\-](\d{1,2})')
     DATE_PATTERN_SHORT = re.compile(r'(\d{1,2})[월/.](\d{1,2})일?')
     PRICE_PATTERN = re.compile(r'([\d,]+)원')
+    # 남 35세~45세 55,000원 / 남자 55,000원 / 여 30세~40세 33,000원
+    PRICE_MALE_RE = re.compile(r'남\s*[\d~\-세]*\s*(\d{2,3},\d{3})원|남자\s*(\d{2,3},\d{3})원')
+    PRICE_FEMALE_RE = re.compile(r'여\s*[\d~\-세]*\s*(\d{2,3},\d{3})원|여자\s*(\d{2,3},\d{3})원')
+    # 나이대: "남 35세~45세" 또는 "남 35~45세" → min=35, max=45
+    AGE_RANGE_MALE_RE = re.compile(r'남\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
+    AGE_RANGE_FEMALE_RE = re.compile(r'여\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
+    # 신청자 수: "남성 현재 N명 신청 접수중"
+    APPLICANTS_MALE_RE = re.compile(r'남성\s*현재\s*(\d+)\s*명\s*신청')
+    APPLICANTS_FEMALE_RE = re.compile(r'여성\s*현재\s*(\d+)\s*명\s*신청')
+    # 총 정원: "남성 N명 / 여성 N명" 또는 "남 N자리"
+    CAPACITY_RE = re.compile(r'남\s*(\d+)\s*[명자리]/?\s*여\s*(\d+)\s*[명자리]?')
 
     def __init__(self):
         super().__init__('lovecasting')
@@ -40,14 +51,20 @@ class LovecastingScraper(BaseScraper):
         return events
 
     def _scrape_category(self, category_url: str) -> list[EventModel]:
-        """카테고리 페이지 본문에서 직접 날짜 파싱 (러브캐스팅은 단일 페이지 구조)"""
-        # 1차: 페이지 본문 직접 파싱
+        """카테고리 페이지에서 이벤트 카드 직접 파싱 (러브캐스팅은 단일 페이지 구조)"""
+        # 1차: 목록 페이지 카드 직접 파싱 (나이대 + 접수자 수 포함)
+        events = self._parse_listing_page(category_url)
+        if events:
+            self.logger.info(f'러브캐스팅 {category_url} — {len(events)}개 이벤트 (목록 직접 파싱)')
+            return events
+
+        # 2차: 페이지 본문 직접 파싱 (기존 방식)
         events = self._fetch_and_parse('러브캐스팅', category_url)
         if events:
             self.logger.info(f'러브캐스팅 {category_url} — {len(events)}개 이벤트 파싱')
             return events
 
-        # 2차: 신청 링크들 수집 → 개별 파싱
+        # 3차: 신청 링크들 수집 → 개별 파싱
         post_links = self._collect_links_static(category_url)
         if not post_links:
             self.logger.info(f'정적 수집 실패, Playwright 시도: {category_url}')
@@ -66,6 +83,205 @@ class LovecastingScraper(BaseScraper):
                 time.sleep(0.5)
             except Exception as e:
                 self.logger.warning(f'게시물 파싱 실패 {url}: {e}')
+        return events
+
+    # ─── 목록 페이지 직접 파싱 (카드 구조) ────────────────────────────────────
+    # 사이트 구조: 각 카드에 날짜, 제목, 접수 현황(N명 접수중), 남/여 나이대가 포함
+    # 예시:
+    #   04.04 | 토요일 | PM 5:00 | 삼성역
+    #   [커피미팅] 직장인 로테이션 소개팅♥
+    #   17명 접수중
+    #   남 35세~45세 | 50,000원
+    #   여 33세~43세 | 20,000원
+
+    # 카드 날짜: "04.04 | 토요일 | PM 5:00 | 삼성역"
+    CARD_DATE_RE = re.compile(r'(\d{1,2})\.(\d{1,2})\s*\|?\s*[월화수목금토일]요일\s*\|?\s*(?:PM|AM)\s*(\d{1,2}):(\d{2})')
+    # 접수 현황: "17명 접수중"
+    APPLICANTS_COUNT_RE = re.compile(r'(\d+)\s*명\s*접수중')
+
+    def _parse_listing_page(self, category_url: str) -> list[EventModel]:
+        """러브캐스팅 목록 페이지에서 이벤트 카드 파싱.
+        Playwright 사용 — 나이대와 접수 현황까지 추출.
+        """
+        events: list[EventModel] = []
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    ignore_https_errors=True,
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                )
+                page = context.new_page()
+                page.goto(category_url, timeout=20000)
+                page.wait_for_load_state('networkidle', timeout=10000)
+                import time as _time
+                _time.sleep(2)
+
+                soup = BeautifulSoup(page.content(), 'html.parser')
+                browser.close()
+
+            events = self._extract_cards_from_soup(soup, category_url)
+        except Exception as e:
+            self.logger.warning(f'목록 페이지 파싱 실패 {category_url}: {e}')
+        return events
+
+    def _extract_cards_from_soup(self, soup: BeautifulSoup, category_url: str) -> list[EventModel]:
+        """BeautifulSoup에서 러브캐스팅 이벤트 카드 추출."""
+        events: list[EventModel] = []
+        now = datetime.now()
+        current_year = now.year
+
+        # 각 이벤트 블록 탐지: 날짜 + 나이대 정보가 함께 있는 컨테이너
+        # 사이트는 각 카드가 별도 div 안에 있음
+        # 구조: 날짜줄 / 제목 / 접수현황 / [남 나이대 + 가격 / 여 나이대 + 가격]
+        card_containers = soup.select('div.meeting-item, div.post-item, article.post, .entry, div[class*="item"], div[class*="card"], div[class*="post"]')
+
+        if not card_containers:
+            # fallback: 날짜 패턴을 포함하는 상위 요소 탐색
+            for el in soup.find_all(string=self.CARD_DATE_RE):
+                parent = el.parent
+                for _ in range(4):
+                    if parent and parent.parent:
+                        parent = parent.parent
+                    else:
+                        break
+                if parent and parent not in card_containers:
+                    card_containers.append(parent)
+
+        seen_dates: set[str] = set()
+
+        for card in card_containers:
+            card_text = card.get_text(separator='\n', strip=True)
+            lines = [l.strip() for l in card_text.split('\n') if l.strip()]
+            if not lines:
+                continue
+
+            # 날짜 추출
+            event_date = None
+            card_date_line = ''
+            for line in lines:
+                m = self.CARD_DATE_RE.search(line)
+                if m:
+                    mo, d = int(m.group(1)), int(m.group(2))
+                    hour, minute = int(m.group(3)), int(m.group(4))
+                    try:
+                        event_date = datetime(current_year, mo, d, hour, minute)
+                        if event_date < now:
+                            event_date = datetime(current_year + 1, mo, d, hour, minute)
+                        card_date_line = line
+                        break
+                    except ValueError:
+                        continue
+
+            if not event_date or event_date < now:
+                continue
+
+            date_key = event_date.strftime('%Y%m%d%H%M')
+            if date_key in seen_dates:
+                continue
+            seen_dates.add(date_key)
+
+            # 제목 추출 (링크 텍스트 우선)
+            title_text = ''
+            link = card.find('a')
+            if link:
+                title_text = link.get_text(strip=True)
+            if not title_text:
+                title_text = lines[0] if lines else ''
+
+            post_url = category_url
+            if link and link.get('href'):
+                href = link['href']
+                if not href.startswith('http'):
+                    href = urljoin(self.BASE_URL, href)
+                post_url = href
+
+            # 접수 현황 (전체 신청자 수)
+            total_applicants = None
+            for line in lines:
+                m_app = self.APPLICANTS_COUNT_RE.search(line)
+                if m_app:
+                    total_applicants = int(m_app.group(1))
+                    break
+
+            # 나이대 파싱 (남/여 각각)
+            age_range_min = None
+            age_range_max = None
+            full_ctx = card_text
+            m_age_male = self.AGE_RANGE_MALE_RE.search(full_ctx)
+            if m_age_male:
+                age_range_min = int(m_age_male.group(1))
+                age_range_max = int(m_age_male.group(2))
+            else:
+                m_age_female = self.AGE_RANGE_FEMALE_RE.search(full_ctx)
+                if m_age_female:
+                    age_range_min = int(m_age_female.group(1))
+                    age_range_max = int(m_age_female.group(2))
+
+            # 가격 파싱
+            price_male = None
+            price_female = None
+            m_male_price = self.PRICE_MALE_RE.search(full_ctx)
+            if m_male_price:
+                raw = m_male_price.group(1) or m_male_price.group(2) or ''
+                if raw:
+                    price_male = int(raw.replace(',', ''))
+            m_female_price = self.PRICE_FEMALE_RE.search(full_ctx)
+            if m_female_price:
+                raw = m_female_price.group(1) or m_female_price.group(2) or ''
+                if raw:
+                    price_female = int(raw.replace(',', ''))
+
+            # fallback 가격
+            if price_male is None and price_female is None:
+                prices_raw = self.PRICE_PATTERN.findall(full_ctx)
+                for raw in prices_raw:
+                    val = int(raw.replace(',', ''))
+                    if val >= 10000:
+                        if price_male is None:
+                            price_male = val
+                        elif price_female is None:
+                            price_female = val
+
+            # 지역
+            region = '서울'
+            for r in self.REGION_KEYWORDS:
+                if r in (card_date_line + title_text):
+                    region = r
+                    break
+
+            # 썸네일
+            thumbnail_url = None
+            img = card.find('img')
+            if img:
+                src = img.get('src', '') or img.get('data-src', '')
+                if src and not any(s in src.lower() for s in ['logo', 'icon', 'gravatar']):
+                    thumbnail_url = src if src.startswith('http') else urljoin(self.BASE_URL, src)
+
+            title = sanitize_text(f'[러브캐스팅] {title_text}', 80)
+            unique_url = f'{post_url}#evt={date_key}'
+
+            try:
+                events.append(EventModel(
+                    title=title,
+                    event_date=event_date,
+                    location_region=region,
+                    location_detail=None,
+                    price_male=price_male,
+                    price_female=price_female,
+                    gender_ratio=None,
+                    source_url=unique_url,
+                    thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
+                    theme=['일반'],
+                    seats_left_male=None,
+                    seats_left_female=None,
+                    age_range_min=age_range_min,
+                    age_range_max=age_range_max,
+                    participant_stats={'total_applicants': total_applicants} if total_applicants else None,
+                ))
+            except Exception:
+                continue
+
         return events
 
     def _fetch_thumbnail(self, url: str) -> Optional[str]:
@@ -306,16 +522,62 @@ class LovecastingScraper(BaseScraper):
                 title = sanitize_text(f'[러브캐스팅] {title_text}', 80)
 
                 price_text = ' '.join(lines[max(0, i - 3):i + 6])
-                prices_raw = self.PRICE_PATTERN.findall(price_text)
+                # 남/여 개별 가격 파싱
                 price_male = None
                 price_female = None
-                for raw in prices_raw:
-                    val = int(raw.replace(',', ''))
-                    if val >= 10000:
-                        if price_male is None:
-                            price_male = val
-                        elif price_female is None:
-                            price_female = val
+
+                # 남성 가격
+                m_male_price = self.PRICE_MALE_RE.search(price_text)
+                if m_male_price:
+                    raw = m_male_price.group(1) or m_male_price.group(2) or ''
+                    if raw:
+                        price_male = int(raw.replace(',', ''))
+
+                # 여성 가격
+                m_female_price = self.PRICE_FEMALE_RE.search(price_text)
+                if m_female_price:
+                    raw = m_female_price.group(1) or m_female_price.group(2) or ''
+                    if raw:
+                        price_female = int(raw.replace(',', ''))
+
+                # fallback: 첫 번째/두 번째 가격 순서대로
+                if price_male is None and price_female is None:
+                    prices_raw = self.PRICE_PATTERN.findall(price_text)
+                    for raw in prices_raw:
+                        val = int(raw.replace(',', ''))
+                        if val >= 10000:
+                            if price_male is None:
+                                price_male = val
+                            elif price_female is None:
+                                price_female = val
+
+                # 나이대 파싱
+                age_range_min = None
+                age_range_max = None
+                full_ctx = ' '.join(lines[max(0, i - 5):i + 10])
+                m_age_male = self.AGE_RANGE_MALE_RE.search(full_ctx)
+                if m_age_male:
+                    age_range_min = int(m_age_male.group(1))
+                    age_range_max = int(m_age_male.group(2))
+                else:
+                    m_age_female = self.AGE_RANGE_FEMALE_RE.search(full_ctx)
+                    if m_age_female:
+                        age_range_min = int(m_age_female.group(1))
+                        age_range_max = int(m_age_female.group(2))
+
+                # 신청자 수 → seats_left
+                seats_left_male = None
+                seats_left_female = None
+                m_applicants_m = self.APPLICANTS_MALE_RE.search(full_ctx)
+                m_applicants_f = self.APPLICANTS_FEMALE_RE.search(full_ctx)
+                m_capacity = self.CAPACITY_RE.search(full_ctx)
+                if m_capacity:
+                    cap_male = int(m_capacity.group(1))
+                    cap_female = int(m_capacity.group(2))
+                    if m_applicants_m:
+                        seats_left_male = cap_male - int(m_applicants_m.group(1))
+                    if m_applicants_f:
+                        seats_left_female = cap_female - int(m_applicants_f.group(1))
 
                 region = '서울'
                 for r in self.REGION_KEYWORDS:
@@ -335,8 +597,10 @@ class LovecastingScraper(BaseScraper):
                     source_url=unique_url,
                     thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
                     theme=['일반'],
-                    seats_left_male=None,
-                    seats_left_female=None,
+                    seats_left_male=seats_left_male,
+                    seats_left_female=seats_left_female,
+                    age_range_min=age_range_min,
+                    age_range_max=age_range_max,
                 ))
             except (ValueError, IndexError):
                 continue

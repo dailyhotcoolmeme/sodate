@@ -1,6 +1,7 @@
 import { useFilterStore } from '@/stores/filterStore'
 import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
+import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 
 export function useFilter() {
   const store = useFilterStore()
@@ -10,6 +11,7 @@ export function useFilter() {
     store.dateRange !== 'all' ? 1 : 0,
     store.maxPrice !== null ? 1 : 0,
     store.themes.length > 0 ? 1 : 0,
+    store.ageGroup !== 'all' ? 1 : 0,
   ].reduce((a, b) => a + b, 0)
 
   const regionLabel =
@@ -28,11 +30,15 @@ export function useFilter() {
       ? '1달'
       : '전체'
 
+  const ageGroupLabel =
+    AGE_GROUP_FILTERS.find((a) => a.id === store.ageGroup)?.label ?? '전체'
+
   return {
     ...store,
     activeFilterCount,
     regionLabel,
     themeLabels,
     dateRangeLabel,
+    ageGroupLabel,
   }
 }

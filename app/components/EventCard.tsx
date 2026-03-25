@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -11,15 +11,22 @@ import { useRouter } from 'expo-router'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
+import type { ParticipantStats } from '@/types/database.types'
 import DeadlineBadge from './DeadlineBadge'
 import ThemeTag from './ThemeTag'
 import CompanyBadge from './CompanyBadge'
 import FavoriteButton from './FavoriteButton'
+import ParticipantStatsSheet from './ParticipantStatsSheet'
 
 interface Props {
   event: EventWithCompany
   isFavorite?: boolean
   onToggleFavorite?: () => void
+}
+
+function hasParticipantData(stats: any): boolean {
+  if (!stats) return false
+  return (stats.male?.length > 0) || (stats.female?.length > 0) || stats.total_count !== undefined
 }
 
 function cleanTitle(title: string): string {
@@ -42,6 +49,7 @@ function formatDate(dateStr: string): string {
 export default function EventCard({ event, isFavorite = false, onToggleFavorite }: Props) {
   const router = useRouter()
   const colors = useColors()
+  const [statsVisible, setStatsVisible] = useState(false)
   const styles = useMemo(() => StyleSheet.create({
     card: {
       backgroundColor: colors.surface,
@@ -90,14 +98,38 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
     metaDot: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 4 },
     price: { fontSize: 13, color: colors.textSecondary },
     tags: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
+    ctaRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 12,
+    },
     cta: {
+      flex: 2,
       backgroundColor: colors.primary,
       borderRadius: 10,
       paddingVertical: 10,
       alignItems: 'center',
-      marginTop: 12,
     },
     ctaText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+    statsBtn: {
+      flex: 1,
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: 'center',
+      borderWidth: 1.5,
+      borderColor: '#9B59F5',
+    },
+    statsBtnText: { color: '#9B59F5', fontWeight: '700', fontSize: 13 },
+    ageBadge: {
+      position: 'absolute',
+      top: 10,
+      left: 10,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      borderRadius: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    ageBadgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   }), [colors])
 
   const handleApply = () => openOutlink(event.source_url)
@@ -129,6 +161,12 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
         )}
         {daysLeft <= 3 && daysLeft >= 0 && (
           <DeadlineBadge daysLeft={daysLeft} />
+        )}
+        {/* 나이대 배지 — 왼쪽 상단 */}
+        {event.age_range_min != null && event.age_range_max != null && (
+          <View style={styles.ageBadge}>
+            <Text style={styles.ageBadgeText}>{event.age_range_min}~{event.age_range_max}세</Text>
+          </View>
         )}
         {/* 하트 버튼 — 오른쪽 상단 */}
         {onToggleFavorite && (
@@ -196,11 +234,31 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
           </View>
         )}
 
-        {/* 신청 버튼 */}
-        <TouchableOpacity style={styles.cta} onPress={handleApply}>
-          <Text style={styles.ctaText}>신청하기  ›</Text>
-        </TouchableOpacity>
+        {/* 신청 버튼 (+ 현황 보기) */}
+        <View style={styles.ctaRow}>
+          {hasParticipantData(event.participant_stats) && (
+            <TouchableOpacity
+              style={styles.statsBtn}
+              onPress={(e) => { e.stopPropagation?.(); setStatsVisible(true) }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.statsBtnText}>현황 보기</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.cta} onPress={handleApply}>
+            <Text style={styles.ctaText}>신청하기  ›</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* 참가자 현황 바텀시트 */}
+      {hasParticipantData(event.participant_stats) && (
+        <ParticipantStatsSheet
+          visible={statsVisible}
+          onClose={() => setStatsVisible(false)}
+          stats={event.participant_stats as ParticipantStats}
+        />
+      )}
     </TouchableOpacity>
   )
 }

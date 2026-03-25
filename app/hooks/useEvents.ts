@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase, type EventWithCompany } from '@/lib/supabase'
 import { useFilterStore } from '@/stores/filterStore'
+import { useProfileStore } from '@/stores/profileStore'
+import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 
 export function useEvents() {
   const [events, setEvents] = useState<EventWithCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const { region, dateRange, maxPrice, themes, sortBy } = useFilterStore()
+  const { region, dateRange, maxPrice, themes, ageGroup, sortBy } = useFilterStore()
+  const { myAge, myGender } = useProfileStore()
 
   const fetchEvents = useCallback(async () => {
     setLoading(true)
@@ -54,6 +57,25 @@ export function useEvents() {
         query = query.overlaps('theme', themes)
       }
 
+      // 나이대 필터
+      if (ageGroup !== 'all') {
+        const ageFilter = AGE_GROUP_FILTERS.find((a) => a.id === ageGroup)
+        if (ageFilter && ageFilter.min !== undefined && ageFilter.max !== undefined) {
+          // 이벤트의 나이 범위와 필터 범위가 겹치는 것만 표시
+          // 이벤트 범위 [age_range_min, age_range_max]가 필터 범위 [min, max]와 overlap
+          query = query
+            .lte('age_range_min', ageFilter.max)
+            .or(`age_range_max.gte.${ageFilter.min},age_range_max.is.null`)
+        }
+      }
+
+      // 내 나이 필터 (내 나이가 이벤트 나이 범위 안에 드는 것만)
+      if (myAge !== null) {
+        query = query
+          .or(`age_range_min.is.null,age_range_min.lte.${myAge}`)
+          .or(`age_range_max.is.null,age_range_max.gte.${myAge}`)
+      }
+
       // 정렬
       if (sortBy === 'created') {
         query = query.order('created_at', { ascending: false })
@@ -73,7 +95,7 @@ export function useEvents() {
     } finally {
       setLoading(false)
     }
-  }, [region, dateRange, maxPrice, themes, sortBy])
+  }, [region, dateRange, maxPrice, themes, ageGroup, sortBy, myAge, myGender])
 
   useEffect(() => {
     fetchEvents()

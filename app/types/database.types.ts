@@ -6,6 +6,21 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export interface ParticipantPerson {
+  birth_year?: number
+  generation?: string  // "90중반", "90초반" 등
+  job?: string
+  height?: number
+}
+
+export interface ParticipantStats {
+  male?: ParticipantPerson[]
+  female?: ParticipantPerson[]
+  total_count?: number
+  seats_left_male?: number
+  seats_left_female?: number
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -81,6 +96,7 @@ export interface Database {
           source_url: string
           is_closed: boolean
           is_active: boolean
+          participant_stats: ParticipantStats | null
           crawled_at: string
           created_at: string
           updated_at: string
@@ -109,6 +125,7 @@ export interface Database {
           source_url: string
           is_closed?: boolean
           is_active?: boolean
+          participant_stats?: ParticipantStats | null
           crawled_at?: string
           created_at?: string
           updated_at?: string
@@ -137,6 +154,7 @@ export interface Database {
           source_url?: string
           is_closed?: boolean
           is_active?: boolean
+          participant_stats?: ParticipantStats | null
           crawled_at?: string
           created_at?: string
           updated_at?: string

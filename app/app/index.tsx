@@ -9,6 +9,8 @@ import {
   RefreshControl,
   Animated,
   Platform,
+  Modal,
+  TextInput,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
@@ -25,7 +27,9 @@ import { useFavorites } from '@/hooks/useFavorites'
 import { useColors } from '@/hooks/useColors'
 import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
+import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { useFilterStore, type FilterState } from '@/stores/filterStore'
+import { useProfileStore } from '@/stores/profileStore'
 import { track } from '@/lib/analytics'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
@@ -43,9 +47,12 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets()
   const { events, loading, refetch } = useEvents()
   const [filterVisible, setFilterVisible] = useState(false)
-  const { region, themes, maxPrice, dateRange, activeFilterCount, regionLabel, setRegion, toggleTheme, resetFilters } = useFilter()
+  const { region, themes, maxPrice, dateRange, ageGroup, ageGroupLabel, activeFilterCount, regionLabel, setRegion, toggleTheme, setAgeGroup, resetFilters } = useFilter()
   const { sortBy, setSortBy } = useFilterStore()
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
+  const { myAge, myGender, setMyAge, setMyGender } = useProfileStore()
+  const [profileModalVisible, setProfileModalVisible] = useState(false)
+  const [ageInput, setAgeInput] = useState(myAge ? String(myAge) : '')
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
   const [showFab, setShowFab] = useState(false)
   const flatListRef = useRef<FlatList>(null)
@@ -206,6 +213,37 @@ export default function HomeScreen() {
       color: colors.primary,
       fontWeight: '600',
     },
+    // 나이대 필터 칩
+    ageGroupScroll: {
+      height: 34,
+      marginBottom: 2,
+    },
+    ageGroupRow: {
+      paddingHorizontal: 16,
+      alignItems: 'center',
+      gap: 6,
+    },
+    ageGroupChip: {
+      paddingHorizontal: 13,
+      paddingVertical: 5,
+      borderRadius: 18,
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    ageGroupChipActive: {
+      backgroundColor: '#9B59F522',
+      borderColor: colors.secondary,
+    },
+    ageGroupChipText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    ageGroupChipTextActive: {
+      color: colors.secondary,
+      fontWeight: '700',
+    },
     // 활성 필터
     activeFilterRow: {
       flexDirection: 'row',
@@ -360,12 +398,18 @@ export default function HomeScreen() {
     toggleTheme(t)
   }, [toggleTheme])
 
+  const handleAgeGroupChange = useCallback((groupId: string) => {
+    track('filter_apply', { properties: { age_group: groupId } })
+    setAgeGroup(groupId)
+  }, [setAgeGroup])
+
   const activeChips: { label: string; onRemove: () => void }[] = []
   if (region !== 'all') activeChips.push({ label: regionLabel, onRemove: () => setRegion('all') })
   themes.forEach((t) => {
     const label = THEMES.find((th) => th.id === t)?.label ?? t
     activeChips.push({ label, onRemove: () => toggleTheme(t) })
   })
+  if (ageGroup !== 'all') activeChips.push({ label: ageGroupLabel, onRemove: () => setAgeGroup('all') })
   if (maxPrice !== null) activeChips.push({ label: `${(maxPrice / 10000).toFixed(0)}만원 이하`, onRemove: () => useFilterStore.getState().setMaxPrice(null) })
   if (dateRange !== 'all') {
     const dl = dateRange === 'today' ? '오늘' : dateRange === 'week' ? '1주일' : '1달'
@@ -381,6 +425,9 @@ export default function HomeScreen() {
           <Text style={styles.logo}>소개팅모아</Text>
         </TouchableOpacity>
         <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => { setAgeInput(myAge ? String(myAge) : ''); setProfileModalVisible(true) }}>
+            <Text style={styles.iconText}>내정보</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/reviews')}>
             <Text style={styles.iconText}>후기</Text>
           </TouchableOpacity>
@@ -463,6 +510,28 @@ export default function HomeScreen() {
         >
           <Text style={styles.moreFilterText}>더보기 ›</Text>
         </TouchableOpacity>
+      </ScrollView>
+      </View>
+
+      {/* ── 나이대 필터 칩 ── */}
+      <View style={styles.ageGroupScroll}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.ageGroupRow}
+        style={{ flex: 1 }}
+      >
+        {AGE_GROUP_FILTERS.map((ag) => (
+          <TouchableOpacity
+            key={ag.id}
+            style={[styles.ageGroupChip, ageGroup === ag.id && styles.ageGroupChipActive]}
+            onPress={() => handleAgeGroupChange(ag.id)}
+          >
+            <Text style={[styles.ageGroupChipText, ageGroup === ag.id && styles.ageGroupChipTextActive]}>
+              {ag.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
       </View>
 
@@ -559,6 +628,123 @@ export default function HomeScreen() {
       )}
 
       <FilterSheet visible={filterVisible} onClose={() => setFilterVisible(false)} />
+
+      {/* ── 내 나이/성별 설정 모달 ── */}
+      <Modal
+        visible={profileModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setProfileModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setProfileModalVisible(false)}
+        >
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              padding: 24,
+              gap: 20,
+            }}
+            onStartShouldSetResponder={() => true}
+          >
+            {/* 핸들 */}
+            <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
+
+            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textPrimary }}>내 정보 설정</Text>
+            <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: -12 }}>
+              설정하면 나에게 맞는 이벤트만 보여드려요
+            </Text>
+
+            {/* 나이 입력 */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>내 나이</Text>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <TextInput
+                  style={{
+                    flex: 1,
+                    backgroundColor: colors.surfaceHigh,
+                    borderRadius: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    fontSize: 16,
+                    color: colors.textPrimary,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                  placeholder="나이 입력 (예: 28)"
+                  placeholderTextColor={colors.textTertiary}
+                  keyboardType="number-pad"
+                  value={ageInput}
+                  onChangeText={setAgeInput}
+                  maxLength={2}
+                />
+                {myAge !== null && (
+                  <TouchableOpacity
+                    onPress={() => { setAgeInput(''); setMyAge(null) }}
+                    style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                  >
+                    <Text style={{ fontSize: 13, color: colors.error }}>초기화</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* 성별 선택 */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>성별</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {(['male', 'female'] as const).map((g) => (
+                  <TouchableOpacity
+                    key={g}
+                    onPress={() => setMyGender(myGender === g ? null : g)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      alignItems: 'center',
+                      borderWidth: 1.5,
+                      borderColor: myGender === g ? colors.primary : colors.border,
+                      backgroundColor: myGender === g ? colors.primary + '22' : colors.surfaceHigh,
+                    }}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: myGender === g ? colors.primary : colors.textSecondary }}>
+                      {g === 'male' ? '남성' : '여성'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* 저장 버튼 */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.primary,
+                borderRadius: 12,
+                paddingVertical: 14,
+                alignItems: 'center',
+              }}
+              onPress={() => {
+                const age = parseInt(ageInput, 10)
+                setMyAge(!isNaN(age) && age > 0 && age < 100 ? age : null)
+                setProfileModalVisible(false)
+              }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>저장</Text>
+            </TouchableOpacity>
+
+            {/* 적용 중 표시 */}
+            {(myAge !== null || myGender !== null) && (
+              <Text style={{ fontSize: 12, color: colors.secondary, textAlign: 'center', marginTop: -8 }}>
+                {[myAge !== null ? `${myAge}세` : '', myGender ? (myGender === 'male' ? '남성' : '여성') : ''].filter(Boolean).join(' · ')} 기준으로 필터링 중
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ── 맨위로 FAB ── */}
       {showFab && (

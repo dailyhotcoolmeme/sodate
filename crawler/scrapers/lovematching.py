@@ -12,6 +12,58 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
 
+# 나이대 패턴 (우선순위 순):
+#   "(91~04년)", "(91 - 04년)"             → 시작-끝년 범위, 마지막에만 년
+#   "(92년 - 07년)", "(95년~02년)"          → 각각 년 붙는 형식
+AGE_YEAR_RANGE_RE = re.compile(
+    r'\(?\s*(\d{2,4})\s*년?\s*[-~～]\s*(\d{2,4})\s*년\s*\)?'
+)
+# 년생 범위: "95년생 ~ 02년생", "91년생~04년생"
+AGE_BIRTH_RANGE_RE = re.compile(
+    r'(\d{2,4})\s*년생\s*[-~～]\s*(\d{2,4})\s*년생'
+)
+# 나이 직접 표시: "28세~40세", "28~40세"
+AGE_SE_RANGE_RE = re.compile(r'(\d{2})\s*[-~～]\s*(\d{2})\s*세')
+
+
+def _year_to_age(yy: int, current_year: int = 2026) -> int:
+    """두 자리/네 자리 년도 → 한국 나이 변환"""
+    if yy < 100:
+        year = (2000 + yy) if yy <= 25 else (1900 + yy)
+    else:
+        year = yy
+    return current_year - year + 1
+
+
+def _parse_age_range_from_text(text: str) -> tuple[Optional[int], Optional[int]]:
+    """텍스트에서 나이대 최소/최대 추출. 년생 기반 또는 세 기반."""
+    current_year = datetime.now().year
+
+    # 우선: "95년생 ~ 02년생" 형식
+    m = AGE_BIRTH_RANGE_RE.search(text)
+    if m:
+        y1 = int(m.group(1))
+        y2 = int(m.group(2))
+        age1 = _year_to_age(y1, current_year)
+        age2 = _year_to_age(y2, current_year)
+        return (min(age1, age2), max(age1, age2))
+
+    # "(91~04년)", "(92년 - 07년)" 형식
+    m = AGE_YEAR_RANGE_RE.search(text)
+    if m:
+        y1 = int(m.group(1))
+        y2 = int(m.group(2))
+        age1 = _year_to_age(y1, current_year)
+        age2 = _year_to_age(y2, current_year)
+        return (min(age1, age2), max(age1, age2))
+
+    # "28~40세" 형식
+    m = AGE_SE_RANGE_RE.search(text)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+
+    return (None, None)
+
 
 class LoveMatchingScraper(BaseScraper):
     BASE_URL = 'https://lovematching.kr'
@@ -106,6 +158,12 @@ class LoveMatchingScraper(BaseScraper):
                         hour, minute = cfg.get('time', (19, 0))
                         upcoming_dates = self._next_dates(weekdays, hour, minute, count=3)
 
+                        # 나이대 추출: 상품명 + 상세 페이지 텍스트에서
+                        detail_text = detail_soup.get_text(separator=' ', strip=True)
+                        age_min, age_max = _parse_age_range_from_text(title_raw)
+                        if age_min is None:
+                            age_min, age_max = _parse_age_range_from_text(detail_text[:2000])
+
                         for event_date in upcoming_dates:
                             title = sanitize_text(f'[러브매칭] {title_raw}', 80)
                             events.append(EventModel(
@@ -121,6 +179,8 @@ class LoveMatchingScraper(BaseScraper):
                                 theme=theme,
                                 seats_left_male=None,
                                 seats_left_female=None,
+                                age_range_min=age_min,
+                                age_range_max=age_max,
                             ))
 
                     except Exception as e:
