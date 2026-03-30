@@ -32,6 +32,7 @@ export type AnalyticsEventType =
   | 'company_view'
   | 'review_view'
   | 'review_click'
+  | 'participant_stats_view'
 
 interface AnalyticsPayload {
   event_type: AnalyticsEventType

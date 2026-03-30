@@ -53,6 +53,7 @@ const mockEvent: EventWithCompany = {
   age_range_max: null,
   format: null,
   thumbnail_urls: ['https://example.com/img.jpg'],
+  participant_stats: null,
   source_url: 'https://lovematching.kr/event/1',
   is_active: true,
   is_closed: false,
