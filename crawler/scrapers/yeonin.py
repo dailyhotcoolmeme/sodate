@@ -335,6 +335,63 @@ class YeoninScraper(BaseScraper):
         }
         return date_key, result
 
+    # ------------------------------------------------------------------ #
+    # 테스트 가능한 파싱 헬퍼 메서드
+    # ------------------------------------------------------------------ #
+
+    def _parse_date(self, text: str) -> Optional[datetime]:
+        """날짜 문자열을 datetime으로 변환. 실패 시 None 반환."""
+        formats = [
+            '%Y.%m.%d %H:%M',
+            '%Y-%m-%d %H:%M',
+            '%Y.%m.%d',
+            '%Y-%m-%d',
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(text.strip(), fmt)
+            except ValueError:
+                continue
+        return None
+
+    def _extract_price(self, text: str, gender: str = 'male') -> Optional[int]:
+        """텍스트에서 성별에 맞는 가격(원)을 추출. 없으면 None.
+
+        '남성: 40,000원 / 여성: 35,000원' 형태를 지원한다.
+        gender='male' → 남성 가격, gender='female' → 여성 가격.
+        성별 구분이 없는 경우 첫 번째 가격을 반환한다.
+        """
+        price_re = re.compile(r'([\d,]+)원')
+
+        if gender == 'male':
+            # 남성 가격: '남성:' 이후 첫 번째 숫자
+            male_m = re.search(r'남성\s*:\s*([\d,]+)원', text)
+            if male_m:
+                return int(male_m.group(1).replace(',', ''))
+        elif gender == 'female':
+            # 여성 가격: '여성:' 이후 첫 번째 숫자
+            female_m = re.search(r'여성\s*:\s*([\d,]+)원', text)
+            if female_m:
+                return int(female_m.group(1).replace(',', ''))
+
+        # 성별 구분 없이 첫 번째 가격 반환
+        m = price_re.search(text)
+        if m:
+            return int(m.group(1).replace(',', ''))
+        return None
+
+    def _extract_seats(self, text: str) -> Optional[int]:
+        """텍스트에서 잔여석 수를 추출. '마감' 등 잔여 없음 표시면 None 반환."""
+        if '마감' in text or '완료' in text:
+            return None
+        m = re.search(r'잔여\s*(\d+)\s*석', text)
+        if m:
+            return int(m.group(1))
+        m2 = re.search(r'(\d+)\s*자리', text)
+        if m2:
+            return int(m2.group(1))
+        return None
+
     def _parse_participant_list(self, soup: BeautifulSoup) -> dict[str, dict]:
         """
         /list 게시판에서 참가자 현황 테이블 파싱 (레거시 fallback)

@@ -217,6 +217,56 @@ class LoveMatchingScraper(BaseScraper):
             products[idx] = {'text': text, 'img': img_url}
         return products
 
+    # ------------------------------------------------------------------ #
+    # 테스트 가능한 파싱 헬퍼 메서드
+    # ------------------------------------------------------------------ #
+
+    def _parse_date(self, text: str) -> Optional[datetime]:
+        """날짜 문자열을 datetime으로 변환. 실패 시 None 반환."""
+        formats = [
+            '%Y.%m.%d %H:%M',
+            '%Y-%m-%d %H:%M',
+            '%Y.%m.%d',
+            '%Y-%m-%d',
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(text.strip(), fmt)
+            except ValueError:
+                continue
+        return None
+
+    def _extract_region(self, text: str) -> str:
+        """텍스트에서 지역 키워드를 찾아 반환. 없으면 '기타'."""
+        for keyword, region in self.REGION_MAP.items():
+            if keyword in text:
+                return region
+        return '기타'
+
+    def _extract_price(self, text: str) -> Optional[int]:
+        """텍스트에서 가격(원)을 추출. 없으면 None."""
+        m = self.PRICE_PATTERN.search(text)
+        if m:
+            return int(m.group(1).replace(',', ''))
+        return None
+
+    def _extract_theme(self, text: str) -> list[str]:
+        """텍스트에서 테마 키워드를 추출."""
+        if '와인' in text:
+            return ['와인']
+        elif '커피' in text:
+            return ['커피']
+        elif '영화' in text:
+            return ['전시']
+        return ['일반']
+
+    def _extract_ratio(self, text: str) -> Optional[str]:
+        """텍스트에서 성비(예: 8:8)를 추출. 없으면 None."""
+        m = re.search(r'(\d+:\d+)', text)
+        if m:
+            return m.group(1)
+        return None
+
     def _next_dates(self, weekdays: list[int], hour: int, minute: int, count: int) -> list[datetime]:
         """지정 요일 기준 다음 날짜 N개 반환"""
         dates = []

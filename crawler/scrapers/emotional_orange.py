@@ -599,6 +599,76 @@ class EmotionalOrangeScraper(BaseScraper):
 
         return {'generation': gen, 'job': job}
 
+    # ------------------------------------------------------------------ #
+    # 테스트 가능한 파싱 헬퍼 메서드
+    # ------------------------------------------------------------------ #
+
+    def _parse_date(self, text: str) -> Optional[datetime]:
+        """날짜 문자열을 datetime으로 변환. 실패 시 None 반환.
+
+        지원 포맷:
+          '3/25 19:00'  → 현재 연도 기준
+          '2026-04-10'  → ISO 날짜
+        """
+        text = text.strip()
+        current_year = datetime.now().year
+
+        # 'M/D HH:MM' 포맷
+        m = re.match(r'^(\d{1,2})/(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?$', text)
+        if m:
+            month = int(m.group(1))
+            day = int(m.group(2))
+            hour = int(m.group(3)) if m.group(3) else 0
+            minute = int(m.group(4)) if m.group(4) else 0
+            try:
+                return datetime(current_year, month, day, hour, minute)
+            except ValueError:
+                return None
+
+        # 표준 포맷들
+        formats = [
+            '%Y-%m-%d %H:%M',
+            '%Y.%m.%d %H:%M',
+            '%Y-%m-%d',
+            '%Y.%m.%d',
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+        return None
+
+    def _extract_region(self, text: str) -> str:
+        """텍스트에서 지역 키워드를 찾아 반환. 없으면 '서울'."""
+        for keyword, region in self.REGION_MAP.items():
+            if keyword in text:
+                return region
+        return '서울'
+
+    def _extract_price_by_gender(self, text: str, gender: str) -> Optional[int]:
+        """텍스트에서 성별에 맞는 가격을 추출.
+
+        '남성 45,000원' 또는 '남성: 45,000원' 형태를 지원.
+        gender='male' → 남성 가격, gender='female' → 여성 가격.
+        """
+        price_re = re.compile(r'([\d,]+)원')
+
+        if gender == 'male':
+            m = re.search(r'남성\s*:?\s*([\d,]+)원', text)
+            if m:
+                return int(m.group(1).replace(',', ''))
+        elif gender == 'female':
+            m = re.search(r'여성\s*:?\s*([\d,]+)원', text)
+            if m:
+                return int(m.group(1).replace(',', ''))
+
+        # 성별 구분 없이 첫 번째 가격 반환
+        m = price_re.search(text)
+        if m:
+            return int(m.group(1).replace(',', ''))
+        return None
+
     @staticmethod
     def _extract_seats(text: str) -> Optional[int]:
         """'두자리 남았어요 🧡' → 2 / '남성 마감입니다 🧡' → 0 / 기타 → None"""
