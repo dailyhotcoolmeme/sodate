@@ -8,6 +8,7 @@ KST = timezone(timedelta(hours=9))
 from models.event import EventModel
 from utils.supabase_client import get_supabase
 from utils.logger import get_logger
+from utils.date_filter import is_within_one_month
 
 
 class BaseScraper(ABC):
@@ -53,6 +54,13 @@ class BaseScraper(ABC):
                     dt = dt.replace(tzinfo=KST).astimezone(timezone.utc)
                 data['event_date'] = dt.isoformat()
 
+                # 날짜 필터: 오늘 ~ 오늘+31일 범위만 저장
+                if not is_within_one_month(dt):
+                    self.logger.debug(
+                        f"날짜 범위 초과 이벤트 건너뜀 ({dt.astimezone(KST).strftime('%Y-%m-%d')} KST): {event.source_url}"
+                    )
+                    continue
+
                 # KST 기준 시간 검증: 소개팅 이벤트는 오전 10시 ~ 자정 사이
                 dt_kst = dt.astimezone(KST)
                 if not (10 <= dt_kst.hour <= 23):
@@ -60,6 +68,18 @@ class BaseScraper(ABC):
                         f"비정상 시간대 이벤트 건너뜀 ({dt_kst.strftime('%H:%M')} KST): {event.source_url}"
                     )
                     continue
+
+            # age_range DB constraint 사전 검증 (age_range_min >= 18, age_range_max <= 60)
+            if data.get('age_range_min') is not None and data['age_range_min'] < 18:
+                self.logger.debug(
+                    f"age_range_min 범위 초과({data['age_range_min']}) → None으로 초기화: {event.source_url}"
+                )
+                data['age_range_min'] = None
+            if data.get('age_range_max') is not None and data['age_range_max'] > 60:
+                self.logger.debug(
+                    f"age_range_max 범위 초과({data['age_range_max']}) → None으로 초기화: {event.source_url}"
+                )
+                data['age_range_max'] = None
 
             try:
                 result = (
@@ -70,7 +90,12 @@ class BaseScraper(ABC):
                 if result.data:
                     new_count += 1
             except Exception as e:
-                self.logger.error(f"이벤트 저장 실패: {event.source_url} - {e}")
+                self.logger.error(
+                    f"이벤트 저장 실패: {event.source_url} - {e} "
+                    f"(저장 시도한 데이터: age_range_min={data.get('age_range_min')}, "
+                    f"age_range_max={data.get('age_range_max')})"
+                )
+                # 해당 이벤트만 스킵하고 계속 진행
 
         return {'new': new_count, 'updated': updated_count}
 

@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
+from utils.date_filter import is_within_one_month
 
 
 class ModpartyScraper(BaseScraper):
@@ -123,7 +124,7 @@ class ModpartyScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f'모드파티 크롤링 실패: {e}')
 
-        return events
+        return events  # 날짜 필터는 _parse_product_data 내부에서 적용됨
 
     def _fetch_booking_counts(self) -> None:
         """Supabase REST API로 booking_counts 테이블 전체 조회 (공개 anon key 사용)"""
@@ -372,8 +373,14 @@ class ModpartyScraper(BaseScraper):
 
         age_count = sum(1 for e in events if e.age_range_min is not None)
         stats_count = sum(1 for e in events if e.participant_stats is not None)
+        filtered = []
+        for ev in events:
+            if is_within_one_month(ev.event_date):
+                filtered.append(ev)
+            else:
+                self.logger.debug(f"날짜 범위 초과 스킵 ({ev.event_date}): {ev.source_url}")
         self.logger.info(
-            f'모드파티 이벤트 {len(events)}개 생성 '
+            f'모드파티 이벤트 {len(filtered)}개 생성 (필터 전: {len(events)}개) '
             f'(나이대 {age_count}개, 참가자현황 {stats_count}개)'
         )
-        return events
+        return filtered

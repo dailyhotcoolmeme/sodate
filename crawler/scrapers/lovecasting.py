@@ -12,6 +12,7 @@ from playwright.sync_api import sync_playwright
 from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text, sanitize_url
+from utils.date_filter import is_within_one_month
 
 
 class LovecastingScraper(BaseScraper):
@@ -48,7 +49,14 @@ class LovecastingScraper(BaseScraper):
                 events.extend(page_events)
             except Exception as e:
                 self.logger.warning(f'카테고리 크롤링 실패 {schedule_url}: {e}')
-        return events
+        filtered = []
+        for ev in events:
+            if is_within_one_month(ev.event_date):
+                filtered.append(ev)
+            else:
+                self.logger.debug(f"날짜 범위 초과 스킵 ({ev.event_date}): {ev.source_url}")
+        self.logger.info(f'러브캐스팅 총 {len(filtered)}개 이벤트 (필터 전: {len(events)}개)')
+        return filtered
 
     def _scrape_category(self, category_url: str) -> list[EventModel]:
         """카테고리 페이지에서 이벤트 카드 직접 파싱 (러브캐스팅은 단일 페이지 구조)"""
@@ -286,25 +294,57 @@ class LovecastingScraper(BaseScraper):
 
     def _fetch_thumbnail(self, url: str) -> Optional[str]:
         """페이지에서 썸네일 이미지 URL 추출"""
+        thumb, _, _ = self._fetch_page_info(url)
+        return thumb
+
+    def _fetch_page_info(self, url: str) -> tuple:
+        """한 번의 fetch로 썸네일 + 가격 추출. 반환: (thumbnail_url, price_male, price_female)"""
+        thumb: Optional[str] = None
+        price_male: Optional[int] = None
+        price_female: Optional[int] = None
         try:
             resp = httpx.get(url, timeout=10, follow_redirects=True,
                              headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'})
             soup = BeautifulSoup(resp.text, 'html.parser')
+            # 썸네일
             og = soup.select_one('meta[property="og:image"]')
             if og and og.get('content'):
-                return og['content']
-            for img in soup.select('img'):
-                src = img.get('src') or img.get('data-src', '')
-                if not src:
-                    continue
-                low = src.lower()
-                if any(skip in low for skip in ['logo', 'icon', 'facebook', 'gravatar', '.gif']):
-                    continue
-                if 'wp-content/uploads' in src or 'cdn' in src:
-                    return src if src.startswith('http') else urljoin(self.BASE_URL, src)
+                thumb = og['content']
+            if not thumb:
+                for img in soup.select('img'):
+                    src = img.get('src') or img.get('data-src', '')
+                    if not src:
+                        continue
+                    low = src.lower()
+                    if any(skip in low for skip in ['logo', 'icon', 'facebook', 'gravatar', '.gif']):
+                        continue
+                    if 'wp-content/uploads' in src or 'cdn' in src:
+                        thumb = src if src.startswith('http') else urljoin(self.BASE_URL, src)
+                        break
+            # 가격
+            text = soup.get_text(separator='\n')
+            m_male = self.PRICE_MALE_RE.search(text)
+            if m_male:
+                raw = m_male.group(1) or m_male.group(2) or ''
+                if raw:
+                    price_male = int(raw.replace(',', ''))
+            m_female = self.PRICE_FEMALE_RE.search(text)
+            if m_female:
+                raw = m_female.group(1) or m_female.group(2) or ''
+                if raw:
+                    price_female = int(raw.replace(',', ''))
+            if price_male is None and price_female is None:
+                for raw in self.PRICE_PATTERN.findall(text):
+                    val = int(raw.replace(',', ''))
+                    if val >= 10000:
+                        if price_male is None:
+                            price_male = val
+                        elif price_female is None:
+                            price_female = val
+                            break
         except Exception:
             pass
-        return None
+        return thumb, price_male, price_female
 
     def _event_from_url(self, title: str, url: str) -> Optional[EventModel]:
         """URL 슬러그에서 날짜 추출. 예: /26-03-21-커피/ → 2026-03-21"""
@@ -327,16 +367,16 @@ class LovecastingScraper(BaseScraper):
                         if r in slug or r in title:
                             region = r
                             break
-                    # 썸네일 fetch
-                    thumbnail_url = self._fetch_thumbnail(url)
+                    # 썸네일 + 가격 fetch
+                    thumbnail_url, price_male, price_female = self._fetch_page_info(url)
                     ev_title = sanitize_text(f'[러브캐스팅] {title or slug}', 80)
                     return EventModel(
                         title=ev_title,
                         event_date=event_date,
                         location_region=region,
                         location_detail=None,
-                        price_male=None,
-                        price_female=None,
+                        price_male=price_male,
+                        price_female=price_female,
                         gender_ratio=None,
                         source_url=f'{url}#evt={event_date.strftime("%Y%m%d%H%M")}',
                         thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
@@ -371,14 +411,14 @@ class LovecastingScraper(BaseScraper):
                 region = r
                 break
 
-        thumbnail_url = self._fetch_thumbnail(url)
+        thumbnail_url, price_male, price_female = self._fetch_page_info(url)
         return EventModel(
             title=sanitize_text(f'[러브캐스팅] {title or slug}', 80),
             event_date=event_date,
             location_region=region,
             location_detail=None,
-            price_male=None,
-            price_female=None,
+            price_male=price_male,
+            price_female=price_female,
             gender_ratio=None,
             source_url=f'{url}#evt={event_date.strftime("%Y%m%d%H%M")}',
             thumbnail_urls=[thumbnail_url] if thumbnail_url else [],

@@ -43,10 +43,15 @@ SCRAPERS = [
 
 
 def run_all() -> int:
-    """모든 스크래퍼 순차 실행 후 실패 시 exit code 1 반환"""
+    """모든 스크래퍼 순차 실행. 전체 실패(성공 0개)일 때만 exit code 1 반환"""
     results = []
     for ScraperClass in SCRAPERS:
-        scraper = ScraperClass()
+        try:
+            scraper = ScraperClass()
+        except Exception as e:
+            logger.error(f"[{ScraperClass.__name__}] 초기화 실패 (Secrets 미설정 등): {e}")
+            results.append({'company': ScraperClass.__name__, 'status': 'failed', 'error': str(e)})
+            continue
         result = scraper.run()
         results.append({
             'company': scraper.company_slug,
@@ -66,9 +71,15 @@ def run_all() -> int:
             + (f" / 오류: {r.get('error', '')}" if r['status'] == 'failed' else '')
         )
 
-    if failed > 0:
-        logger.warning(f"{failed}개 업체 크롤링 실패 — GitHub Actions에서 실패로 처리됩니다")
+    if success == 0:
+        # 단 한 곳도 성공 못했을 때만 전체 실패 처리 (Secrets 미설정, 네트워크 불가 등)
+        logger.error(f"전체 크롤링 실패 — 성공 0건. Secrets 및 네트워크 상태를 확인하세요.")
         return 1
+
+    if failed > 0:
+        # 일부 실패는 경고만 남기고 성공 처리 (개별 업체 사이트 문제)
+        logger.warning(f"{failed}개 업체 크롤링 실패 (일부 실패 — 워크플로우는 계속 진행)")
+
     return 0
 
 

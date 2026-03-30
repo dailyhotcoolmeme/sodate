@@ -19,6 +19,7 @@ import httpx
 from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
+from utils.date_filter import is_within_one_month
 
 MUNTO_BASE_URL = 'https://www.munto.kr'
 MUNTO_API_BASE = 'https://api.munto.kr/api/web/v1'
@@ -436,5 +437,11 @@ class MuntoScraper(BaseScraper):
             ev for ev in events
             if ev.source_url not in seen and not seen.add(ev.source_url)  # type: ignore
         ]
-        self.logger.info(f'문토 총 {len(unique)}개 이벤트 수집 완료')
-        return unique
+        filtered = []
+        for ev in unique:
+            if is_within_one_month(ev.event_date):
+                filtered.append(ev)
+            else:
+                self.logger.debug(f"날짜 범위 초과 스킵 ({ev.event_date}): {ev.source_url}")
+        self.logger.info(f'문토 총 {len(filtered)}개 이벤트 수집 완료 (필터 전: {len(unique)}개)')
+        return filtered

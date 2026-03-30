@@ -13,6 +13,7 @@ from playwright.sync_api import sync_playwright
 from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
+from utils.date_filter import is_within_one_month
 
 FALLBACK_PRICE_FEMALE = 29000
 FALLBACK_PRICE_MALE = 59000
@@ -46,14 +47,23 @@ class SolooffScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f'솔로오프 크롤링 실패: {e}')
 
-        self.logger.info(f'솔로오프 총 {len(events)}개 이벤트')
-        return events
+        filtered = []
+        for ev in events:
+            if is_within_one_month(ev.event_date):
+                filtered.append(ev)
+            else:
+                self.logger.debug(f"날짜 범위 초과 스킵 ({ev.event_date}): {ev.source_url}")
+        self.logger.info(f'솔로오프 총 {len(filtered)}개 이벤트 (필터 전: {len(events)}개)')
+        return filtered
 
     def _scrape_with_playwright(self) -> list[EventModel]:
         """Playwright로 solo-off.com/26/ 게시판 파싱"""
         events: list[EventModel] = []
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(
+                headless=True,
+                args=['--disable-blink-features=AutomationControlled'],
+            )
             context = browser.new_context(
                 ignore_https_errors=True,
                 user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -79,8 +89,11 @@ class SolooffScraper(BaseScraper):
 
             for url in post_links[:3]:
                 try:
-                    page.goto(url, timeout=15000)
-                    page.wait_for_load_state('networkidle', timeout=8000)
+                    page.goto(url, timeout=30000)
+                    try:
+                        page.wait_for_load_state('networkidle', timeout=15000)
+                    except Exception:
+                        page.wait_for_load_state('domcontentloaded', timeout=10000)
                     detail_soup = BeautifulSoup(page.content(), 'html.parser')
                     content = page.inner_text('body')
                     thumb_imgs = page.eval_on_selector_all('img[src*="cdn.imweb"], img[src*="imweb"]', 'els => els.map(e => e.src)')

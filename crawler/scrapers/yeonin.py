@@ -11,6 +11,7 @@ from playwright.sync_api import sync_playwright
 from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text, sanitize_url
+from utils.date_filter import is_within_one_month
 
 
 # ─────────────────────────────────────────────
@@ -156,7 +157,14 @@ class YeoninScraper(BaseScraper):
             self.logger.error(f'크롤링 실패: {e}')
             raise
 
-        return events
+        filtered = []
+        for ev in events:
+            if is_within_one_month(ev.event_date):
+                filtered.append(ev)
+            else:
+                self.logger.debug(f"날짜 범위 초과 스킵 ({ev.event_date}): {ev.source_url}")
+        self.logger.info(f'연인어때 총 {len(filtered)}개 이벤트 (필터 전: {len(events)}개)')
+        return filtered
 
     def _parse_age_groups_from_og(self, og_description: str) -> list[str]:
         """

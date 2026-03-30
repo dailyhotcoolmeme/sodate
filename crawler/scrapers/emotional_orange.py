@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
+from utils.date_filter import is_within_one_month
 
 
 # 잔여석 한글 수사 → 정수
@@ -135,8 +136,14 @@ class EmotionalOrangeScraper(BaseScraper):
             ev for ev in events
             if ev.source_url not in seen and not seen.add(ev.source_url)  # type: ignore
         ]
-        self.logger.info(f'감정오렌지 총 {len(unique)}개 이벤트')
-        return unique
+        filtered = []
+        for ev in unique:
+            if is_within_one_month(ev.event_date):
+                filtered.append(ev)
+            else:
+                self.logger.debug(f"날짜 범위 초과 스킵 ({ev.event_date}): {ev.source_url}")
+        self.logger.info(f'감정오렌지 총 {len(filtered)}개 이벤트 (필터 전: {len(unique)}개)')
+        return filtered
 
     # ------------------------------------------------------------------ #
     # 상품 목록 수집
