@@ -5,6 +5,9 @@ on:
     - cron: '0 */6 * * *'    # 6시간마다
   workflow_dispatch:
 
+permissions:
+  issues: write
+
 jobs:
   health-check:
     runs-on: ubuntu-latest
