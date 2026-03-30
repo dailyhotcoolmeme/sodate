@@ -65,8 +65,8 @@ class YeoninScraper(BaseScraper):
                 page = context.new_page()
 
                 # 1단계: 일정 목록 페이지에서 최신 월별 게시물 링크 수집
-                page.goto(self.SCHEDULE_URL, timeout=15000)
-                page.wait_for_load_state('networkidle', timeout=10000)
+                page.goto(self.SCHEDULE_URL, timeout=30000)
+                page.wait_for_load_state('domcontentloaded', timeout=15000)
 
                 soup = BeautifulSoup(page.content(), 'html.parser')
                 post_links = []
@@ -82,8 +82,8 @@ class YeoninScraper(BaseScraper):
                 # 2단계: /list 페이지에서 참가자 명단 게시글 목록 수집
                 participant_data: dict[str, dict] = {}
                 try:
-                    page.goto(self.LIST_URL, timeout=15000)
-                    page.wait_for_load_state('networkidle', timeout=8000)
+                    page.goto(self.LIST_URL, timeout=30000)
+                    page.wait_for_load_state('domcontentloaded', timeout=15000)
                     list_soup = BeautifulSoup(page.content(), 'html.parser')
                     # 게시글 링크 추출 후 각 게시글의 og:description 파싱
                     list_post_links = []
@@ -98,8 +98,8 @@ class YeoninScraper(BaseScraper):
                     # 최신 30개 게시글에서 참가자 명단 파싱
                     for list_url in list_post_links[:30]:
                         try:
-                            page.goto(list_url, timeout=15000)
-                            page.wait_for_load_state('networkidle', timeout=8000)
+                            page.goto(list_url, timeout=20000)
+                            page.wait_for_load_state('domcontentloaded', timeout=10000)
                             list_detail_soup = BeautifulSoup(page.content(), 'html.parser')
 
                             # og:description 메타 태그에 참가자 데이터가 있음
@@ -123,8 +123,8 @@ class YeoninScraper(BaseScraper):
                 # 3단계: 최신 게시물 최대 3개만 파싱
                 for title, url in post_links[:3]:
                     try:
-                        page.goto(url, timeout=15000)
-                        page.wait_for_load_state('networkidle', timeout=8000)
+                        page.goto(url, timeout=20000)
+                        page.wait_for_load_state('domcontentloaded', timeout=10000)
                         detail_soup = BeautifulSoup(page.content(), 'html.parser')
 
                         thumbnail_url = None
