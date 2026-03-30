@@ -2,14 +2,13 @@ name: Crawl Sodate Events
 
 on:
   schedule:
-    - cron: '0 21 * * *'   # 매일 오전 06:00 KST (UTC 21:00 전날)
-    - cron: '0 3 * * *'    # 매일 오후 12:00 KST (UTC 03:00)
-    - cron: '0 9 * * *'    # 매일 오후 18:00 KST (UTC 09:00)
+    - cron: '0 23 * * *'   # 매일 오전 08:00 KST (UTC 23:00 전날)
+    - cron: '0 11 * * *'   # 매일 오후 20:00 KST (UTC 11:00)
   workflow_dispatch:         # 수동 실행
 
 jobs:
   crawl:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
 
     steps:
@@ -29,6 +28,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('crawler/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Install dependencies
         run: |
           cd crawler
@@ -45,8 +52,8 @@ jobs:
           cd crawler
           python main.py
 
-      - name: Run review crawlers (once a day, 21:00 UTC run only)
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.schedule, '0 21')
+      - name: Run review crawlers (once a day, 23:00 UTC run only)
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.schedule, '0 23')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -78,7 +85,7 @@ jobs:
           done
 
       - name: Check deadline reminders
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.schedule, '0 9')
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.schedule, '0 11')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
