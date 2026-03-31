@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { Plus, Search, Pencil, Trash2, Eye, EyeOff, Star } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Eye, EyeOff, Star, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface Event {
   id: string; title: string; company_id: string
@@ -14,28 +14,41 @@ interface Event {
   companies: { name: string } | null
 }
 
+type SortKey = 'date_asc' | 'date_desc' | 'company_asc'
+
 export default function Events() {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<SortKey>('date_asc')
+  const [filterRegion, setFilterRegion] = useState('')
+  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all')
+  const [filterClosed, setFilterClosed] = useState<'all' | 'open' | 'closed'>('all')
+  const [filterFeatured, setFilterFeatured] = useState<'all' | 'featured'>('all')
   const [editTarget, setEditTarget] = useState<Event | null>(null)
   const [showForm, setShowForm] = useState(false)
 
   useEffect(() => { load() }, [])
 
   async function load() {
+    const now = new Date().toISOString()
+    const oneMonthLater = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString()
+
     const { data, error } = await supabase
       .from('events')
       .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, is_featured, companies(name)')
-      .order('event_date', { ascending: false })
-      .limit(200)
+      .gte('event_date', now)
+      .lte('event_date', oneMonthLater)
+      .order('event_date', { ascending: true })
+      .limit(500)
     if (error) {
-      // is_featured 컬럼 없을 경우 fallback
       const { data: data2 } = await supabase
         .from('events')
         .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, companies(name)')
-        .order('event_date', { ascending: false })
-        .limit(200)
+        .gte('event_date', now)
+        .lte('event_date', oneMonthLater)
+        .order('event_date', { ascending: true })
+        .limit(500)
       setEvents((data2 as any) ?? [])
     } else {
       setEvents((data as any) ?? [])
@@ -62,15 +75,52 @@ export default function Events() {
     setEvents((prev) => prev.filter((e) => e.id !== id))
   }
 
-  const filtered = events.filter((e) =>
-    e.title.toLowerCase().includes(search.toLowerCase()) ||
-    (e.companies?.name ?? '').includes(search)
+  const regions = useMemo(() =>
+    [...new Set(events.map((e) => e.location_region).filter(Boolean))].sort(),
+    [events]
   )
+
+  const filtered = useMemo(() => {
+    let list = events.filter((e) => {
+      if (search && !e.title.toLowerCase().includes(search.toLowerCase()) && !(e.companies?.name ?? '').includes(search)) return false
+      if (filterRegion && e.location_region !== filterRegion) return false
+      if (filterActive === 'active' && !e.is_active) return false
+      if (filterActive === 'inactive' && e.is_active) return false
+      if (filterClosed === 'open' && e.is_closed) return false
+      if (filterClosed === 'closed' && !e.is_closed) return false
+      if (filterFeatured === 'featured' && !e.is_featured) return false
+      return true
+    })
+
+    list = [...list].sort((a, b) => {
+      if (sortBy === 'date_asc') return new Date(a.event_date).getTime() - new Date(b.event_date).getTime()
+      if (sortBy === 'date_desc') return new Date(b.event_date).getTime() - new Date(a.event_date).getTime()
+      if (sortBy === 'company_asc') return (a.companies?.name ?? '').localeCompare(b.companies?.name ?? '', 'ko')
+      return 0
+    })
+
+    return list
+  }, [events, search, sortBy, filterRegion, filterActive, filterClosed, filterFeatured])
+
+  const SortBtn = ({ label, asc, desc }: { label: string; asc: SortKey; desc: SortKey }) => (
+    <button
+      onClick={() => setSortBy(sortBy === asc ? desc : asc)}
+      className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-800"
+    >
+      {label}
+      {sortBy === asc ? <ArrowUp size={11} /> : sortBy === desc ? <ArrowDown size={11} /> : <ArrowUpDown size={11} className="opacity-40" />}
+    </button>
+  )
+
+  const selectCls = "px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white"
 
   return (
     <div className="p-8 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900">이벤트 관리 <span className="text-base font-normal text-gray-400">({events.length}개)</span></h1>
+        <h1 className="text-xl font-bold text-gray-900">
+          이벤트 관리
+          <span className="text-base font-normal text-gray-400 ml-2">({filtered.length}/{events.length}개)</span>
+        </h1>
         <button
           onClick={() => { setEditTarget(null); setShowForm(true) }}
           className="flex items-center gap-2 px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-medium hover:bg-pink-600"
@@ -79,15 +129,48 @@ export default function Events() {
         </button>
       </div>
 
-      {/* 검색 */}
-      <div className="relative">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="제목 또는 업체명 검색..."
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
-        />
+      {/* 검색 + 필터 */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-48">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="제목 또는 업체명 검색..."
+            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+          />
+        </div>
+
+        <select value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)} className={selectCls}>
+          <option value="">전체 지역</option>
+          {regions.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+
+        <select value={filterActive} onChange={(e) => setFilterActive(e.target.value as any)} className={selectCls}>
+          <option value="all">노출 전체</option>
+          <option value="active">노출 중</option>
+          <option value="inactive">비노출</option>
+        </select>
+
+        <select value={filterClosed} onChange={(e) => setFilterClosed(e.target.value as any)} className={selectCls}>
+          <option value="all">마감 전체</option>
+          <option value="open">모집 중</option>
+          <option value="closed">마감</option>
+        </select>
+
+        <select value={filterFeatured} onChange={(e) => setFilterFeatured(e.target.value as any)} className={selectCls}>
+          <option value="all">추천 전체</option>
+          <option value="featured">추천만</option>
+        </select>
+
+        {(filterRegion || filterActive !== 'all' || filterClosed !== 'all' || filterFeatured !== 'all') && (
+          <button
+            onClick={() => { setFilterRegion(''); setFilterActive('all'); setFilterClosed('all'); setFilterFeatured('all') }}
+            className="text-xs text-gray-400 hover:text-red-400 underline"
+          >
+            필터 초기화
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -97,9 +180,13 @@ export default function Events() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
-                <th className="px-4 py-3 text-left font-medium">업체</th>
+                <th className="px-4 py-3 text-left">
+                  <SortBtn label="업체" asc="company_asc" desc="company_asc" />
+                </th>
                 <th className="px-4 py-3 text-left font-medium">제목</th>
-                <th className="px-4 py-3 text-left font-medium">날짜</th>
+                <th className="px-4 py-3 text-left">
+                  <SortBtn label="날짜" asc="date_asc" desc="date_desc" />
+                </th>
                 <th className="px-4 py-3 text-left font-medium">지역</th>
                 <th className="px-4 py-3 text-left font-medium">가격</th>
                 <th className="px-4 py-3 text-left font-medium">나이대</th>
@@ -174,6 +261,13 @@ export default function Events() {
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="px-4 py-8 text-center text-gray-400 text-sm">
+                    조건에 맞는 이벤트가 없습니다.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
