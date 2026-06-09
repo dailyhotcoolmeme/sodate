@@ -323,6 +323,22 @@ export default function EventDetailScreen() {
               styles={styles}
             />
           )}
+          {(event.seats_left_male != null || event.seats_left_female != null) && (
+            <InfoRow
+              label="잔여"
+              value={[
+                event.seats_left_male != null
+                  ? `남 ${event.seats_left_male}석`
+                  : null,
+                event.seats_left_female != null
+                  ? `여 ${event.seats_left_female}석`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' / ')}
+              styles={styles}
+            />
+          )}
           {(event.price_male || event.price_female) && (
             <InfoRow
               label="참가비"

@@ -97,6 +97,10 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
     meta: { fontSize: 13, color: colors.textSecondary },
     metaDot: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 4 },
     price: { fontSize: 13, color: colors.textSecondary },
+    seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+    seatsLabel: { fontSize: 13, color: colors.textSecondary, marginRight: 6 },
+    seatsValue: { fontSize: 13, fontWeight: '600' },
+    seatsSep: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 4 },
     tags: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
     ctaRow: {
       flexDirection: 'row',
@@ -138,6 +142,13 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
   const daysLeft = Math.ceil(
     (new Date(event.event_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   )
+
+  const seatColor = (n: number | null) => {
+    if (n == null) return undefined
+    if (n <= 1) return colors.error
+    if (n <= 3) return colors.warning
+    return colors.textPrimary
+  }
 
   return (
     <TouchableOpacity
@@ -220,6 +231,26 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
             {event.price_female && (
               <Text style={styles.price}>
                 여 {event.price_female.toLocaleString()}원
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* 잔여석 */}
+        {(event.seats_left_male != null || event.seats_left_female != null) && (
+          <View style={styles.seatsRow}>
+            <Text style={styles.seatsLabel}>잔여</Text>
+            {event.seats_left_male != null && (
+              <Text style={[styles.seatsValue, { color: seatColor(event.seats_left_male) }]}>
+                {event.seats_left_male === 0 ? '남 마감' : `남 ${event.seats_left_male}`}
+              </Text>
+            )}
+            {event.seats_left_male != null && event.seats_left_female != null && (
+              <Text style={styles.seatsSep}>·</Text>
+            )}
+            {event.seats_left_female != null && (
+              <Text style={[styles.seatsValue, { color: seatColor(event.seats_left_female) }]}>
+                {event.seats_left_female === 0 ? '여 마감' : `여 ${event.seats_left_female}`}
               </Text>
             )}
           </View>
