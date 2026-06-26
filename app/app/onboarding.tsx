@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useColors } from '@/hooks/useColors'
 
@@ -46,6 +47,7 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(0)
   const router = useRouter()
   const colors = useColors()
+  const insets = useSafeAreaInsets()
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
@@ -142,7 +144,7 @@ export default function OnboardingScreen() {
 
       {/* 건너뛰기 */}
       {!isLast && (
-        <TouchableOpacity style={styles.skipBtn} onPress={handleFinish}>
+        <TouchableOpacity style={[styles.skipBtn, { top: insets.top + 12 }]} onPress={handleFinish}>
           <Text style={styles.skipText}>건너뛰기</Text>
         </TouchableOpacity>
       )}
@@ -167,7 +169,7 @@ export default function OnboardingScreen() {
       </View>
 
       {/* 버튼 */}
-      <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
+      <TouchableOpacity style={[styles.nextBtn, { marginBottom: insets.bottom + 24 }]} onPress={handleNext}>
         <Text style={styles.nextBtnText}>
           {isLast ? '시작하기' : '다음'}
         </Text>

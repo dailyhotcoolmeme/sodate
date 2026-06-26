@@ -14,6 +14,7 @@ import type { EventWithCompany } from '@/lib/supabase'
 import type { ParticipantStats } from '@/types/database.types'
 import DeadlineBadge from './DeadlineBadge'
 import ThemeTag from './ThemeTag'
+import { daysUntil } from '@/lib/dday'
 import CompanyBadge from './CompanyBadge'
 import FavoriteButton from './FavoriteButton'
 import ParticipantStatsSheet from './ParticipantStatsSheet'
@@ -139,9 +140,7 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
   const handleApply = () => openOutlink(event.source_url)
   const handleCardPress = () => router.push(`/event/${event.id}`)
 
-  const daysLeft = Math.ceil(
-    (new Date(event.event_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  )
+  const daysLeft = daysUntil(event.event_date)
 
   const seatColor = (n: number | null) => {
     if (n == null) return undefined
@@ -218,43 +217,76 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
         </View>
 
         {/* 성비 + 가격 */}
-        {(event.gender_ratio || event.price_male || event.price_female) && (
+        {event.gender_ratio && (
           <View style={styles.metaRow}>
-            {event.gender_ratio && (
-              <Text style={styles.meta}>{event.gender_ratio}</Text>
-            )}
-            {event.price_male && (
-              <Text style={styles.price}>
-                남 {event.price_male.toLocaleString()}원
-              </Text>
-            )}
-            {event.price_female && (
-              <Text style={styles.price}>
-                여 {event.price_female.toLocaleString()}원
-              </Text>
-            )}
+            <Text style={styles.meta}>{event.gender_ratio}</Text>
           </View>
         )}
 
-        {/* 잔여석 */}
-        {(event.seats_left_male != null || event.seats_left_female != null) && (
-          <View style={styles.seatsRow}>
-            <Text style={styles.seatsLabel}>잔여</Text>
-            {event.seats_left_male != null && (
-              <Text style={[styles.seatsValue, { color: seatColor(event.seats_left_male) }]}>
-                {event.seats_left_male === 0 ? '남 마감' : `남 ${event.seats_left_male}`}
-              </Text>
-            )}
-            {event.seats_left_male != null && event.seats_left_female != null && (
-              <Text style={styles.seatsSep}>·</Text>
-            )}
-            {event.seats_left_female != null && (
-              <Text style={[styles.seatsValue, { color: seatColor(event.seats_left_female) }]}>
-                {event.seats_left_female === 0 ? '여 마감' : `여 ${event.seats_left_female}`}
-              </Text>
-            )}
-          </View>
-        )}
+        {/* 정원 · 잔여석 (항상 표시) */}
+        {(() => {
+          const hasCapacity = event.capacity_male != null || event.capacity_female != null
+          const hasSeats = event.seats_left_male != null || event.seats_left_female != null
+          return (
+            <>
+              <View style={styles.seatsRow}>
+                <Text style={styles.seatsLabel}>정원</Text>
+                {hasCapacity ? (
+                  <>
+                    {event.capacity_male != null && (
+                      <Text style={styles.seatsValue}>남 {event.capacity_male}명</Text>
+                    )}
+                    {event.capacity_male != null && event.capacity_female != null && (
+                      <Text style={styles.seatsSep}>·</Text>
+                    )}
+                    {event.capacity_female != null && (
+                      <Text style={styles.seatsValue}>여 {event.capacity_female}명</Text>
+                    )}
+                  </>
+                ) : (
+                  <Text style={styles.seatsValue}>-</Text>
+                )}
+              </View>
+              <View style={styles.seatsRow}>
+                <Text style={styles.seatsLabel}>잔여석</Text>
+                {hasSeats ? (
+                  <>
+                    {event.seats_left_male != null && (
+                      <Text style={[styles.seatsValue, { color: seatColor(event.seats_left_male) }]}>
+                        {event.seats_left_male === 0 ? '남 마감' : `남 ${event.seats_left_male}석`}
+                      </Text>
+                    )}
+                    {event.seats_left_male != null && event.seats_left_female != null && (
+                      <Text style={styles.seatsSep}>·</Text>
+                    )}
+                    {event.seats_left_female != null && (
+                      <Text style={[styles.seatsValue, { color: seatColor(event.seats_left_female) }]}>
+                        {event.seats_left_female === 0 ? '여 마감' : `여 ${event.seats_left_female}석`}
+                      </Text>
+                    )}
+                  </>
+                ) : (
+                  <Text style={styles.seatsValue}>-</Text>
+                )}
+              </View>
+            </>
+          )
+        })()}
+
+        {/* 참가비 (항상 표시) */}
+        <View style={styles.seatsRow}>
+          <Text style={styles.seatsLabel}>참가비</Text>
+          {(event.price_male != null || event.price_female != null) ? (
+            <Text style={styles.seatsValue}>
+              {[
+                event.price_male != null ? `남 ${event.price_male.toLocaleString()}원` : null,
+                event.price_female != null ? `여 ${event.price_female.toLocaleString()}원` : null,
+              ].filter(Boolean).join(' · ')}
+            </Text>
+          ) : (
+            <Text style={styles.seatsValue}>-</Text>
+          )}
+        </View>
 
         {/* 테마 태그 */}
         {event.theme && event.theme.length > 0 && (

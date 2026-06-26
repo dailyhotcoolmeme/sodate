@@ -21,6 +21,8 @@ import ThemeTag from '@/components/ThemeTag'
 import DeadlineBadge from '@/components/DeadlineBadge'
 import ReviewCard from '@/components/ReviewCard'
 import ParticipantStatsSheet from '@/components/ParticipantStatsSheet'
+import AdBanner from '@/components/AdBanner'
+import { daysUntil } from '@/lib/dday'
 
 function cleanText(text: string): string {
   return text
@@ -238,9 +240,7 @@ export default function EventDetailScreen() {
     )
   }
 
-  const daysLeft = Math.ceil(
-    (new Date(event.event_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  )
+  const daysLeft = daysUntil(event.event_date)
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -250,7 +250,7 @@ export default function EventDetailScreen() {
           <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>홈</Text>
         </TouchableOpacity>
       </View>
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
       {/* 썸네일 */}
       <View style={styles.imageContainer}>
         {event.thumbnail_urls?.[0] ? (
@@ -311,50 +311,42 @@ export default function EventDetailScreen() {
           {event.gender_ratio && (
             <InfoRow label="성비" value={event.gender_ratio} styles={styles} />
           )}
-          {(event.capacity_male || event.capacity_female) && (
-            <InfoRow
-              label="모집"
-              value={[
-                event.capacity_male ? `남 ${event.capacity_male}명` : null,
-                event.capacity_female ? `여 ${event.capacity_female}명` : null,
-              ]
-                .filter(Boolean)
-                .join(' / ')}
-              styles={styles}
-            />
-          )}
-          {(event.seats_left_male != null || event.seats_left_female != null) && (
-            <InfoRow
-              label="잔여"
-              value={[
-                event.seats_left_male != null
-                  ? `남 ${event.seats_left_male}석`
-                  : null,
-                event.seats_left_female != null
-                  ? `여 ${event.seats_left_female}석`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(' / ')}
-              styles={styles}
-            />
-          )}
-          {(event.price_male || event.price_female) && (
-            <InfoRow
-              label="참가비"
-              value={[
-                event.price_male
-                  ? `남 ${event.price_male.toLocaleString()}원`
-                  : null,
-                event.price_female
-                  ? `여 ${event.price_female.toLocaleString()}원`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(' / ')}
-              styles={styles}
-            />
-          )}
+          <InfoRow
+            label="정원"
+            value={
+              (event.capacity_male != null || event.capacity_female != null)
+                ? [
+                    event.capacity_male != null ? `남 ${event.capacity_male}명` : null,
+                    event.capacity_female != null ? `여 ${event.capacity_female}명` : null,
+                  ].filter(Boolean).join(' / ')
+                : '-'
+            }
+            styles={styles}
+          />
+          <InfoRow
+            label="잔여석"
+            value={
+              (event.seats_left_male != null || event.seats_left_female != null)
+                ? [
+                    event.seats_left_male != null ? (event.seats_left_male === 0 ? '남 마감' : `남 ${event.seats_left_male}석`) : null,
+                    event.seats_left_female != null ? (event.seats_left_female === 0 ? '여 마감' : `여 ${event.seats_left_female}석`) : null,
+                  ].filter(Boolean).join(' / ')
+                : '-'
+            }
+            styles={styles}
+          />
+          <InfoRow
+            label="참가비"
+            value={
+              (event.price_male != null || event.price_female != null)
+                ? [
+                    event.price_male != null ? `남 ${event.price_male.toLocaleString()}원` : null,
+                    event.price_female != null ? `여 ${event.price_female.toLocaleString()}원` : null,
+                  ].filter(Boolean).join(' / ')
+                : '-'
+            }
+            styles={styles}
+          />
           {event.age_range_min && (
             <InfoRow
               label="나이"
@@ -383,6 +375,9 @@ export default function EventDetailScreen() {
             <Text style={styles.description}>{cleanText(event.description)}</Text>
           </View>
         )}
+
+        {/* 신청 버튼 위 광고 (CTA와 구분되는 외곽선형 + '광고' 배지) */}
+        <AdBanner />
 
         {/* 신청 버튼 */}
         <TouchableOpacity

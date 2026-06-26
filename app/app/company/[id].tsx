@@ -176,7 +176,7 @@ export default function CompanyDetailScreen() {
         <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>상세</Text>
       </TouchableOpacity>
     </View>
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
       {/* 업체 헤더 */}
       <View style={styles.header}>
         {company.logo_url ? (

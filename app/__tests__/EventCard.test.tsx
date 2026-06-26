@@ -54,7 +54,7 @@ const mockEvent: EventWithCompany = {
   format: null,
   thumbnail_urls: ['https://example.com/img.jpg'],
   participant_stats: null,
-  source_url: 'https://lovematching.kr/event/1',
+  source_url: 'https://frip.co.kr/event/1',
   is_active: true,
   is_closed: false,
   crawled_at: new Date().toISOString(),
@@ -62,11 +62,11 @@ const mockEvent: EventWithCompany = {
   updated_at: new Date().toISOString(),
   companies: {
     id: 'c1',
-    slug: 'lovematching',
-    name: '러브매칭',
+    slug: 'frip',
+    name: '프립',
     logo_url: null,
-    base_url: 'https://lovematching.kr',
-    crawl_url: 'https://lovematching.kr/events',
+    base_url: 'https://frip.co.kr',
+    crawl_url: 'https://frip.co.kr/events',
     crawl_type: 'static',
     regions: ['강남'],
     description: null,
@@ -89,7 +89,7 @@ describe('EventCard', () => {
 
   it('업체명이 렌더링된다', () => {
     const { getByText } = render(<EventCard event={mockEvent} />)
-    expect(getByText('러브매칭')).toBeTruthy()
+    expect(getByText('프립')).toBeTruthy()
   })
 
   it('지역 정보가 렌더링된다', () => {
@@ -116,7 +116,7 @@ describe('EventCard', () => {
   it('신청하기 버튼 탭 시 openOutlink가 source_url로 호출된다', () => {
     const { getByText } = render(<EventCard event={mockEvent} />)
     fireEvent.press(getByText('신청하기 →'))
-    expect(outlink.openOutlink).toHaveBeenCalledWith('https://lovematching.kr/event/1')
+    expect(outlink.openOutlink).toHaveBeenCalledWith('https://frip.co.kr/event/1')
   })
 
   it('D-2일 때 마감 임박 뱃지가 표시된다', () => {
@@ -139,6 +139,6 @@ describe('EventCard', () => {
   it('companies가 null이면 업체 배지가 없다', () => {
     const noCompany = { ...mockEvent, companies: null }
     const { queryByText } = render(<EventCard event={noCompany} />)
-    expect(queryByText('러브매칭')).toBeNull()
+    expect(queryByText('프립')).toBeNull()
   })
 })

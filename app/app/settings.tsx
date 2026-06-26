@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import { useThemeStore } from '@/stores/themeStore'
 
@@ -56,6 +57,7 @@ export default function SettingsScreen() {
   const { isDark, toggle } = useThemeStore()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const router = useRouter()
+  const insets = useSafeAreaInsets()
 
   const handleContact = () =>
     Linking.openURL('mailto:ourmine0319@gmail.com').catch(() =>
@@ -63,7 +65,7 @@ export default function SettingsScreen() {
     )
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
       {/* 앱 정보 */}
       <View style={styles.appInfo}>
         <Text style={styles.appName}>소개팅모아</Text>

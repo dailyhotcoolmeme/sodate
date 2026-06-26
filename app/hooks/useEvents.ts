@@ -23,6 +23,8 @@ export function useEvents() {
         .eq('is_active', true)
         .eq('is_closed', false)
         .gte('event_date', new Date().toISOString())
+        // 당일 ~ +1달 하드 상한: 1달 넘는 미래 이벤트는 항상 제외 (매일 자동 롤링)
+        .lte('event_date', (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString() })())
 
       // 지역 필터
       if (region !== 'all') {

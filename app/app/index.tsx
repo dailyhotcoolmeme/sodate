@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import EventCard from '@/components/EventCard'
 import EventListItem from '@/components/EventListItem'
+import AdListItem from '@/components/AdListItem'
 import EventCardSkeleton from '@/components/EventCardSkeleton'
 import FilterSheet from '@/components/FilterSheet'
 import EmptyState from '@/components/EmptyState'
@@ -42,6 +43,12 @@ const SORT_OPTIONS: SortOption[] = [
 ]
 
 const QUICK_THEMES = ['프리미엄', '직장인', '야외', '취미', '액티비티']
+
+// 리스트 N개마다 네이티브 광고 1개 삽입
+const AD_INTERVAL = 6
+type ListRow =
+  | { type: 'event'; event: import('@/lib/supabase').EventWithCompany }
+  | { type: 'ad'; key: string }
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets()
@@ -91,9 +98,16 @@ export default function HomeScreen() {
       color: colors.textPrimary,
       letterSpacing: -0.5,
     },
+    headerRightScroll: {
+      flex: 1,
+    },
     headerRight: {
       flexDirection: 'row',
+      alignItems: 'center',
       gap: 4,
+      flexGrow: 1,
+      justifyContent: 'flex-end',
+      paddingLeft: 8,
     },
     iconBtn: {
       padding: 8,
@@ -416,6 +430,19 @@ export default function HomeScreen() {
     activeChips.push({ label: dl, onRemove: () => useFilterStore.getState().setDateRange('all') })
   }
 
+  // 이벤트 사이사이에 광고 슬롯 삽입
+  const listData = useMemo<ListRow[]>(() => {
+    const rows: ListRow[] = []
+    events.forEach((ev, i) => {
+      rows.push({ type: 'event', event: ev })
+      // 마지막 항목 뒤에는 광고를 넣지 않음
+      if ((i + 1) % AD_INTERVAL === 0 && i < events.length - 1) {
+        rows.push({ type: 'ad', key: `ad-${i}` })
+      }
+    })
+    return rows
+  }, [events])
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* ── 상단 헤더 ── */}
@@ -424,7 +451,12 @@ export default function HomeScreen() {
           <Image source={require('../assets/logo-icon.png')} style={styles.logoIcon} contentFit="cover" />
           <Text style={styles.logo}>소개팅모아</Text>
         </TouchableOpacity>
-        <View style={styles.headerRight}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.headerRightScroll}
+          contentContainerStyle={styles.headerRight}
+        >
           <TouchableOpacity style={styles.iconBtn} onPress={() => { setAgeInput(myAge ? String(myAge) : ''); setProfileModalVisible(true) }}>
             <Text style={styles.iconText}>내정보</Text>
           </TouchableOpacity>
@@ -440,7 +472,7 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/settings')}>
             <Text style={styles.iconText}>설정</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </View>
 
       {/* ── 검색바 (탭하면 필터 시트 오픈) ── */}
@@ -603,21 +635,25 @@ export default function HomeScreen() {
           ref={flatListRef}
           onScroll={onScroll}
           scrollEventThrottle={100}
-          data={events}
-          renderItem={({ item }) => viewMode === 'card' ? (
-            <EventCard
-              event={item}
-              isFavorite={favoriteIds.has(item.id)}
-              onToggleFavorite={() => handleToggleFavorite(item.id, item.company_id ?? undefined, favoriteIds.has(item.id))}
-            />
-          ) : (
-            <EventListItem
-              event={item}
-              isFavorite={favoriteIds.has(item.id)}
-              onToggleFavorite={() => handleToggleFavorite(item.id, item.company_id ?? undefined, favoriteIds.has(item.id))}
-            />
-          )}
-          keyExtractor={(item) => item.id}
+          data={listData}
+          renderItem={({ item }) => {
+            if (item.type === 'ad') return <AdListItem />
+            const ev = item.event
+            return viewMode === 'card' ? (
+              <EventCard
+                event={ev}
+                isFavorite={favoriteIds.has(ev.id)}
+                onToggleFavorite={() => handleToggleFavorite(ev.id, ev.company_id ?? undefined, favoriteIds.has(ev.id))}
+              />
+            ) : (
+              <EventListItem
+                event={ev}
+                isFavorite={favoriteIds.has(ev.id)}
+                onToggleFavorite={() => handleToggleFavorite(ev.id, ev.company_id ?? undefined, favoriteIds.has(ev.id))}
+              />
+            )
+          }}
+          keyExtractor={(item) => item.type === 'ad' ? item.key : item.event.id}
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />
           }

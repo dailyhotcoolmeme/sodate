@@ -1,10 +1,8 @@
 import React, { useMemo } from 'react'
 import { View, Text, ScrollView, StyleSheet } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 
 export default function TermsScreen() {
-  const insets = useSafeAreaInsets()
   const colors = useColors()
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -17,7 +15,7 @@ export default function TermsScreen() {
   }), [colors])
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Text style={styles.title}>이용약관</Text>
         <Text style={styles.date}>시행일: 2026년 3월 20일 | 최종 수정일: 2026년 3월 20일</Text>

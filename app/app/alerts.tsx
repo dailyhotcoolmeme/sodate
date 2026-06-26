@@ -198,7 +198,7 @@ export default function AlertsScreen() {
       </TouchableOpacity>
       <Text style={styles.headerTitle}>알림 설정</Text>
     </View>
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
       <Text style={styles.sectionTitle}>관심 지역</Text>
       <Text style={styles.hint}>선택하지 않으면 전국 알림을 받습니다</Text>
       <View style={styles.chipRow}>

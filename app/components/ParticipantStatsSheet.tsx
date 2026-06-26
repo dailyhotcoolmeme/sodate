@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   Animated,
   PanResponder,
@@ -245,7 +246,9 @@ export default function ParticipantStatsSheet({ visible, onClose, stats }: Props
       onRequestClose={closeSheet}
       statusBarTranslucent
     >
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeSheet}>
+      <View style={styles.overlay}>
+        {/* 딤 배경 탭 → 닫기 (시트 뒤 형제로 분리해야 시트 내부 스크롤이 정상 동작) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
         <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
           {/* 드래그 핸들 */}
           <View {...panResponder.panHandlers}>
@@ -339,7 +342,7 @@ export default function ParticipantStatsSheet({ visible, onClose, stats }: Props
             </View>
           </ScrollView>
         </Animated.View>
-      </TouchableOpacity>
+      </View>
     </Modal>
   )
 }

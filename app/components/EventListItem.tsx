@@ -9,6 +9,7 @@ import type { EventWithCompany } from '@/lib/supabase'
 import type { ParticipantStats } from '@/types/database.types'
 import DeadlineBadge from './DeadlineBadge'
 import ParticipantStatsSheet from './ParticipantStatsSheet'
+import { daysUntil } from '@/lib/dday'
 
 interface Props {
   event: EventWithCompany
@@ -30,9 +31,7 @@ const COMPANY_COLORS: Record<string, string> = {
   '모드파티': '#6C3CE1',
   '연인어때': '#E84393',
   '러브캐스팅': '#E85D04',
-  '솔로오프': '#7B2D8B',
   '에모셔널오렌지': '#F4842B',
-  '러브매칭': '#C62A47',
   '프립': '#00B4D8',
   '문토': '#2D6A4F',
   '토크블라썸': '#F72585',
@@ -58,6 +57,12 @@ const THUMB = 88
 export default function EventListItem({ event, isFavorite = false, onToggleFavorite }: Props) {
   const router = useRouter()
   const colors = useColors()
+  const seatColor = (n: number | null) => {
+    if (n == null) return undefined
+    if (n <= 1) return colors.error
+    if (n <= 3) return colors.warning
+    return colors.textPrimary
+  }
   const [statsVisible, setStatsVisible] = useState(false)
   const styles = useMemo(() => StyleSheet.create({
     row: {
@@ -96,6 +101,9 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     title: { fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
     meta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     price: { fontSize: 12, color: colors.textSecondary },
+    seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+    seatsLabel: { fontSize: 12, color: colors.textSecondary, marginRight: 6 },
+    seatsText: { fontSize: 12, color: colors.textPrimary, fontWeight: '500' },
     ageText: { fontSize: 11, color: '#9B59F5', fontWeight: '600' },
     heart: { paddingLeft: 4, paddingTop: 2 },
     heartIcon: { fontSize: 18, color: colors.textTertiary },
@@ -111,7 +119,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     statsSmallBtnText: { fontSize: 10, color: '#9B59F5' },
   }), [colors])
 
-  const daysLeft = Math.ceil((new Date(event.event_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  const daysLeft = daysUntil(event.event_date)
 
   return (
     <TouchableOpacity
@@ -130,7 +138,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
         )}
         {daysLeft <= 3 && daysLeft >= 0 && (
           <View style={styles.deadlineDot}>
-            <Text style={styles.deadlineText}>D-{daysLeft}</Text>
+            <Text style={styles.deadlineText}>{daysLeft === 0 ? '오늘' : `D-${daysLeft}`}</Text>
           </View>
         )}
       </View>
@@ -142,13 +150,52 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
         )}
         <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
         <Text style={styles.meta}>{formatDate(event.event_date)} · {event.location_region}</Text>
-        {(event.price_male || event.price_female) && (
-          <Text style={styles.price}>
-            {event.price_male ? `남 ${event.price_male.toLocaleString()}원` : ''}
-            {event.price_male && event.price_female ? '  ' : ''}
-            {event.price_female ? `여 ${event.price_female.toLocaleString()}원` : ''}
-          </Text>
-        )}
+        <View style={styles.seatsRow}>
+          <Text style={styles.seatsLabel}>정원</Text>
+          {(event.capacity_male != null || event.capacity_female != null) ? (
+            <Text style={styles.seatsText}>
+              {[
+                event.capacity_male != null ? `남 ${event.capacity_male}명` : null,
+                event.capacity_female != null ? `여 ${event.capacity_female}명` : null,
+              ].filter(Boolean).join(' · ')}
+            </Text>
+          ) : (
+            <Text style={styles.seatsText}>-</Text>
+          )}
+        </View>
+        <View style={styles.seatsRow}>
+          <Text style={styles.seatsLabel}>잔여석</Text>
+          {(event.seats_left_male != null || event.seats_left_female != null) ? (
+            <Text style={styles.seatsText}>
+              {event.seats_left_male != null && (
+                <Text style={{ color: seatColor(event.seats_left_male) }}>
+                  {event.seats_left_male === 0 ? '남 마감' : `남 ${event.seats_left_male}석`}
+                </Text>
+              )}
+              {event.seats_left_male != null && event.seats_left_female != null ? ' · ' : ''}
+              {event.seats_left_female != null && (
+                <Text style={{ color: seatColor(event.seats_left_female) }}>
+                  {event.seats_left_female === 0 ? '여 마감' : `여 ${event.seats_left_female}석`}
+                </Text>
+              )}
+            </Text>
+          ) : (
+            <Text style={styles.seatsText}>-</Text>
+          )}
+        </View>
+        <View style={styles.seatsRow}>
+          <Text style={styles.seatsLabel}>참가비</Text>
+          {(event.price_male != null || event.price_female != null) ? (
+            <Text style={styles.seatsText}>
+              {[
+                event.price_male != null ? `남 ${event.price_male.toLocaleString()}원` : null,
+                event.price_female != null ? `여 ${event.price_female.toLocaleString()}원` : null,
+              ].filter(Boolean).join(' · ')}
+            </Text>
+          ) : (
+            <Text style={styles.seatsText}>-</Text>
+          )}
+        </View>
         {event.age_range_min != null && event.age_range_max != null && (
           <Text style={styles.ageText}>{event.age_range_min}~{event.age_range_max}세</Text>
         )}

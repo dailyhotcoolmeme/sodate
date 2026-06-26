@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
+import mobileAds from 'react-native-google-mobile-ads'
 import { useThemeStore } from '@/stores/themeStore'
 import { usePushNotification } from '@/hooks/usePushNotification'
 
@@ -14,6 +15,11 @@ export default function RootLayout() {
   usePushNotification()
   const { isDark, colors, load } = useThemeStore()
   useEffect(() => { load() }, [])
+
+  // AdMob SDK 초기화 (1회)
+  useEffect(() => {
+    mobileAds().initialize().catch(() => {})
+  }, [])
 
   useEffect(() => {
     async function checkOnboarding() {

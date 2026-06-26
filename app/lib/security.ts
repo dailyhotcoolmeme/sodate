@@ -1,6 +1,4 @@
 const ALLOWED_OUTLINK_DOMAINS = [
-  'lovematching.kr',
-  'lovematching.co.kr',
   'yeonin.co.kr',
   'emotional0ranges.com',
   'emotionorange.com',
@@ -8,8 +6,6 @@ const ALLOWED_OUTLINK_DOMAINS = [
   'munto.kr',
   'modparty.co.kr',
   'lovecasting.co.kr',
-  'solo-off.com',
-  'solooff.com',
   'talkblossom.co.kr',
   'somoim.co.kr',
   'booking.naver.com',
