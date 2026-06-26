@@ -125,66 +125,6 @@ HEADERS = {
 }
 
 
-# ─── 1. 러브매칭 (lovematching) ────────────────────────────────────────────────
-
-def qa_lovematching(db, limit: int) -> int:
-    report = QAReport('러브매칭 (lovematching)')
-    events = get_db_events(db, 'lovematching', limit)
-    if not events:
-        report.add_error('DB 이벤트 없음')
-        return report.print()
-
-    # 상품 목록 수집
-    try:
-        r = httpx.get('https://lovematching.kr/shop', headers=HEADERS, timeout=15, follow_redirects=True)
-        soup = BeautifulSoup(r.text, 'html.parser')
-        products = {}
-        for a in soup.select('a[href*="idx="]'):
-            m = re.search(r'idx=(\d+)', a.get('href', ''))
-            if m:
-                products[m.group(1)] = a.get_text(' ', strip=True)
-    except Exception as e:
-        report.add_error(f'상품 목록 수집 실패: {e}')
-        return report.print()
-
-    for ev in events:
-        checks = []
-        src = ev.get('source_url', '')
-        idx_m = re.search(r'idx=(\d+)', src)
-        idx = idx_m.group(1) if idx_m else None
-
-        # 상품 상세 접속
-        site_price = None
-        site_age_text = ''
-        try:
-            detail_url = f'https://lovematching.kr/shop/?idx={idx}' if idx else None
-            if detail_url:
-                dr = httpx.get(detail_url, headers=HEADERS, timeout=15, follow_redirects=True)
-                ds = BeautifulSoup(dr.text, 'html.parser')
-                text = ds.get_text(' ', strip=True)
-                pm = re.search(r'([\d,]+)원', text)
-                if pm:
-                    site_price = int(pm.group(1).replace(',', ''))
-                age_m = re.search(r'\(?\s*(\d{2,4})\s*[년~\-]\s*(\d{2,4})\s*년?\s*\)?', text)
-                if age_m:
-                    site_age_text = f"{age_m.group(1)}~{age_m.group(2)}년"
-        except Exception as e:
-            report.add_error(f'상품 상세 실패 idx={idx}: {e}')
-
-        db_date = parse_date_kst(ev['event_date'])
-        db_price = ev.get('price_male')
-        db_age = ev.get('age_group_label') or f"{ev.get('age_range_min')}~{ev.get('age_range_max')}"
-
-        checks.append(('가격(남)', site_price, db_price, prices_match(site_price, db_price)))
-        checks.append(('나이대', site_age_text or '미확인', db_age, bool(site_age_text)))
-
-        report.add(ev['title'], checks)
-
-    return report.print()
-
-
-# ─── 2. 프립 (frip) — GraphQL API ─────────────────────────────────────────────
-
 def qa_frip(db, limit: int) -> int:
     report = QAReport('프립 (frip)')
     events = get_db_events(db, 'frip', limit)
@@ -898,38 +838,6 @@ def qa_lovecommunity(db, limit: int) -> int:
     return report.print()
 
 
-# ─── 14. 솔로오프 (solooff) ───────────────────────────────────────────────────
-
-def qa_solooff(db, limit: int) -> int:
-    report = QAReport('솔로오프 (solooff)')
-    events = get_db_events(db, 'solooff', limit)
-    if not events:
-        report.add_error('DB 이벤트 없음')
-        return report.print()
-
-    # 솔로오프는 JS 렌더링 — httpx로 API 엔드포인트 직접 시도
-    try:
-        r = httpx.get('https://www.solo-off.com', headers=HEADERS,
-                      timeout=15, follow_redirects=True)
-        # JSON API 패턴 탐색
-        json_m = re.search(r'https?://[^\s"]+/api/[^\s"]+', r.text)
-        api_url = json_m.group(0) if json_m else None
-    except Exception as e:
-        report.add_error(f'접속 실패: {e}')
-        return report.print()
-
-    for ev in events:
-        checks = []
-        checks.append(('상태', 'DB 데이터 존재', ev.get('event_date', '')[:10], True))
-        checks.append(('나이대', ev.get('age_group_label') or '-',
-                       ev.get('age_group_label') or '-', True))
-        report.add(ev['title'], checks)
-
-    return report.print()
-
-
-# ─── 15. 시크릿살롱 (secretsalon) ─────────────────────────────────────────────
-
 def qa_secretsalon(db, limit: int) -> int:
     report = QAReport('시크릿살롱 (secretsalon)')
     events = get_db_events(db, 'secretsalon', limit)
@@ -970,7 +878,6 @@ def qa_secretsalon(db, limit: int) -> int:
 # ─── 메인 실행 ─────────────────────────────────────────────────────────────────
 
 SITE_FUNCS = {
-    'lovematching': qa_lovematching,
     'frip': qa_frip,
     'munto': qa_munto,
     'modparty': qa_modparty,
@@ -983,7 +890,6 @@ SITE_FUNCS = {
     'yeonin': qa_yeonin,
     'yeongyul': qa_yeongyul,
     'lovecommunity-loco': qa_lovecommunity,
-    'solo-off': qa_solooff,
     'secretsalon': qa_secretsalon,
 }
 

@@ -47,6 +47,18 @@ class BaseScraper(ABC):
             data['company_id'] = company_id
             data['crawled_at'] = datetime.now(timezone.utc).isoformat()
 
+            # 크롤러는 정원/잔여석/가격 정확도를 신뢰하지 않는다 — 항상 비움(관리자 직접 입력 전용).
+            # 어떤 스크래퍼가 값을 채워 넣어도 여기서 일괄 None 처리되어 DB에 저장되지 않는다.
+            data['capacity_male'] = None
+            data['capacity_female'] = None
+            data['seats_left_male'] = None
+            data['seats_left_female'] = None
+            data['price_male'] = None
+            data['price_female'] = None
+
+            # 테마는 구분하지 않는다 — 전부 소개팅. 스크래퍼가 뭘 넣든 일괄 고정.
+            data['theme'] = ['소개팅']
+
             if isinstance(data['event_date'], datetime):
                 dt = data['event_date']
                 if dt.tzinfo is None:

@@ -1,7 +1,9 @@
 """인썸파티 (inssumparty.co.kr) 스크래퍼 — imweb 기반, 대전, Playwright"""
+import json
 import re
 import time
 from datetime import datetime
+from html import unescape as html_unescape
 from typing import Optional
 
 from playwright.sync_api import sync_playwright
@@ -44,8 +46,59 @@ class InssumPartyScraper(BaseScraper):
     PRICE_MALE_RE = re.compile(r'남\s*(?:자|성)?\s*([\d,]+)\s*원')
     PRICE_FEMALE_RE = re.compile(r'여\s*(?:자|성)?\s*([\d,]+)\s*원')
 
+    # imweb 신청 위젯이 실제 사용하는 옵션 API. 응답의 '날짜(필수)' 드롭다운에
+    # 유저가 실제로 선택 가능한 일정만 들어있어, 화면과 1:1 일치한다.
+    # (페이지 텍스트 파싱은 과거·마감 일정 잔재까지 긁어 부정확했음)
+    LOAD_OPTION_URL = 'https://www.inssumparty.co.kr/shop/load_option.cm'
+    # 날짜 선택지: selectRequireOption('prod', idx, '그룹코드', '값코드', '6월 13일(토)')
+    BOOKABLE_LABEL_RE = re.compile(
+        r"selectRequireOption\('prod',\s*\d+,\s*'[^']+',\s*'[^']+',\s*'([^']+)'"
+    )
+    BOOKABLE_DATE_RE = re.compile(r'(\d{1,2})\s*월\s*(\d{1,2})\s*일|(\d{1,2})/(\d{1,2})')
+
     def __init__(self):
         super().__init__('inssumparty')
+
+    # ------------------------------------------------------------------
+    # 실제 선택 가능한 일정(권위 소스) — load_option.cm 직접 호출
+    # ------------------------------------------------------------------
+    def _fetch_bookable_dates(self, page, idx: str) -> set:
+        """상품의 '실제 선택 가능한 일정'만 MM/DD 집합으로 반환.
+
+        신청 버튼을 눌렀을 때 imweb이 호출하는 load_option.cm을 그대로 호출한다.
+        Playwright의 page.request는 현재 세션 쿠키를 공유하므로 추가 인증이 필요 없다.
+        빈 집합이면(=API 실패) 호출부에서 기존 텍스트 파싱으로 폴백한다.
+        """
+        dates: set = set()
+        try:
+            resp = page.request.post(
+                self.LOAD_OPTION_URL,
+                form={'type': 'prod', 'prod_idx': str(idx), '__': '1'},
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Referer': f'{self.BASE_URL}/shop_view/?idx={idx}',
+                },
+                timeout=15000,
+            )
+            body = resp.text()
+            try:
+                body = json.loads(body).get('option_html', body)
+            except (ValueError, AttributeError):
+                pass
+            body = html_unescape(body)
+            for label in self.BOOKABLE_LABEL_RE.findall(body):
+                dm = self.BOOKABLE_DATE_RE.search(label)
+                if not dm:
+                    continue
+                if dm.group(1):  # "6월 13일"
+                    mo, d = int(dm.group(1)), int(dm.group(2))
+                else:            # "6/13"
+                    mo, d = int(dm.group(3)), int(dm.group(4))
+                if 1 <= mo <= 12 and 1 <= d <= 31:
+                    dates.add(f'{mo:02d}/{d:02d}')
+        except Exception as e:
+            self.logger.debug(f'인썸파티 load_option 실패 idx={idx}: {e}')
+        return dates
 
     # ------------------------------------------------------------------
     # 메인 scrape
@@ -90,7 +143,11 @@ class InssumPartyScraper(BaseScraper):
                         html = page.content()
                         soup = BeautifulSoup(html, 'html.parser')
                         thumbnail_url = self._get_thumbnail(soup, page)
-                        new_events = self._parse_product(soup, page, idx, data, thumbnail_url)
+                        # 권위 소스: 실제 선택 가능한 일정만 (과거·마감 일정 차단)
+                        bookable_dates = self._fetch_bookable_dates(page, idx)
+                        new_events = self._parse_product(
+                            soup, page, idx, data, thumbnail_url, bookable_dates
+                        )
                         events.extend(new_events)
                     except Exception as e:
                         self.logger.warning(f'인썸파티 idx={idx} 파싱 실패: {e}')
@@ -289,6 +346,7 @@ class InssumPartyScraper(BaseScraper):
         idx: str,
         listing: dict,
         thumbnail_url: Optional[str] = None,
+        bookable_dates: Optional[set] = None,
     ) -> list[EventModel]:
         events: list[EventModel] = []
         text = soup.get_text(separator='\n', strip=True)
@@ -412,6 +470,16 @@ class InssumPartyScraper(BaseScraper):
             capacity_female: Optional[int] = None
 
             date_key_short = f'{str(mo).zfill(2)}/{str(d).zfill(2)}'
+
+            # ── 권위 검증: load_option.cm이 준 '실제 선택 가능한 일정'에만 한정 ──
+            # (텍스트 파싱이 긁은 과거·마감 일정이 +1년 롤오버로 둔갑하는 것을 차단)
+            if bookable_dates and date_key_short not in bookable_dates:
+                self.logger.debug(
+                    f'인썸파티 idx={idx} 비예약 일정 스킵 ({date_key_short}): '
+                    f'선택가능={sorted(bookable_dates)}'
+                )
+                continue
+
             seats_data = seats_map.get(date_key_short)
             if not seats_data:
                 # fallback: 전체 텍스트에서 첫 번째 매치

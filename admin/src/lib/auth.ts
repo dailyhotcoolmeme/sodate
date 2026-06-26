@@ -1,22 +1,33 @@
-// 간단한 관리자 인증 — env에 설정된 비밀번호 비교
-// 실제 운영 시 Supabase Auth로 교체 가능
+// 관리자 인증은 서버(CF Pages Functions)에서 처리한다.
+// 비밀번호/세션 비밀은 클라이언트에 존재하지 않으며, 세션은 HttpOnly 쿠키로만 유지된다.
 
-const ADMIN_ID = import.meta.env.VITE_ADMIN_ID
-const ADMIN_PW = import.meta.env.VITE_ADMIN_PW
-const SESSION_KEY = 'sodate_admin_session'
-
-export function login(id: string, pw: string): boolean {
-  if (id === ADMIN_ID && pw === ADMIN_PW) {
-    sessionStorage.setItem(SESSION_KEY, 'true')
-    return true
+export async function login(id: string, pw: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, pw }),
+      credentials: 'include',
+    })
+    return res.ok
+  } catch {
+    return false
   }
-  return false
 }
 
-export function logout() {
-  sessionStorage.removeItem(SESSION_KEY)
+export async function logout(): Promise<void> {
+  try {
+    await fetch('/api/logout', { method: 'POST', credentials: 'include' })
+  } catch {
+    /* 무시 */
+  }
 }
 
-export function isLoggedIn(): boolean {
-  return sessionStorage.getItem(SESSION_KEY) === 'true'
+export async function checkSession(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/me', { credentials: 'include' })
+    return res.ok
+  } catch {
+    return false
+  }
 }

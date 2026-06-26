@@ -59,6 +59,7 @@ export default function HomeScreen() {
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
   const { myAge, myGender, setMyAge, setMyGender } = useProfileStore()
   const [profileModalVisible, setProfileModalVisible] = useState(false)
+  const [menuVisible, setMenuVisible] = useState(false)
   const [ageInput, setAgeInput] = useState(myAge ? String(myAge) : '')
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
   const [showFab, setShowFab] = useState(false)
@@ -93,10 +94,10 @@ export default function HomeScreen() {
       borderRadius: 8,
     },
     logo: {
-      fontSize: 22,
-      fontWeight: '800',
+      fontSize: 17,
+      fontWeight: '700',
       color: colors.textPrimary,
-      letterSpacing: -0.5,
+      letterSpacing: -0.3,
     },
     headerRightScroll: {
       flex: 1,
@@ -116,6 +117,46 @@ export default function HomeScreen() {
     iconText: {
       fontSize: 15,
       color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    headerIcons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+    },
+    headerIconBtn: {
+      padding: 6,
+      borderRadius: 8,
+    },
+    menuBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.12)',
+    },
+    menuCard: {
+      position: 'absolute',
+      right: 12,
+      minWidth: 168,
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 8,
+    },
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    menuItemText: {
+      fontSize: 15,
+      color: colors.textPrimary,
       fontWeight: '500',
     },
     // 검색바
@@ -419,10 +460,6 @@ export default function HomeScreen() {
 
   const activeChips: { label: string; onRemove: () => void }[] = []
   if (region !== 'all') activeChips.push({ label: regionLabel, onRemove: () => setRegion('all') })
-  themes.forEach((t) => {
-    const label = THEMES.find((th) => th.id === t)?.label ?? t
-    activeChips.push({ label, onRemove: () => toggleTheme(t) })
-  })
   if (ageGroup !== 'all') activeChips.push({ label: ageGroupLabel, onRemove: () => setAgeGroup('all') })
   if (maxPrice !== null) activeChips.push({ label: `${(maxPrice / 10000).toFixed(0)}만원 이하`, onRemove: () => useFilterStore.getState().setMaxPrice(null) })
   if (dateRange !== 'all') {
@@ -451,29 +488,36 @@ export default function HomeScreen() {
           <Image source={require('../assets/logo-icon.png')} style={styles.logoIcon} contentFit="cover" />
           <Text style={styles.logo}>소개팅모아</Text>
         </TouchableOpacity>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.headerRightScroll}
-          contentContainerStyle={styles.headerRight}
-        >
-          <TouchableOpacity style={styles.iconBtn} onPress={() => { setAgeInput(myAge ? String(myAge) : ''); setProfileModalVisible(true) }}>
-            <Text style={styles.iconText}>내정보</Text>
+        <View style={styles.headerIcons}>
+          <TouchableOpacity style={styles.headerIconBtn} onPress={() => setMenuVisible(true)}>
+            <Ionicons name="menu" size={26} color={colors.textPrimary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/reviews')}>
-            <Text style={styles.iconText}>후기</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/favorites')}>
-            <Text style={styles.iconText}>관심</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/alerts')}>
-            <Text style={styles.iconText}>알림</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/settings')}>
-            <Text style={styles.iconText}>설정</Text>
-          </TouchableOpacity>
-        </ScrollView>
+        </View>
       </View>
+
+      {/* ── 햄버거 메뉴 ── */}
+      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
+        <TouchableOpacity style={styles.menuBackdrop} activeOpacity={1} onPress={() => setMenuVisible(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[styles.menuCard, { top: insets.top + 48 }]}>
+            {[
+              { label: '내 정보', icon: 'person-outline', action: () => { setAgeInput(myAge ? String(myAge) : ''); setProfileModalVisible(true) } },
+              { label: '후기', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
+              { label: '관심', icon: 'heart-outline', action: () => router.push('/favorites') },
+              { label: '알림설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
+              { label: '설정', icon: 'settings-outline', action: () => router.push('/settings') },
+            ].map((m) => (
+              <TouchableOpacity
+                key={m.label}
+                style={styles.menuItem}
+                onPress={() => { setMenuVisible(false); m.action() }}
+              >
+                <Ionicons name={m.icon as any} size={18} color={colors.textSecondary} />
+                <Text style={styles.menuItemText}>{m.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ── 검색바 (탭하면 필터 시트 오픈) ── */}
       <TouchableOpacity
@@ -485,7 +529,7 @@ export default function HomeScreen() {
         <Text style={styles.searchPlaceholder}>
           {activeFilterCount > 0
             ? `필터 ${activeFilterCount}개 적용 중`
-            : '지역 · 테마 · 가격으로 검색'}
+            : '지역 · 나이 · 가격으로 검색'}
         </Text>
         {activeFilterCount > 0 && (
           <View style={styles.filterBadge}>
@@ -525,22 +569,11 @@ export default function HomeScreen() {
         contentContainerStyle={styles.themeRow}
         style={{ flex: 1 }}
       >
-        {QUICK_THEMES.map((t) => (
-          <TouchableOpacity
-            key={t}
-            style={[styles.themeChip, themes.includes(t) && styles.themeChipActive]}
-            onPress={() => handleThemeToggle(t)}
-          >
-            <Text style={[styles.themeChipText, themes.includes(t) && styles.themeChipTextActive]}>
-              {t}
-            </Text>
-          </TouchableOpacity>
-        ))}
         <TouchableOpacity
           style={styles.moreFilterBtn}
           onPress={() => setFilterVisible(true)}
         >
-          <Text style={styles.moreFilterText}>더보기 ›</Text>
+          <Text style={styles.moreFilterText}>필터 ›</Text>
         </TouchableOpacity>
       </ScrollView>
       </View>

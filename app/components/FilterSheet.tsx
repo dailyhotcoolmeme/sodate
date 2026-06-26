@@ -222,21 +222,6 @@ export default function FilterSheet({ visible, onClose }: Props) {
             </View>
           </Section>
 
-          {/* 테마 */}
-          <Section title="테마" styles={styles}>
-            <View style={styles.chipGrid}>
-              {THEMES.map((t) => (
-                <Chip
-                  key={t.id}
-                  label={t.label}
-                  selected={themes.includes(t.id)}
-                  onPress={() => toggleTheme(t.id)}
-                  styles={styles}
-                />
-              ))}
-            </View>
-          </Section>
-
           {/* 가격 */}
           <Section title="최대 가격" styles={styles}>
             <View style={styles.chipRow}>

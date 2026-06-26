@@ -23,7 +23,7 @@ export function useCompany(id: string) {
             .select('*, companies(id, name, logo_url, slug, base_url, description, is_active, crawl_url, crawl_type, regions, instagram_url, created_at, updated_at)')
             .eq('company_id', id)
             .eq('is_active', true)
-            .eq('is_closed', false)
+            // 마감(is_closed) 이벤트도 노출 — 카드에서 흐림+마감 배지 처리
             .gte('event_date', new Date().toISOString())
             .order('event_date', { ascending: true })
             .limit(20),

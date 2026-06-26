@@ -5,8 +5,6 @@ from typing import Optional
 
 # 크롤링 허용 도메인 화이트리스트
 ALLOWED_DOMAINS: set[str] = {
-    'lovematching.kr',
-    'www.lovematching.kr',
     'yeonin.co.kr',
     'www.yeonin.co.kr',
     'emotional0ranges.com',
@@ -20,8 +18,6 @@ ALLOWED_DOMAINS: set[str] = {
     'www.somoim.co.kr',
     'modparty.co.kr',
     'www.modparty.co.kr',
-    'solo-off.com',
-    'www.solo-off.com',
     'talkblossom.co.kr',
     'www.talkblossom.co.kr',
     'lovecasting.co.kr',

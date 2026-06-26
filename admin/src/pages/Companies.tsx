@@ -37,7 +37,7 @@ export default function Companies() {
   }
 
   return (
-    <div className="p-8 space-y-4">
+    <div className="p-4 md:p-8 space-y-4">
       <h1 className="text-xl font-bold text-gray-900">업체 관리</h1>
       {loading ? <p className="text-gray-400 text-sm">불러오는 중...</p> : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

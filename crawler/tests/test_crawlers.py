@@ -9,77 +9,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 # ──────────────────────────────────────────────
-# LoveMatchingScraper 테스트
-# ──────────────────────────────────────────────
-
-class TestLoveMatchingScraper:
-    def _make_scraper(self):
-        with patch('scrapers.lovematching.BaseScraper.__init__', lambda self, slug: None):
-            from scrapers.lovematching import LoveMatchingScraper
-            scraper = LoveMatchingScraper.__new__(LoveMatchingScraper)
-            scraper.company_slug = 'lovematching'
-            scraper.supabase = MagicMock()
-            from utils.logger import get_logger
-            scraper.logger = get_logger('test-lovematching')
-            return scraper
-
-    def test_parse_date_dot_format(self):
-        scraper = self._make_scraper()
-        result = scraper._parse_date('2026.04.01 19:00')
-        assert result == datetime(2026, 4, 1, 19, 0)
-
-    def test_parse_date_hyphen_format(self):
-        scraper = self._make_scraper()
-        result = scraper._parse_date('2026-04-15 20:00')
-        assert result == datetime(2026, 4, 15, 20, 0)
-
-    def test_parse_date_returns_none_on_invalid(self):
-        scraper = self._make_scraper()
-        result = scraper._parse_date('invalid date')
-        assert result is None
-
-    def test_extract_region_gangnam(self):
-        scraper = self._make_scraper()
-        assert scraper._extract_region('강남역 근처 와인 소개팅') == '강남'
-
-    def test_extract_region_hongdae(self):
-        scraper = self._make_scraper()
-        assert scraper._extract_region('홍대 카페 소개팅') == '홍대'
-
-    def test_extract_region_fallback(self):
-        scraper = self._make_scraper()
-        assert scraper._extract_region('알 수 없는 위치') == '기타'
-
-    def test_extract_price_with_comma(self):
-        scraper = self._make_scraper()
-        assert scraper._extract_price('참가비 35,000원') == 35000
-
-    def test_extract_price_without_comma(self):
-        scraper = self._make_scraper()
-        assert scraper._extract_price('30000원') == 30000
-
-    def test_extract_price_none(self):
-        scraper = self._make_scraper()
-        assert scraper._extract_price('') is None
-
-    def test_extract_theme_wine(self):
-        scraper = self._make_scraper()
-        assert '와인' in scraper._extract_theme('와인 로테이션 소개팅')
-
-    def test_extract_theme_default(self):
-        scraper = self._make_scraper()
-        assert scraper._extract_theme('일반 소개팅') == ['일반']
-
-    def test_extract_ratio(self):
-        scraper = self._make_scraper()
-        assert scraper._extract_ratio('8:8 소개팅') == '8:8'
-
-    def test_extract_ratio_none(self):
-        scraper = self._make_scraper()
-        assert scraper._extract_ratio('소개팅') is None
-
-
-# ──────────────────────────────────────────────
 # YeoninScraper 테스트
 # ──────────────────────────────────────────────
 
@@ -163,7 +92,7 @@ class TestEmotionalOrangeScraper:
 class TestSecurity:
     def test_is_allowed_crawl_url_valid(self):
         from utils.security import is_allowed_crawl_url
-        assert is_allowed_crawl_url('https://lovematching.kr/schedule') is True
+        assert is_allowed_crawl_url('https://frip.co.kr/schedule') is True
         assert is_allowed_crawl_url('https://yeonin.co.kr/events') is True
 
     def test_is_allowed_crawl_url_invalid(self):
@@ -198,13 +127,13 @@ class TestSecurity:
 
     def test_sanitize_url_valid(self):
         from utils.security import sanitize_url
-        result = sanitize_url('https://lovematching.kr/event/1')
-        assert result == 'https://lovematching.kr/event/1'
+        result = sanitize_url('https://frip.co.kr/event/1')
+        assert result == 'https://frip.co.kr/event/1'
 
     def test_sanitize_url_relative(self):
         from utils.security import sanitize_url
-        result = sanitize_url('/event/1', 'https://lovematching.kr')
-        assert result == 'https://lovematching.kr/event/1'
+        result = sanitize_url('/event/1', 'https://frip.co.kr')
+        assert result == 'https://frip.co.kr/event/1'
 
     def test_contains_pii_phone(self):
         from utils.security import contains_pii
@@ -235,9 +164,9 @@ class TestImageExtractor:
         </div>
         '''
         soup = BeautifulSoup(html, 'html.parser')
-        result = extract_images(soup, 'https://lovematching.kr')
+        result = extract_images(soup, 'https://frip.co.kr')
         assert len(result) == 2
-        assert 'https://lovematching.kr/images/event1.jpg' in result
+        assert 'https://frip.co.kr/images/event1.jpg' in result
 
     def test_extract_images_limit(self):
         from bs4 import BeautifulSoup
@@ -245,7 +174,7 @@ class TestImageExtractor:
 
         imgs = ''.join(f'<img src="/img{i}.jpg">' for i in range(10))
         soup = BeautifulSoup(f'<div>{imgs}</div>', 'html.parser')
-        result = extract_images(soup, 'https://lovematching.kr', limit=3)
+        result = extract_images(soup, 'https://frip.co.kr', limit=3)
         assert len(result) == 3
 
     def test_extract_og_image(self):

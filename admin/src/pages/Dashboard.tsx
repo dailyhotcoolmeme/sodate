@@ -101,11 +101,11 @@ export default function Dashboard() {
     load()
   }, [])
 
-  if (loading) return <div className="p-8 text-gray-400">불러오는 중...</div>
+  if (loading) return <div className="p-4 md:p-8 text-gray-400">불러오는 중...</div>
   if (!stats) return null
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       <h1 className="text-xl font-bold text-gray-900">대시보드</h1>
 
       {/* 핵심 지표 */}

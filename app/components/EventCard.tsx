@@ -11,13 +11,12 @@ import { useRouter } from 'expo-router'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
-import type { ParticipantStats } from '@/types/database.types'
 import DeadlineBadge from './DeadlineBadge'
 import ThemeTag from './ThemeTag'
 import { daysUntil } from '@/lib/dday'
+import { genderInfoLine } from '@/lib/eventInfo'
 import CompanyBadge from './CompanyBadge'
 import FavoriteButton from './FavoriteButton'
-import ParticipantStatsSheet from './ParticipantStatsSheet'
 
 interface Props {
   event: EventWithCompany
@@ -25,10 +24,6 @@ interface Props {
   onToggleFavorite?: () => void
 }
 
-function hasParticipantData(stats: any): boolean {
-  if (!stats) return false
-  return (stats.male?.length > 0) || (stats.female?.length > 0) || stats.total_count !== undefined
-}
 
 function cleanTitle(title: string): string {
   return title
@@ -50,7 +45,7 @@ function formatDate(dateStr: string): string {
 export default function EventCard({ event, isFavorite = false, onToggleFavorite }: Props) {
   const router = useRouter()
   const colors = useColors()
-  const [statsVisible, setStatsVisible] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const styles = useMemo(() => StyleSheet.create({
     card: {
       backgroundColor: colors.surface,
@@ -58,6 +53,26 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
       marginHorizontal: 16,
       marginVertical: 8,
       overflow: 'hidden',
+    },
+    closedOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(255,255,255,0.5)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    closedBadge: {
+      backgroundColor: 'rgba(24,24,27,0.72)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.22)',
+      paddingHorizontal: 16,
+      paddingVertical: 7,
+      borderRadius: 12,
+    },
+    closedBadgeText: {
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: '700',
+      letterSpacing: 1,
     },
     imageContainer: { position: 'relative' },
     image: { width: '100%', height: 200 },
@@ -101,6 +116,12 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
     seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
     seatsLabel: { fontSize: 13, color: colors.textSecondary, marginRight: 6 },
     seatsValue: { fontSize: 13, fontWeight: '600' },
+    genderBlock: { marginTop: 6, gap: 3 },
+    genderRow: { flexDirection: 'row', alignItems: 'center' },
+    genderTag: { fontSize: 13, fontWeight: '700', marginRight: 8, width: 30 },
+    genderMale: { color: '#3B82F6' },
+    genderFemale: { color: colors.primary },
+    genderInfo: { flex: 1, fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
     seatsSep: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 4 },
     tags: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
     ctaRow: {
@@ -116,6 +137,8 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
       alignItems: 'center',
     },
     ctaText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+    ctaClosed: { backgroundColor: '#e5e7eb' },
+    ctaClosedText: { color: '#9ca3af', fontWeight: '700', fontSize: 14 },
     statsBtn: {
       flex: 1,
       borderRadius: 10,
@@ -157,12 +180,13 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
     >
       {/* 썸네일 */}
       <View style={styles.imageContainer}>
-        {event.thumbnail_urls?.[0] ? (
+        {event.thumbnail_urls?.[0] && !imgError ? (
           <Image
             source={{ uri: event.thumbnail_urls[0] }}
             style={styles.image}
             contentFit="cover"
             transition={200}
+            onError={() => setImgError(true)}
           />
         ) : (
           <View style={styles.imagePlaceholder}>
@@ -171,12 +195,6 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
         )}
         {daysLeft <= 3 && daysLeft >= 0 && (
           <DeadlineBadge daysLeft={daysLeft} />
-        )}
-        {/* 나이대 배지 — 왼쪽 상단 */}
-        {event.age_range_min != null && event.age_range_max != null && (
-          <View style={styles.ageBadge}>
-            <Text style={styles.ageBadgeText}>{event.age_range_min}~{event.age_range_max}세</Text>
-          </View>
         )}
         {/* 하트 버튼 — 오른쪽 상단 */}
         {onToggleFavorite && (
@@ -209,119 +227,59 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
           {cleanTitle(event.title)}
         </Text>
 
-        {/* 날짜 + 지역 */}
+        {/* 날짜 · 지역 · 나이대 */}
         <View style={styles.metaRow}>
           <Text style={styles.meta}>{formatDate(event.event_date)}</Text>
           <Text style={styles.metaDot}>·</Text>
           <Text style={styles.meta}>{event.location_region}</Text>
         </View>
 
-        {/* 성비 + 가격 */}
-        {event.gender_ratio && (
-          <View style={styles.metaRow}>
-            <Text style={styles.meta}>{event.gender_ratio}</Text>
-          </View>
-        )}
-
-        {/* 정원 · 잔여석 (항상 표시) */}
+        {/* 남성 / 여성 한 줄 요약 */}
         {(() => {
-          const hasCapacity = event.capacity_male != null || event.capacity_female != null
-          const hasSeats = event.seats_left_male != null || event.seats_left_female != null
+          const m = genderInfoLine({ capacity: event.capacity_male, seats: event.seats_left_male, price: event.price_male, age: event.age_male })
+          const f = genderInfoLine({ capacity: event.capacity_female, seats: event.seats_left_female, price: event.price_female, age: event.age_female })
+          if (!m && !f) return null
           return (
-            <>
-              <View style={styles.seatsRow}>
-                <Text style={styles.seatsLabel}>정원</Text>
-                {hasCapacity ? (
-                  <>
-                    {event.capacity_male != null && (
-                      <Text style={styles.seatsValue}>남 {event.capacity_male}명</Text>
-                    )}
-                    {event.capacity_male != null && event.capacity_female != null && (
-                      <Text style={styles.seatsSep}>·</Text>
-                    )}
-                    {event.capacity_female != null && (
-                      <Text style={styles.seatsValue}>여 {event.capacity_female}명</Text>
-                    )}
-                  </>
-                ) : (
-                  <Text style={styles.seatsValue}>-</Text>
-                )}
-              </View>
-              <View style={styles.seatsRow}>
-                <Text style={styles.seatsLabel}>잔여석</Text>
-                {hasSeats ? (
-                  <>
-                    {event.seats_left_male != null && (
-                      <Text style={[styles.seatsValue, { color: seatColor(event.seats_left_male) }]}>
-                        {event.seats_left_male === 0 ? '남 마감' : `남 ${event.seats_left_male}석`}
-                      </Text>
-                    )}
-                    {event.seats_left_male != null && event.seats_left_female != null && (
-                      <Text style={styles.seatsSep}>·</Text>
-                    )}
-                    {event.seats_left_female != null && (
-                      <Text style={[styles.seatsValue, { color: seatColor(event.seats_left_female) }]}>
-                        {event.seats_left_female === 0 ? '여 마감' : `여 ${event.seats_left_female}석`}
-                      </Text>
-                    )}
-                  </>
-                ) : (
-                  <Text style={styles.seatsValue}>-</Text>
-                )}
-              </View>
-            </>
+            <View style={styles.genderBlock}>
+              {!!m && (
+                <View style={styles.genderRow}>
+                  <Text style={[styles.genderTag, styles.genderMale]}>남성</Text>
+                  <Text style={styles.genderInfo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{m}</Text>
+                </View>
+              )}
+              {!!f && (
+                <View style={styles.genderRow}>
+                  <Text style={[styles.genderTag, styles.genderFemale]}>여성</Text>
+                  <Text style={styles.genderInfo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{f}</Text>
+                </View>
+              )}
+            </View>
           )
         })()}
 
-        {/* 참가비 (항상 표시) */}
-        <View style={styles.seatsRow}>
-          <Text style={styles.seatsLabel}>참가비</Text>
-          {(event.price_male != null || event.price_female != null) ? (
-            <Text style={styles.seatsValue}>
-              {[
-                event.price_male != null ? `남 ${event.price_male.toLocaleString()}원` : null,
-                event.price_female != null ? `여 ${event.price_female.toLocaleString()}원` : null,
-              ].filter(Boolean).join(' · ')}
-            </Text>
-          ) : (
-            <Text style={styles.seatsValue}>-</Text>
-          )}
-        </View>
-
-        {/* 테마 태그 */}
-        {event.theme && event.theme.length > 0 && (
-          <View style={styles.tags}>
-            {event.theme.slice(0, 3).map((t: string) => (
-              <ThemeTag key={t} label={t} />
-            ))}
-          </View>
-        )}
-
-        {/* 신청 버튼 (+ 현황 보기) */}
+        {/* 신청 버튼 */}
         <View style={styles.ctaRow}>
-          {hasParticipantData(event.participant_stats) && (
-            <TouchableOpacity
-              style={styles.statsBtn}
-              onPress={(e) => { e.stopPropagation?.(); setStatsVisible(true) }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.statsBtnText}>현황 보기</Text>
+          {event.is_closed ? (
+            <View style={[styles.cta, styles.ctaClosed]}>
+              <Text style={styles.ctaClosedText}>신청 마감</Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.cta} onPress={handleApply}>
+              <Text style={styles.ctaText}>신청하기  ›</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.cta} onPress={handleApply}>
-            <Text style={styles.ctaText}>신청하기  ›</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
-      {/* 참가자 현황 바텀시트 */}
-      {hasParticipantData(event.participant_stats) && (
-        <ParticipantStatsSheet
-          visible={statsVisible}
-          onClose={() => setStatsVisible(false)}
-          stats={event.participant_stats as ParticipantStats}
-        />
+      {/* 마감 처리 — 흐림 + 중앙 마감 배지 */}
+      {event.is_closed && (
+        <View style={styles.closedOverlay} pointerEvents="none">
+          <View style={styles.closedBadge}>
+            <Text style={styles.closedBadgeText}>마감</Text>
+          </View>
+        </View>
       )}
+
     </TouchableOpacity>
   )
 }

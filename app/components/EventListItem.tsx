@@ -6,10 +6,9 @@ import { useRouter } from 'expo-router'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
-import type { ParticipantStats } from '@/types/database.types'
 import DeadlineBadge from './DeadlineBadge'
-import ParticipantStatsSheet from './ParticipantStatsSheet'
 import { daysUntil } from '@/lib/dday'
+import { genderInfoLine } from '@/lib/eventInfo'
 
 interface Props {
   event: EventWithCompany
@@ -36,10 +35,6 @@ const COMPANY_COLORS: Record<string, string> = {
   '문토': '#2D6A4F',
   '토크블라썸': '#F72585',
 }
-function hasParticipantData(stats: any): boolean {
-  if (!stats) return false
-  return (stats.male?.length > 0) || (stats.female?.length > 0) || stats.total_count !== undefined
-}
 
 function companyColor(name?: string): string {
   if (name && COMPANY_COLORS[name]) return COMPANY_COLORS[name]
@@ -63,7 +58,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     if (n <= 3) return colors.warning
     return colors.textPrimary
   }
-  const [statsVisible, setStatsVisible] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const styles = useMemo(() => StyleSheet.create({
     row: {
       flexDirection: 'row',
@@ -74,6 +69,27 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
       marginVertical: 5,
       padding: 12,
       gap: 12,
+      overflow: 'hidden',
+    },
+    closedOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(255,255,255,0.5)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    closedBadge: {
+      backgroundColor: 'rgba(24,24,27,0.72)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.22)',
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: 10,
+    },
+    closedBadgeText: {
+      color: '#fff',
+      fontSize: 12.5,
+      fontWeight: '700',
+      letterSpacing: 1,
     },
     thumbWrap: { position: 'relative' },
     thumb: { width: THUMB, height: THUMB, borderRadius: 10 },
@@ -104,6 +120,12 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
     seatsLabel: { fontSize: 12, color: colors.textSecondary, marginRight: 6 },
     seatsText: { fontSize: 12, color: colors.textPrimary, fontWeight: '500' },
+    genderBlock: { marginTop: 5, gap: 2 },
+    genderRow: { flexDirection: 'row', alignItems: 'center' },
+    genderTag: { fontSize: 12.5, fontWeight: '700', marginRight: 7, width: 28 },
+    genderMale: { color: '#3B82F6' },
+    genderFemale: { color: colors.primary },
+    genderInfo: { flex: 1, fontSize: 12.5, color: colors.textSecondary, fontWeight: '500' },
     ageText: { fontSize: 11, color: '#9B59F5', fontWeight: '600' },
     heart: { paddingLeft: 4, paddingTop: 2 },
     heartIcon: { fontSize: 18, color: colors.textTertiary },
@@ -129,8 +151,8 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     >
       {/* 썸네일 */}
       <View style={styles.thumbWrap}>
-        {event.thumbnail_urls?.[0] ? (
-          <Image source={{ uri: event.thumbnail_urls[0] }} style={styles.thumb} contentFit="cover" transition={200} />
+        {event.thumbnail_urls?.[0] && !imgError ? (
+          <Image source={{ uri: event.thumbnail_urls[0] }} style={styles.thumb} contentFit="cover" transition={200} onError={() => setImgError(true)} />
         ) : (
           <View style={[styles.thumbPlaceholder, { backgroundColor: companyColor(event.companies?.name) }]}>
             <Text style={styles.thumbInitial}>{event.companies?.name?.[0] ?? '소'}</Text>
@@ -150,68 +172,31 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
         )}
         <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
         <Text style={styles.meta}>{formatDate(event.event_date)} · {event.location_region}</Text>
-        <View style={styles.seatsRow}>
-          <Text style={styles.seatsLabel}>정원</Text>
-          {(event.capacity_male != null || event.capacity_female != null) ? (
-            <Text style={styles.seatsText}>
-              {[
-                event.capacity_male != null ? `남 ${event.capacity_male}명` : null,
-                event.capacity_female != null ? `여 ${event.capacity_female}명` : null,
-              ].filter(Boolean).join(' · ')}
-            </Text>
-          ) : (
-            <Text style={styles.seatsText}>-</Text>
-          )}
-        </View>
-        <View style={styles.seatsRow}>
-          <Text style={styles.seatsLabel}>잔여석</Text>
-          {(event.seats_left_male != null || event.seats_left_female != null) ? (
-            <Text style={styles.seatsText}>
-              {event.seats_left_male != null && (
-                <Text style={{ color: seatColor(event.seats_left_male) }}>
-                  {event.seats_left_male === 0 ? '남 마감' : `남 ${event.seats_left_male}석`}
-                </Text>
+        {(() => {
+          const m = genderInfoLine({ capacity: event.capacity_male, seats: event.seats_left_male, price: event.price_male, age: event.age_male })
+          const f = genderInfoLine({ capacity: event.capacity_female, seats: event.seats_left_female, price: event.price_female, age: event.age_female })
+          if (!m && !f) return null
+          return (
+            <View style={styles.genderBlock}>
+              {!!m && (
+                <View style={styles.genderRow}>
+                  <Text style={[styles.genderTag, styles.genderMale]}>남성</Text>
+                  <Text style={styles.genderInfo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{m}</Text>
+                </View>
               )}
-              {event.seats_left_male != null && event.seats_left_female != null ? ' · ' : ''}
-              {event.seats_left_female != null && (
-                <Text style={{ color: seatColor(event.seats_left_female) }}>
-                  {event.seats_left_female === 0 ? '여 마감' : `여 ${event.seats_left_female}석`}
-                </Text>
+              {!!f && (
+                <View style={styles.genderRow}>
+                  <Text style={[styles.genderTag, styles.genderFemale]}>여성</Text>
+                  <Text style={styles.genderInfo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{f}</Text>
+                </View>
               )}
-            </Text>
-          ) : (
-            <Text style={styles.seatsText}>-</Text>
-          )}
-        </View>
-        <View style={styles.seatsRow}>
-          <Text style={styles.seatsLabel}>참가비</Text>
-          {(event.price_male != null || event.price_female != null) ? (
-            <Text style={styles.seatsText}>
-              {[
-                event.price_male != null ? `남 ${event.price_male.toLocaleString()}원` : null,
-                event.price_female != null ? `여 ${event.price_female.toLocaleString()}원` : null,
-              ].filter(Boolean).join(' · ')}
-            </Text>
-          ) : (
-            <Text style={styles.seatsText}>-</Text>
-          )}
-        </View>
-        {event.age_range_min != null && event.age_range_max != null && (
-          <Text style={styles.ageText}>{event.age_range_min}~{event.age_range_max}세</Text>
-        )}
+            </View>
+          )
+        })()}
       </View>
 
-      {/* 오른쪽 컬럼: 현황 버튼 + 하트 */}
+      {/* 오른쪽 컬럼: 하트 */}
       <View style={styles.rightCol}>
-        {hasParticipantData(event.participant_stats) && (
-          <TouchableOpacity
-            style={styles.statsSmallBtn}
-            onPress={(e) => { e.stopPropagation?.(); setStatsVisible(true) }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.statsSmallBtnText}>현황</Text>
-          </TouchableOpacity>
-        )}
         {onToggleFavorite && (
           <TouchableOpacity
             style={styles.heart}
@@ -223,14 +208,15 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
         )}
       </View>
 
-      {/* 참가자 현황 바텀시트 */}
-      {hasParticipantData(event.participant_stats) && (
-        <ParticipantStatsSheet
-          visible={statsVisible}
-          onClose={() => setStatsVisible(false)}
-          stats={event.participant_stats as ParticipantStats}
-        />
+      {/* 마감 처리 — 흐림 + 중앙 마감 배지 */}
+      {event.is_closed && (
+        <View style={styles.closedOverlay} pointerEvents="none">
+          <View style={styles.closedBadge}>
+            <Text style={styles.closedBadgeText}>마감</Text>
+          </View>
+        </View>
       )}
+
     </TouchableOpacity>
   )
 }

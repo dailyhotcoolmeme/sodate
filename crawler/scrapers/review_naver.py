@@ -17,12 +17,10 @@ NAVER_BLOG_SEARCH = 'https://search.naver.com/search.naver'
 COMPANY_KEYWORDS = {
     'yeonin': ['연인어때 후기', '연인어때 소개팅 후기'],
     'emotional-orange': ['에모셔널오렌지 후기', '에모셔널 오렌지 소개팅 후기'],
-    'lovematching': ['러브매칭 후기', '러브매칭 소개팅 후기'],
     'frip': ['프립 소개팅 후기', '프립 로테이션 후기'],
     'munto': ['문토 소개팅 후기', '문토 로테이션 후기'],
     'modparty': ['모드파티 후기', '모드파티 소개팅 후기'],
     'lovecasting': ['러브캐스팅 후기', '러브캐스팅 소개팅 후기'],
-    'solooff': ['솔로오프 후기', '솔로오프 소개팅 후기'],
     'talkblossom': ['토크블라썸 후기', '토크블라썸 소개팅 후기'],
 }
 

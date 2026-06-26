@@ -17,12 +17,11 @@ import { useFavorites } from '@/hooks/useFavorites'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import { track } from '@/lib/analytics'
-import ThemeTag from '@/components/ThemeTag'
 import DeadlineBadge from '@/components/DeadlineBadge'
 import ReviewCard from '@/components/ReviewCard'
-import ParticipantStatsSheet from '@/components/ParticipantStatsSheet'
 import AdBanner from '@/components/AdBanner'
 import { daysUntil } from '@/lib/dday'
+import { genderInfoLine } from '@/lib/eventInfo'
 
 function cleanText(text: string): string {
   return text
@@ -159,6 +158,28 @@ export default function EventDetailScreen() {
       fontWeight: '700',
       fontSize: 16,
     },
+    ctaBtnClosed: { backgroundColor: '#e5e7eb' },
+    ctaBtnClosedText: { color: '#9ca3af', fontWeight: '700', fontSize: 16 },
+    closedOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(255,255,255,0.5)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    closedBadge: {
+      backgroundColor: 'rgba(24,24,27,0.72)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.22)',
+      paddingHorizontal: 18,
+      paddingVertical: 9,
+      borderRadius: 12,
+    },
+    closedBadgeText: {
+      color: '#fff',
+      fontSize: 15,
+      fontWeight: '700',
+      letterSpacing: 1,
+    },
     participantBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -211,7 +232,6 @@ export default function EventDetailScreen() {
   const companyId = event?.companies?.id ?? null
   const { reviews, loading: reviewsLoading } = useReviews(companyId, 3)
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
-  const [participantSheetVisible, setParticipantSheetVisible] = useState(false)
 
   useEffect(() => {
     if (event) {
@@ -267,6 +287,14 @@ export default function EventDetailScreen() {
         {daysLeft <= 3 && daysLeft >= 0 && (
           <DeadlineBadge daysLeft={daysLeft} />
         )}
+        {/* 마감 — 흐림 + 중앙 배지 */}
+        {event.is_closed && (
+          <View style={styles.closedOverlay} pointerEvents="none">
+            <View style={styles.closedBadge}>
+              <Text style={styles.closedBadgeText}>마감</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={styles.content}>
@@ -308,65 +336,28 @@ export default function EventDetailScreen() {
           {event.location_detail && (
             <InfoRow label="장소" value={event.location_detail} styles={styles} />
           )}
-          {event.gender_ratio && (
-            <InfoRow label="성비" value={event.gender_ratio} styles={styles} />
-          )}
-          <InfoRow
-            label="정원"
-            value={
-              (event.capacity_male != null || event.capacity_female != null)
-                ? [
-                    event.capacity_male != null ? `남 ${event.capacity_male}명` : null,
-                    event.capacity_female != null ? `여 ${event.capacity_female}명` : null,
-                  ].filter(Boolean).join(' / ')
-                : '-'
-            }
-            styles={styles}
-          />
-          <InfoRow
-            label="잔여석"
-            value={
-              (event.seats_left_male != null || event.seats_left_female != null)
-                ? [
-                    event.seats_left_male != null ? (event.seats_left_male === 0 ? '남 마감' : `남 ${event.seats_left_male}석`) : null,
-                    event.seats_left_female != null ? (event.seats_left_female === 0 ? '여 마감' : `여 ${event.seats_left_female}석`) : null,
-                  ].filter(Boolean).join(' / ')
-                : '-'
-            }
-            styles={styles}
-          />
-          <InfoRow
-            label="참가비"
-            value={
-              (event.price_male != null || event.price_female != null)
-                ? [
-                    event.price_male != null ? `남 ${event.price_male.toLocaleString()}원` : null,
-                    event.price_female != null ? `여 ${event.price_female.toLocaleString()}원` : null,
-                  ].filter(Boolean).join(' / ')
-                : '-'
-            }
-            styles={styles}
-          />
-          {event.age_range_min && (
-            <InfoRow
-              label="나이"
-              value={`${event.age_range_min}세${event.age_range_max ? ` ~ ${event.age_range_max}세` : ' 이상'}`}
-              styles={styles}
-            />
-          )}
+          {(() => {
+            const m = genderInfoLine({ capacity: event.capacity_male, seats: event.seats_left_male, price: event.price_male, age: event.age_male })
+            const f = genderInfoLine({ capacity: event.capacity_female, seats: event.seats_left_female, price: event.price_female, age: event.age_female })
+            return (
+              <>
+                {!!m && (
+                  <View style={styles.infoRow}>
+                    <Text style={[styles.infoLabel, { color: '#3B82F6', fontWeight: '700' }]}>남성</Text>
+                    <Text style={styles.infoValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{m}</Text>
+                  </View>
+                )}
+                {!!f && (
+                  <View style={styles.infoRow}>
+                    <Text style={[styles.infoLabel, { color: colors.primary, fontWeight: '700' }]}>여성</Text>
+                    <Text style={styles.infoValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{f}</Text>
+                  </View>
+                )}
+              </>
+            )
+          })()}
         </View>
 
-        {/* 테마 태그 */}
-        {event.theme && event.theme.length > 0 && (
-          <View style={styles.tagsSection}>
-            <Text style={styles.sectionLabel}>테마</Text>
-            <View style={styles.tags}>
-              {event.theme.map((t: string) => (
-                <ThemeTag key={t} label={t} />
-              ))}
-            </View>
-          </View>
-        )}
 
         {/* 설명 */}
         {event.description && (
@@ -379,29 +370,20 @@ export default function EventDetailScreen() {
         {/* 신청 버튼 위 광고 (CTA와 구분되는 외곽선형 + '광고' 배지) */}
         <AdBanner />
 
-        {/* 신청 버튼 */}
-        <TouchableOpacity
-          style={styles.ctaBtn}
-          onPress={() => {
-            track('event_apply_click', { eventId: event.id, companyId: event.company_id })
-            openOutlink(event.source_url)
-          }}
-        >
-          <Text style={styles.ctaBtnText}>신청하기 ›</Text>
-        </TouchableOpacity>
-
-        {/* 참가자 현황 버튼 — participant_stats가 있을 때만 표시 */}
-        {event.participant_stats && (
+        {/* 신청 버튼 (마감 시 회색 비활성) */}
+        {event.is_closed ? (
+          <View style={[styles.ctaBtn, styles.ctaBtnClosed]}>
+            <Text style={styles.ctaBtnClosedText}>신청 마감</Text>
+          </View>
+        ) : (
           <TouchableOpacity
-            style={styles.participantBtn}
+            style={styles.ctaBtn}
             onPress={() => {
-              track('participant_stats_view', { eventId: event.id })
-              setParticipantSheetVisible(true)
+              track('event_apply_click', { eventId: event.id, companyId: event.company_id })
+              openOutlink(event.source_url)
             }}
-            activeOpacity={0.8}
           >
-            <Ionicons name="people-outline" size={18} color={colors.secondary} />
-            <Text style={styles.participantBtnText}>참가자 현황</Text>
+            <Text style={styles.ctaBtnText}>신청하기 ›</Text>
           </TouchableOpacity>
         )}
 
@@ -436,15 +418,6 @@ export default function EventDetailScreen() {
         <View style={{ height: 40 }} />
       </View>
     </ScrollView>
-
-    {/* 참가자 현황 바텀시트 */}
-    {event.participant_stats && (
-      <ParticipantStatsSheet
-        visible={participantSheetVisible}
-        onClose={() => setParticipantSheetVisible(false)}
-        stats={event.participant_stats}
-      />
-    )}
     </View>
   )
 }

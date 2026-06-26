@@ -1,35 +1,48 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { isLoggedIn } from './lib/auth'
+import { useEffect, useState } from 'react'
+import { checkSession } from './lib/auth'
 import Login from './pages/Login'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
+import Register from './pages/Register'
 import Events from './pages/Events'
 import Companies from './pages/Companies'
 import CrawlLogs from './pages/CrawlLogs'
 import Analytics from './pages/Analytics'
-import { useState } from 'react'
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  if (!isLoggedIn()) return <Navigate to="/login" replace />
-  return <Layout>{children}</Layout>
+function guard(authed: boolean, el: React.ReactNode) {
+  return authed ? <Layout>{el}</Layout> : <Navigate to="/login" replace />
 }
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(isLoggedIn())
+  // null = 세션 확인 중
+  const [authed, setAuthed] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    checkSession().then(setAuthed)
+  }, [])
+
+  if (authed === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">
+        불러오는 중...
+      </div>
+    )
+  }
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={
-          loggedIn
-            ? <Navigate to="/" replace />
-            : <Login onLogin={() => setLoggedIn(true)} />
-        } />
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
-        <Route path="/companies" element={<ProtectedRoute><Companies /></ProtectedRoute>} />
-        <Route path="/crawl-logs" element={<ProtectedRoute><CrawlLogs /></ProtectedRoute>} />
-        <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+        <Route
+          path="/login"
+          element={authed ? <Navigate to="/" replace /> : <Login onLogin={() => setAuthed(true)} />}
+        />
+        <Route path="/" element={guard(authed, <Dashboard />)} />
+        <Route path="/register" element={guard(authed, <Register />)} />
+        <Route path="/events" element={guard(authed, <Events />)} />
+        <Route path="/companies" element={guard(authed, <Companies />)} />
+        <Route path="/crawl-logs" element={guard(authed, <CrawlLogs />)} />
+        <Route path="/analytics" element={guard(authed, <Analytics />)} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

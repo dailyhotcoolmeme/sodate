@@ -1,0 +1,90 @@
+# 관리자 등록 설계서 (ADMIN_REGISTRATION_SPEC)
+
+> 작성: 2026-06-06 / 결정: 오너
+> 전략 전환 근거: `docs/CRAWLER_ACCURACY_SPEC.md` (100% 자동 정확 불가 → 오너 직접 등록 + 자동 보조)
+
+---
+
+## 1. 핵심 컨셉
+
+> **시스템은 "예정 날짜 + 확인 링크"만 자동으로 깔아준다. 오너가 링크로 눈 확인 후, 좌석·가격을 직접 입력해 저장한다.**
+
+- **자동(시스템 책임):** 업체별 예정 날짜 리스트업 + 각 날짜의 실제 신청 페이지 링크 + (가능하면 가격 prefill)
+- **수동(오너 책임 = 정답):** 남성 정원/잔여, 여성 정원/잔여, 남/여 가격 → 오너가 링크 눌러 확인하고 입력
+- **정답 소스 = 오너 입력값.** 크롤러 값은 보조/초안일 뿐.
+
+---
+
+## 2. 등록 화면 (admin, 기존 `admin/` Vite+React)
+
+### 2.1 상단
+- **업체 선택** 드롭다운 (companies)
+- **[예정 날짜 불러오기]** 버튼 → 해당 업체 크롤러 호출 → 예정 날짜들을 아래 테이블 행으로 자동 생성
+
+### 2.2 이벤트 입력 테이블 (행 = 회차 1건)
+| 컬럼 | 출처 | 비고 |
+|---|---|---|
+| 날짜/시간 | 자동(크롤러) | 수정가능 |
+| **[확인하기] 링크** | 자동 | 클릭 → 실제 신청 페이지 새 탭. 오너가 눈으로 확인 |
+| 남성 정원 | **오너 입력** | 숫자 |
+| 남성 잔여 | **오너 입력** | 숫자 |
+| 남성 가격 | 오너 입력(가능시 prefill) | |
+| 여성 정원 | **오너 입력** | 숫자 |
+| 여성 잔여 | **오너 입력** | 숫자 |
+| 여성 가격 | 오너 입력(가능시 prefill) | |
+| 지역 / 테마 | 자동(수정가능) | |
+| 마감 토글 | 오너 | 양쪽 잔여 0 또는 수동 |
+| [저장] | — | events 테이블 upsert |
+
+- 행별 저장 / 일괄 저장 둘 다.
+- 이미 등록된 회차는 다시 불러올 때 입력값 유지(병합).
+
+### 2.3 동선
+```
+업체 선택 → [예정 날짜 불러오기] → 날짜+링크 자동 표시
+  → 오너가 각 행 [확인하기] 클릭 → 실제 페이지에서 좌석·가격 눈 확인
+  → 남/여 정원·잔여·가격 입력 → 저장 → 앱에 노출
+```
+
+---
+
+## 3. 데이터 모델 (기존 events 스키마 재사용)
+
+EventModel에 이미 존재: `capacity_male/female`, `seats_left_male/female`, `price_male/female`, `event_date`, `location_region`, `theme`, `source_url`(=확인 링크).
+- **추가 검토:** `source = 'manual'` 플래그(크롤링 vs 수동 구분), `verified_at`(오너 확인 시각), `verified_by`.
+
+---
+
+## 4. "예정 날짜 + 링크" 자동 추출기 (크롤러 재활용)
+
+업체별로 예정 날짜 리스트 + 링크를 반환하는 함수. 정확성 책임 없음(좌석·가격은 오너가 채움).
+업체 분류별 추출 방식(검증결과는 CRAWLER_ACCURACY_SPEC §2.6):
+- **imweb** (인썸·에오·시크릿 등): `load_option.cm`으로 예정 날짜 → 링크=상품 URL. (가격은 cascade로 prefill 가능)
+- **wix** (투연시): calendar_scheduler API → 날짜 → 링크=상품 URL.
+- **플랫폼** (프립·문토·모드파티): 자체 API → 날짜+링크.
+- **인라인/이미지/오프라인** (설렘·연인·러브매칭 등): 날짜 자동 어려움 → 링크만 제공하거나 오너가 날짜도 직접 추가(수동 행 추가 버튼).
+
+**출력 형식(제안):** `{vendor, dates:[{datetime, link, price_male?, price_female?}]}`
+
+---
+
+## 5. 구현 현황 (2026-06-08 실DB 연동 완료)
+
+1. ✅ **발견 엔진** `crawler/discover_candidates.py` — imweb는 **load_option.cm**(정확), wix는 calendar, 플랫폼·인라인은 기존 스크래퍼. 날짜+링크만 적재(좌석·가격 버림). KST 시간 정확, **과거 자동삭제 + 오늘~+2개월 창**. (Edge Function 방식은 폐기 — 상품목록 발견에 Playwright 필요해 배치로 전환)
+2. ✅ **admin 등록 UI** `admin/src/pages/Register.tsx` — event_candidates 자동 리스트업 + [확인하기] 링크 + 빈칸 입력 + **수정 즉시저장**(디바운스+저장중 재편집 재저장으로 race 해결) + 직접추가. 빌드 통과.
+3. ✅ **스키마** `013_create_event_candidates.sql` 적용(Management API+PAT). `events.source` 추가.
+4. ✅ **실DB 연동·실측**: 10개 업체 268건 자동 리스트업, 즉시저장 6칸 정확 검증.
+
+**미해결/추후:**
+- 모드파티 로그인 navigation 타임아웃 보강(진행) / inssumparty·lovecommunity·flipo는 현재 미래 날짜 없음(정상 0) / solo-off 자유입력형 제외
+- 앱 피드: events 중 `source IN ('verified','manual')`만 노출하도록 분리(미착수) — 기존 크롤링 1388건과 구분
+- 발견 정기 실행(GitHub Actions cron) 연결(미착수)
+
+**실행:** `python crawler/discover_candidates.py` (발견) / admin `.env` 후 `npm run dev`. env는 `*.local`·`.env*`로 gitignore됨.
+
+---
+
+## 6. 미해결 / 오너 확인 필요
+- [ ] 추출기 호출 위치: admin에서 직접(브라우저) 불가(크롤러는 Python) → Edge Function or 별도 API or 사전 배치로 날짜 미리 뽑아둘지
+- [ ] 가격 prefill 범위(cascade까지 돌릴지 vs 날짜만)
+- [ ] `CLAUDE.md`/`PRD.md` 등록중심으로 갱신

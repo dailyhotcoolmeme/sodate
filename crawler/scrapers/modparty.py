@@ -82,8 +82,13 @@ class ModpartyScraper(BaseScraper):
                 page.wait_for_load_state('domcontentloaded', timeout=10000)
                 page.fill('input[name="uid"]', self._uid)
                 page.fill('input[name="passwd"]', self._pw)
-                with page.expect_navigation(timeout=15000):
-                    page.click('button:has-text("로그인")')
+                # 'load' 이벤트가 느려 타임아웃 나는 경우가 있어 domcontentloaded + 여유 + 예외 허용.
+                # 네비게이션 이벤트를 못 잡아도 아래 URL 검사로 로그인 성공 여부 확인.
+                try:
+                    with page.expect_navigation(timeout=30000, wait_until='domcontentloaded'):
+                        page.click('button:has-text("로그인")')
+                except Exception:
+                    page.wait_for_timeout(3000)
 
                 if '/login' in page.url:
                     self.logger.error('모드파티 로그인 실패')

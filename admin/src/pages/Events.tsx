@@ -115,7 +115,7 @@ export default function Events() {
   const selectCls = "px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white"
 
   return (
-    <div className="p-8 space-y-4">
+    <div className="p-4 md:p-8 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-gray-900">
           이벤트 관리

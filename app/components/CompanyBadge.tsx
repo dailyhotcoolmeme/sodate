@@ -43,16 +43,12 @@ export default function CompanyBadge({ name, logoUrl }: Props) {
 
   return (
     <View style={styles.container}>
-      {logoUrl ? (
+      {!!logoUrl && (
         <Image
           source={{ uri: logoUrl }}
           style={styles.logo}
           contentFit="contain"
         />
-      ) : (
-        <View style={styles.logoPlaceholder}>
-          <Text style={styles.logoInitial}>{name[0]}</Text>
-        </View>
       )}
       <Text style={styles.name}>{name}</Text>
     </View>

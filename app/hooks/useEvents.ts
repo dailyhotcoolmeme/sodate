@@ -21,7 +21,7 @@ export function useEvents() {
         .from('events')
         .select('*, companies(id, name, logo_url, slug, base_url, description, is_active, crawl_url, crawl_type, regions, instagram_url, created_at, updated_at)')
         .eq('is_active', true)
-        .eq('is_closed', false)
+        // 마감(is_closed) 이벤트도 목록엔 노출 — 카드에서 흐림+마감 배지 처리
         .gte('event_date', new Date().toISOString())
         // 당일 ~ +1달 하드 상한: 1달 넘는 미래 이벤트는 항상 제외 (매일 자동 롤링)
         .lte('event_date', (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString() })())

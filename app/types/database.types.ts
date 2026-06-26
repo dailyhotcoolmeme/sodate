@@ -92,6 +92,8 @@ export interface Database {
           theme: string[]
           age_range_min: number | null
           age_range_max: number | null
+          age_male: string | null
+          age_female: string | null
           format: string | null
           source_url: string
           is_closed: boolean
@@ -121,6 +123,8 @@ export interface Database {
           theme?: string[]
           age_range_min?: number | null
           age_range_max?: number | null
+          age_male?: string | null
+          age_female?: string | null
           format?: string | null
           source_url: string
           is_closed?: boolean
@@ -150,6 +154,8 @@ export interface Database {
           theme?: string[]
           age_range_min?: number | null
           age_range_max?: number | null
+          age_male?: string | null
+          age_female?: string | null
           format?: string | null
           source_url?: string
           is_closed?: boolean

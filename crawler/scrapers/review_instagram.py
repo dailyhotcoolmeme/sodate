@@ -16,7 +16,6 @@ DDG_SEARCH = 'https://html.duckduckgo.com/html/'
 COMPANY_KEYWORDS = {
     'yeonin':           ['site:instagram.com 연인어때 소개팅 후기', 'site:instagram.com 연인어때 로테이션'],
     'emotional-orange': ['site:instagram.com 에모셔널오렌지 소개팅 후기', 'site:instagram.com 에모셔널오렌지 로테이션'],
-    'lovematching':     ['site:instagram.com 러브매칭 소개팅 후기', 'site:instagram.com 러브매칭 로테이션'],
     'frip':             ['site:instagram.com 프립 소개팅 후기'],
     'munto':            ['site:instagram.com 문토 소개팅 후기'],
     'modparty':         ['site:instagram.com 모드파티 소개팅 후기', 'site:instagram.com 모드파티 후기'],

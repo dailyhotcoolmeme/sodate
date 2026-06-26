@@ -110,11 +110,11 @@ export default function Analytics() {
     setLoading(false)
   }
 
-  if (loading) return <div className="p-8 text-gray-400">분석 데이터 로드 중...</div>
+  if (loading) return <div className="p-4 md:p-8 text-gray-400">분석 데이터 로드 중...</div>
   if (!data) return null
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       {/* 헤더 + 기간 선택 */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-gray-900">데이터 분석</h1>

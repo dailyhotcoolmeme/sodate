@@ -1,9 +1,10 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { logout } from '../lib/auth'
-import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut, PlusCircle } from 'lucide-react'
 
 const NAV = [
   { to: '/', label: '대시보드', icon: LayoutDashboard },
+  { to: '/register', label: '직접 등록', icon: PlusCircle },
   { to: '/events', label: '이벤트', icon: CalendarDays },
   { to: '/companies', label: '업체', icon: Building2 },
   { to: '/crawl-logs', label: '크롤링', icon: FileText },
@@ -13,15 +14,15 @@ const NAV = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     navigate('/login')
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* 사이드바 */}
-      <aside className="w-56 bg-white border-r border-gray-200 flex flex-col">
+    <div className="md:flex md:h-screen bg-gray-50">
+      {/* 데스크탑 사이드바 */}
+      <aside className="hidden md:flex md:flex-col w-56 bg-white border-r border-gray-200">
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-gray-100">
           <img src="/favicon.png" className="w-8 h-8 rounded-lg object-cover" alt="소개팅모아" />
           <div>
@@ -61,8 +62,38 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* 본문 */}
-      <main className="flex-1 overflow-auto">
+      {/* 본문 (데스크탑은 사이드바 옆 스크롤 영역, 모바일은 일반 흐름) */}
+      <main className="flex-1 min-w-0 md:overflow-auto">
+        {/* 모바일 상단 메뉴 — 본문 흐름 안에 자연 배치 (스티키/고정 아님) */}
+        <div className="md:hidden bg-white border-b border-gray-200 px-4 py-3">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2">
+              <img src="/favicon.png" className="w-7 h-7 rounded-lg object-cover" alt="소개팅모아" />
+              <span className="text-sm font-bold text-gray-900">소개팅모아 <span className="text-gray-400 font-normal">Admin</span></span>
+            </div>
+            <button onClick={handleLogout} className="flex items-center gap-1 text-xs text-gray-400 px-2 py-1">
+              <LogOut size={14} /> 로그아웃
+            </button>
+          </div>
+          <nav className="flex flex-wrap gap-1.5">
+            {NAV.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) =>
+                  `flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
+                    isActive ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600'
+                  }`
+                }
+              >
+                <Icon size={14} />
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+
         {children}
       </main>
     </div>

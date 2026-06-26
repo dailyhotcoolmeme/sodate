@@ -5,10 +5,16 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   const [id, setId] = useState('')
   const [pw, setPw] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (login(id, pw)) {
+    if (submitting) return
+    setError('')
+    setSubmitting(true)
+    const ok = await login(id, pw)
+    setSubmitting(false)
+    if (ok) {
       onLogin()
     } else {
       setError('아이디 또는 비밀번호가 올바르지 않습니다')
@@ -54,9 +60,10 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button
             type="submit"
-            className="w-full bg-pink-500 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-pink-600 transition-colors"
+            disabled={submitting}
+            className="w-full bg-pink-500 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-pink-600 transition-colors disabled:opacity-60"
           >
-            로그인
+            {submitting ? '확인 중...' : '로그인'}
           </button>
         </form>
       </div>

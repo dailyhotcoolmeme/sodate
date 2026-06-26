@@ -27,7 +27,7 @@ class MockScraper(BaseScraper):
                 title='테스트 소개팅 8:8',
                 event_date=datetime(2026, 4, 1, 19, 0),
                 location_region='강남',
-                source_url='https://lovematching.kr/event/1',
+                source_url='https://frip.co.kr/event/1',
             )
         ]
 
