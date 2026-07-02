@@ -54,11 +54,19 @@
 
 ## 실행 순서
 - [완료] WS1 DB: `hashtags text[]` 컬럼 + GIN 인덱스 추가
-- [완료·미푸시] WS2 크롤러: 괜찮소 canonical dedup, 문토 KST, date_filter TZ 통일, 지역 세부화, hashtags 유틸 + base 보존. **GitHub push 필요(대기)**
+- [완료·push] WS2 크롤러: 괜찮소 canonical dedup, 문토 KST, date_filter TZ 통일, 지역 세부화, hashtags 유틸 + base 보존. commit 4c5df6e, main push 완료
 - [완료·OTA배포] WS3 앱: HashtagChips 배지 + 탭 필터 + FilterSheet 태그검색 + filterStore(overlaps OR). iOS/Android OTA 완료
-- [완료·미배포] WS4 admin: Events.tsx 표시·편집. **CF Pages 배포 필요(대기)**
-- WS5 데이터 정리: [완료] 괜찮소 중복 19행 삭제 · [완료] 기존 349건 중 342건 hashtags backfill · [대기] 문토 시간=재크롤로 보정(일괄 +9h는 시간 혼재로 위험, SQL 금지)
+- [완료·배포] WS4 admin: Events.tsx 표시·편집. sodate-admin.pages.dev 배포 완료
+- [완료] WS5 데이터 정리: 괜찮소 완전중복 19행 삭제 · 기존 342건 hashtags backfill · 재크롤(workflow_dispatch)로 문토 시간 보정 + 괜찮소 옛형식(#evt) 19행 삭제. 최종 완전중복 0/357건.
 
-## 후속 메모
-- 자동 해시태그가 #로테이션/연령대 위주로 밋밋. 컨셉태그(#와인/#사주) 희소 → admin 큐레이션 또는 derive에서 #로테이션 제외 검토.
-- 문토 재크롤은 크롤러 push 후 GitHub Actions 실행 필요.
+## 해시태그 사전 개정 (전수조사 후 오너 확정)
+- 제거: `#로테이션`(보편어). 유지: 연령대(배지선 특색 뒤로 밀림, derive 우선순위 컨셉>형식>대상>연령).
+- 확대: `#커피미팅` ← `커피`/`카페` 포함(4→49건). ⚠️감정오렌지 '커피쿠폰'도 걸릴 수 있음(admin 교정).
+- 신규: `#대기업`·`#공무원`·`#교사`(전문직과 별개 각각) / `#2:2` / `#프리미엄`(프리미엄·능력특집·고소득) / `#대화중심`(대화·토크, **티키타카 제외**) / `#결혼전제`(결혼특집).
+- 뺌: 큰키·키·선착순·커피쿠폰·주류세부(맥주/사케).
+- 재backfill 357건 완료(커버리지 347). crawler push 필요.
+
+## 후속 메모(과거)
+- (해결) 자동 해시태그가 #로테이션/연령대 위주로 밋밋 → 사전 개정으로 특색태그화.
+- 문토 과거 이벤트는 재크롤 대상 아니라 옛 시간 잔존 가능(앱은 upcoming만 노출이라 무관). 미래 이벤트는 정상.
+- 괜찮소 8건 = dedup 적용 후 실제 upcoming 수. 매일 크론으로 갱신.
