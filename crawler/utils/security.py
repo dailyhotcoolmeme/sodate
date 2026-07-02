@@ -159,7 +159,12 @@ def build_description(text: Optional[str], max_length: int = 800) -> Optional[st
             break
     if not kept:
         return None
-    return sanitize_text(' '.join(kept), max_length)
+    # 줄바꿈 유지 (sanitize_text는 \n을 공백으로 뭉개므로 사용하지 않음).
+    # kept의 각 라인은 이미 내부 공백 정리됨 → \n으로 이어 원본 줄 구조 보존.
+    result = '\n'.join(kept)
+    if len(result) > max_length:
+        result = result[:max_length].rstrip() + '...'
+    return result or None
 
 
 def extract_description_from_soup(soup, max_length: int = 800) -> Optional[str]:
