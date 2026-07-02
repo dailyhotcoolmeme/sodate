@@ -11,7 +11,7 @@ from playwright.sync_api import sync_playwright
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
-from utils.security import sanitize_text, sanitize_url, build_description
+from utils.security import sanitize_text, sanitize_url, build_description, extract_description_from_soup
 from utils.date_filter import is_within_one_month
 
 
@@ -269,8 +269,8 @@ class LovecastingScraper(BaseScraper):
             title = sanitize_text(f'[러브캐스팅] {title_text}', 80)
             unique_url = f'{post_url}#evt={date_key}'
 
-            # 본문 설명 추출 (카드 텍스트 — 해시태그 자동생성용 특색 키워드 확보)
-            description = build_description(card_text, 800)
+            # 본문 설명 추출 (페이지 soup에서 og + 본문; 카드 텍스트보다 풍부)
+            description = extract_description_from_soup(soup, 800) or build_description(card_text, 800)
 
             try:
                 events.append(EventModel(

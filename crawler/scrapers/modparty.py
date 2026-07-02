@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
-from utils.security import sanitize_text
+from utils.security import sanitize_text, extract_description_from_soup
 from utils.date_filter import is_within_one_month
 
 
@@ -173,23 +173,8 @@ class ModpartyScraper(BaseScraper):
         imweb 상품 상세 본문 영역을 우선 시도하고, 없으면 og:description 메타 사용.
         네비/푸터 보일러플레이트는 본문 영역 선택자로 배제한다.
         """
-        content_selectors = [
-            '.shop_view_info', '.product_detail', '.se-viewer', '.se-main-container',
-            '.detail_cont', '.prd_detail', '.content_area', 'article', '#content',
-        ]
-        best_text = ''
-        for sel in content_selectors:
-            for node in soup.select(sel):
-                text = node.get_text(separator=' ', strip=True)
-                if len(text) > len(best_text):
-                    best_text = text
-
-        if len(best_text) < 30:
-            og_desc = soup.find('meta', property='og:description')
-            if og_desc and og_desc.get('content'):
-                best_text = og_desc['content']
-
-        return sanitize_text(best_text, 800) if best_text else None
+        # imweb .detail_detail_wrap 등 컨테이너 + og + 본문 폴백을 공용 추출기로 처리
+        return extract_description_from_soup(soup, 800)
 
     def _parse_age_group(self, text: str) -> tuple[Optional[int], Optional[int], Optional[str]]:
         """제목/텍스트에서 나이대 파싱. (min_age, max_age, label) 반환"""

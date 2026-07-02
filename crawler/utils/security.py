@@ -162,6 +162,39 @@ def build_description(text: Optional[str], max_length: int = 800) -> Optional[st
     return sanitize_text(' '.join(kept), max_length)
 
 
+def extract_description_from_soup(soup, max_length: int = 800) -> Optional[str]:
+    """상세 페이지 soup에서 이벤트 설명을 견고하게 추출한다.
+
+    og/meta 요약 + 본문 컨테이너(imweb .detail_detail_wrap / 네이버 에디터 /
+    워드프레스 .entry-content 등)를 우선 사용해 리뷰·구매평 영역을 피하고,
+    그래도 한글 본문이 부족하면 전체 본문 텍스트로 폴백한다. 결과는 build_description로 정제.
+    """
+    if soup is None:
+        return None
+    parts: list[str] = []
+    og = soup.find('meta', property='og:description')
+    if og and og.get('content'):
+        parts.append(og['content'])
+    md = soup.find('meta', attrs={'name': 'description'})
+    if md and md.get('content'):
+        parts.append(md['content'])
+    for sel in (
+        '.detail_detail_wrap', '.se-main-container', '.se-viewer',
+        '.entry-content', '.prd_detail', '#prd_detail', '.shop_view_info',
+    ):
+        try:
+            el = soup.select_one(sel)
+        except Exception:
+            el = None
+        if el:
+            parts.append(el.get_text('\n', strip=True))
+    combined = '\n'.join(p for p in parts if p)
+    # 컨테이너에서 한글 본문을 충분히 못 얻으면 전체 본문으로 폴백
+    if sum(1 for ch in combined if '가' <= ch <= '힣') < 20:
+        combined = combined + '\n' + soup.get_text('\n', strip=True)
+    return build_description(combined, max_length)
+
+
 _ALLOWED_IMAGE_EXTS = {'jpg', 'jpeg', 'png', 'webp', 'gif'}
 
 
