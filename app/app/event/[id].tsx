@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect, useState } from 'react'
+import EventThumbnail from '@/components/EventThumbnail'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
 import {
@@ -291,17 +292,13 @@ export default function EventDetailScreen() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
       {/* 썸네일 */}
       <View style={styles.imageContainer}>
-        {event.thumbnail_urls?.[0] ? (
-          <Image
-            source={{ uri: event.thumbnail_urls[0] }}
-            style={styles.image}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Ionicons name="heart" size={64} color="#FF6B9D" />
-          </View>
-        )}
+        <EventThumbnail
+          url={event.thumbnail_urls?.[0]}
+          companyName={event.companies?.name}
+          region={event.location_region}
+          style={styles.image}
+          size="large"
+        />
         {daysLeft <= 3 && daysLeft >= 0 && (
           <DeadlineBadge daysLeft={daysLeft} />
         )}

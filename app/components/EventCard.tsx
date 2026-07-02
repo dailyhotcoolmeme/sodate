@@ -17,6 +17,7 @@ import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
 import { genderInfoLine } from '@/lib/eventInfo'
 import CompanyBadge from './CompanyBadge'
+import EventThumbnail from './EventThumbnail'
 import FavoriteButton from './FavoriteButton'
 
 interface Props {
@@ -181,19 +182,13 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
     >
       {/* 썸네일 */}
       <View style={styles.imageContainer}>
-        {event.thumbnail_urls?.[0] && !imgError ? (
-          <Image
-            source={{ uri: event.thumbnail_urls[0] }}
-            style={styles.image}
-            contentFit="cover"
-            transition={200}
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Ionicons name="heart" size={28} color="#FF6B9D" />
-          </View>
-        )}
+        <EventThumbnail
+          url={event.thumbnail_urls?.[0]}
+          companyName={event.companies?.name}
+          region={event.location_region}
+          style={styles.image}
+          size="large"
+        />
         {daysLeft <= 3 && daysLeft >= 0 && (
           <DeadlineBadge daysLeft={daysLeft} />
         )}

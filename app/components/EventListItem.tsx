@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import EventThumbnail from './EventThumbnail'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
@@ -152,13 +153,13 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     >
       {/* 썸네일 */}
       <View style={styles.thumbWrap}>
-        {event.thumbnail_urls?.[0] && !imgError ? (
-          <Image source={{ uri: event.thumbnail_urls[0] }} style={styles.thumb} contentFit="cover" transition={200} onError={() => setImgError(true)} />
-        ) : (
-          <View style={[styles.thumbPlaceholder, { backgroundColor: companyColor(event.companies?.name) }]}>
-            <Text style={styles.thumbInitial}>{event.companies?.name?.[0] ?? '소'}</Text>
-          </View>
-        )}
+        <EventThumbnail
+          url={event.thumbnail_urls?.[0]}
+          companyName={event.companies?.name}
+          region={event.location_region}
+          style={styles.thumb}
+          size="small"
+        />
         {daysLeft <= 3 && daysLeft >= 0 && (
           <View style={styles.deadlineDot}>
             <Text style={styles.deadlineText}>{daysLeft === 0 ? '오늘' : `D-${daysLeft}`}</Text>
