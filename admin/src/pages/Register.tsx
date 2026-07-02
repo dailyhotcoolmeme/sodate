@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Trash2, ExternalLink, Loader2, Check } from 'lucide-react'
 import DateTimePicker from '../components/DateTimePicker'
+import HashtagEditor from '../components/HashtagEditor'
 
 /**
  * 직접 등록 페이지 — 크롤링 정확도 무시. 오너 입력값이 정답(source of truth).
@@ -30,6 +31,7 @@ type Row = {
   seats_left_female: string
   age_male: string // 남 참가 연령대 (자유 텍스트, 예: 27~34)
   age_female: string // 여 참가 연령대
+  hashtags: string[]
   is_closed: boolean
   source: 'crawl' | 'manual'
   saved: boolean
@@ -67,7 +69,7 @@ export default function Register() {
     const horizon = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
     const { data, error } = await supabase
       .from('events')
-      .select('id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, age_male, age_female, is_closed, source, companies(name)')
+      .select('id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, age_male, age_female, hashtags, is_closed, source, companies(name)')
       .eq('is_active', true)
       .gte('event_date', now.toISOString())
       .lte('event_date', horizon.toISOString())
@@ -89,6 +91,7 @@ export default function Register() {
         capacity_male: s(e.capacity_male), seats_left_male: s(e.seats_left_male), price_male: s(e.price_male),
         capacity_female: s(e.capacity_female), seats_left_female: s(e.seats_left_female), price_female: s(e.price_female),
         age_male: e.age_male ?? '', age_female: e.age_female ?? '',
+        hashtags: e.hashtags ?? [],
         is_closed: e.is_closed ?? false,
         source: e.source === 'crawl' ? 'crawl' : 'manual', // crawl=미입력(흰), 그외=오너입력(노랑)
       }),
@@ -115,6 +118,16 @@ export default function Register() {
       const next = rs.map((r) => (r.key === key ? { ...r, [field]: value, saved: false } : r))
       rowsRef.current = next // 즉시 동기화 (저장이 최신값 읽도록)
       return next
+    })
+    scheduleSave(key)
+  }
+
+  // 해시태그(string[])는 patch(문자열/불리언 전용)로 못 받으므로 별도 갱신 + 기존 저장 흐름 재사용
+  function patchHashtags(key: string, next: string[]) {
+    setRows((rs) => {
+      const updated = rs.map((r) => (r.key === key ? { ...r, hashtags: next, saved: false } : r))
+      rowsRef.current = updated
+      return updated
     })
     scheduleSave(key)
   }
@@ -158,6 +171,7 @@ export default function Register() {
       age_female: normalizeAge(row.age_female),
       age_range_min: ageNums.length ? Math.min(...ageNums) : null,
       age_range_max: ageNums.length ? Math.max(...ageNums) : null,
+      hashtags: row.hashtags,
       is_closed: row.is_closed,
       is_active: true,
       source: 'verified', // 오너가 손댄 이벤트 → 발견 재실행 시 덮어쓰지 않음(crawl만 교체)
@@ -279,8 +293,7 @@ export default function Register() {
                 <div className="rounded-lg bg-blue-50/60 p-2.5">
                   <p className="text-xs font-semibold text-blue-600 mb-2">남성</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <CardInput label="정원" type="number" value={r.capacity_male} onChange={(v) => patch(r.key, 'capacity_male', v)} onBlur={() => flushSave(r.key)} />
-                    <CardInput label="잔여" type="number" value={r.seats_left_male} onChange={(v) => patch(r.key, 'seats_left_male', v)} onBlur={() => flushSave(r.key)} />
+                    {/* 정원·잔여는 실시간 갱신 전까지 숨김 (앱 표시도 숨김 상태) */}
                     <CardInput label="가격" type="number" value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} />
                     <CardInput label="연령" value={r.age_male} placeholder="예 2734" onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
                   </div>
@@ -288,12 +301,17 @@ export default function Register() {
                 <div className="rounded-lg bg-pink-50/60 p-2.5">
                   <p className="text-xs font-semibold text-pink-600 mb-2">여성</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <CardInput label="정원" type="number" value={r.capacity_female} onChange={(v) => patch(r.key, 'capacity_female', v)} onBlur={() => flushSave(r.key)} />
-                    <CardInput label="잔여" type="number" value={r.seats_left_female} onChange={(v) => patch(r.key, 'seats_left_female', v)} onBlur={() => flushSave(r.key)} />
+                    {/* 정원·잔여는 실시간 갱신 전까지 숨김 (앱 표시도 숨김 상태) */}
                     <CardInput label="가격" type="number" value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} />
                     <CardInput label="연령" value={r.age_female} placeholder="예 2532" onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
                   </div>
                 </div>
+              </div>
+
+              {/* 해시태그 — 성별 블록과 같은 카드 안에 하위 섹션으로 배치 */}
+              <div className="mt-2.5">
+                <p className="text-xs text-gray-400 mb-1">해시태그</p>
+                <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
               </div>
             </div>
           ))}
@@ -309,21 +327,19 @@ export default function Register() {
                 <th className="px-3 py-2.5 text-left font-medium">업체</th>
                 <th className="px-3 py-2.5 text-left font-medium">날짜/시간</th>
                 <th className="px-3 py-2.5 text-left font-medium">지역</th>
-                <th className="px-3 py-2.5 text-center font-medium text-blue-600">남 정원</th>
-                <th className="px-3 py-2.5 text-center font-medium text-blue-600">남 잔여</th>
                 <th className="px-3 py-2.5 text-center font-medium text-blue-600">남 가격</th>
                 <th className="px-3 py-2.5 text-center font-medium text-blue-600">남 연령</th>
-                <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 정원</th>
-                <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 잔여</th>
                 <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 가격</th>
                 <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 연령</th>
+                <th className="px-3 py-2.5 text-left font-medium">해시태그</th>
                 <th className="px-3 py-2.5 text-center font-medium">마감</th>
                 <th className="px-3 py-2.5"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {visibleRows.map((r) => (
-                <tr key={r.key} className={r.source === 'manual' ? 'bg-amber-50/30' : ''}>
+                <Fragment key={r.key}>
+                <tr className={r.source === 'manual' ? 'bg-amber-50/30' : ''}>
                   <td className="px-3 py-2">
                     {r.source_url ? (
                       <a href={r.source_url} target="_blank" rel="noreferrer"
@@ -359,14 +375,15 @@ export default function Register() {
                       onBlur={() => flushSave(r.key)}
                       className="border border-gray-200 rounded px-2 py-1 text-sm w-20" />
                   </td>
-                  <NumCell value={r.capacity_male} onChange={(v) => patch(r.key, 'capacity_male', v)} onBlur={() => flushSave(r.key)} />
-                  <NumCell value={r.seats_left_male} onChange={(v) => patch(r.key, 'seats_left_male', v)} onBlur={() => flushSave(r.key)} />
                   <NumCell value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} wide />
                   <AgeCell value={r.age_male} onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
-                  <NumCell value={r.capacity_female} onChange={(v) => patch(r.key, 'capacity_female', v)} onBlur={() => flushSave(r.key)} />
-                  <NumCell value={r.seats_left_female} onChange={(v) => patch(r.key, 'seats_left_female', v)} onBlur={() => flushSave(r.key)} />
                   <NumCell value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} wide />
                   <AgeCell value={r.age_female} onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
+                  <td className="px-3 py-2 align-middle">
+                    <div className="w-64">
+                      <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showSuggestions={false} compact />
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-center">
                     <input type="checkbox" checked={r.is_closed}
                       onChange={(e) => { patch(r.key, 'is_closed', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
@@ -378,6 +395,17 @@ export default function Register() {
                     </button>
                   </td>
                 </tr>
+                <tr className={`border-b border-gray-100 ${r.source === 'manual' ? 'bg-amber-50/30' : ''}`}>
+                  <td colSpan={12} className="px-3 pt-0 pb-3 whitespace-normal">
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs text-gray-400 shrink-0 pt-0.5">추천</span>
+                      <div className="min-w-0 flex-1">
+                        <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showInput={false} />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -451,6 +479,7 @@ function makeRow(p: Partial<Row>): Row {
     seats_left_female: '',
     age_male: '',
     age_female: '',
+    hashtags: [],
     is_closed: false,
     source: 'manual',
     saved: false,

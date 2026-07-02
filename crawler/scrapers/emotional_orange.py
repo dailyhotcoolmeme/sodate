@@ -177,6 +177,82 @@ class EmotionalOrangeScraper(BaseScraper):
         return products
 
     # ------------------------------------------------------------------ #
+    # 본문(description) 추출
+    # ------------------------------------------------------------------ #
+
+    # 네비/푸터/광고 등 보일러플레이트로 판단되는 라인 (부분일치 제외)
+    _DESC_BOILERPLATE = (
+        '로그인', '회원가입', '장바구니', '마이페이지', '주문조회', '고객센터',
+        '이용약관', '개인정보', '취소/환불', '반품', '교환', '배송', '사업자',
+        '대표자', '상호명', '통신판매', '고객문의', 'copyright', 'Copyright',
+        'COPYRIGHT', 'All rights', 'ALL RIGHTS', '전체보기', '카테고리',
+        '검색어', 'SEARCH', '위시리스트', '최근본상품', 'TOP', '바로가기',
+        '네이버', '카카오', '인스타', '페이스북', '유튜브', '블로그 바로',
+        '이용안내', '공지사항', '자주묻는', 'FAQ', 'Q&A', '리뷰쓰기',
+    )
+
+    def _extract_description(self, soup: BeautifulSoup) -> Optional[str]:
+        """상품 상세 페이지에서 소개팅 설명 본문 텍스트를 추출한다.
+
+        og:description / meta description 요약 + 상세 본문 영역의 핵심 텍스트를
+        모아 보일러플레이트를 걸러내고 최대 800자로 캡한다. 빈 값이면 None.
+        """
+        parts: list[str] = []
+        seen_lines: set[str] = set()
+
+        def _push(raw: Optional[str]) -> None:
+            if not raw:
+                return
+            for ln in re.split(r'[\n\r]+', raw):
+                ln = ln.strip()
+                if len(ln) < 4:
+                    continue
+                # 한글이 없는 라인(순수 영문/숫자 UI)은 스킵
+                if not re.search(r'[가-힣]', ln):
+                    continue
+                # 보일러플레이트 라인 제외
+                if any(bp in ln for bp in self._DESC_BOILERPLATE):
+                    continue
+                # 가격/잔여석/옵션 날짜 라인은 본문 특색과 무관 → 제외
+                if re.match(r'^[\d,]+\s*원$', ln):
+                    continue
+                if ln in seen_lines:
+                    continue
+                seen_lines.add(ln)
+                parts.append(ln)
+
+        # 1. 메타 요약 (짧고 특색이 압축돼 있어 우선)
+        og_desc = soup.find('meta', property='og:description')
+        if og_desc and og_desc.get('content'):
+            _push(og_desc['content'])
+        meta_desc = soup.find('meta', attrs={'name': 'description'})
+        if meta_desc and meta_desc.get('content'):
+            _push(meta_desc['content'])
+
+        # 2. 상품 상세 본문 영역 (imweb / 에디터 컨테이너 우선)
+        body = None
+        for kw in (
+            'prd_detail', 'product_detail', 'shop_detail', 'shop_view',
+            'detail_info', 'prd-detail', 'product_info', 'goods_detail',
+            'se-main-container', 'editor', 'content_detail', 'prd_content',
+        ):
+            el = soup.find(attrs={'id': re.compile(kw, re.I)})
+            if el is None:
+                el = soup.find(attrs={'class': re.compile(kw, re.I)})
+            if el is not None:
+                body = el
+                break
+
+        if body is not None:
+            _push(body.get_text(separator='\n', strip=True))
+
+        if not parts:
+            return None
+
+        combined = ' '.join(parts)
+        return sanitize_text(combined, 800)
+
+    # ------------------------------------------------------------------ #
     # 블로그 URL 추출
     # ------------------------------------------------------------------ #
 
@@ -213,6 +289,9 @@ class EmotionalOrangeScraper(BaseScraper):
                 if src and 'upload' in src and not src.endswith('.gif'):
                     thumbnail_url = src if src.startswith('http') else self.BASE_URL + src
                     break
+
+        # 본문 설명 (상품 단위 — 이 상품의 모든 이벤트가 공유)
+        description = self._extract_description(soup)
 
         # 제목
         title_line = ''
@@ -363,6 +442,7 @@ class EmotionalOrangeScraper(BaseScraper):
                     age_range_max=age_range_max,
                     age_group_label=age_group_label,
                     participant_stats=participant_stats,
+                    description=description,
                 ))
             except Exception:
                 continue
@@ -373,7 +453,7 @@ class EmotionalOrangeScraper(BaseScraper):
                 soup, idx, listing_data,
                 title_line, thumbnail_url,
                 price_male, price_female, region,
-                blog_events_map,
+                blog_events_map, description,
             )
         return events
 
@@ -766,6 +846,7 @@ class EmotionalOrangeScraper(BaseScraper):
         price_female: Optional[int],
         region: str,
         blog_events_map: dict[str, dict],
+        description: Optional[str] = None,
     ) -> list[EventModel]:
         """옵션 파싱 실패 시 전체 텍스트에서 이벤트 추출."""
         events: list[EventModel] = []
@@ -879,6 +960,7 @@ class EmotionalOrangeScraper(BaseScraper):
                     age_range_max=age_range_max,
                     age_group_label=age_group_label,
                     participant_stats=participant_stats,
+                    description=description,
                 ))
             except Exception:
                 continue

@@ -577,6 +577,7 @@ class FripScraper(BaseScraper):
 
             return EventModel(
                 title=sanitize_text(f'[프립] {title}', 80),
+                description=sanitize_text(description_text, 800) if description_text else None,
                 event_date=event_date,
                 location_region=region,
                 location_detail=area or None,

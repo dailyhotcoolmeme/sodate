@@ -110,6 +110,58 @@ def contains_pii(text: str) -> bool:
     return False
 
 
+# 본문(description) 추출 시 제외할 보일러플레이트 라인 키워드
+# (네비게이션/푸터/공용 UI/쇼핑몰 안내 — 이벤트 특색과 무관)
+_BOILERPLATE_KEYWORDS = (
+    '로그인', '회원가입', '장바구니', '마이페이지', '위시리스트', '관심상품',
+    '고객센터', '고객상담', '이용약관', '개인정보', '주문조회', '최근 본',
+    '최근본', '공지사항', '카카오톡', '카카오 채널', '카카오채널', '전체메뉴',
+    '카테고리', '맨위로', '홈으로', '적립금', '쿠폰', '리뷰쓰기', '후기작성',
+    '배송조회', '반품', '환불', '교환/', '사업자', '통신판매', '대표이사',
+    '상호명', '이메일무단수집', '무단수집거부', 'copyright', 'all rights reserved',
+    'e-mail', 'menu', 'top',
+)
+
+
+def build_description(text: Optional[str], max_length: int = 800) -> Optional[str]:
+    """페이지 본문 텍스트에서 이벤트 특색이 담긴 설명 라인만 추려 반환.
+
+    - 네비/푸터/쇼핑몰 안내 등 보일러플레이트 라인 제외
+    - 한글이 거의 없는(메뉴/숫자/영문 UI) 라인 제외
+    - 개인정보 포함 라인 제외
+    - 중복 라인 제거 후 max_length(기본 800자)까지 이어붙임
+    빈 결과면 None.
+    """
+    if not text:
+        return None
+    seen: set[str] = set()
+    kept: list[str] = []
+    running = 0
+    for raw in text.split('\n'):
+        line = _WHITESPACE_RE.sub(' ', raw).strip()
+        if len(line) < 6:  # 너무 짧은 라인(버튼/메뉴 항목) 제외
+            continue
+        low = line.lower()
+        if any(kw in low for kw in _BOILERPLATE_KEYWORDS):
+            continue
+        # 한글 비중이 낮은 라인(숫자·기호·영문 UI) 제외
+        hangul = sum(1 for ch in line if '가' <= ch <= '힣')
+        if hangul < 4:
+            continue
+        if contains_pii(line):
+            continue
+        if line in seen:
+            continue
+        seen.add(line)
+        kept.append(line)
+        running += len(line) + 1
+        if running >= max_length:
+            break
+    if not kept:
+        return None
+    return sanitize_text(' '.join(kept), max_length)
+
+
 _ALLOWED_IMAGE_EXTS = {'jpg', 'jpeg', 'png', 'webp', 'gif'}
 
 

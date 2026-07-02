@@ -146,7 +146,10 @@ class YeoninScraper(BaseScraper):
 
                         content_text = page.inner_text('body')
 
-                        parsed = self._parse_post(title, content_text, url, thumbnail_url, age_groups, participant_data)
+                        # 본문 설명 추출 (해시태그 키워드 확보용)
+                        description = self._extract_description(detail_soup, og_desc_meta)
+
+                        parsed = self._parse_post(title, content_text, url, thumbnail_url, age_groups, participant_data, description)
                         events.extend(parsed)
                         time.sleep(1)
                     except Exception as e:
@@ -165,6 +168,30 @@ class YeoninScraper(BaseScraper):
                 self.logger.debug(f"날짜 범위 초과 스킵 ({ev.event_date}): {ev.source_url}")
         self.logger.info(f'연인어때 총 {len(filtered)}개 이벤트 (필터 전: {len(events)}개)')
         return filtered
+
+    def _extract_description(self, soup: BeautifulSoup, og_desc_meta) -> Optional[str]:
+        """상세 페이지 본문 텍스트 추출 (해시태그 키워드 확보용).
+
+        imweb 게시글 본문 영역을 우선 시도하고, 없으면 og:description 메타를 사용.
+        네비/푸터 보일러플레이트는 본문 영역 선택자로 배제한다.
+        """
+        # 1) 본문 영역 후보 선택자 (imweb 게시판/에디터 공통)
+        content_selectors = [
+            '.post_content', '.board_view', '.se-viewer', '.se-main-container',
+            '.content_area', '.post_area', 'article', '#content',
+        ]
+        best_text = ''
+        for sel in content_selectors:
+            for node in soup.select(sel):
+                text = node.get_text(separator=' ', strip=True)
+                if len(text) > len(best_text):
+                    best_text = text
+
+        # 2) 본문 영역이 빈약하면 og:description 사용
+        if len(best_text) < 30 and og_desc_meta:
+            best_text = og_desc_meta.get('content', '') or ''
+
+        return sanitize_text(best_text, 800) if best_text else None
 
     def _parse_age_groups_from_og(self, og_description: str) -> list[str]:
         """
@@ -473,7 +500,8 @@ class YeoninScraper(BaseScraper):
 
     def _parse_post(self, post_title: str, content: str, source_url: str,
                     thumbnail_url: Optional[str], age_groups: list[str],
-                    participant_data: dict[str, dict]) -> list[EventModel]:
+                    participant_data: dict[str, dict],
+                    description: Optional[str] = None) -> list[EventModel]:
         """월별 일정 게시물 텍스트에서 개별 이벤트 추출 (테이블 파싱 방식)"""
         events = []
         lines = [l.strip() for l in content.split('\n') if l.strip()]
@@ -593,6 +621,7 @@ class YeoninScraper(BaseScraper):
                 unique_url = f"{source_url}#evt={event_date.strftime('%Y%m%d%H%M')}"
                 events.append(EventModel(
                     title=title,
+                    description=description,
                     event_date=event_date,
                     location_region=region,
                     location_detail=None,

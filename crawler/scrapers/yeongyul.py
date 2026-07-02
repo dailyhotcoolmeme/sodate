@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
-from utils.security import sanitize_text
+from utils.security import sanitize_text, build_description
 from utils.date_filter import is_within_one_month
 
 
@@ -289,6 +289,9 @@ class YeongyulScraper(BaseScraper):
             # 이미 테이블 파싱 성공 — total_count 덮어쓰기 (더 정확한 값)
             participant_stats['total_count'] = listing_meta['signup_count']
 
+        # 본문 설명 추출 (해시태그 자동생성용 특색 키워드 확보)
+        description = build_description(full_text, 800)
+
         clean_title = sanitize_text(f'[괜찮소] {title}', 80)
         # url은 이미 canonical(ab-고유번호). 고유번호가 유니크하므로 #evt 접미어 불필요 → dedup 키로 그대로 사용.
         source_url = url
@@ -296,6 +299,7 @@ class YeongyulScraper(BaseScraper):
         try:
             return EventModel(
                 title=clean_title,
+                description=description,
                 event_date=event_date,
                 location_region=region,
                 location_detail=location_detail,

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { Plus, Search, Pencil, Trash2, Eye, EyeOff, Star, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Eye, EyeOff, Star, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import HashtagEditor from '../components/HashtagEditor'
 
 interface Event {
   id: string; title: string; company_id: string
@@ -13,25 +14,6 @@ interface Event {
   is_active: boolean; is_closed: boolean; is_featured: boolean
   hashtags: string[] | null
   companies: { name: string } | null
-}
-
-// 시작 사전 (스펙 docs/hashtag_and_crawler_fixes_spec.md) — admin 추천용
-const HASHTAG_SUGGESTIONS = [
-  // 컨셉
-  '#와인', '#요리', '#보드게임', '#등산·아웃도어', '#전시·문화', '#가치관팅', '#사주·타로', '#독서',
-  // 형식
-  '#1:1', '#소규모', '#로테이션', '#커피미팅', '#식사모임', '#사회자진행',
-  // 대상
-  '#직장인', '#전문직', '#20대', '#30대', '#40대',
-]
-
-// 입력값 정규화: 공백 트림 + 앞에 # 자동 부착
-function normalizeHashtag(raw: string): string {
-  let t = raw.trim().replace(/\s+/g, '')
-  if (!t) return ''
-  t = t.replace(/^#+/, '')
-  if (!t) return ''
-  return `#${t}`
 }
 
 type SortKey = 'date_asc' | 'date_desc' | 'company_asc'
@@ -391,7 +373,10 @@ function EventForm({ initial, onClose, onSaved }: {
             />
           </div>
         ))}
-        <HashtagEditor value={hashtags} onChange={setHashtags} />
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">해시태그</label>
+          <HashtagEditor value={hashtags} onChange={setHashtags} />
+        </div>
         <div className="flex gap-2 pt-2">
           <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-600">취소</button>
           <button onClick={save} disabled={saving} className="flex-1 px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-medium hover:bg-pink-600 disabled:opacity-50">
@@ -399,86 +384,6 @@ function EventForm({ initial, onClose, onSaved }: {
           </button>
         </div>
       </div>
-    </div>
-  )
-}
-
-function HashtagEditor({ value, onChange }: {
-  value: string[]
-  onChange: (tags: string[]) => void
-}) {
-  const [input, setInput] = useState('')
-
-  const addTag = (raw: string) => {
-    const tag = normalizeHashtag(raw)
-    if (!tag) return
-    if (value.some((t) => t.toLowerCase() === tag.toLowerCase())) return
-    onChange([...value, tag])
-  }
-
-  const commitInput = () => {
-    if (!input.trim()) return
-    addTag(input)
-    setInput('')
-  }
-
-  const removeTag = (tag: string) => onChange(value.filter((t) => t !== tag))
-
-  const remaining = HASHTAG_SUGGESTIONS.filter(
-    (s) => !value.some((t) => t.toLowerCase() === s.toLowerCase())
-  )
-
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">해시태그</label>
-
-      {/* 선택된 칩 + 입력 */}
-      <div className="flex flex-wrap items-center gap-1.5 w-full px-2 py-2 border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-pink-500">
-        {value.map((tag) => (
-          <span key={tag} className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-pink-50 text-pink-600 text-xs font-medium">
-            {tag}
-            <button
-              type="button"
-              onClick={() => removeTag(tag)}
-              className="hover:text-pink-800"
-              aria-label={`${tag} 삭제`}
-            >
-              <X size={12} />
-            </button>
-          </span>
-        ))}
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ',') {
-              e.preventDefault()
-              commitInput()
-            } else if (e.key === 'Backspace' && !input && value.length > 0) {
-              removeTag(value[value.length - 1])
-            }
-          }}
-          onBlur={commitInput}
-          placeholder={value.length === 0 ? '태그 입력 후 Enter (예: 와인)' : '추가...'}
-          className="flex-1 min-w-24 text-sm focus:outline-none py-0.5"
-        />
-      </div>
-
-      {/* 추천 태그 */}
-      {remaining.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {remaining.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => addTag(s)}
-              className="px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 text-xs hover:border-pink-300 hover:text-pink-500"
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

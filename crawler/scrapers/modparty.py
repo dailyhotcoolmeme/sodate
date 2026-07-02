@@ -110,6 +110,10 @@ class ModpartyScraper(BaseScraper):
                         page.goto(data['url'].split('#')[0], timeout=15000)
                         page.wait_for_load_state('domcontentloaded', timeout=8000)
                         detail_soup = BeautifulSoup(page.content(), 'html.parser')
+
+                        # 본문 설명 추출 (해시태그 키워드 확보용)
+                        product_data[idx]['desc'] = self._extract_description(detail_soup)
+
                         og = detail_soup.find('meta', property='og:image')
                         if og and og.get('content') and 'placeholder' not in og['content']:
                             product_data[idx]['img'] = og['content']
@@ -162,6 +166,30 @@ class ModpartyScraper(BaseScraper):
         except Exception as e:
             self.logger.warning(f'모드파티 Supabase API 실패 (fallback HTML 사용): {e}')
             self._booking_counts = {}
+
+    def _extract_description(self, soup: BeautifulSoup) -> Optional[str]:
+        """상품 상세 페이지 본문 텍스트 추출 (해시태그 키워드 확보용).
+
+        imweb 상품 상세 본문 영역을 우선 시도하고, 없으면 og:description 메타 사용.
+        네비/푸터 보일러플레이트는 본문 영역 선택자로 배제한다.
+        """
+        content_selectors = [
+            '.shop_view_info', '.product_detail', '.se-viewer', '.se-main-container',
+            '.detail_cont', '.prd_detail', '.content_area', 'article', '#content',
+        ]
+        best_text = ''
+        for sel in content_selectors:
+            for node in soup.select(sel):
+                text = node.get_text(separator=' ', strip=True)
+                if len(text) > len(best_text):
+                    best_text = text
+
+        if len(best_text) < 30:
+            og_desc = soup.find('meta', property='og:description')
+            if og_desc and og_desc.get('content'):
+                best_text = og_desc['content']
+
+        return sanitize_text(best_text, 800) if best_text else None
 
     def _parse_age_group(self, text: str) -> tuple[Optional[int], Optional[int], Optional[str]]:
         """제목/텍스트에서 나이대 파싱. (min_age, max_age, label) 반환"""
@@ -355,6 +383,7 @@ class ModpartyScraper(BaseScraper):
                 try:
                     events.append(EventModel(
                         title=title,
+                        description=data.get('desc'),
                         event_date=event_date,
                         location_region=region,
                         location_detail=None,

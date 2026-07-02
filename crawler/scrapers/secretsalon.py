@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
-from utils.security import sanitize_text
+from utils.security import sanitize_text, build_description
 from utils.date_filter import is_within_one_month
 
 
@@ -210,6 +210,9 @@ class SecretSalonScraper(BaseScraper):
         # 전체 텍스트 (본문에서 날짜·좌석 추출)
         full_text = soup.get_text(separator='\n', strip=True)
 
+        # 본문 설명 추출 (해시태그 자동생성용 특색 키워드 확보)
+        description = build_description(full_text + '\n' + listing_text, 800)
+
         # 가격 추출
         price_male, price_female = self._extract_prices(full_text + '\n' + listing_text)
 
@@ -371,6 +374,7 @@ class SecretSalonScraper(BaseScraper):
             try:
                 events.append(EventModel(
                     title=title,
+                    description=description,
                     event_date=event_date,
                     location_region='강남',
                     location_detail='양재',
