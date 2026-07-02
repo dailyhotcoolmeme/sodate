@@ -33,6 +33,24 @@ function cleanText(text: string): string {
     .trim()
 }
 
+// 상세 설명: 크롤 시 줄바꿈이 공백으로 합쳐지므로, 불릿/섹션 기호(✅⛔🔺 등) 앞에서
+// 줄을 나눠 마크다운형 리스트로 보여준다.
+const _DESC_MARKERS = '✅|✔|☑|⛔|🔺|🔻|▶|►|●|◆|◼|■|👉|💠|✳|✴|⭐|❗|‼|🎁|🍷'
+const _DESC_LEAD = new RegExp(`^((?:${_DESC_MARKERS})+|-|·|\\d+[.)])\\s*`, 'u')
+
+function descLines(raw: string): string[] {
+  let t = (raw || '').replace(/_E\d+$/i, '').replace(/️/g, '')
+  // 불릿 기호 묶음 앞에서 줄바꿈
+  t = t.replace(new RegExp(`\\s*((?:${_DESC_MARKERS})+)`, 'gu'), '\n$1')
+  // " - " 서브 불릿
+  t = t.replace(/\s+-\s+/g, '\n- ')
+  const onlyMarker = new RegExp(`^(?:${_DESC_MARKERS}|\\s)+$`, 'u')
+  return t
+    .split('\n')
+    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .filter((s) => s && !onlyMarker.test(s))
+}
+
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
   const days = ['일', '월', '화', '수', '목', '금', '토']
@@ -141,6 +159,12 @@ export default function EventDetailScreen() {
       color: colors.textSecondary,
       lineHeight: 22,
     },
+    descPara: { marginBottom: 8 },
+    // 기호로 시작한 줄: 줄바꿈 시 텍스트 시작점에 정렬(행잉 인덴트)
+    descRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginBottom: 7 },
+    descSub: { paddingLeft: 14 },
+    descBullet: { fontSize: 14, lineHeight: 22, color: colors.textSecondary },
+    descRowText: { flex: 1, fontSize: 14, lineHeight: 22, color: colors.textSecondary },
     ctaBtn: {
       backgroundColor: colors.primary,
       borderRadius: 14,
@@ -358,7 +382,23 @@ export default function EventDetailScreen() {
         {event.description && (
           <View style={styles.descSection}>
             <Text style={styles.sectionLabel}>상세 설명</Text>
-            <Text style={styles.description}>{cleanText(event.description)}</Text>
+            {descLines(event.description).map((line, i) => {
+              const m = line.match(_DESC_LEAD)
+              if (m) {
+                const marker = m[1] === '-' ? '·' : m[1]
+                const rest = line.slice(m[0].length)
+                const sub = m[1] === '-'
+                return (
+                  <View key={i} style={[styles.descRow, sub && styles.descSub]}>
+                    <Text style={styles.descBullet}>{marker}</Text>
+                    <Text style={styles.descRowText}>{rest}</Text>
+                  </View>
+                )
+              }
+              return (
+                <Text key={i} style={[styles.description, styles.descPara]}>{line}</Text>
+              )
+            })}
           </View>
         )}
 
