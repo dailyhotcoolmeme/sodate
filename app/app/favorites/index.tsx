@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
+import TopBar from '@/components/TopBar'
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -53,12 +54,11 @@ export default function FavoritesScreen() {
   }), [colors])
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
+      <TopBar showBack />
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>홈</Text>
-          </TouchableOpacity>
+          <Text style={styles.title}>관심 소개팅</Text>
           <View style={styles.toggleRow}>
             <TouchableOpacity
               style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]}
@@ -74,7 +74,6 @@ export default function FavoritesScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        <Text style={styles.title}>관심 소개팅</Text>
         <Text style={styles.subtitle}>
           {loading ? '' : `${events.length}개의 소개팅을 저장했습니다`}
         </Text>

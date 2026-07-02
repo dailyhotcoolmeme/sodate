@@ -27,6 +27,8 @@ class YeongyulScraper(BaseScraper):
     DATE_RE = re.compile(r'(\d{4})[.\-](\d{1,2})[.\-](\d{1,2})\s+(\d{1,2}):(\d{2})')
     PRICE_RE = re.compile(r'(\d{1,3}(?:,\d{3})*)\s*원')
     LINK_RE = re.compile(r'/ab-\d{4,}-\d{3,}')
+    # 게시글 고유번호(ab-\d+-\d+)만 추출 — 쿼리스트링/프래그먼트/PC·모바일 변형 제거용
+    POST_ID_RE = re.compile(r'ab-\d+-\d+')
     # 나이 범위: "나이 : 30세 ~ 38세" 또는 "연령 : 30세 ~ 37세" 또는 별도 행 "30세 ~ 37세"
     AGE_RANGE_RE = re.compile(r'(?:나이|연령)\s*[:\-]?\s*(\d{2,3})\s*세?\s*[~\-]\s*(\d{2,3})\s*세?')
     # 나이 범위 독립 패턴 (나이: 라벨 없이 숫자만 있는 경우 fallback)
@@ -38,6 +40,17 @@ class YeongyulScraper(BaseScraper):
 
     def __init__(self):
         super().__init__('yeongyul')
+
+    @classmethod
+    def _canonical_url(cls, href: str) -> Optional[str]:
+        """href에서 게시글 고유번호(ab-\\d+-\\d+)만 뽑아 쿼리스트링·프래그먼트 없는
+        정규화(canonical) URL을 만든다. 고유번호가 없으면 None."""
+        if not href:
+            return None
+        m = cls.POST_ID_RE.search(href)
+        if not m:
+            return None
+        return f'{cls.BASE_URL}/{m.group(0)}'
 
     def scrape(self) -> list[EventModel]:
         events: list[EventModel] = []
@@ -56,11 +69,19 @@ class YeongyulScraper(BaseScraper):
                 time.sleep(2)
 
                 # 이벤트 링크 수집
-                event_links = page.eval_on_selector_all(
+                raw_links = page.eval_on_selector_all(
                     'a[href*="ab-"]',
                     'els => [...new Set(els.map(e => e.href))].filter(h => /ab-\\d{4,}-\\d{3,}/.test(h))'
                 )
-                self.logger.info(f'괜찮소 이벤트 {len(event_links)}개 발견')
+                # canonical URL로 정규화 후 set으로 중복 제거 (쿼리스트링/모바일 변형 href 통합)
+                event_links: list[str] = []
+                seen_links: set[str] = set()
+                for h in raw_links:
+                    canon = self._canonical_url(h)
+                    if canon and canon not in seen_links:
+                        seen_links.add(canon)
+                        event_links.append(canon)
+                self.logger.info(f'괜찮소 이벤트 {len(event_links)}개 발견 (원본 링크 {len(raw_links)}개)')
 
                 # 목록 페이지에서 썸네일 미리 수집
                 thumbnail_map: dict[str, str] = {}
@@ -70,8 +91,9 @@ class YeongyulScraper(BaseScraper):
                         'els => els.map(e => ({src: e.src, closest: e.closest("a") ? e.closest("a").href : ""}))'
                     )
                     for td in thumb_data:
-                        if td.get('closest') and td.get('src'):
-                            thumbnail_map[td['closest']] = td['src']
+                        canon = self._canonical_url(td.get('closest', ''))
+                        if canon and td.get('src'):
+                            thumbnail_map[canon] = td['src']
                 except Exception as e:
                     self.logger.debug(f'썸네일 수집 실패: {e}')
 
@@ -86,9 +108,9 @@ class YeongyulScraper(BaseScraper):
                         link = row.find('a', href=self.LINK_RE)
                         if not link:
                             continue
-                        href = link.get('href', '')
-                        if not href.startswith('http'):
-                            href = f'{self.BASE_URL}/{href.lstrip("/")}'
+                        href = self._canonical_url(link.get('href', ''))
+                        if not href:
+                            continue
                         row_text = row.get_text(separator=' ', strip=True)
                         meta: dict = {}
                         # 나이 범위: "연령 : 30세 ~ 37세 [만나이 적용!!]"
@@ -268,7 +290,8 @@ class YeongyulScraper(BaseScraper):
             participant_stats['total_count'] = listing_meta['signup_count']
 
         clean_title = sanitize_text(f'[괜찮소] {title}', 80)
-        source_url = f'{url}#evt={event_date.strftime("%Y%m%d%H%M")}'
+        # url은 이미 canonical(ab-고유번호). 고유번호가 유니크하므로 #evt 접미어 불필요 → dedup 키로 그대로 사용.
+        source_url = url
 
         try:
             return EventModel(

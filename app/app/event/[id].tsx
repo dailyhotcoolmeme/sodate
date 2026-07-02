@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
+import TopBar from '@/components/TopBar'
 import {
   View,
   Text,
@@ -18,6 +19,7 @@ import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import { track } from '@/lib/analytics'
 import DeadlineBadge from '@/components/DeadlineBadge'
+import HashtagChips from '@/components/HashtagChips'
 import ReviewCard from '@/components/ReviewCard'
 import AdBanner from '@/components/AdBanner'
 import { daysUntil } from '@/lib/dday'
@@ -84,19 +86,11 @@ export default function EventDetailScreen() {
       fontWeight: '600',
     },
     heartBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      borderWidth: 1.5,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
+      padding: 4,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    heartBtnActive: {
-      borderColor: '#FF6B9D',
-      backgroundColor: '#FF6B9D18',
-    },
+    heartBtnActive: {},
     heartIcon: { fontSize: 20, color: colors.textTertiary },
     heartIconActive: { color: '#FF6B9D' },
     title: {
@@ -130,6 +124,7 @@ export default function EventDetailScreen() {
       color: colors.textPrimary,
       fontWeight: '500',
     },
+    hashtagRow: { marginTop: -14, marginBottom: 16 },
     tagsSection: { marginBottom: 20 },
     sectionLabel: {
       fontSize: 13,
@@ -263,13 +258,8 @@ export default function EventDetailScreen() {
   const daysLeft = daysUntil(event.event_date)
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>홈</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.screen}>
+      <TopBar showBack />
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
       {/* 썸네일 */}
       <View style={styles.imageContainer}>
@@ -328,6 +318,11 @@ export default function EventDetailScreen() {
 
         {/* 제목 */}
         <Text style={styles.title}>{cleanText(event.title)}</Text>
+
+        {/* 해시태그 배지 (제목 바로 아래) — title 하단 여백을 끌어올려 붙임 */}
+        <View style={styles.hashtagRow}>
+          <HashtagChips hashtags={event.hashtags} size="md" max={4} />
+        </View>
 
         {/* 기본 정보 */}
         <View style={styles.infoCard}>

@@ -1,3 +1,4 @@
+import TopBar from '@/components/TopBar'
 import React, { useMemo } from 'react'
 import {
   View,
@@ -65,6 +66,8 @@ export default function SettingsScreen() {
     )
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <TopBar showBack />
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
       {/* 앱 정보 */}
       <View style={styles.appInfo}>
@@ -134,6 +137,7 @@ export default function SettingsScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+    </View>
   )
 }
 

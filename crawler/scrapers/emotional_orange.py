@@ -29,10 +29,14 @@ class EmotionalOrangeScraper(BaseScraper):
     DATE_PAGE_URL = 'https://emotional0ranges.com/date'
 
     REGION_MAP = {
-        '역삼': '강남', '선릉': '강남', '강남': '강남', '서초': '강남',
-        '한남': '서울', '용산': '서울', '이태원': '서울',
-        '홍대': '홍대', '마포': '홍대', '합정': '홍대',
-        '성수': '성수', '건대': '건대',
+        '역삼': '강남', '선릉': '강남', '강남': '강남', '서초': '강남', '교대': '강남',
+        '한남': '서울', '용산': '서울', '이태원': '서울', '삼각지': '서울',
+        '홍대': '홍대', '마포': '홍대', '합정': '홍대', '연남': '홍대', '망원': '홍대',
+        '성수동': '성수', '성수': '성수', '뚝섬': '성수', '서울숲': '성수',
+        '건대입구': '건대', '건대': '건대', '군자': '건대', '어린이대공원': '건대',
+        '신촌': '신촌', '이대': '신촌', '이화여대': '신촌',
+        '종로': '종로', '광화문': '종로', '을지로': '종로', '안국': '종로',
+        '인사동': '종로', '종각': '종로', '시청': '종로',
         '가산': '기타', '구로': '기타', '마곡': '기타', '강서': '기타',
         '동탄': '기타', '화성': '기타', '수원': '수원',
         '부산': '부산', '대구': '대구', '대전': '대전', '인천': '인천',
@@ -311,6 +315,10 @@ class EmotionalOrangeScraper(BaseScraper):
             seats_left_male: Optional[int] = None
             seats_left_female: Optional[int] = None
 
+            # 지역/세부위치는 이벤트(옵션)마다 독립 계산 — 루프 간 오염 방지
+            ev_region = region
+            ev_location_detail: Optional[str] = None
+
             if blog_ev:
                 participant_stats = blog_ev.get('participant_stats')
                 seats_left_male = blog_ev.get('seats_left_male')
@@ -322,6 +330,14 @@ class EmotionalOrangeScraper(BaseScraper):
                     age_range_max = blog_ev['age_range_max']
                 if blog_ev.get('age_group_label') and not age_group_label:
                     age_group_label = blog_ev['age_group_label']
+                # 블로그 location 메타로 세부 동네/지역 보강
+                blog_location = blog_ev.get('location')
+                if blog_location:
+                    ev_location_detail = blog_location
+                    for kw, region_val in self.REGION_MAP.items():
+                        if kw in blog_location:
+                            ev_region = region_val
+                            break
 
             source_url = (
                 f'{self.BASE_URL}/shop_view/?idx={idx}'
@@ -333,8 +349,8 @@ class EmotionalOrangeScraper(BaseScraper):
                 events.append(EventModel(
                     title=title,
                     event_date=event_date,
-                    location_region=region,
-                    location_detail=None,
+                    location_region=ev_region,
+                    location_detail=ev_location_detail,
                     price_male=price_male,
                     price_female=price_female,
                     gender_ratio=None,
@@ -819,6 +835,8 @@ class EmotionalOrangeScraper(BaseScraper):
             participant_stats: Optional[dict] = None
             seats_left_male: Optional[int] = None
             seats_left_female: Optional[int] = None
+            ev_region = region
+            ev_location_detail: Optional[str] = None
             if blog_ev:
                 participant_stats = blog_ev.get('participant_stats')
                 seats_left_male = blog_ev.get('seats_left_male')
@@ -829,6 +847,13 @@ class EmotionalOrangeScraper(BaseScraper):
                     age_range_max = blog_ev['age_range_max']
                 if blog_ev.get('age_group_label') and not age_group_label:
                     age_group_label = blog_ev['age_group_label']
+                blog_location = blog_ev.get('location')
+                if blog_location:
+                    ev_location_detail = blog_location
+                    for kw, region_val in self.REGION_MAP.items():
+                        if kw in blog_location:
+                            ev_region = region_val
+                            break
 
             source_url = (
                 f'{self.BASE_URL}/shop_view/?idx={idx}'
@@ -840,8 +865,8 @@ class EmotionalOrangeScraper(BaseScraper):
                 events.append(EventModel(
                     title=title,
                     event_date=event_date,
-                    location_region=region,
-                    location_detail=None,
+                    location_region=ev_region,
+                    location_detail=ev_location_detail,
                     price_male=price_male,
                     price_female=price_female,
                     gender_ratio=None,

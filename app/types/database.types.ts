@@ -94,6 +94,7 @@ export interface Database {
           age_range_max: number | null
           age_male: string | null
           age_female: string | null
+          hashtags: string[]
           format: string | null
           source_url: string
           is_closed: boolean
@@ -125,6 +126,7 @@ export interface Database {
           age_range_max?: number | null
           age_male?: string | null
           age_female?: string | null
+          hashtags?: string[]
           format?: string | null
           source_url: string
           is_closed?: boolean
@@ -156,6 +158,7 @@ export interface Database {
           age_range_max?: number | null
           age_male?: string | null
           age_female?: string | null
+          hashtags?: string[]
           format?: string | null
           source_url?: string
           is_closed?: boolean

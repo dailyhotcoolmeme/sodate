@@ -19,6 +19,7 @@ class EventModel(BaseModel):
     seats_left_male: Optional[int] = None
     seats_left_female: Optional[int] = None
     theme: list[str] = []
+    hashtags: list[str] = []                     # 자동 생성 해시태그 (admin 검수·수정)
     age_range_min: Optional[int] = None
     age_range_max: Optional[int] = None
     format: Optional[str] = None

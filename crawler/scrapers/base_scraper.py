@@ -9,6 +9,7 @@ from models.event import EventModel
 from utils.supabase_client import get_supabase
 from utils.logger import get_logger
 from utils.date_filter import is_within_one_month
+from utils.hashtags import derive_hashtags
 
 
 class BaseScraper(ABC):
@@ -58,6 +59,21 @@ class BaseScraper(ABC):
 
             # 테마는 구분하지 않는다 — 전부 소개팅. 스크래퍼가 뭘 넣든 일괄 고정.
             data['theme'] = ['소개팅']
+
+            # 해시태그 자동 생성 (admin 검수·수정 대상). theme는 그대로 두고 hashtags만 채운다.
+            # 매칭이 없어 빈 배열이면 upsert에서 제외 → 기존(admin 편집) 값을 빈 배열로 덮지 않는다.
+            derived_hashtags = derive_hashtags(
+                title=data.get('title'),
+                description=data.get('description'),
+                region=data.get('location_region'),
+                age_min=data.get('age_range_min'),
+                age_max=data.get('age_range_max'),
+                extra=data.get('format'),
+            )
+            if derived_hashtags:
+                data['hashtags'] = derived_hashtags
+            else:
+                data.pop('hashtags', None)
 
             if isinstance(data['event_date'], datetime):
                 dt = data['event_date']

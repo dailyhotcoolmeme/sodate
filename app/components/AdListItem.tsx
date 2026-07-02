@@ -6,15 +6,15 @@ import {
   NativeAsset,
   NativeAssetType,
   NativeMediaView,
-  TestIds,
 } from 'react-native-google-mobile-ads'
 import { Image } from 'expo-image'
 import { useColors } from '@/hooks/useColors'
+import { NATIVE_AD_UNIT_ID } from '@/lib/ads'
 
 const THUMB = 88
 
-// 실제 광고 단위 ID는 AdMob 계정 발급 후 교체. 지금은 구글 공식 테스트 단위.
-const AD_UNIT_ID = TestIds.NATIVE
+// 광고 단위 ID는 @/lib/ads 에서 중앙 관리 (미설정 시 자동 테스트 광고 폴백)
+const AD_UNIT_ID = NATIVE_AD_UNIT_ID
 
 export default function AdListItem() {
   const colors = useColors()

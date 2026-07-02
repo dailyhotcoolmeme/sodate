@@ -3,13 +3,14 @@ import { supabase, type EventWithCompany } from '@/lib/supabase'
 import { useFilterStore } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
+import { kstDowHour, timeSlotOf } from '@/constants/filters'
 
 export function useEvents() {
   const [events, setEvents] = useState<EventWithCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const { region, dateRange, maxPrice, themes, ageGroup, sortBy } = useFilterStore()
+  const { regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy } = useFilterStore()
   const { myAge, myGender } = useProfileStore()
 
   const fetchEvents = useCallback(async () => {
@@ -26,9 +27,14 @@ export function useEvents() {
         // 당일 ~ +1달 하드 상한: 1달 넘는 미래 이벤트는 항상 제외 (매일 자동 롤링)
         .lte('event_date', (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString() })())
 
-      // 지역 필터
-      if (region !== 'all') {
-        query = query.eq('location_region', region)
+      // 지역 필터 (다중 선택)
+      if (regions.length > 0) {
+        query = query.in('location_region', regions)
+      }
+
+      // 업체 필터 (다중 선택)
+      if (companies.length > 0) {
+        query = query.in('company_id', companies)
       }
 
       // 날짜 필터
@@ -59,15 +65,20 @@ export function useEvents() {
         query = query.overlaps('theme', themes)
       }
 
-      // 나이대 필터
-      if (ageGroup !== 'all') {
-        const ageFilter = AGE_GROUP_FILTERS.find((a) => a.id === ageGroup)
-        if (ageFilter && ageFilter.min !== undefined && ageFilter.max !== undefined) {
-          // 이벤트의 나이 범위와 필터 범위가 겹치는 것만 표시
-          // 이벤트 범위 [age_range_min, age_range_max]가 필터 범위 [min, max]와 overlap
-          query = query
-            .lte('age_range_min', ageFilter.max)
-            .or(`age_range_max.gte.${ageFilter.min},age_range_max.is.null`)
+      // 해시태그 필터 (hashtags is string[] in DB) — OR: 선택 태그 중 하나라도 포함하면 표시
+      if (hashtags.length > 0) {
+        query = query.overlaps('hashtags', hashtags)
+      }
+
+      // 나이대 필터 (다중 선택) — 선택한 구간 중 하나라도 겹치면 표시
+      if (ageGroups.length > 0) {
+        const buckets = AGE_GROUP_FILTERS.filter((a) => ageGroups.includes(a.id))
+        if (buckets.length > 0) {
+          // 각 구간과 overlap: age_range_min <= 구간max AND (age_range_max >= 구간min OR null)
+          const orStr = buckets
+            .map((b) => `and(age_range_min.lte.${b.max},or(age_range_max.gte.${b.min},age_range_max.is.null))`)
+            .join(',')
+          query = query.or(orStr)
         }
       }
 
@@ -91,13 +102,24 @@ export function useEvents() {
 
       const { data, error: err } = await query.limit(100)
       if (err) throw err
-      setEvents((data ?? []) as EventWithCompany[])
+
+      // 요일·시간대는 KST 기준 클라이언트 필터 (서버에서 dow/hour 직접 못 거름)
+      let rows = (data ?? []) as EventWithCompany[]
+      if (days.length > 0 || timeSlots.length > 0) {
+        rows = rows.filter((e) => {
+          const { dow, hour } = kstDowHour(e.event_date)
+          if (days.length > 0 && !days.includes(dow)) return false
+          if (timeSlots.length > 0 && !timeSlots.includes(timeSlotOf(hour))) return false
+          return true
+        })
+      }
+      setEvents(rows)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '알 수 없는 오류')
     } finally {
       setLoading(false)
     }
-  }, [region, dateRange, maxPrice, themes, ageGroup, sortBy, myAge, myGender])
+  }, [regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, myAge, myGender])
 
   useEffect(() => {
     fetchEvents()

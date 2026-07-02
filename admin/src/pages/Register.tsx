@@ -140,6 +140,7 @@ export default function Register() {
 
     savingKeys.current.add(key)
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, saving: true } : r)))
+    const ageNums = [...extractAges(row.age_male), ...extractAges(row.age_female)]
     const payload = {
       company_id: row.company_id,
       title: row.company_name || '모임',
@@ -152,8 +153,11 @@ export default function Register() {
       capacity_female: numOrNull(row.capacity_female),
       seats_left_male: numOrNull(row.seats_left_male),
       seats_left_female: numOrNull(row.seats_left_female),
-      age_male: row.age_male.trim() || null,
-      age_female: row.age_female.trim() || null,
+      // 텍스트는 "27~34"로 정규화 저장(앱 표시 깔끔), 구간은 4자리 분리 포함해 산출
+      age_male: normalizeAge(row.age_male),
+      age_female: normalizeAge(row.age_female),
+      age_range_min: ageNums.length ? Math.min(...ageNums) : null,
+      age_range_max: ageNums.length ? Math.max(...ageNums) : null,
       is_closed: row.is_closed,
       is_active: true,
       source: 'verified', // 오너가 손댄 이벤트 → 발견 재실행 시 덮어쓰지 않음(crawl만 교체)
@@ -278,7 +282,7 @@ export default function Register() {
                     <CardInput label="정원" type="number" value={r.capacity_male} onChange={(v) => patch(r.key, 'capacity_male', v)} onBlur={() => flushSave(r.key)} />
                     <CardInput label="잔여" type="number" value={r.seats_left_male} onChange={(v) => patch(r.key, 'seats_left_male', v)} onBlur={() => flushSave(r.key)} />
                     <CardInput label="가격" type="number" value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} />
-                    <CardInput label="연령" value={r.age_male} placeholder="예 27~34" onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
+                    <CardInput label="연령" value={r.age_male} placeholder="예 2734" onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
                   </div>
                 </div>
                 <div className="rounded-lg bg-pink-50/60 p-2.5">
@@ -287,7 +291,7 @@ export default function Register() {
                     <CardInput label="정원" type="number" value={r.capacity_female} onChange={(v) => patch(r.key, 'capacity_female', v)} onBlur={() => flushSave(r.key)} />
                     <CardInput label="잔여" type="number" value={r.seats_left_female} onChange={(v) => patch(r.key, 'seats_left_female', v)} onBlur={() => flushSave(r.key)} />
                     <CardInput label="가격" type="number" value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} />
-                    <CardInput label="연령" value={r.age_female} placeholder="예 25~32" onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
+                    <CardInput label="연령" value={r.age_female} placeholder="예 2532" onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
                   </div>
                 </div>
               </div>
@@ -424,7 +428,7 @@ function AgeCell({ value, onChange, onBlur }: {
   return (
     <td className="px-2 py-2 text-center">
       <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
-        placeholder="예 27~34"
+        placeholder="예 2734"
         className="border border-gray-200 rounded px-2 py-1 text-sm text-center w-20 placeholder:text-gray-300" />
     </td>
   )
@@ -458,6 +462,28 @@ function makeRow(p: Partial<Row>): Row {
 function numOrNull(v: string): number | null {
   const n = parseInt(v, 10)
   return Number.isFinite(n) ? n : null
+}
+
+// 연령 텍스트에서 나이 숫자들 추출. 구분자 없는 4자리(예: 2734)는 앞2/뒤2로 쪼갬(20~40대 기본).
+// DB 제약(18~60) 밖은 버림.
+function extractAges(text: string): number[] {
+  const out: number[] = []
+  for (const g of (text || '').match(/\d+/g) || []) {
+    if (g.length === 4) out.push(parseInt(g.slice(0, 2), 10), parseInt(g.slice(2), 10))
+    else out.push(parseInt(g, 10))
+  }
+  return out.filter((n) => Number.isFinite(n) && n >= 18 && n <= 60)
+}
+
+// 저장용 정규화: "2734"/"27 34" → "27~34". 글자 섞인 자유표현은 그대로 둠.
+function normalizeAge(text: string): string | null {
+  const t = (text || '').trim()
+  if (!t) return null
+  if (!/^[\d\s~,.\-]+$/.test(t)) return t
+  const ages = extractAges(t)
+  if (ages.length >= 2) return `${Math.min(...ages)}~${Math.max(...ages)}`
+  if (ages.length === 1) return String(ages[0])
+  return t
 }
 
 function toLocalInput(iso: string): string {

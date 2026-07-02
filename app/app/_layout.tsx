@@ -68,9 +68,9 @@ export default function RootLayout() {
         <Stack.Screen name="reviews/index" options={{ headerShown: false }} />
         <Stack.Screen name="favorites/index" options={{ headerShown: false }} />
         <Stack.Screen name="alerts" options={{ headerShown: false }} />
-        <Stack.Screen name="settings" options={{ title: '설정', headerBackTitle: '홈' }} />
-        <Stack.Screen name="privacy" options={{ title: '개인정보처리방침', headerBackTitle: '설정' }} />
-        <Stack.Screen name="terms" options={{ title: '이용약관', headerBackTitle: '설정' }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="privacy" options={{ headerShown: false }} />
+        <Stack.Screen name="terms" options={{ headerShown: false }} />
         <Stack.Screen
           name="onboarding"
           options={{ headerShown: false, gestureEnabled: false, contentStyle: { backgroundColor: colors.background } }}

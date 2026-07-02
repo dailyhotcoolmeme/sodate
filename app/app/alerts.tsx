@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
+import TopBar from '@/components/TopBar'
 import {
   View,
   Text,
@@ -35,6 +36,7 @@ export default function AlertsScreen() {
     backBtn: { paddingVertical: 4, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 2 },
     backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
     headerTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5, marginTop: 4 },
+    pageTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5, marginBottom: 16 },
     scroll: { flex: 1 },
     content: { padding: 16, paddingBottom: 40 },
     sectionTitle: {
@@ -191,14 +193,10 @@ export default function AlertsScreen() {
   )
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-    <View style={styles.header}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-        <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>홈</Text>
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>알림 설정</Text>
-    </View>
+    <View style={styles.container}>
+    <TopBar showBack />
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <Text style={styles.pageTitle}>알림 설정</Text>
       <Text style={styles.sectionTitle}>관심 지역</Text>
       <Text style={styles.hint}>선택하지 않으면 전국 알림을 받습니다</Text>
       <View style={styles.chipRow}>

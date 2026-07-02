@@ -7,6 +7,7 @@ import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
 import DeadlineBadge from './DeadlineBadge'
+import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
 import { genderInfoLine } from '@/lib/eventInfo'
 
@@ -171,6 +172,8 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
           <Text style={styles.company}>{event.companies.name}</Text>
         )}
         <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
+        {/* 해시태그 배지 (제목 바로 아래) */}
+        <HashtagChips hashtags={event.hashtags} size="sm" max={3} />
         <Text style={styles.meta}>{formatDate(event.event_date)} · {event.location_region}</Text>
         {(() => {
           const m = genderInfoLine({ capacity: event.capacity_male, seats: event.seats_left_male, price: event.price_male, age: event.age_male })

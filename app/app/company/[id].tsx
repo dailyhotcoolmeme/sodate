@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
+import TopBar from '@/components/TopBar'
 import {
   View,
   Text,
@@ -170,12 +171,8 @@ export default function CompanyDetailScreen() {
   const subscribed = isSubscribed(company.id)
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-    <View style={styles.navHeader}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-        <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>상세</Text>
-      </TouchableOpacity>
-    </View>
+    <View style={styles.screen}>
+    <TopBar showBack />
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
       {/* 업체 헤더 */}
       <View style={styles.header}>

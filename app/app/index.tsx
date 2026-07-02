@@ -26,9 +26,12 @@ import { useEvents } from '@/hooks/useEvents'
 import { useFilter } from '@/hooks/useFilter'
 import { useFavorites } from '@/hooks/useFavorites'
 import { useColors } from '@/hooks/useColors'
-import { REGIONS } from '@/constants/regions'
+import { useRegions } from '@/hooks/useRegions'
 import { THEMES } from '@/constants/themes'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
+import { DAY_OPTIONS, TIME_SLOTS } from '@/constants/filters'
+import { useCompanies } from '@/hooks/useCompanies'
+import TopBar from '@/components/TopBar'
 import { useFilterStore, type FilterState } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { track } from '@/lib/analytics'
@@ -39,13 +42,12 @@ const SORT_OPTIONS: SortOption[] = [
   { id: 'deadline', label: '마감 임박' },
   { id: 'price_low', label: '가격 낮은순' },
   { id: 'price_high', label: '가격 높은순' },
-  { id: 'created', label: '최신 등록' },
 ]
 
 const QUICK_THEMES = ['프리미엄', '직장인', '야외', '취미', '액티비티']
 
 // 리스트 N개마다 네이티브 광고 1개 삽입
-const AD_INTERVAL = 6
+const AD_INTERVAL = 8
 type ListRow =
   | { type: 'event'; event: import('@/lib/supabase').EventWithCompany }
   | { type: 'ad'; key: string }
@@ -54,12 +56,13 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets()
   const { events, loading, refetch } = useEvents()
   const [filterVisible, setFilterVisible] = useState(false)
-  const { region, themes, maxPrice, dateRange, ageGroup, ageGroupLabel, activeFilterCount, regionLabel, setRegion, toggleTheme, setAgeGroup, resetFilters } = useFilter()
+  const { regions, themes, maxPrice, dateRange, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
+  const regionOptions = useRegions()
+  const companyOptions = useCompanies()
   const { sortBy, setSortBy } = useFilterStore()
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
   const { myAge, myGender, setMyAge, setMyGender } = useProfileStore()
   const [profileModalVisible, setProfileModalVisible] = useState(false)
-  const [menuVisible, setMenuVisible] = useState(false)
   const [ageInput, setAgeInput] = useState(myAge ? String(myAge) : '')
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
   const [showFab, setShowFab] = useState(false)
@@ -127,6 +130,23 @@ export default function HomeScreen() {
     headerIconBtn: {
       padding: 6,
       borderRadius: 8,
+    },
+    headerFilterBadge: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      minWidth: 15,
+      height: 15,
+      paddingHorizontal: 3,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerFilterBadgeText: {
+      color: '#fff',
+      fontSize: 9,
+      fontWeight: '800',
     },
     menuBackdrop: {
       flex: 1,
@@ -282,13 +302,13 @@ export default function HomeScreen() {
       paddingHorizontal: 13,
       paddingVertical: 5,
       borderRadius: 18,
-      backgroundColor: 'transparent',
+      backgroundColor: colors.surfaceHigh,
       borderWidth: 1,
       borderColor: colors.border,
     },
     ageGroupChipActive: {
-      backgroundColor: '#9B59F522',
-      borderColor: colors.secondary,
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
     },
     ageGroupChipText: {
       fontSize: 13,
@@ -296,7 +316,7 @@ export default function HomeScreen() {
       fontWeight: '500',
     },
     ageGroupChipTextActive: {
-      color: colors.secondary,
+      color: '#fff',
       fontWeight: '700',
     },
     // 활성 필터
@@ -445,8 +465,8 @@ export default function HomeScreen() {
 
   const handleRegionChange = useCallback((regionId: string) => {
     track('filter_apply', { properties: { region: regionId, result_count: events.length } })
-    setRegion(regionId)
-  }, [setRegion, events.length])
+    toggleRegion(regionId)
+  }, [toggleRegion, events.length])
 
   const handleThemeToggle = useCallback((t: string) => {
     track('filter_apply', { properties: { theme: t } })
@@ -455,12 +475,28 @@ export default function HomeScreen() {
 
   const handleAgeGroupChange = useCallback((groupId: string) => {
     track('filter_apply', { properties: { age_group: groupId } })
-    setAgeGroup(groupId)
-  }, [setAgeGroup])
+    toggleAgeGroup(groupId)
+  }, [toggleAgeGroup])
 
   const activeChips: { label: string; onRemove: () => void }[] = []
-  if (region !== 'all') activeChips.push({ label: regionLabel, onRemove: () => setRegion('all') })
-  if (ageGroup !== 'all') activeChips.push({ label: ageGroupLabel, onRemove: () => setAgeGroup('all') })
+  regions.forEach((r) => activeChips.push({ label: r, onRemove: () => toggleRegion(r) }))
+  hashtags.forEach((t) => activeChips.push({ label: t, onRemove: () => toggleHashtag(t) }))
+  ageGroups.forEach((id) => {
+    const label = AGE_GROUP_FILTERS.find((a) => a.id === id)?.label ?? id
+    activeChips.push({ label, onRemove: () => toggleAgeGroup(id) })
+  })
+  days.forEach((d) => {
+    const label = (DAY_OPTIONS.find((o) => o.id === d)?.label ?? '') + '요일'
+    activeChips.push({ label, onRemove: () => toggleDay(d) })
+  })
+  timeSlots.forEach((s) => {
+    const label = TIME_SLOTS.find((o) => o.id === s)?.label ?? s
+    activeChips.push({ label, onRemove: () => toggleTimeSlot(s) })
+  })
+  companies.forEach((id) => {
+    const label = companyOptions.find((c) => c.id === id)?.name ?? id
+    activeChips.push({ label, onRemove: () => toggleCompany(id) })
+  })
   if (maxPrice !== null) activeChips.push({ label: `${(maxPrice / 10000).toFixed(0)}만원 이하`, onRemove: () => useFilterStore.getState().setMaxPrice(null) })
   if (dateRange !== 'all') {
     const dl = dateRange === 'today' ? '오늘' : dateRange === 'week' ? '1주일' : '1달'
@@ -481,63 +517,14 @@ export default function HomeScreen() {
   }, [events])
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* ── 상단 헤더 ── */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.logoBtn} onPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })} activeOpacity={0.7}>
-          <Image source={require('../assets/logo-icon.png')} style={styles.logoIcon} contentFit="cover" />
-          <Text style={styles.logo}>소개팅모아</Text>
-        </TouchableOpacity>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.headerIconBtn} onPress={() => setMenuVisible(true)}>
-            <Ionicons name="menu" size={26} color={colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* ── 햄버거 메뉴 ── */}
-      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
-        <TouchableOpacity style={styles.menuBackdrop} activeOpacity={1} onPress={() => setMenuVisible(false)}>
-          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[styles.menuCard, { top: insets.top + 48 }]}>
-            {[
-              { label: '내 정보', icon: 'person-outline', action: () => { setAgeInput(myAge ? String(myAge) : ''); setProfileModalVisible(true) } },
-              { label: '후기', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
-              { label: '관심', icon: 'heart-outline', action: () => router.push('/favorites') },
-              { label: '알림설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
-              { label: '설정', icon: 'settings-outline', action: () => router.push('/settings') },
-            ].map((m) => (
-              <TouchableOpacity
-                key={m.label}
-                style={styles.menuItem}
-                onPress={() => { setMenuVisible(false); m.action() }}
-              >
-                <Ionicons name={m.icon as any} size={18} color={colors.textSecondary} />
-                <Text style={styles.menuItemText}>{m.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* ── 검색바 (탭하면 필터 시트 오픈) ── */}
-      <TouchableOpacity
-        style={styles.searchBar}
-        activeOpacity={0.7}
-        onPress={() => setFilterVisible(true)}
-      >
-        <Text style={styles.searchIcon}>검색</Text>
-        <Text style={styles.searchPlaceholder}>
-          {activeFilterCount > 0
-            ? `필터 ${activeFilterCount}개 적용 중`
-            : '지역 · 나이 · 가격으로 검색'}
-        </Text>
-        {activeFilterCount > 0 && (
-          <View style={styles.filterBadge}>
-            <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-          </View>
-        )}
-        <Text style={styles.filterIcon}>›</Text>
-      </TouchableOpacity>
+    <View style={styles.container}>
+      {/* ── 공용 톱바 ── */}
+      <TopBar
+        onLogoPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
+        onProfilePress={() => { setAgeInput(myAge ? String(myAge) : ''); setProfileModalVisible(true) }}
+        onFilterPress={() => setFilterVisible(true)}
+        filterCount={activeFilterCount}
+      />
 
       {/* ── 지역 빠른 탭 ── */}
       <View style={styles.regionScroll}>
@@ -547,13 +534,13 @@ export default function HomeScreen() {
         contentContainerStyle={styles.regionRow}
         style={{ flex: 1 }}
       >
-        {REGIONS.map((r) => (
+        {regionOptions.map((r) => (
           <TouchableOpacity
             key={r.id}
-            style={[styles.regionChip, region === r.id && styles.regionChipActive]}
+            style={[styles.regionChip, regions.includes(r.id) && styles.regionChipActive]}
             onPress={() => handleRegionChange(r.id)}
           >
-            <Text style={[styles.regionChipText, region === r.id && styles.regionChipTextActive]}>
+            <Text style={[styles.regionChipText, regions.includes(r.id) && styles.regionChipTextActive]}>
               {r.label}
             </Text>
           </TouchableOpacity>
@@ -561,22 +548,6 @@ export default function HomeScreen() {
       </ScrollView>
       </View>
 
-      {/* ── 테마 빠른 칩 ── */}
-      <View style={styles.themeScroll}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.themeRow}
-        style={{ flex: 1 }}
-      >
-        <TouchableOpacity
-          style={styles.moreFilterBtn}
-          onPress={() => setFilterVisible(true)}
-        >
-          <Text style={styles.moreFilterText}>필터 ›</Text>
-        </TouchableOpacity>
-      </ScrollView>
-      </View>
 
       {/* ── 나이대 필터 칩 ── */}
       <View style={styles.ageGroupScroll}>
@@ -589,10 +560,10 @@ export default function HomeScreen() {
         {AGE_GROUP_FILTERS.map((ag) => (
           <TouchableOpacity
             key={ag.id}
-            style={[styles.ageGroupChip, ageGroup === ag.id && styles.ageGroupChipActive]}
+            style={[styles.ageGroupChip, ageGroups.includes(ag.id) && styles.ageGroupChipActive]}
             onPress={() => handleAgeGroupChange(ag.id)}
           >
-            <Text style={[styles.ageGroupChipText, ageGroup === ag.id && styles.ageGroupChipTextActive]}>
+            <Text style={[styles.ageGroupChipText, ageGroups.includes(ag.id) && styles.ageGroupChipTextActive]}>
               {ag.label}
             </Text>
           </TouchableOpacity>
@@ -619,16 +590,11 @@ export default function HomeScreen() {
 
       {/* ── 결과 수 + 정렬 + 뷰 토글 ── */}
       <View style={styles.resultRow}>
-        {!loading && (
-          <Text style={styles.resultText}>
-            {events.length > 0 ? `총 ${events.length}개` : '결과 없음'}
-          </Text>
-        )}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.sortRow}
-          style={{ flex: 1, marginLeft: 8 }}
+          style={{ flex: 1 }}
         >
           {SORT_OPTIONS.map((opt) => (
             <TouchableOpacity
@@ -716,6 +682,7 @@ export default function HomeScreen() {
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
               padding: 24,
+              paddingBottom: insets.bottom + 24,
               gap: 20,
             }}
             onStartShouldSetResponder={() => true}

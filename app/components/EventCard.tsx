@@ -13,6 +13,7 @@ import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
 import DeadlineBadge from './DeadlineBadge'
 import ThemeTag from './ThemeTag'
+import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
 import { genderInfoLine } from '@/lib/eventInfo'
 import CompanyBadge from './CompanyBadge'
@@ -226,6 +227,9 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
         <Text style={styles.title} numberOfLines={2}>
           {cleanTitle(event.title)}
         </Text>
+
+        {/* 해시태그 배지 (제목 바로 아래) */}
+        <HashtagChips hashtags={event.hashtags} size="sm" />
 
         {/* 날짜 · 지역 · 나이대 */}
         <View style={styles.metaRow}>

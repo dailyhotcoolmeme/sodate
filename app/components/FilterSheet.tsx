@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -7,10 +7,16 @@ import {
   ScrollView,
   Modal,
   Platform,
+  TextInput,
 } from 'react-native'
 import { useColors } from '@/hooks/useColors'
-import { REGIONS } from '@/constants/regions'
-import { THEMES } from '@/constants/themes'
+import { useRegions } from '@/hooks/useRegions'
+import { useCompanies } from '@/hooks/useCompanies'
+import { useHashtags } from '@/hooks/useHashtags'
+import TopBar from '@/components/TopBar'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
+import { DAY_OPTIONS, TIME_SLOTS } from '@/constants/filters'
 import { useFilterStore, type FilterSnapshot } from '@/stores/filterStore'
 
 interface Props {
@@ -36,25 +42,48 @@ const PRICE_OPTIONS: { value: number | null; label: string }[] = [
 
 export default function FilterSheet({ visible, onClose }: Props) {
   const {
-    region,
+    regions,
     dateRange,
     maxPrice,
-    themes,
+    hashtags,
+    ageGroups,
+    days,
+    timeSlots,
+    companies,
     recentFilters,
-    setRegion,
+    toggleRegion,
     setDateRange,
     setMaxPrice,
-    toggleTheme,
+    toggleHashtag,
+    toggleAgeGroup,
+    toggleDay,
+    toggleTimeSlot,
+    toggleCompany,
     saveRecentFilter,
     applyRecentFilter,
     resetFilters,
   } = useFilterStore()
   const colors = useColors()
+  const insets = useSafeAreaInsets()
+  const regionOptions = useRegions()
+  const companyOptions = useCompanies()
+  const hashtagOptions = useHashtags()
+  const [hashtagQuery, setHashtagQuery] = useState('')
+
+  // 검색어로 후보 필터링 + 선택된 태그는 항상 위에 노출
+  const filteredHashtags = useMemo(() => {
+    const q = hashtagQuery.trim().replace(/^#/, '').toLowerCase()
+    const base = q
+      ? hashtagOptions.filter((t) => t.replace(/^#/, '').toLowerCase().includes(q))
+      : hashtagOptions
+    // 선택됐지만 후보에 없는 태그(예: 검색 결과 밖)도 노출되도록 합침
+    const merged = [...hashtags.filter((t) => !base.includes(t)), ...base]
+    return merged
+  }, [hashtagOptions, hashtagQuery, hashtags])
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
-      paddingTop: Platform.OS === 'android' ? 16 : 0,
     },
     header: {
       flexDirection: 'row',
@@ -103,6 +132,17 @@ export default function FilterSheet({ visible, onClose }: Props) {
       gap: 8,
       flexWrap: 'wrap',
     },
+    searchInput: {
+      backgroundColor: colors.surfaceHigh,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      fontSize: 14,
+      color: colors.textPrimary,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 12,
+    },
     chip: {
       backgroundColor: colors.surfaceHigh,
       borderRadius: 20,
@@ -137,7 +177,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
       fontSize: 12,
       color: colors.textSecondary,
     },
-  }), [colors])
+  }), [colors, insets.top])
 
   const handleApply = () => {
     saveRecentFilter()
@@ -152,13 +192,14 @@ export default function FilterSheet({ visible, onClose }: Props) {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
+        <TopBar onBeforeNavigate={onClose} />
         {/* 헤더 */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={styles.resetText}>닫기</Text>
+          <TouchableOpacity onPress={resetFilters} hitSlop={8}>
+            <Text style={styles.resetText}>초기화</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>필터</Text>
-          <TouchableOpacity onPress={handleApply}>
+          <TouchableOpacity onPress={handleApply} hitSlop={8}>
             <Text style={styles.applyText}>적용</Text>
           </TouchableOpacity>
         </View>
@@ -179,7 +220,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
                       }}
                     >
                       <Text style={styles.recentChipText}>
-                        {f.region !== 'all' ? f.region : '전체'}
+                        {f.regions && f.regions.length > 0 ? f.regions.join(', ') : '전체'}
                         {f.themes.length > 0 ? ` · ${f.themes[0]}` : ''}
                         {f.dateRange !== 'all'
                           ? ` · ${f.dateRange === 'today' ? '오늘' : f.dateRange === 'week' ? '1주일' : '1달'}`
@@ -195,12 +236,81 @@ export default function FilterSheet({ visible, onClose }: Props) {
           {/* 지역 */}
           <Section title="지역" styles={styles}>
             <View style={styles.chipGrid}>
-              {REGIONS.map((r) => (
+              {regionOptions.map((r) => (
                 <Chip
                   key={r.id}
                   label={r.label}
-                  selected={region === r.id}
-                  onPress={() => setRegion(r.id)}
+                  selected={regions.includes(r.id)}
+                  onPress={() => toggleRegion(r.id)}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          </Section>
+
+          {/* 나이대 */}
+          <Section title="나이대" styles={styles}>
+            <View style={styles.chipGrid}>
+              {AGE_GROUP_FILTERS.map((a) => (
+                <Chip
+                  key={a.id}
+                  label={a.label}
+                  selected={ageGroups.includes(a.id)}
+                  onPress={() => toggleAgeGroup(a.id)}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          </Section>
+
+          {/* 해시태그 */}
+          <Section title="해시태그" styles={styles}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="해시태그 검색 (예: 와인, 30대)"
+              placeholderTextColor={colors.textTertiary}
+              value={hashtagQuery}
+              onChangeText={setHashtagQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.chipGrid}>
+              {filteredHashtags.map((t) => (
+                <Chip
+                  key={t}
+                  label={t}
+                  selected={hashtags.includes(t)}
+                  onPress={() => toggleHashtag(t)}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          </Section>
+
+          {/* 요일 */}
+          <Section title="요일" styles={styles}>
+            <View style={styles.chipRow}>
+              {DAY_OPTIONS.map((d) => (
+                <Chip
+                  key={d.id}
+                  label={d.label}
+                  selected={days.includes(d.id)}
+                  onPress={() => toggleDay(d.id)}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          </Section>
+
+          {/* 시간대 */}
+          <Section title="시간대" styles={styles}>
+            <View style={styles.chipRow}>
+              {TIME_SLOTS.map((t) => (
+                <Chip
+                  key={t.id}
+                  label={t.label}
+                  selected={timeSlots.includes(t.id)}
+                  onPress={() => toggleTimeSlot(t.id)}
                   styles={styles}
                 />
               ))}
@@ -237,14 +347,24 @@ export default function FilterSheet({ visible, onClose }: Props) {
             </View>
           </Section>
 
-          <View style={{ paddingHorizontal: 20, paddingVertical: 16 }}>
-            <TouchableOpacity
-              onPress={resetFilters}
-              style={{ alignItems: 'center', paddingVertical: 12 }}
-            >
-              <Text style={styles.resetText}>필터 초기화</Text>
-            </TouchableOpacity>
-          </View>
+          {/* 업체 */}
+          {companyOptions.length > 0 && (
+            <Section title="업체" styles={styles}>
+              <View style={styles.chipGrid}>
+                {companyOptions.map((c) => (
+                  <Chip
+                    key={c.id}
+                    label={c.name}
+                    selected={companies.includes(c.id)}
+                    onPress={() => toggleCompany(c.id)}
+                    styles={styles}
+                  />
+                ))}
+              </View>
+            </Section>
+          )}
+
+          <View style={{ height: insets.bottom + 24 }} />
         </ScrollView>
       </View>
     </Modal>

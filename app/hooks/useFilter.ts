@@ -1,5 +1,4 @@
 import { useFilterStore } from '@/stores/filterStore'
-import { REGIONS } from '@/constants/regions'
 import { THEMES } from '@/constants/themes'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 
@@ -7,15 +6,19 @@ export function useFilter() {
   const store = useFilterStore()
 
   const activeFilterCount = [
-    store.region !== 'all' ? 1 : 0,
+    store.regions.length > 0 ? 1 : 0,
     store.dateRange !== 'all' ? 1 : 0,
     store.maxPrice !== null ? 1 : 0,
     store.themes.length > 0 ? 1 : 0,
-    store.ageGroup !== 'all' ? 1 : 0,
+    store.hashtags.length > 0 ? 1 : 0,
+    store.ageGroups.length > 0 ? 1 : 0,
+    store.days.length > 0 ? 1 : 0,
+    store.timeSlots.length > 0 ? 1 : 0,
+    store.companies.length > 0 ? 1 : 0,
   ].reduce((a, b) => a + b, 0)
 
-  const regionLabel =
-    REGIONS.find((r) => r.id === store.region)?.label ?? '전체'
+  // 지역은 동적(location_region 문자열 그대로) — id가 곧 라벨. 다중.
+  const regionLabels = store.regions
 
   const themeLabels = store.themes.map(
     (id) => THEMES.find((t) => t.id === id)?.label ?? id
@@ -30,15 +33,16 @@ export function useFilter() {
       ? '1달'
       : '전체'
 
-  const ageGroupLabel =
-    AGE_GROUP_FILTERS.find((a) => a.id === store.ageGroup)?.label ?? '전체'
+  const ageGroupLabels = store.ageGroups.map(
+    (id) => AGE_GROUP_FILTERS.find((a) => a.id === id)?.label ?? id
+  )
 
   return {
     ...store,
     activeFilterCount,
-    regionLabel,
+    regionLabels,
     themeLabels,
     dateRangeLabel,
-    ageGroupLabel,
+    ageGroupLabels,
   }
 }

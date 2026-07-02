@@ -11,10 +11,14 @@
 
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
+
+# base_scraper가 naive datetime을 KST 벽시계로 간주하므로, 여기서도 KST로 명시 변환한다.
+# (실행 머신 TZ에 의존하는 .astimezone() → GitHub Actions(UTC)에서 -9h 버그 방지)
+KST = timezone(timedelta(hours=9))
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
@@ -318,18 +322,20 @@ class MuntoScraper(BaseScraper):
 
                         # 날짜
                         start_date_str = detail.get('startDate') or item.get('startDate')
+                        now_kst = datetime.now(KST).replace(tzinfo=None)
                         if start_date_str:
                             try:
+                                # KST(UTC+9)로 명시 변환 후 naive KST 벽시계로 넘긴다.
                                 event_date = datetime.fromisoformat(
                                     start_date_str.replace('Z', '+00:00')
-                                ).astimezone().replace(tzinfo=None)
+                                ).astimezone(KST).replace(tzinfo=None)
                             except Exception:
-                                event_date = datetime.now().replace(hour=19, minute=0, second=0, microsecond=0)
+                                event_date = now_kst.replace(hour=19, minute=0, second=0, microsecond=0)
                         else:
-                            event_date = datetime.now().replace(hour=19, minute=0, second=0, microsecond=0)
+                            event_date = now_kst.replace(hour=19, minute=0, second=0, microsecond=0)
 
-                        # 미래 이벤트만
-                        if event_date < datetime.now():
+                        # 미래 이벤트만 (KST 기준으로 비교)
+                        if event_date < now_kst:
                             continue
 
                         # 가격 (단일 가격 — 남녀 구분 없음)

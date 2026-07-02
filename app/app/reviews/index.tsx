@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
+import TopBar from '@/components/TopBar'
 import {
   View,
   Text,
@@ -187,12 +188,10 @@ export default function ReviewsScreen() {
   const sections = Object.values(byCompany)
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
+      <TopBar showBack />
       {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={16} color={colors.primary} /><Text style={styles.backText}>홈</Text>
-        </TouchableOpacity>
         <Text style={styles.title}>후기 모아보기</Text>
         <Text style={styles.subtitle}>실제 참여자들의 솔직한 후기</Text>
       </View>

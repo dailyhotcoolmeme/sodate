@@ -1,4 +1,4 @@
-// 성별 한 줄 요약: "3/10명 · 50,000원 · 29~34세" 형태로 합친다.
+// 성별 한 줄 요약: "50,000원 · 29~34세" 형태로 합친다.
 // 값이 없는 항목은 자동으로 빠지고, 가운데점(·)으로 연결.
 export function genderInfoLine(opts: {
   capacity: number | null
@@ -8,14 +8,14 @@ export function genderInfoLine(opts: {
 }): string {
   const parts: string[] = []
 
-  // 인원: 잔여/정원
-  if (opts.capacity != null && opts.seats != null) {
-    parts.push(opts.seats === 0 ? '마감' : `${opts.seats}/${opts.capacity}명`)
-  } else if (opts.capacity != null) {
-    parts.push(`${opts.capacity}명`)
-  } else if (opts.seats != null) {
-    parts.push(opts.seats === 0 ? '마감' : `${opts.seats}석`)
-  }
+  // 인원(정원/잔여석)은 실시간 갱신 전까지 숨김 — 나중에 재검토 시 아래 블록 복원.
+  // if (opts.capacity != null && opts.seats != null) {
+  //   parts.push(opts.seats === 0 ? '마감' : `${opts.seats}/${opts.capacity}명`)
+  // } else if (opts.capacity != null) {
+  //   parts.push(`${opts.capacity}명`)
+  // } else if (opts.seats != null) {
+  //   parts.push(opts.seats === 0 ? '마감' : `${opts.seats}석`)
+  // }
 
   // 참가비
   if (opts.price != null) parts.push(`${opts.price.toLocaleString()}원`)
