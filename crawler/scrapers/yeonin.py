@@ -560,9 +560,14 @@ class YeoninScraper(BaseScraper):
                             elif price_female is None:
                                 price_female = val
 
-                # 지역 추출 (제목은 날짜 나열이라 지역이 없음 → 본문 원문에서 장소/역명 스캔)
+                # 지역 추출: 제목의 "지역(요일)" 패턴 우선(구로(금요일)·대전(토요일)·천안(일요일)),
+                # 없으면 본문 원문에서 장소/역명 스캔.
+                _full_title = f'{title_text} {post_title}'
+                _locs = re.findall(r'([가-힣]{2,6})\s*\([월화수목금토일]요일\)', _full_title)
+                _phrase = '·'.join(dict.fromkeys(_locs)) if _locs else None
                 region = resolve_region(
-                    title=f'{title_text} {post_title}',
+                    region_phrase=_phrase,
+                    title=_full_title,
                     body=content,
                 )
 
