@@ -238,15 +238,26 @@ class YeongyulScraper(BaseScraper):
         # 장소: "장소 :" 다음 라인
         location_detail = None
         region = '기타'
+
+        # 1순위: 제목의 "[XXX 로테이션 소개팅]"에서 지역 문구를 그대로 사용.
+        # 조합지역(서울/경기, 창원/마산, 대전.광주 등)도 나누지 않고 그대로 유지한다.
+        region_m = re.search(r'\[\s*([가-힣][가-힣/·.\s]*?)\s*로테이션', title)
+        if region_m:
+            phrase = re.sub(r'\s+', ' ', region_m.group(1)).strip(' .·/')
+            if phrase:
+                region = phrase
+
         for i, line in enumerate(lines):
             if line.startswith('장소'):
                 loc_text = lines[i + 1] if i + 1 < len(lines) else ''
                 if loc_text and not loc_text.startswith('나이') and not loc_text.startswith('참가'):
                     location_detail = loc_text
-                for kw, region_val in self.REGION_MAP.items():
-                    if kw in title or kw in (loc_text or ''):
-                        region = region_val
-                        break
+                # 제목에서 지역을 못 얻었을 때만(기본 '기타') REGION_MAP으로 보강
+                if region == '기타':
+                    for kw, region_val in self.REGION_MAP.items():
+                        if kw in title or kw in (loc_text or ''):
+                            region = region_val
+                            break
                 break
 
         # 나이 범위 파싱: "나이 : 30세 ~ 38세" 또는 개행 포함 "나이 :\n30세 ~ 37세"
