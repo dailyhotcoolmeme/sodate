@@ -794,6 +794,18 @@ class EmotionalOrangeScraper(BaseScraper):
         result: list[str] = []
         seen: set[str] = set()
 
+        # 방법 0: imweb 커스텀 옵션 드롭다운 (.form-select-wrap .dropdown-item) — 최우선.
+        # imweb이 <select><option> 대신 div 기반 드롭다운으로 바뀌어 기존 방법1~3이
+        # 옵션 날짜를 못 잡던 문제 수정. 예: "7월 2일 목요일 저녁 8시 (나이C)"
+        for item in soup.select(
+            '.form-select-wrap .dropdown-item, .dropdown-menu .dropdown-item, '
+            '._form_select_wrap .dropdown-item'
+        ):
+            text = item.get_text(' ', strip=True)
+            if self.DATE_RE.search(text) and text not in seen:
+                result.append(text)
+                seen.add(text)
+
         # 방법 1: <select> 태그의 <option> 요소
         for sel in soup.find_all('select'):
             for opt in sel.find_all('option'):
