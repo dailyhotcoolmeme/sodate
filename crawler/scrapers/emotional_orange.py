@@ -25,6 +25,12 @@ from utils.region import resolve_region
 SEAT_WORDS = {'한자리': 1, '두자리': 2, '세자리': 3, '네자리': 4, '다섯자리': 5}
 
 
+def _title_place(title_line: Optional[str]) -> Optional[str]:
+    """제목 대괄호 안 지명을 '그대로' 반환 (예: '가산디지털단지', '강남 삼성', '송파 문정')."""
+    m = re.search(r'\[([^\]]+)\]', title_line or '')
+    return m.group(1).strip() if m else None
+
+
 class EmotionalOrangeScraper(BaseScraper):
     BASE_URL = 'https://emotional0ranges.com'
     DATE_PAGE_URL = 'https://emotional0ranges.com/date'
@@ -425,6 +431,7 @@ class EmotionalOrangeScraper(BaseScraper):
 
             # 지역 결정은 공용 해석기로 일원화 (제목 → 블로그 location → 본문 순)
             ev_region = resolve_region(
+                region_phrase=_title_place(title_line),
                 title=title_line,
                 location_detail=ev_location_detail,
                 body=description,
@@ -956,6 +963,7 @@ class EmotionalOrangeScraper(BaseScraper):
 
             # 지역 결정은 공용 해석기로 일원화
             ev_region = resolve_region(
+                region_phrase=_title_place(title_line),
                 title=title_line,
                 location_detail=ev_location_detail,
                 body=description,
