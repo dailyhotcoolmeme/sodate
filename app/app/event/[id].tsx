@@ -44,6 +44,10 @@ function descLines(raw: string): string[] {
   t = t.replace(new RegExp(`\\s*((?:${_DESC_MARKERS})+)`, 'gu'), '\n$1')
   // " - " 서브 불릿
   t = t.replace(/\s+-\s+/g, '\n- ')
+  // 문장 끝(마침표/느낌표/물음표 + 공백)에서 줄바꿈 — 기호 없는 문장형 설명 대응
+  t = t.replace(/([가-힣A-Za-z0-9)\]」』】])([.!?]+)\s+/g, '$1$2\n')
+  // 번호 목록 "N." "N)" 앞에서 줄바꿈
+  t = t.replace(/\s+(\d{1,2}[.)]\s)/g, '\n$1')
   const onlyMarker = new RegExp(`^(?:${_DESC_MARKERS}|\\s)+$`, 'u')
   return t
     .split('\n')
