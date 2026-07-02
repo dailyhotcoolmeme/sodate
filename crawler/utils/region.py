@@ -23,6 +23,8 @@ _CITY = (
 # "천안 쌍용동", "선릉역", "강남구", "홍대입구역" 같은 지명 문구 (도시 접두 선택)
 _PLACE_RE = re.compile(rf'((?:{_CITY})\s+)?([가-힣]{{2,5}}(?:역|동|구|읍|면|지구))')
 _CITY_RE = re.compile(rf'({_CITY})')
+# "서울역과 충정로역 사이"처럼 두 역이 묶인 경우 → 둘 다 표시
+_TWO_STATIONS = re.compile(r'([가-힣]{2,5}역)\s*(?:과|와|,|·|및|~|사이|부터)\s*([가-힣]{2,5}역)')
 _MULTI = re.compile(r'[가-힣A-Za-z0-9]+(?:\s*[/·.,&～~]\s*[가-힣A-Za-z0-9]+)+')
 _WS = re.compile(r'\s+')
 _LOC_LINE = re.compile(r'(?:모임장소|만남장소|장소|위치|지역)\s*[:：]?\s*([^\n]{2,40})')
@@ -79,10 +81,14 @@ def resolve_region(
     if body:
         m = _LOC_LINE.search(body)
         if m:
-            ph = _extract_phrase(m.group(1))
+            seg = m.group(1)
+            tm = _TWO_STATIONS.search(seg)  # "서울역과 충정로역 사이" → 서울역·충정로역
+            if tm:
+                return f'{tm.group(1)}·{tm.group(2)}'
+            ph = _extract_phrase(seg)
             if ph:
                 return ph
-            v = _clean(m.group(1))
+            v = _clean(seg)
             if _usable(v) and len(v) <= 20:
                 return v
 
