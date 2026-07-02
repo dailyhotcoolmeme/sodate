@@ -18,6 +18,7 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
 from utils.date_filter import is_within_one_month
+from utils.region import resolve_region
 
 FRIP_GQL = 'https://gql.frip.co.kr/graphql'
 FRIP_BASE = 'https://frip.co.kr'
@@ -495,11 +496,6 @@ class FripScraper(BaseScraper):
                 return None
 
             area = node.get('areaName') or ''
-            region = '서울'
-            for kw in REGION_KW:
-                if kw in area or kw in title:
-                    region = kw
-                    break
 
             product_id = str(node.get('id'))
 
@@ -541,6 +537,13 @@ class FripScraper(BaseScraper):
                 rec_age = frip_info.get('recommendedAge')
                 if rec_age and int(rec_age) > 0:
                     recommended_age = int(rec_age)
+
+            # ── 지역 결정 (areaName 우선, 조합지역 "동대문·성북" 등 유지) ──
+            region = resolve_region(
+                region_phrase=area or None,
+                title=title,
+                body=description_text or None,
+            )
 
             # ── 5) 나이대 파싱 ──
             age_range_min, age_range_max, age_group_label = self._parse_age_info(

@@ -13,6 +13,7 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text, sanitize_url, build_description, extract_description_from_soup
 from utils.date_filter import is_within_one_month
+from utils.region import resolve_region
 
 
 class LovecastingScraper(BaseScraper):
@@ -251,12 +252,11 @@ class LovecastingScraper(BaseScraper):
                         elif price_female is None:
                             price_female = val
 
-            # 지역
-            region = '서울'
-            for r in self.REGION_KEYWORDS:
-                if r in (card_date_line + title_text):
-                    region = r
-                    break
+            # 지역 (카드 본문 원문 = 날짜줄의 역/장소명 포함)
+            region = resolve_region(
+                title=f'{title_text} {card_date_line}',
+                body=card_text,
+            )
 
             # 썸네일
             thumbnail_url = None
@@ -365,12 +365,8 @@ class LovecastingScraper(BaseScraper):
                     event_date = datetime(year, mo, d, 14, 0)
                     if event_date < datetime.now():
                         return None
-                    # 지역
-                    region = '서울'
-                    for r in self.REGION_KEYWORDS:
-                        if r in slug or r in title:
-                            region = r
-                            break
+                    # 지역 (슬러그/제목에서 장소명 스캔)
+                    region = resolve_region(title=title, body=slug)
                     # 썸네일 + 가격 fetch
                     thumbnail_url, price_male, price_female = self._fetch_page_info(url)
                     ev_title = sanitize_text(f'[러브캐스팅] {title or slug}', 80)
@@ -408,12 +404,8 @@ class LovecastingScraper(BaseScraper):
         except ValueError:
             return None
 
-        # 지역
-        region = '서울'
-        for r in self.REGION_KEYWORDS:
-            if r in slug or r in title:
-                region = r
-                break
+        # 지역 (슬러그/제목에서 장소명 스캔)
+        region = resolve_region(title=title, body=slug)
 
         thumbnail_url, price_male, price_female = self._fetch_page_info(url)
         return EventModel(
@@ -626,11 +618,11 @@ class LovecastingScraper(BaseScraper):
                     if m_applicants_f:
                         seats_left_female = cap_female - int(m_applicants_f.group(1))
 
-                region = '서울'
-                for r in self.REGION_KEYWORDS:
-                    if r in title_text + post_title:
-                        region = r
-                        break
+                # 지역 (본문 원문 = "장소 [선릉역] ... 위치 강남구" 스캔)
+                region = resolve_region(
+                    title=f'{title_text} {post_title}',
+                    body=content,
+                )
 
                 unique_url = f"{source_url}#evt={date_key}"
                 events.append(EventModel(
@@ -673,11 +665,7 @@ class LovecastingScraper(BaseScraper):
         if not event_date or event_date < datetime.now():
             return None
 
-        region = '서울'
-        for r in self.REGION_KEYWORDS:
-            if r in post_title:
-                region = r
-                break
+        region = resolve_region(title=post_title)
 
         title = sanitize_text(f'[러브캐스팅] {post_title}', 80)
         unique_url = f"{source_url}#evt={event_date.strftime('%Y%m%d%H%M')}"

@@ -18,6 +18,7 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
 from utils.date_filter import is_within_one_month
+from utils.region import resolve_region
 
 
 # 잔여석 한글 수사 → 정수
@@ -328,15 +329,6 @@ class EmotionalOrangeScraper(BaseScraper):
         price_male = prices[0] if prices else None
         price_female = prices[1] if len(prices) > 1 else price_male
 
-        # 지역
-        region = '서울'
-        bracket_m = re.search(r'\[([^\]]+)\]', title_line)
-        if bracket_m:
-            for kw, region_val in self.REGION_MAP.items():
-                if kw in bracket_m.group(1):
-                    region = region_val
-                    break
-
         # 테마
         theme = ['일반']
         if '와인' in title_line:
@@ -412,8 +404,7 @@ class EmotionalOrangeScraper(BaseScraper):
             seats_left_male: Optional[int] = None
             seats_left_female: Optional[int] = None
 
-            # 지역/세부위치는 이벤트(옵션)마다 독립 계산 — 루프 간 오염 방지
-            ev_region = region
+            # 세부위치는 이벤트(옵션)마다 독립 계산 — 루프 간 오염 방지
             ev_location_detail: Optional[str] = None
 
             if blog_ev:
@@ -431,13 +422,13 @@ class EmotionalOrangeScraper(BaseScraper):
                 blog_location = blog_ev.get('location')
                 if blog_location:
                     ev_location_detail = blog_location
-                    # 제목에서 지역을 못 얻었을 때만(기본 '서울') 블로그로 보강.
-                    # 제목 지역이 우선 — 블로그가 제목을 덮어써 뒤집는 문제 방지.
-                    if ev_region == '서울':
-                        for kw, region_val in self.REGION_MAP.items():
-                            if kw in blog_location:
-                                ev_region = region_val
-                                break
+
+            # 지역 결정은 공용 해석기로 일원화 (제목 → 블로그 location → 본문 순)
+            ev_region = resolve_region(
+                title=title_line,
+                location_detail=ev_location_detail,
+                body=description,
+            )
 
             source_url = (
                 f'{self.BASE_URL}/shop_view/?idx={idx}'
@@ -473,7 +464,7 @@ class EmotionalOrangeScraper(BaseScraper):
             events = self._parse_product_page_fallback(
                 soup, idx, listing_data,
                 title_line, thumbnail_url,
-                price_male, price_female, region,
+                price_male, price_female,
                 blog_events_map, description,
             )
         return events
@@ -877,7 +868,6 @@ class EmotionalOrangeScraper(BaseScraper):
         thumbnail_url: Optional[str],
         price_male: Optional[int],
         price_female: Optional[int],
-        region: str,
         blog_events_map: dict[str, dict],
         description: Optional[str] = None,
     ) -> list[EventModel]:
@@ -949,7 +939,6 @@ class EmotionalOrangeScraper(BaseScraper):
             participant_stats: Optional[dict] = None
             seats_left_male: Optional[int] = None
             seats_left_female: Optional[int] = None
-            ev_region = region
             ev_location_detail: Optional[str] = None
             if blog_ev:
                 participant_stats = blog_ev.get('participant_stats')
@@ -964,13 +953,13 @@ class EmotionalOrangeScraper(BaseScraper):
                 blog_location = blog_ev.get('location')
                 if blog_location:
                     ev_location_detail = blog_location
-                    # 제목에서 지역을 못 얻었을 때만(기본 '서울') 블로그로 보강.
-                    # 제목 지역이 우선 — 블로그가 제목을 덮어써 뒤집는 문제 방지.
-                    if ev_region == '서울':
-                        for kw, region_val in self.REGION_MAP.items():
-                            if kw in blog_location:
-                                ev_region = region_val
-                                break
+
+            # 지역 결정은 공용 해석기로 일원화
+            ev_region = resolve_region(
+                title=title_line,
+                location_detail=ev_location_detail,
+                body=description,
+            )
 
             source_url = (
                 f'{self.BASE_URL}/shop_view/?idx={idx}'

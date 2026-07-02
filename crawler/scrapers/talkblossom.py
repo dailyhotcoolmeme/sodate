@@ -14,6 +14,7 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text, sanitize_url, build_description
 from utils.date_filter import is_within_one_month
+from utils.region import resolve_region
 
 
 class TalkblossomScraper(BaseScraper):
@@ -486,11 +487,11 @@ class TalkblossomScraper(BaseScraper):
                     continue
                 seen_dates.add(date_key)
 
-                region = '서울'
-                for r in self.REGION_KEYWORDS:
-                    if r in post_title or r in date_str:
-                        region = r
-                        break
+                # 지역 (제목/스케줄엔 지역이 없음 → 본문 원문에서 장소/역명 스캔)
+                region = resolve_region(
+                    title=f'{post_title} {date_str}',
+                    body=content,
+                )
 
                 # 가격: 본문 전체에서 추출
                 prices_raw = self.PRICE_PATTERN.findall(content)
@@ -576,11 +577,11 @@ class TalkblossomScraper(BaseScraper):
                         elif price_female is None:
                             price_female = val
 
-                region = '서울'
-                for r in self.REGION_KEYWORDS:
-                    if r in title_text:
-                        region = r
-                        break
+                # 지역 (본문 원문에서 장소/역명 스캔)
+                region = resolve_region(
+                    title=f'{title_text} {post_title}',
+                    body=content,
+                )
 
                 # 나이대 라벨: "99-86년생(25-38세)" 패턴
                 age_group_label = None

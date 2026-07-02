@@ -179,7 +179,7 @@ class TwoYeonsiScraper(BaseScraper):
                         events.append(EventModel(
                             title=title,
                             event_date=event_date,
-                            location_region='기타',  # 광주
+                            location_region='광주',
                             location_detail='광주',
                             price_male=price_male,
                             price_female=price_female,

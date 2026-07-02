@@ -12,6 +12,7 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text, sanitize_url
 from utils.date_filter import is_within_one_month
+from utils.region import resolve_region
 
 
 # ─────────────────────────────────────────────
@@ -521,18 +522,6 @@ class YeoninScraper(BaseScraper):
         # 가격 패턴
         price_pattern = re.compile(r'(\d{2,3}),?(\d{3})원?|(\d{4,6})원')
 
-        # 지역 키워드 (제목에서 세부 동네 매칭 — 먼저 매칭되는 것 우선, 미매칭이면 '서울' 폴백)
-        region_keywords = [
-            '강남', '역삼', '선릉', '서초', '교대',
-            '홍대', '합정', '연남', '망원',
-            '신촌', '이대', '성수', '뚝섬', '건대', '군자',
-            '종로', '광화문', '을지로', '종각', '시청',
-            '잠실', '송파', '여의도', '영등포', '용산', '이태원',
-            '노원', '신림', '구로', '가산',
-            '수원', '분당', '판교', '일산', '인천', '천안',
-            '부산', '서면', '대구', '동성로', '대전',
-        ]
-
         # 나이대 라벨 패턴 (본문에서)
         age_label_pattern = re.compile(r'([A-D]그룹[^\s,]+|[A-D]그룹\(\d{2,4}[-~]\d{2,4}년생\))')
 
@@ -571,12 +560,11 @@ class YeoninScraper(BaseScraper):
                             elif price_female is None:
                                 price_female = val
 
-                # 지역 추출
-                region = '서울'
-                for r in region_keywords:
-                    if r in title_text:
-                        region = r
-                        break
+                # 지역 추출 (제목은 날짜 나열이라 지역이 없음 → 본문 원문에서 장소/역명 스캔)
+                region = resolve_region(
+                    title=f'{title_text} {post_title}',
+                    body=content,
+                )
 
                 # 나이대 라벨 추출 (본문 라인에서)
                 age_group_label = None

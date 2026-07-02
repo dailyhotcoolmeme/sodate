@@ -12,6 +12,7 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text, build_description, extract_description_from_soup
 from utils.date_filter import is_within_one_month
+from utils.region import resolve_region
 
 
 class SecretSalonScraper(BaseScraper):
@@ -210,6 +211,9 @@ class SecretSalonScraper(BaseScraper):
         # 전체 텍스트 (본문에서 날짜·좌석 추출)
         full_text = soup.get_text(separator='\n', strip=True)
 
+        # 지역 결정 — 공용 해석기 (양재→강남 매핑, 단일 지점이라 결과는 강남 유지)
+        region = resolve_region(title=title_line, location_detail='양재', body=full_text)
+
         # 본문 설명 추출 (og + .detail_detail_wrap 우선, 리뷰영역 회피)
         description = extract_description_from_soup(soup, 800)
 
@@ -376,7 +380,7 @@ class SecretSalonScraper(BaseScraper):
                     title=title,
                     description=description,
                     event_date=event_date,
-                    location_region='강남',
+                    location_region=region,
                     location_detail='양재',
                     price_male=price_male,
                     price_female=price_female,

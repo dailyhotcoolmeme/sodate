@@ -13,6 +13,7 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text, build_description
 from utils.date_filter import is_within_one_month
+from utils.region import resolve_region
 
 
 class InssumPartyScraper(BaseScraper):
@@ -422,11 +423,8 @@ class InssumPartyScraper(BaseScraper):
                 age_range_max = max(age1, age2)
 
         # ── 지역 파싱 ──────────────────────────────────────────────
-        region = '대전'
-        for kw, region_val in self.REGION_MAP.items():
-            if kw in title_line or kw in full_text:
-                region = region_val
-                break
+        # 공용 해석기 — 제목의 "[대전]" 등, 못 찾으면 대전 업체이므로 대전 기본
+        region = resolve_region(title=title_line, body=full_text, default='대전')
 
         # ── 날짜별 seats 매핑 ──────────────────────────────────────
         seats_map = self._parse_seats_by_date(text, listing_text)

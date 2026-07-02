@@ -24,6 +24,7 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
 from utils.date_filter import is_within_one_month
+from utils.region import resolve_region
 
 
 class LovecommunityLoco(BaseScraper):
@@ -198,12 +199,8 @@ class LovecommunityLoco(BaseScraper):
         price_male = prices[0] if prices else None
         price_female = prices[0] if prices else None
 
-        # 지역 추출
-        region = '서울'
-        for kw, region_val in self.REGION_MAP.items():
-            if kw in (title_line + text[:500]):
-                region = region_val
-                break
+        # 지역 추출 (공용 해석기)
+        region = resolve_region(title=title_line, body=text[:2000])
 
         # 나이대 파싱 — JSON-LD description 우선
         age_min, age_max, age_group_label = None, None, None

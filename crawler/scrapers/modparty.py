@@ -12,6 +12,7 @@ from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text, extract_description_from_soup
 from utils.date_filter import is_within_one_month
+from utils.region import resolve_region
 
 
 class ModpartyScraper(BaseScraper):
@@ -271,12 +272,11 @@ class ModpartyScraper(BaseScraper):
                     title_line = line
                     break
 
-            # 지역 추출
-            region = '서울'
-            for keyword, region_val in self.REGION_MAP.items():
-                if keyword in title_line or keyword in text:
-                    region = region_val
-                    break
+            # 지역 추출 — 공용 해석기 (제목·본문 키워드 스캔, "천안 쌍용동" 등 포함)
+            region = resolve_region(
+                title=title_line,
+                body=(data.get('desc') or '') + '\n' + text,
+            )
 
             # 가격 추출 (첫 번째 1만원 이상 가격)
             price_raw = self.PRICE_PATTERN.search(text)
