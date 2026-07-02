@@ -28,19 +28,37 @@ class EmotionalOrangeScraper(BaseScraper):
     BASE_URL = 'https://emotional0ranges.com'
     DATE_PAGE_URL = 'https://emotional0ranges.com/date'
 
+    # 제목 대괄호의 동네 키워드 → 지역 라벨. 앞에서부터 매칭(첫 매칭 우선)하므로
+    # 더 구체적인 키워드를 앞에 둔다.
     REGION_MAP = {
+        # 강남권
         '역삼': '강남', '선릉': '강남', '강남': '강남', '서초': '강남', '교대': '강남',
-        '한남': '서울', '용산': '서울', '이태원': '서울', '삼각지': '서울',
+        '삼성': '강남', '신논현': '강남', '논현': '강남',
+        # 송파/잠실
+        '송파': '송파', '잠실': '송파', '문정': '송파', '가락': '송파', '석촌': '송파',
+        # 영등포/여의도
+        '영등포': '영등포', '여의도': '영등포',
+        # 용산
+        '용산': '용산', '한남': '용산', '이태원': '용산', '삼각지': '용산',
+        # 홍대/마포
         '홍대': '홍대', '마포': '홍대', '합정': '홍대', '연남': '홍대', '망원': '홍대',
+        # 성수
         '성수동': '성수', '성수': '성수', '뚝섬': '성수', '서울숲': '성수',
+        # 건대
         '건대입구': '건대', '건대': '건대', '군자': '건대', '어린이대공원': '건대',
+        # 신촌
         '신촌': '신촌', '이대': '신촌', '이화여대': '신촌',
+        # 종로
         '종로': '종로', '광화문': '종로', '을지로': '종로', '안국': '종로',
         '인사동': '종로', '종각': '종로', '시청': '종로',
-        '가산': '기타', '구로': '기타', '마곡': '기타', '강서': '기타',
-        '동탄': '기타', '화성': '기타', '수원': '수원',
-        '부산': '부산', '대구': '대구', '대전': '대전', '인천': '인천',
-        '일산': '기타', '고양': '기타', '광주': '기타',
+        # 서남권
+        '가산': '가산', '구로': '구로', '마곡': '강서', '강서': '강서',
+        # 경기
+        '분당': '분당', '판교': '분당', '정자': '분당',
+        '수원': '수원', '광교': '수원', '동탄': '동탄', '화성': '동탄',
+        '하남': '하남', '미사': '하남', '일산': '일산', '고양': '일산',
+        # 광역시
+        '부산': '부산', '대구': '대구', '대전': '대전', '인천': '인천', '광주': '광주',
     }
 
     # "N월 N일" 패턴 (리뷰 제외: [옵션] 으로 시작하는 라인은 과거 리뷰)
@@ -413,10 +431,13 @@ class EmotionalOrangeScraper(BaseScraper):
                 blog_location = blog_ev.get('location')
                 if blog_location:
                     ev_location_detail = blog_location
-                    for kw, region_val in self.REGION_MAP.items():
-                        if kw in blog_location:
-                            ev_region = region_val
-                            break
+                    # 제목에서 지역을 못 얻었을 때만(기본 '서울') 블로그로 보강.
+                    # 제목 지역이 우선 — 블로그가 제목을 덮어써 뒤집는 문제 방지.
+                    if ev_region == '서울':
+                        for kw, region_val in self.REGION_MAP.items():
+                            if kw in blog_location:
+                                ev_region = region_val
+                                break
 
             source_url = (
                 f'{self.BASE_URL}/shop_view/?idx={idx}'
@@ -943,10 +964,13 @@ class EmotionalOrangeScraper(BaseScraper):
                 blog_location = blog_ev.get('location')
                 if blog_location:
                     ev_location_detail = blog_location
-                    for kw, region_val in self.REGION_MAP.items():
-                        if kw in blog_location:
-                            ev_region = region_val
-                            break
+                    # 제목에서 지역을 못 얻었을 때만(기본 '서울') 블로그로 보강.
+                    # 제목 지역이 우선 — 블로그가 제목을 덮어써 뒤집는 문제 방지.
+                    if ev_region == '서울':
+                        for kw, region_val in self.REGION_MAP.items():
+                            if kw in blog_location:
+                                ev_region = region_val
+                                break
 
             source_url = (
                 f'{self.BASE_URL}/shop_view/?idx={idx}'
