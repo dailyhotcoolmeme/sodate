@@ -21,6 +21,9 @@ export const COMPANY_COVERS: Record<string, string> = {
 
 export const DEFAULT_COVER = P('1516197370049-569c4eaba1d6') // 소셜 카페
 
+// 썸네일이 항상 로고라서 실제 사진이 없는 업체 — 이벤트 썸네일 무시하고 무조건 커버 사용
+export const ALWAYS_COVER = new Set<string>(['연인어때', '토크블라썸'])
+
 export function coverFor(companyName?: string | null): string {
   if (companyName && COMPANY_COVERS[companyName]) return COMPANY_COVERS[companyName]
   return DEFAULT_COVER

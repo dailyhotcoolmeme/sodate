@@ -1,13 +1,13 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, StyleProp, ViewStyle, ImageStyle } from 'react-native'
+import { View, Text, StyleSheet, StyleProp, ViewStyle, ImageStyle, TextStyle } from 'react-native'
 import { Image } from 'expo-image'
-import { coverFor } from '@/constants/companyCovers'
+import { coverFor, ALWAYS_COVER } from '@/constants/companyCovers'
 
 // 이미지 없는 케이스 공통 규칙:
-// - 이벤트 썸네일이 있으면(실제 사진) 그대로 보여준다.
-// - 없거나 / 로고·플레이스홀더 URL / 로딩 실패면
-//   → 업체별 "고정 배경 이미지" + 어두운 오버레이 + 강조 텍스트(업체명·지역)로 보여준다.
-// 카드/리스트/상세 어디서든 이 컴포넌트만 쓰면 동일 동작(신규 업체도 자동).
+// - 실제 이벤트 사진이 있으면 그대로.
+// - 없거나 / 로고·플레이스홀더 / 로딩실패 / 로고전용 업체면
+//   → 업체 고정 배경 + 어두운 오버레이 + "중앙 강조 텍스트(굵은 외곽선)".
+// 카드/리스트/상세 공용. (다른 업체 포스터처럼 이미지 위 텍스트 강조)
 
 const PASTEL = ['#2A2320', '#26221A', '#22201C', '#231F22', '#1F2422', '#221F26']
 function bgOf(name: string) {
@@ -16,7 +16,6 @@ function bgOf(name: string) {
   return PASTEL[h % PASTEL.length]
 }
 
-// 로고·플레이스홀더·1x1 등 "실제 사진이 아닌" 썸네일 URL 판별
 function isBadThumb(url?: string | null): boolean {
   if (!url) return true
   const u = url.toLowerCase()
@@ -24,6 +23,41 @@ function isBadThumb(url?: string | null): boolean {
 }
 
 const stripBrackets = (s?: string | null) => (s || '').replace(/^\[[^\]]*\]\s*/, '').trim()
+
+const OUTLINE_DIRS: [number, number][] = Array.from({ length: 16 }, (_, i) => {
+  const a = (i / 16) * Math.PI * 2
+  return [Math.cos(a), Math.sin(a)]
+})
+
+// RN은 글자 외곽선(stroke)이 없어 같은 글자를 8방향으로 겹쳐 두꺼운 테두리를 만든다.
+function OutlinedText({
+  children,
+  style,
+  ow = 2,
+  color = 'rgba(0,0,0,0.92)',
+}: {
+  children: string
+  style: StyleProp<TextStyle>
+  ow?: number
+  color?: string
+}) {
+  // 16방향 원형 배치로 매끄럽고 두꺼운 외곽선
+  const dirs = OUTLINE_DIRS
+  return (
+    <View style={styles.otWrap}>
+      {dirs.map(([dx, dy], i) => (
+        <Text
+          key={i}
+          numberOfLines={1}
+          style={[style, styles.otAbs, { left: dx * ow, top: dy * ow, color }]}
+        >
+          {children}
+        </Text>
+      ))}
+      <Text numberOfLines={1} style={style}>{children}</Text>
+    </View>
+  )
+}
 
 export default function EventThumbnail({
   url,
@@ -41,8 +75,10 @@ export default function EventThumbnail({
   const [thumbErr, setThumbErr] = useState(false)
   const [coverErr, setCoverErr] = useState(false)
 
-  // 1) 실제 이벤트 사진이 있으면 그대로
-  if (url && !thumbErr && !isBadThumb(url)) {
+  const forceCover = !!companyName && ALWAYS_COVER.has(companyName)
+
+  // 1) 실제 이벤트 사진 (로고전용 업체는 건너뜀)
+  if (!forceCover && url && !thumbErr && !isBadThumb(url)) {
     return (
       <Image
         source={{ uri: url }}
@@ -54,7 +90,7 @@ export default function EventThumbnail({
     )
   }
 
-  // 2) 없으면 업체 고정 배경 + 오버레이
+  // 2) 업체 고정 배경 + 중앙 강조 텍스트
   const name = stripBrackets(companyName) || '소개팅'
   const cover = coverFor(companyName)
   const small = size === 'small'
@@ -71,71 +107,43 @@ export default function EventThumbnail({
           onError={() => setCoverErr(true)}
         />
       )}
-      {/* 어두운 오버레이 (하단 강조 — 네이티브 그라데이션 없이 2겹으로 근사) */}
-      <View style={styles.scrimTop} />
-      <View style={styles.scrimBottom} />
+      <View style={styles.scrim} />
 
-      {small ? (
-        <Text style={styles.smallName} numberOfLines={2}>{name}</Text>
-      ) : (
-        <View style={styles.textWrap}>
-          <Text style={[styles.name, detail && styles.nameDetail]} numberOfLines={1}>
-            {name}
-          </Text>
-          {!!region && (
-            <Text style={[styles.sub, detail && styles.subDetail]} numberOfLines={1}>
-              {region} · 소개팅
-            </Text>
-          )}
-        </View>
+      <OutlinedText
+        style={[styles.name, small && styles.nameSmall, detail && styles.nameDetail]}
+        ow={small ? 1.6 : 3}
+      >
+        {name}
+      </OutlinedText>
+      {!small && !!region && (
+        <OutlinedText style={[styles.sub, detail && styles.subDetail]} ow={1.6}>
+          {`${region} · 소개팅`}
+        </OutlinedText>
       )}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  wrap: { overflow: 'hidden', justifyContent: 'flex-end' },
-  scrimTop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.22)' },
-  scrimBottom: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '62%',
-    backgroundColor: 'rgba(0,0,0,0.42)',
-  },
-  textWrap: { paddingHorizontal: 16, paddingBottom: 14 },
+  wrap: { overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.28)' },
+  otWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  otAbs: { position: 'absolute' },
   name: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     color: '#fff',
     letterSpacing: -0.4,
-    textShadowColor: 'rgba(0,0,0,0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
+    textAlign: 'center',
   },
-  nameDetail: { fontSize: 27 },
+  nameSmall: { fontSize: 13 },
+  nameDetail: { fontSize: 30 },
   sub: {
     fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.92)',
-    marginTop: 3,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  subDetail: { fontSize: 15, marginTop: 5 },
-  smallName: {
-    position: 'absolute',
-    left: 7,
-    right: 7,
-    bottom: 7,
-    fontSize: 12,
     fontWeight: '800',
     color: '#fff',
-    letterSpacing: -0.3,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    marginTop: 6,
+    textAlign: 'center',
   },
+  subDetail: { fontSize: 15, marginTop: 8 },
 })
