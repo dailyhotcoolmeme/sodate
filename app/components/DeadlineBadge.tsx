@@ -12,7 +12,7 @@ export default function DeadlineBadge({ daysLeft }: Props) {
     badge: {
       position: 'absolute',
       top: 10,
-      right: 10,
+      left: 10,
       backgroundColor: colors.deadline,
       borderRadius: 6,
       paddingHorizontal: 8,

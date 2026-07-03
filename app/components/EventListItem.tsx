@@ -106,7 +106,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     thumbInitial: { fontSize: 26, color: '#fff', fontWeight: '800' },
     deadlineDot: {
       position: 'absolute',
-      bottom: 4,
+      top: 4,
       left: 4,
       backgroundColor: colors.deadline,
       borderRadius: 6,
