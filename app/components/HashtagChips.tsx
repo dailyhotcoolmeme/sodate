@@ -33,13 +33,10 @@ export default function HashtagChips({ hashtags, size = 'sm', max = 3 }: Props) 
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        scroll: { marginTop: 6, marginBottom: 2 },
-        row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+        scroll: { marginTop: 1, marginBottom: 2 },
+        row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
         chip: {
-          backgroundColor: colors.tagBackground,
-          borderRadius: 8,
-          paddingHorizontal: size === 'md' ? 10 : 8,
-          paddingVertical: size === 'md' ? 5 : 3,
+          paddingVertical: 2,
         },
         chipText: {
           color: colors.primary,
