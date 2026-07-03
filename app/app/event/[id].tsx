@@ -504,6 +504,14 @@ export default function EventDetailScreen() {
           </TouchableOpacity>
         )}
 
+        {/* 후기 작성 — 신청하기 바로 아래 (업체 식별 가능할 때만) */}
+        {companyId && (
+          <TouchableOpacity style={styles.writeBtn} onPress={openWrite} activeOpacity={0.85}>
+            <Ionicons name="create-outline" size={17} color={colors.primary} />
+            <Text style={styles.writeBtnText}>후기 작성</Text>
+          </TouchableOpacity>
+        )}
+
         {/* 업체 후기 섹션 */}
         <View style={styles.reviewsSection}>
           <View style={styles.reviewsHeader}>
@@ -536,14 +544,6 @@ export default function EventDetailScreen() {
                 />
               ))}
             </View>
-          )}
-
-          {/* 후기 작성 (업체 식별 가능할 때만) */}
-          {companyId && (
-            <TouchableOpacity style={styles.writeBtn} onPress={openWrite} activeOpacity={0.85}>
-              <Ionicons name="create-outline" size={17} color={colors.primary} />
-              <Text style={styles.writeBtnText}>후기 작성</Text>
-            </TouchableOpacity>
           )}
         </View>
 

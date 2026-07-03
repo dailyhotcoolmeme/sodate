@@ -124,7 +124,11 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
   const canSubmit = nickValid && ratingValid && contentValid && !submitting
 
   const handleSubmit = async () => {
-    if (!canSubmit) return
+    if (submitting) return
+    // 비활성 대신 무엇이 빠졌는지 안내
+    if (!nickValid) { setError('닉네임을 2~20자로 입력해주세요.'); return }
+    if (!ratingValid) { setError('별점을 선택해주세요.'); return }
+    if (!contentValid) { setError('후기를 5자 이상 입력해주세요.'); return }
     setSubmitting(true)
     setError(null)
     const result = isEdit
@@ -216,7 +220,8 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
     <Modal visible={visible} transparent animationType="none" onRequestClose={closeSheet} statusBarTranslucent>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
+        keyboardVerticalOffset={0}
       >
         <View style={styles.overlay}>
           {/* 딤 배경 탭 → 닫기(시트 뒤 형제) */}
@@ -311,7 +316,7 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
               <TouchableOpacity
                 style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
                 onPress={handleSubmit}
-                disabled={!canSubmit}
+                disabled={submitting}
                 activeOpacity={0.85}
               >
                 {submitting && <ActivityIndicator color="#fff" size="small" />}
