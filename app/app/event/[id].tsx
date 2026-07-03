@@ -22,7 +22,7 @@ import { useColors } from '@/hooks/useColors'
 import { track } from '@/lib/analytics'
 import DeadlineBadge from '@/components/DeadlineBadge'
 import HashtagChips from '@/components/HashtagChips'
-import ReviewCard from '@/components/ReviewCard'
+import ReviewSection from '@/components/ReviewSection'
 import ReviewSheet, { type ReviewSheetInitial } from '@/components/ReviewSheet'
 import { deleteReview, reportReview } from '@/lib/reviews'
 import { getMyReviewIds } from '@/lib/reviewIdentity'
@@ -275,7 +275,7 @@ export default function EventDetailScreen() {
   }), [colors])
 
   const companyId = event?.companies?.id ?? null
-  const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviews(companyId, 3)
+  const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviews(companyId, 30)
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
 
   // 후기 작성/수정 시트 + 내 후기 식별
@@ -527,23 +527,14 @@ export default function EventDetailScreen() {
 
           {reviewsLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
-          ) : reviews.length === 0 ? (
-            <View style={styles.emptyReviews}>
-              <Text style={styles.emptyReviewsText}>아직 등록된 후기가 없습니다</Text>
-            </View>
           ) : (
-            <View style={styles.reviewsList}>
-              {reviews.map((review) => (
-                <ReviewCard
-                  key={review.id}
-                  review={review}
-                  isMine={myReviewIds.includes(review.id)}
-                  onEdit={openEdit}
-                  onDelete={handleDelete}
-                  onReport={handleReport}
-                />
-              ))}
-            </View>
+            <ReviewSection
+              reviews={reviews}
+              myReviewIds={myReviewIds}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+              onReport={handleReport}
+            />
           )}
         </View>
 

@@ -18,6 +18,8 @@ interface Props {
   showCompany?: boolean
   /** 이 기기에서 작성한 내 후기인지 — true면 수정/삭제 버튼 노출 */
   isMine?: boolean
+  /** 소스 배지 숨김 (탭이 이미 소스를 나타낼 때) */
+  hideSourceBadge?: boolean
   onEdit?: (review: ReviewRow) => void
   onDelete?: (review: ReviewRow) => void
   onReport?: (review: ReviewRow) => void
@@ -37,7 +39,7 @@ const SOURCE_LABELS: Record<string, string> = {
   user: '직접 작성',
 }
 
-export default function ReviewCard({ review, showCompany = false, isMine = false, onEdit, onDelete, onReport }: Props) {
+export default function ReviewCard({ review, showCompany = false, isMine = false, hideSourceBadge = false, onEdit, onDelete, onReport }: Props) {
   const colors = useColors()
   const isUser = review.source === 'user'
   const styles = useMemo(() => StyleSheet.create({
@@ -121,7 +123,9 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
       )}
       <View style={styles.body}>
         <View style={styles.header}>
-          <Text style={styles.source}>{SOURCE_LABELS[review.source] ?? review.source}</Text>
+          {!hideSourceBadge && (
+            <Text style={styles.source}>{SOURCE_LABELS[review.source] ?? review.source}</Text>
+          )}
           {showCompany && review.companies && (
             <Text style={styles.company}>{review.companies.name}</Text>
           )}
