@@ -42,9 +42,9 @@ export default function HashtagChips({ hashtags, size = 'sm', max = 3 }: Props) 
           paddingVertical: size === 'md' ? 5 : 3,
         },
         chipText: {
-          color: colors.tagText,
+          color: colors.primary,
           fontSize: size === 'md' ? 12.5 : 11,
-          fontWeight: '600',
+          fontWeight: '700',
         },
       }),
     [colors, size]

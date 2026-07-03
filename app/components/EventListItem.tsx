@@ -115,7 +115,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     },
     deadlineText: { fontSize: 10, color: '#fff', fontWeight: '700' },
     info: { flex: 1, gap: 3 },
-    company: { fontSize: 11, color: colors.primary, fontWeight: '600' },
+    company: { fontSize: 11, color: colors.textTertiary, fontWeight: '600' },
     title: { fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
     meta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     price: { fontSize: 12, color: colors.textSecondary },
