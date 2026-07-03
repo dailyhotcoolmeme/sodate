@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import Register from './pages/Register'
 import Events from './pages/Events'
 import Companies from './pages/Companies'
+import Reviews from './pages/Reviews'
 import CrawlLogs from './pages/CrawlLogs'
 import Analytics from './pages/Analytics'
 
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/register" element={guard(authed, <Register />)} />
         <Route path="/events" element={guard(authed, <Events />)} />
         <Route path="/companies" element={guard(authed, <Companies />)} />
+        <Route path="/reviews" element={guard(authed, <Reviews />)} />
         <Route path="/crawl-logs" element={guard(authed, <CrawlLogs />)} />
         <Route path="/analytics" element={guard(authed, <Analytics />)} />
         <Route path="*" element={<Navigate to="/" replace />} />

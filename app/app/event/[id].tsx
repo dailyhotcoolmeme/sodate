@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from 'react'
+import React, { useMemo, useEffect, useState, useCallback } from 'react'
 import EventThumbnail from '@/components/EventThumbnail'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
@@ -9,6 +9,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -22,6 +23,10 @@ import { track } from '@/lib/analytics'
 import DeadlineBadge from '@/components/DeadlineBadge'
 import HashtagChips from '@/components/HashtagChips'
 import ReviewCard from '@/components/ReviewCard'
+import ReviewSheet, { type ReviewSheetInitial } from '@/components/ReviewSheet'
+import { deleteReview, reportReview } from '@/lib/reviews'
+import { getMyReviewIds } from '@/lib/reviewIdentity'
+import type { ReviewRow } from '@/lib/supabase'
 import AdBanner from '@/components/AdBanner'
 import { daysUntil } from '@/lib/dday'
 import { genderInfoLine } from '@/lib/eventInfo'
@@ -238,6 +243,22 @@ export default function EventDetailScreen() {
       color: colors.primary,
       fontWeight: '600',
     },
+    writeBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 12,
+      marginTop: 12,
+    },
+    writeBtnText: {
+      color: colors.primary,
+      fontWeight: '700',
+      fontSize: 14,
+    },
     emptyReviews: {
       backgroundColor: colors.surface,
       borderRadius: 12,
@@ -254,8 +275,68 @@ export default function EventDetailScreen() {
   }), [colors])
 
   const companyId = event?.companies?.id ?? null
-  const { reviews, loading: reviewsLoading } = useReviews(companyId, 3)
+  const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviews(companyId, 3)
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
+
+  // 후기 작성/수정 시트 + 내 후기 식별
+  const [sheetVisible, setSheetVisible] = useState(false)
+  const [editTarget, setEditTarget] = useState<ReviewSheetInitial | null>(null)
+  const [myReviewIds, setMyReviewIds] = useState<string[]>([])
+
+  const loadMyReviewIds = useCallback(() => {
+    getMyReviewIds().then(setMyReviewIds)
+  }, [])
+
+  useEffect(() => {
+    loadMyReviewIds()
+  }, [loadMyReviewIds])
+
+  const openWrite = () => {
+    setEditTarget(null)
+    setSheetVisible(true)
+  }
+
+  const openEdit = (review: ReviewRow) => {
+    setEditTarget({ id: review.id, author_name: review.author_name, rating: review.rating, content: review.content })
+    setSheetVisible(true)
+  }
+
+  const handleSheetDone = () => {
+    loadMyReviewIds()
+    refetchReviews()
+  }
+
+  const handleDelete = async (review: ReviewRow) => {
+    const result = await deleteReview(review.id)
+    if ('error' in result) {
+      Alert.alert('삭제 실패', result.error)
+      return
+    }
+    loadMyReviewIds()
+    refetchReviews()
+  }
+
+  const handleReport = (review: ReviewRow) => {
+    Alert.alert(
+      '후기 신고',
+      '이 후기를 신고할까요? 부적절한 내용은 검토 후 조치됩니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '신고',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await reportReview(review.id)
+            if ('error' in result) {
+              Alert.alert('신고 실패', result.error)
+              return
+            }
+            Alert.alert('신고되었습니다', result.already ? '이미 신고한 후기입니다.' : '검토 후 조치하겠습니다.')
+          },
+        },
+      ]
+    )
+  }
 
   useEffect(() => {
     if (event) {
@@ -445,15 +526,39 @@ export default function EventDetailScreen() {
           ) : (
             <View style={styles.reviewsList}>
               {reviews.map((review) => (
-                <ReviewCard key={review.id} review={review} />
+                <ReviewCard
+                  key={review.id}
+                  review={review}
+                  isMine={myReviewIds.includes(review.id)}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  onReport={handleReport}
+                />
               ))}
             </View>
+          )}
+
+          {/* 후기 작성 (업체 식별 가능할 때만) */}
+          {companyId && (
+            <TouchableOpacity style={styles.writeBtn} onPress={openWrite} activeOpacity={0.85}>
+              <Ionicons name="create-outline" size={17} color={colors.primary} />
+              <Text style={styles.writeBtnText}>후기 작성</Text>
+            </TouchableOpacity>
           )}
         </View>
 
         <View style={{ height: 40 }} />
       </View>
     </ScrollView>
+    {companyId && (
+      <ReviewSheet
+        visible={sheetVisible}
+        onClose={() => setSheetVisible(false)}
+        companyId={companyId}
+        initial={editTarget}
+        onDone={handleSheetDone}
+      />
+    )}
     </View>
   )
 }

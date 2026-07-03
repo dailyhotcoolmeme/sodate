@@ -257,47 +257,53 @@ export interface Database {
         Row: {
           id: string
           company_id: string
-          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual'
+          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user'
           author_name: string | null
           author_url: string | null
           content: string
           rating: number | null
           thumbnail_url: string | null
-          source_url: string
+          source_url: string | null
           published_at: string | null
           is_active: boolean
           crawled_at: string
           created_at: string
+          owner_token: string | null
+          report_count: number | null
         }
         Insert: {
           id?: string
           company_id: string
-          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual'
+          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user'
           author_name?: string | null
           author_url?: string | null
           content: string
           rating?: number | null
           thumbnail_url?: string | null
-          source_url: string
+          source_url?: string | null
           published_at?: string | null
           is_active?: boolean
           crawled_at?: string
           created_at?: string
+          owner_token?: string | null
+          report_count?: number | null
         }
         Update: {
           id?: string
           company_id?: string
-          source?: 'naver_blog' | 'instagram' | 'kakao' | 'manual'
+          source?: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user'
           author_name?: string | null
           author_url?: string | null
           content?: string
           rating?: number | null
           thumbnail_url?: string | null
-          source_url?: string
+          source_url?: string | null
           published_at?: string | null
           is_active?: boolean
           crawled_at?: string
           created_at?: string
+          owner_token?: string | null
+          report_count?: number | null
         }
       }
       crawl_logs: {

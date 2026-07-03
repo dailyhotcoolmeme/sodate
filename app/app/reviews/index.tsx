@@ -68,7 +68,7 @@ function ReviewThumb({ review }: { review: ReviewWithCompany }) {
   return (
     <TouchableOpacity
       style={styles.thumb}
-      onPress={() => { track('review_click', { companyId: review.company_id, properties: { source: review.source } }); openOutlink(review.source_url) }}
+      onPress={() => { track('review_click', { companyId: review.company_id, properties: { source: review.source } }); if (review.source_url) openOutlink(review.source_url) }}
       activeOpacity={0.82}
     >
       {review.thumbnail_url ? (

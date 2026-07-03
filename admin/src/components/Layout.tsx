@@ -1,12 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { logout } from '../lib/auth'
-import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut, PlusCircle } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut, PlusCircle, MessageSquareWarning } from 'lucide-react'
 
 const NAV = [
   { to: '/', label: '대시보드', icon: LayoutDashboard },
   { to: '/register', label: '직접 등록', icon: PlusCircle },
   { to: '/events', label: '이벤트', icon: CalendarDays },
   { to: '/companies', label: '업체', icon: Building2 },
+  { to: '/reviews', label: '후기 관리', icon: MessageSquareWarning },
   { to: '/crawl-logs', label: '크롤링', icon: FileText },
   { to: '/analytics', label: '분석', icon: BarChart3 },
 ]

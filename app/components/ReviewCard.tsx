@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { openOutlink } from '@/lib/outlink'
@@ -8,7 +8,7 @@ import type { ReviewRow } from '@/lib/supabase'
 
 function cleanText(text: string): string {
   return text
-    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F000}-\u{1FFFF}]|\u200d/gu, '')
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F000}-\u{1FFFF}]|‍/gu, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -16,6 +16,11 @@ function cleanText(text: string): string {
 interface Props {
   review: ReviewRow & { companies?: { name: string; slug: string } | null }
   showCompany?: boolean
+  /** 이 기기에서 작성한 내 후기인지 — true면 수정/삭제 버튼 노출 */
+  isMine?: boolean
+  onEdit?: (review: ReviewRow) => void
+  onDelete?: (review: ReviewRow) => void
+  onReport?: (review: ReviewRow) => void
 }
 
 function formatDate(dateStr: string | null): string {
@@ -29,10 +34,12 @@ const SOURCE_LABELS: Record<string, string> = {
   instagram: '인스타그램',
   kakao: '카카오',
   manual: '직접 등록',
+  user: '직접 작성',
 }
 
-export default function ReviewCard({ review, showCompany = false }: Props) {
+export default function ReviewCard({ review, showCompany = false, isMine = false, onEdit, onDelete, onReport }: Props) {
   const colors = useColors()
+  const isUser = review.source === 'user'
   const styles = useMemo(() => StyleSheet.create({
     card: {
       backgroundColor: colors.surface,
@@ -62,7 +69,6 @@ export default function ReviewCard({ review, showCompany = false }: Props) {
       fontWeight: '500',
     },
     ratingRow: { flexDirection: 'row', marginLeft: 'auto' },
-    star: { fontSize: 13, color: '#FFB800' },
     content: {
       fontSize: 14,
       color: colors.textPrimary,
@@ -71,14 +77,41 @@ export default function ReviewCard({ review, showCompany = false }: Props) {
     footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
     author: { fontSize: 12, color: colors.textTertiary },
     date: { fontSize: 12, color: colors.textTertiary },
+    actionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      marginTop: 10,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.divider,
+    },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    actionText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+    deleteText: { color: colors.error },
+    reportText: { color: colors.textTertiary },
   }), [colors])
 
+  const handleDelete = () => {
+    Alert.alert(
+      '후기 삭제',
+      '이 후기를 삭제할까요? 삭제하면 되돌릴 수 없어요.',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: () => onDelete?.(review) },
+      ]
+    )
+  }
+
+  // 크롤 후기는 원문 링크로, 직접 작성 후기는 링크 없음
+  const pressable = !isUser && !!review.source_url
+  const CardWrap: any = pressable ? TouchableOpacity : View
+  const wrapProps = pressable
+    ? { onPress: () => review.source_url && openOutlink(review.source_url), activeOpacity: 0.8 }
+    : {}
+
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => openOutlink(review.source_url)}
-      activeOpacity={0.8}
-    >
+    <CardWrap style={styles.card} {...wrapProps}>
       {review.thumbnail_url && (
         <Image
           source={{ uri: review.thumbnail_url }}
@@ -100,14 +133,41 @@ export default function ReviewCard({ review, showCompany = false }: Props) {
             </View>
           )}
         </View>
-        <Text style={styles.content} numberOfLines={4}>{cleanText(review.content ?? '')}</Text>
+        <Text style={styles.content} numberOfLines={pressable ? 4 : undefined}>{cleanText(review.content ?? '')}</Text>
         <View style={styles.footer}>
           {review.author_name && (
             <Text style={styles.author}>{review.author_name}</Text>
           )}
           <Text style={styles.date}>{formatDate(review.published_at)}</Text>
         </View>
+
+        {/* 내 후기: 수정/삭제, 남의 후기: 신고 (텍스트 버튼 — 아이콘 단독 금지) */}
+        {isMine ? (
+          <View style={styles.actionsRow}>
+            {onEdit && (
+              <TouchableOpacity style={styles.actionBtn} onPress={() => onEdit(review)} hitSlop={6}>
+                <Ionicons name="create-outline" size={15} color={colors.textSecondary} />
+                <Text style={styles.actionText}>수정</Text>
+              </TouchableOpacity>
+            )}
+            {onDelete && (
+              <TouchableOpacity style={styles.actionBtn} onPress={handleDelete} hitSlop={6}>
+                <Ionicons name="trash-outline" size={15} color={colors.error} />
+                <Text style={[styles.actionText, styles.deleteText]}>삭제</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          onReport && (
+            <View style={styles.actionsRow}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => onReport(review)} hitSlop={6}>
+                <Ionicons name="flag-outline" size={15} color={colors.textTertiary} />
+                <Text style={[styles.actionText, styles.reportText]}>신고</Text>
+              </TouchableOpacity>
+            </View>
+          )
+        )}
       </View>
-    </TouchableOpacity>
+    </CardWrap>
   )
 }

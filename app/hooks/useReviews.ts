@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase, type ReviewRow } from '@/lib/supabase'
 
 export function useReviews(companyId: string | null, limit = 10) {
@@ -6,7 +6,7 @@ export function useReviews(companyId: string | null, limit = 10) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const fetchReviews = useCallback(() => {
     if (!companyId) {
       setLoading(false)
       return
@@ -26,7 +26,11 @@ export function useReviews(companyId: string | null, limit = 10) {
       })
   }, [companyId, limit])
 
-  return { reviews, loading, error }
+  useEffect(() => {
+    fetchReviews()
+  }, [fetchReviews])
+
+  return { reviews, loading, error, refetch: fetchReviews }
 }
 
 export function useAllReviews(limit = 30) {
