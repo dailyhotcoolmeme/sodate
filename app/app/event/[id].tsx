@@ -297,7 +297,7 @@ export default function EventDetailScreen() {
           companyName={event.companies?.name}
           region={event.location_region}
           style={styles.image}
-          size="large"
+          size="detail"
         />
         {daysLeft <= 3 && daysLeft >= 0 && (
           <DeadlineBadge daysLeft={daysLeft} />
