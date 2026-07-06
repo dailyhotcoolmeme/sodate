@@ -43,19 +43,37 @@ class BaseScraper(ABC):
         new_count = 0
         updated_count = 0
 
+        # 관리자 검증완료(verified) 이벤트는 크롤러가 절대 건드리지 않는다 → 입력한 가격·연령 영구 보존.
+        verified_urls: set = set()
+        try:
+            vres = (
+                self.supabase.table('events')
+                .select('source_url')
+                .eq('company_id', company_id)
+                .eq('verified', True)
+                .execute()
+            )
+            for row in (vres.data or []):
+                if row.get('source_url'):
+                    verified_urls.add(row['source_url'])
+        except Exception as e:
+            self.logger.warning(f"verified 목록 조회 실패(계속 진행): {e}")
+
         for event in events:
+            # 검증완료 이벤트는 스킵(관리자 입력값 보존)
+            if event.source_url in verified_urls:
+                updated_count += 1
+                continue
+
             data = event.model_dump()
             data['company_id'] = company_id
             data['crawled_at'] = datetime.now(timezone.utc).isoformat()
 
-            # 크롤러는 정원/잔여석/가격 정확도를 신뢰하지 않는다 — 항상 비움(관리자 직접 입력 전용).
-            # 어떤 스크래퍼가 값을 채워 넣어도 여기서 일괄 None 처리되어 DB에 저장되지 않는다.
-            data['capacity_male'] = None
-            data['capacity_female'] = None
-            data['seats_left_male'] = None
-            data['seats_left_female'] = None
-            data['price_male'] = None
-            data['price_female'] = None
+            # 정원/잔여석/가격은 크롤러가 절대 쓰지 않는다(관리자 전용). upsert 데이터에서 제거 →
+            # 신규 행은 NULL, 기존 행은 관리자 입력값이 덮이지 않는다.
+            for _k in ('capacity_male', 'capacity_female', 'seats_left_male',
+                       'seats_left_female', 'price_male', 'price_female'):
+                data.pop(_k, None)
 
             # 테마는 구분하지 않는다 — 전부 소개팅. 스크래퍼가 뭘 넣든 일괄 고정.
             data['theme'] = ['소개팅']
