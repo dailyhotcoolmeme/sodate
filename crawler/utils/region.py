@@ -23,6 +23,14 @@ _CITY = (
 # "천안 쌍용동", "선릉역", "강남구", "홍대입구역" 같은 지명 문구 (도시 접두 선택)
 _PLACE_RE = re.compile(rf'((?:{_CITY})\s+)?([가-힣]{{2,5}}(?:역|동|구|읍|면|지구))')
 _CITY_RE = re.compile(rf'({_CITY})')
+# "작성하면/신청하면/완료하면" 처럼 동사+'면'을 지명(읍/면)으로 오인하는 것 배제
+_VERB_MYEON = re.compile(r'(하|으|라|다|되|지|가|오|이|았|었|겠|시|해|주|받|보|없|있)면$')
+# 접미사 없이 통용되는 맨 지명(역/동 안 붙여도 사람들이 지역으로 인식) — 접미 지명이 없을 때 폴백
+_KNOWN_AREAS = re.compile(
+    r'(사당|강남|역삼|삼성|선릉|홍대|신촌|합정|상수|성수|건대|왕십리|종로|을지로|명동|충무로|'
+    r'잠실|천호|노원|수유|이태원|한남|여의도|영등포|구로|신림|봉천|압구정|신사|논현|교대|서초|'
+    r'양재|혜화|대학로|동대문|가산|구디|신도림|사가정|미아|불광|연신내|서면|해운대|동성로|상무|둔산)'
+)
 # "서울역과 충정로역 사이"처럼 두 역이 묶인 경우 → 둘 다 표시
 _TWO_STATIONS = re.compile(r'([가-힣]{2,5}역)\s*(?:과|와|,|·|및|~|사이|부터)\s*([가-힣]{2,5}역)')
 _MULTI = re.compile(r'[가-힣A-Za-z0-9]+(?:\s*[/·.,&～~]\s*[가-힣A-Za-z0-9]+)+')
@@ -43,13 +51,21 @@ def _usable(phrase: Optional[str]) -> bool:
 
 
 def _extract_phrase(text: Optional[str]) -> Optional[str]:
-    """텍스트에서 지명 문구를 '통째로' 뽑는다 (도시+동/구/역, 없으면 도시명)."""
+    """텍스트에서 지명 문구를 '통째로' 뽑는다 (도시+동/구/역 → 맨지명 → 도시명)."""
     if not text:
         return None
-    m = _PLACE_RE.search(text)
-    if m:
+    # 1) 접미(역/동/구/읍/면/지구) 지명 — 단, '작성하면' 같은 동사+면은 건너뜀
+    for m in _PLACE_RE.finditer(text):
+        place = m.group(2)
+        if _VERB_MYEON.search(place):
+            continue
         city = (m.group(1) or '').strip()
-        return _clean(f'{city} {m.group(2)}') if city else _clean(m.group(2))
+        return _clean(f'{city} {place}') if city else _clean(place)
+    # 2) 접미 없이 통용되는 맨 지명 (사당/강남/성수 …)
+    am = _KNOWN_AREAS.search(text)
+    if am:
+        return am.group(1)
+    # 3) 도시명
     cm = _CITY_RE.search(text)
     return cm.group(1) if cm else None
 

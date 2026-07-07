@@ -305,7 +305,7 @@ class YeongyulScraper(BaseScraper):
             participant_stats['total_count'] = listing_meta['signup_count']
 
         # 본문 설명 추출 (해시태그 자동생성용 특색 키워드 확보)
-        description = build_description(full_text, 800)
+        description = build_description(full_text, 6000)
 
         clean_title = sanitize_text(f'[괜찮소] {title}', 80)
         # url은 이미 canonical(ab-고유번호). 고유번호가 유니크하므로 #evt 접미어 불필요 → dedup 키로 그대로 사용.

@@ -16,6 +16,7 @@ serve(async (req) => {
     regions?: string[]
     max_price?: number
     themes?: string[]
+    hashtags?: string[]
     company_ids?: string[]
     notify_new?: boolean
     notify_deadline?: boolean
@@ -26,7 +27,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 })
   }
 
-  const { token, regions, max_price, themes, company_ids, notify_new, notify_deadline } = body
+  const { token, regions, max_price, themes, hashtags, company_ids, notify_new, notify_deadline } = body
   if (!token) {
     return new Response(JSON.stringify({ error: 'token is required' }), { status: 400 })
   }
@@ -51,6 +52,7 @@ serve(async (req) => {
         regions: regions ?? null,
         max_price: max_price ?? null,
         themes: themes ?? null,
+        hashtags: hashtags ?? null,
         company_ids: company_ids ?? null,
         notify_new: notify_new ?? true,
         notify_deadline: notify_deadline ?? true,

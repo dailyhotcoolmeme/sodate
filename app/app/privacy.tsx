@@ -22,7 +22,7 @@ export default function PrivacyScreen() {
       <TopBar showBack />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
         <Text style={styles.title}>개인정보처리방침</Text>
-        <Text style={styles.date}>시행일: 2026년 3월 20일 | 최종 수정일: 2026년 3월 20일</Text>
+        <Text style={styles.date}>시행일: 2026년 3월 20일 | 최종 수정일: 2026년 7월 4일</Text>
 
         <Text style={styles.body}>
           소개팅모아(이하 "서비스")는 이용자의 개인정보를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다. 본 방침을 통해 수집하는 개인정보의 항목, 이용 목적, 보유 기간 등을 안내드립니다.
@@ -33,6 +33,7 @@ export default function PrivacyScreen() {
           • 기기 고유 식별자(푸시 알림 토큰){'\n'}
           • 앱 이용 기록(알림 설정 정보: 관심 지역, 관심 테마, 알림 수신 여부){'\n'}
           • 이용자가 후기를 작성하는 경우: 닉네임, 후기 내용, 별점, 후기 관리(수정·삭제)용 익명 식별 토큰{'\n'}
+          • 광고 식별자(모바일 광고 ID / Apple IDFA): 맞춤형 광고 제공을 위해 광고 서비스(Google AdMob)를 통해 수집·이용{'\n'}
           • 자동 수집 항목: 기기 모델, OS 버전, 앱 버전
         </Text>
         <Text style={styles.body}>
@@ -43,6 +44,7 @@ export default function PrivacyScreen() {
         <Text style={styles.bullet}>
           • 푸시 알림 발송: 관심 지역·테마에 맞는 새 소개팅 일정 및 마감 알림{'\n'}
           • 이용자 후기 게시 및 관리(수정·삭제·신고 처리, 부적절 게시물 차단){'\n'}
+          • 광고 게재: 서비스 운영을 위한 광고(맞춤형 광고 포함) 노출 및 성과 측정{'\n'}
           • 서비스 품질 개선: 앱 오류 분석 및 기능 개선
         </Text>
 
@@ -59,7 +61,8 @@ export default function PrivacyScreen() {
         <Text style={styles.sectionTitle}>5. 개인정보 처리 위탁</Text>
         <Text style={styles.bullet}>
           • Supabase Inc.: 데이터 저장 및 서버 운영 (미국 서버 이용){'\n'}
-          • Expo (Expo Inc.): 푸시 알림 발송 서비스
+          • Expo (Expo Inc.): 푸시 알림 발송 서비스{'\n'}
+          • Google LLC (Google AdMob): 광고 게재 및 광고 성과 측정
         </Text>
 
         <Text style={styles.sectionTitle}>6. 이용자의 권리</Text>
@@ -67,9 +70,13 @@ export default function PrivacyScreen() {
           이용자는 언제든지 자신의 개인정보에 대한 열람, 정정, 삭제, 처리 정지를 요청할 수 있습니다. 요청은 아래 문의처로 연락 주시면 지체 없이 처리하겠습니다.
         </Text>
 
-        <Text style={styles.sectionTitle}>7. 쿠키 및 추적 기술</Text>
+        <Text style={styles.sectionTitle}>7. 광고 및 추적 기술</Text>
         <Text style={styles.body}>
-          서비스는 별도의 쿠키를 사용하지 않습니다. 다만 앱 내 AsyncStorage를 통해 알림 설정, 테마 설정, 관심 목록 등을 기기 내에 저장합니다. 이는 이용자 기기 외부로 전송되지 않습니다.
+          서비스는 별도의 쿠키를 사용하지 않으며, 앱 내 설정·테마·관심 목록 등은 기기 내 저장소(AsyncStorage)에만 저장되어 외부로 전송되지 않습니다.{'\n\n'}
+          서비스는 Google AdMob을 통해 광고를 게재하며, 이 과정에서 기기의 광고 식별자(광고 ID / IDFA)가 맞춤형 광고 제공 및 성과 측정에 이용될 수 있습니다. 이용자는 다음 방법으로 맞춤형 광고를 거부(옵트아웃)할 수 있습니다.{'\n'}
+          • iOS: 설정 › 개인정보 보호 및 보안 › 추적 에서 앱의 추적 허용을 끄면 맞춤형 광고가 제공되지 않습니다.{'\n'}
+          • Android: 설정 › Google › 광고 에서 '광고 개인 최적화 삭제' 또는 광고 ID 재설정.{'\n\n'}
+          맞춤형 광고를 거부하더라도 광고 자체는 노출되며, 개인화되지 않은 광고로 대체됩니다.
         </Text>
 
         <Text style={styles.sectionTitle}>8. 개인정보 보호책임자</Text>

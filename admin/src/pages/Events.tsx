@@ -12,6 +12,7 @@ interface Event {
   participant_stats: Record<string, unknown> | null
   seats_left_male: number | null; seats_left_female: number | null
   is_active: boolean; is_closed: boolean; is_featured: boolean
+  verified: boolean
   hashtags: string[] | null
   companies: { name: string } | null
 }
@@ -27,6 +28,7 @@ export default function Events() {
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all')
   const [filterClosed, setFilterClosed] = useState<'all' | 'open' | 'closed'>('all')
   const [filterFeatured, setFilterFeatured] = useState<'all' | 'featured'>('all')
+  const [filterVerified, setFilterVerified] = useState<'all' | 'unverified' | 'verified'>('all')
   const [editTarget, setEditTarget] = useState<Event | null>(null)
   const [showForm, setShowForm] = useState(false)
 
@@ -38,7 +40,7 @@ export default function Events() {
 
     const { data, error } = await supabase
       .from('events')
-      .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, is_featured, hashtags, companies(name)')
+      .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, is_featured, verified, hashtags, companies(name)')
       .gte('event_date', now)
       .lte('event_date', oneMonthLater)
       .order('event_date', { ascending: true })
@@ -46,7 +48,7 @@ export default function Events() {
     if (error) {
       const { data: data2 } = await supabase
         .from('events')
-        .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, hashtags, companies(name)')
+        .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, verified, hashtags, companies(name)')
         .gte('event_date', now)
         .lte('event_date', oneMonthLater)
         .order('event_date', { ascending: true })
@@ -91,6 +93,8 @@ export default function Events() {
       if (filterClosed === 'open' && e.is_closed) return false
       if (filterClosed === 'closed' && !e.is_closed) return false
       if (filterFeatured === 'featured' && !e.is_featured) return false
+      if (filterVerified === 'unverified' && e.verified) return false
+      if (filterVerified === 'verified' && !e.verified) return false
       return true
     })
 
@@ -102,7 +106,14 @@ export default function Events() {
     })
 
     return list
-  }, [events, search, sortBy, filterRegion, filterActive, filterClosed, filterFeatured])
+  }, [events, search, sortBy, filterRegion, filterActive, filterClosed, filterFeatured, filterVerified])
+
+  const unverifiedCount = useMemo(() => events.filter((e) => !e.verified).length, [events])
+
+  // 미완료(미검증) / 완료(검증) 두 구획으로 나눠서 보여준다.
+  // 매일 나·친구가 위쪽 "미완료" 구획만 처리하면 됨.
+  const pendingList = useMemo(() => filtered.filter((e) => !e.verified), [filtered])
+  const doneList = useMemo(() => filtered.filter((e) => e.verified), [filtered])
 
   const SortBtn = ({ label, asc, desc }: { label: string; asc: SortKey; desc: SortKey }) => (
     <button
@@ -115,6 +126,79 @@ export default function Events() {
   )
 
   const selectCls = "px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white"
+
+  const renderRow = (event: Event) => (
+    <tr key={event.id} className={`border-t border-gray-100 hover:bg-gray-50 ${!event.verified ? 'bg-amber-50/40' : ''}`}>
+      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{event.companies?.name}</td>
+      <td className="px-4 py-3 max-w-xs">
+        <p className="truncate font-medium text-gray-900">{event.title}</p>
+        {event.hashtags && event.hashtags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {event.hashtags.map((tag) => (
+              <span key={tag} className="px-1.5 py-0.5 rounded bg-pink-50 text-pink-600 text-[11px] font-medium">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </td>
+      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+        {new Date(event.event_date).toLocaleDateString('ko-KR')}
+      </td>
+      <td className="px-4 py-3 text-gray-500 text-xs">{event.location_region}</td>
+      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+        {event.price_male ? `남 ${event.price_male.toLocaleString()}` : <span className="text-amber-500 font-semibold">입력필요</span>}
+      </td>
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
+        {event.age_group_label ? (
+          <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-medium">{event.age_group_label}</span>
+        ) : (event.age_range_min && event.age_range_max) ? (
+          <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-medium">{event.age_range_min}~{event.age_range_max}세</span>
+        ) : (
+          <span className="text-amber-500 font-semibold">입력필요</span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-center text-xs whitespace-nowrap">
+        {(event.seats_left_male != null || event.seats_left_female != null) ? (
+          <span className="text-gray-600">
+            {event.seats_left_male != null ? `남${event.seats_left_male}` : ''}
+            {event.seats_left_male != null && event.seats_left_female != null ? '/' : ''}
+            {event.seats_left_female != null ? `여${event.seats_left_female}` : ''}
+          </span>
+        ) : <span className="text-gray-300">-</span>}
+      </td>
+      <td className="px-4 py-3 text-center">
+        {event.participant_stats && (
+          Object.keys(event.participant_stats).length > 0
+            ? <span className="inline-block w-2 h-2 rounded-full bg-green-400" title="참가자 현황 있음" />
+            : <span className="inline-block w-2 h-2 rounded-full bg-gray-200" title="현황 없음" />
+        )}
+        {!event.participant_stats && <span className="text-gray-300 text-xs">-</span>}
+      </td>
+      <td className="px-4 py-3 text-center">
+        <button onClick={() => toggleActive(event.id, event.is_active)}>
+          {event.is_active
+            ? <Eye size={15} className="text-green-500 mx-auto" />
+            : <EyeOff size={15} className="text-gray-300 mx-auto" />}
+        </button>
+      </td>
+      <td className="px-4 py-3 text-center">
+        <button onClick={() => toggleFeatured(event.id, event.is_featured)}>
+          <Star size={15} className={`mx-auto ${event.is_featured ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
+        </button>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2 justify-center">
+          <button onClick={() => { setEditTarget(event); setShowForm(true) }}>
+            <Pencil size={14} className="text-gray-400 hover:text-blue-500" />
+          </button>
+          <button onClick={() => deleteEvent(event.id)}>
+            <Trash2 size={14} className="text-gray-400 hover:text-red-500" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
 
   return (
     <div className="p-4 md:p-8 space-y-4">
@@ -165,6 +249,20 @@ export default function Events() {
           <option value="featured">추천만</option>
         </select>
 
+        <select value={filterVerified} onChange={(e) => setFilterVerified(e.target.value as any)} className={selectCls}>
+          <option value="all">검증 전체</option>
+          <option value="unverified">미검증(새 이벤트)</option>
+          <option value="verified">검증완료</option>
+        </select>
+
+        <button
+          onClick={() => setFilterVerified(filterVerified === 'unverified' ? 'all' : 'unverified')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${filterVerified === 'unverified' ? 'bg-pink-500 text-white border-pink-500' : 'bg-white text-pink-600 border-pink-300'}`}
+          title="아직 가격·연령을 입력하지 않은 새 이벤트만 보기"
+        >
+          미검증만 {unverifiedCount > 0 && `(${unverifiedCount})`}
+        </button>
+
         {(filterRegion || filterActive !== 'all' || filterClosed !== 'all' || filterFeatured !== 'all') && (
           <button
             onClick={() => { setFilterRegion(''); setFilterActive('all'); setFilterClosed('all'); setFilterFeatured('all') }}
@@ -200,78 +298,26 @@ export default function Events() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((event) => (
-                <tr key={event.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{event.companies?.name}</td>
-                  <td className="px-4 py-3 max-w-xs">
-                    <p className="truncate font-medium text-gray-900">{event.title}</p>
-                    {event.hashtags && event.hashtags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {event.hashtags.map((tag) => (
-                          <span key={tag} className="px-1.5 py-0.5 rounded bg-pink-50 text-pink-600 text-[11px] font-medium">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                    {new Date(event.event_date).toLocaleDateString('ko-KR')}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{event.location_region}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                    {event.price_male ? `남 ${event.price_male.toLocaleString()}` : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-xs whitespace-nowrap">
-                    {event.age_group_label ? (
-                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-medium">{event.age_group_label}</span>
-                    ) : (event.age_range_min && event.age_range_max) ? (
-                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-medium">{event.age_range_min}~{event.age_range_max}세</span>
-                    ) : (
-                      <span className="text-gray-300">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center text-xs whitespace-nowrap">
-                    {(event.seats_left_male != null || event.seats_left_female != null) ? (
-                      <span className="text-gray-600">
-                        {event.seats_left_male != null ? `남${event.seats_left_male}` : ''}
-                        {event.seats_left_male != null && event.seats_left_female != null ? '/' : ''}
-                        {event.seats_left_female != null ? `여${event.seats_left_female}` : ''}
-                      </span>
-                    ) : <span className="text-gray-300">-</span>}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {event.participant_stats && (
-                      Object.keys(event.participant_stats).length > 0
-                        ? <span className="inline-block w-2 h-2 rounded-full bg-green-400" title="참가자 현황 있음" />
-                        : <span className="inline-block w-2 h-2 rounded-full bg-gray-200" title="현황 없음" />
-                    )}
-                    {!event.participant_stats && <span className="text-gray-300 text-xs">-</span>}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button onClick={() => toggleActive(event.id, event.is_active)}>
-                      {event.is_active
-                        ? <Eye size={15} className="text-green-500 mx-auto" />
-                        : <EyeOff size={15} className="text-gray-300 mx-auto" />}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button onClick={() => toggleFeatured(event.id, event.is_featured)}>
-                      <Star size={15} className={`mx-auto ${event.is_featured ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-center">
-                      <button onClick={() => { setEditTarget(event); setShowForm(true) }}>
-                        <Pencil size={14} className="text-gray-400 hover:text-blue-500" />
-                      </button>
-                      <button onClick={() => deleteEvent(event.id)}>
-                        <Trash2 size={14} className="text-gray-400 hover:text-red-500" />
-                      </button>
-                    </div>
+              {/* ── 미완료 구획: 가격·연령 아직 안 넣은 새 이벤트 (매일 여기만 처리) ── */}
+              {filterVerified !== 'verified' && pendingList.length > 0 && (
+                <tr className="bg-amber-100/70">
+                  <td colSpan={11} className="px-4 py-2 text-xs font-bold text-amber-800">
+                    🔴 미완료 · 가격/연령 입력 필요 ({pendingList.length})
                   </td>
                 </tr>
-              ))}
+              )}
+              {filterVerified !== 'verified' && pendingList.map(renderRow)}
+
+              {/* ── 완료 구획: 검증완료(크롤러가 안 건드림) ── */}
+              {filterVerified !== 'unverified' && doneList.length > 0 && (
+                <tr className="bg-emerald-50">
+                  <td colSpan={11} className="px-4 py-2 text-xs font-bold text-emerald-700">
+                    ✅ 완료 · 검증완료 ({doneList.length})
+                  </td>
+                </tr>
+              )}
+              {filterVerified !== 'unverified' && doneList.map(renderRow)}
+
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={11} className="px-4 py-8 text-center text-gray-400 text-sm">
@@ -327,6 +373,7 @@ function EventForm({ initial, onClose, onSaved }: {
       age_group_label: form.age_group_label || null,
       hashtags,
       event_date: new Date(form.event_date).toISOString(),
+      verified: true, // 관리자가 저장 = 검증완료 → 크롤러가 가격·연령을 덮어쓰지 않음
     }
     if (initial) {
       await supabase.from('events').update(payload).eq('id', initial.id)

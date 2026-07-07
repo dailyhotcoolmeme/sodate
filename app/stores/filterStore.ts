@@ -26,6 +26,7 @@ interface FilterState {
   recentFilters: FilterSnapshot[]
 
   toggleRegion: (id: string) => void
+  setRegionsBulk: (ids: string[], on: boolean) => void
   setDateRange: (range: FilterState['dateRange']) => void
   setMaxPrice: (price: number | null) => void
   toggleTheme: (theme: string) => void
@@ -62,6 +63,13 @@ export const useFilterStore = create<FilterState>()(
           regions: s.regions.includes(id)
             ? s.regions.filter((x) => x !== id)
             : [...s.regions, id],
+        })),
+      // 여러 지역을 한번에 추가/제거(홈 지역 '군' 칩용)
+      setRegionsBulk: (ids, on) =>
+        set((s) => ({
+          regions: on
+            ? Array.from(new Set([...s.regions, ...ids]))
+            : s.regions.filter((x) => !ids.includes(x)),
         })),
       setDateRange: (dateRange) => set({ dateRange }),
       setMaxPrice: (maxPrice) => set({ maxPrice }),

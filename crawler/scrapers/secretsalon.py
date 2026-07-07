@@ -215,7 +215,7 @@ class SecretSalonScraper(BaseScraper):
         region = resolve_region(title=title_line, location_detail='양재', body=full_text)
 
         # 본문 설명 추출 (og + .detail_detail_wrap 우선, 리뷰영역 회피)
-        description = extract_description_from_soup(soup, 800)
+        description = extract_description_from_soup(soup, 6000)
 
         # 가격 추출
         price_male, price_female = self._extract_prices(full_text + '\n' + listing_text)

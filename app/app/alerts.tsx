@@ -19,8 +19,9 @@ import Constants from 'expo-constants'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
-import { REGIONS } from '@/constants/regions'
-import { THEMES } from '@/constants/themes'
+import { useRegions, type RegionOption } from '@/hooks/useRegions'
+import { useHashtags } from '@/hooks/useHashtags'
+import { REGION_GROUP_ORDER, regionGroupKey, TAG_GROUP_ORDER, tagGroupKey } from '@/constants/chipGroups'
 import { supabase } from '@/lib/supabase'
 import { track } from '@/lib/analytics'
 
@@ -46,12 +47,36 @@ export default function AlertsScreen() {
       marginTop: 24,
       marginBottom: 4,
     },
+    sectionHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 24,
+      marginBottom: 4,
+    },
+    sectionTitleInline: { color: colors.textPrimary, fontSize: 16, fontWeight: '700' },
+    selectAllText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+    // 지역/태그 군: 서울 등 상위 라벨(한 줄), 그 아래 각 군은 [좌측 라벨 | 우측 칩] 행
+    groupTop: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginTop: 14, marginBottom: 2 },
+    groupRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, gap: 8 },
+    // 라벨 칸 폭 고정 → 칩 시작선이 모든 행에서 동일. 강남권 들여쓰기는 라벨 글자에만(paddingLeft).
+    groupRowLabel: {
+      width: 60,
+      paddingLeft: 10,
+      paddingTop: 7,
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.textSecondary,
+    },
+    // 서울과 동급인 최상위 라벨(경기·인천·충청… + 취미/직업/유형)은 서울 글자에 맞춤
+    groupRowLabelTop: { width: 60, paddingTop: 6, fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+    groupRowChips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     hint: { color: colors.textTertiary, fontSize: 12, marginBottom: 12 },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
@@ -80,8 +105,23 @@ export default function AlertsScreen() {
     saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   }), [colors])
 
+  const regionOptions = useRegions()
+  const hashtagOptions = useHashtags()
+
+  // 지역/태그 칩을 '군(群)'으로 묶어 표시(향후 크롤 값도 분류기가 자동 분류)
+  const groupedRegions = useMemo(() => {
+    const buckets: Record<string, RegionOption[]> = {}
+    for (const r of regionOptions) (buckets[regionGroupKey(r.label)] ??= []).push(r)
+    return REGION_GROUP_ORDER.filter((g) => buckets[g.key]?.length).map((g) => ({ ...g, items: buckets[g.key] }))
+  }, [regionOptions])
+
+  const groupedTags = useMemo(() => {
+    const buckets: Record<string, string[]> = {}
+    for (const t of hashtagOptions) (buckets[tagGroupKey(t)] ??= []).push(t)
+    return TAG_GROUP_ORDER.filter((k) => buckets[k]?.length).map((k) => ({ key: k, items: buckets[k] }))
+  }, [hashtagOptions])
   const [selectedRegions, setSelectedRegions] = useState<string[]>([])
-  const [selectedThemes, setSelectedThemes] = useState<string[]>([])
+  const [selectedHashtags, setSelectedHashtags] = useState<string[]>([])
   const [notifyNew, setNotifyNew] = useState(true)
   const [notifyDeadline, setNotifyDeadline] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -94,7 +134,7 @@ export default function AlertsScreen() {
         try {
           const saved = JSON.parse(raw)
           setSelectedRegions(saved.regions ?? [])
-          setSelectedThemes(saved.themes ?? [])
+          setSelectedHashtags(saved.hashtags ?? [])
           setNotifyNew(saved.notify_new ?? true)
           setNotifyDeadline(saved.notify_deadline ?? true)
         } catch {}
@@ -109,8 +149,8 @@ export default function AlertsScreen() {
     )
   }
 
-  const toggleTheme = (id: string) => {
-    setSelectedThemes((prev) =>
+  const toggleHashtag = (id: string) => {
+    setSelectedHashtags((prev) =>
       prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
     )
   }
@@ -153,7 +193,7 @@ export default function AlertsScreen() {
         body: {
           token: tokenResult.data,
           regions: selectedRegions.length > 0 ? selectedRegions : null,
-          themes: selectedThemes.length > 0 ? selectedThemes : null,
+          hashtags: selectedHashtags.length > 0 ? selectedHashtags : null,
           notify_new: notifyNew,
           notify_deadline: notifyDeadline,
         },
@@ -164,7 +204,7 @@ export default function AlertsScreen() {
       // AsyncStorage에 로컬 저장 (다음 진입 시 즉시 복원)
       await AsyncStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({
         regions: selectedRegions,
-        themes: selectedThemes,
+        hashtags: selectedHashtags,
         notify_new: notifyNew,
         notify_deadline: notifyDeadline,
       }))
@@ -172,7 +212,7 @@ export default function AlertsScreen() {
       track('alert_subscribe', {
         properties: {
           regions: selectedRegions,
-          themes: selectedThemes,
+          hashtags: selectedHashtags,
           notify_new: notifyNew,
           notify_deadline: notifyDeadline,
         },
@@ -197,47 +237,85 @@ export default function AlertsScreen() {
     <TopBar showBack />
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
       <Text style={styles.pageTitle}>알림 설정</Text>
-      <Text style={styles.sectionTitle}>관심 지역</Text>
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitleInline}>관심 지역</Text>
+        <TouchableOpacity
+          onPress={() =>
+            setSelectedRegions(
+              regionOptions.length > 0 && selectedRegions.length === regionOptions.length
+                ? []
+                : regionOptions.map((r) => r.id)
+            )
+          }
+          hitSlop={8}
+        >
+          <Text style={styles.selectAllText}>
+            {regionOptions.length > 0 && selectedRegions.length === regionOptions.length ? '선택해제' : '전체선택'}
+          </Text>
+        </TouchableOpacity>
+      </View>
       <Text style={styles.hint}>선택하지 않으면 전국 알림을 받습니다</Text>
-      <View style={styles.chipRow}>
-        {REGIONS.filter((r) => r.id !== 'all').map((region) => (
-          <TouchableOpacity
-            key={region.id}
-            style={[styles.chip, selectedRegions.includes(region.id) && styles.chipSelected]}
-            onPress={() => toggleRegion(region.id)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                selectedRegions.includes(region.id) && styles.chipTextSelected,
-              ]}
-            >
-              {region.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {groupedRegions.map((g, gi) => {
+        const showParent = !!g.parent && (gi === 0 || groupedRegions[gi - 1].parent !== g.parent)
+        return (
+          <View key={g.key}>
+            {showParent && <Text style={styles.groupTop}>{g.parent}</Text>}
+            <View style={styles.groupRow}>
+              <Text style={g.parent ? styles.groupRowLabel : styles.groupRowLabelTop}>{g.key}</Text>
+              <View style={styles.groupRowChips}>
+                {g.items.map((region) => (
+                  <TouchableOpacity
+                    key={region.id}
+                    style={[styles.chip, selectedRegions.includes(region.id) && styles.chipSelected]}
+                    onPress={() => toggleRegion(region.id)}
+                  >
+                    <Text style={[styles.chipText, selectedRegions.includes(region.id) && styles.chipTextSelected]}>
+                      {region.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        )
+      })}
 
-      <Text style={styles.sectionTitle}>관심 테마</Text>
-      <Text style={styles.hint}>선택하지 않으면 모든 테마 알림을 받습니다</Text>
-      <View style={styles.chipRow}>
-        {THEMES.map((theme) => (
-          <TouchableOpacity
-            key={theme.id}
-            style={[styles.chip, selectedThemes.includes(theme.id) && styles.chipSelected]}
-            onPress={() => toggleTheme(theme.id)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                selectedThemes.includes(theme.id) && styles.chipTextSelected,
-              ]}
-            >
-              {theme.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitleInline}>관심 태그</Text>
+        <TouchableOpacity
+          onPress={() =>
+            setSelectedHashtags(
+              hashtagOptions.length > 0 && selectedHashtags.length === hashtagOptions.length
+                ? []
+                : [...hashtagOptions]
+            )
+          }
+          hitSlop={8}
+        >
+          <Text style={styles.selectAllText}>
+            {hashtagOptions.length > 0 && selectedHashtags.length === hashtagOptions.length ? '선택해제' : '전체선택'}
+          </Text>
+        </TouchableOpacity>
       </View>
+      <Text style={styles.hint}>선택하지 않으면 모든 태그 알림을 받습니다</Text>
+      {groupedTags.map((g) => (
+        <View key={g.key} style={styles.groupRow}>
+          <Text style={styles.groupRowLabelTop}>{g.key}</Text>
+          <View style={styles.groupRowChips}>
+            {g.items.map((tag) => (
+              <TouchableOpacity
+                key={tag}
+                style={[styles.chip, selectedHashtags.includes(tag) && styles.chipSelected]}
+                onPress={() => toggleHashtag(tag)}
+              >
+                <Text style={[styles.chipText, selectedHashtags.includes(tag) && styles.chipTextSelected]}>
+                  {tag}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      ))}
 
       <Text style={styles.sectionTitle}>알림 종류</Text>
       <View style={styles.row}>

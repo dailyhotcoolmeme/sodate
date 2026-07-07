@@ -123,7 +123,20 @@ _BOILERPLATE_KEYWORDS = (
 )
 
 
-def build_description(text: Optional[str], max_length: int = 800) -> Optional[str]:
+# 날짜 회차 나열(예: "7.10(금) 오후 8시 로테이션 소개팅 C") — 대부분 지난 회차라 설명에서 제거.
+# 날짜+시각이 반드시 있어야 매칭되므로 "로테이션 소개팅 A 남:95~" 같은 조건 설명은 보존된다.
+_SCHEDULE_TUPLE_RE = re.compile(
+    r'\d{1,2}\s*\.\s*\d{1,2}\s*(?:\([일월화수목금토]\))?\s*(?:오전|오후)?\s*\d{1,2}\s*시'
+    r'(?:\s*\d{1,2}\s*분)?(?:\s*(?:로테이션\s*)?소개팅\s*[A-Da-d]?)?'
+)
+
+
+def strip_schedule(text: str) -> str:
+    """설명에서 날짜 회차 나열만 제거."""
+    return _WHITESPACE_RE.sub(' ', _SCHEDULE_TUPLE_RE.sub(' ', text)).strip()
+
+
+def build_description(text: Optional[str], max_length: int = 6000) -> Optional[str]:
     """페이지 본문 텍스트에서 이벤트 특색이 담긴 설명 라인만 추려 반환.
 
     - 네비/푸터/쇼핑몰 안내 등 보일러플레이트 라인 제외
@@ -139,6 +152,8 @@ def build_description(text: Optional[str], max_length: int = 800) -> Optional[st
     running = 0
     for raw in text.split('\n'):
         line = _WHITESPACE_RE.sub(' ', raw).strip()
+        # 날짜 회차 나열 제거(있으면) → 유용한 설명이 길이 제한에 밀려 잘리지 않게
+        line = strip_schedule(line)
         if len(line) < 6:  # 너무 짧은 라인(버튼/메뉴 항목) 제외
             continue
         low = line.lower()
@@ -167,7 +182,7 @@ def build_description(text: Optional[str], max_length: int = 800) -> Optional[st
     return result or None
 
 
-def extract_description_from_soup(soup, max_length: int = 800) -> Optional[str]:
+def extract_description_from_soup(soup, max_length: int = 6000) -> Optional[str]:
     """상세 페이지 soup에서 이벤트 설명을 견고하게 추출한다.
 
     og/meta 요약 + 본문 컨테이너(imweb .detail_detail_wrap / 네이버 에디터 /

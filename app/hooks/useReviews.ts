@@ -33,11 +33,11 @@ export function useReviews(companyId: string | null, limit = 10) {
   return { reviews, loading, error, refetch: fetchReviews }
 }
 
-export function useAllReviews(limit = 30) {
+export function useAllReviews(limit = 500) {
   const [reviews, setReviews] = useState<(ReviewRow & { companies: { name: string; slug: string } | null })[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     supabase
       .from('reviews')
       .select('*, companies(name, slug)')
@@ -50,5 +50,9 @@ export function useAllReviews(limit = 30) {
       })
   }, [limit])
 
-  return { reviews, loading }
+  useEffect(() => {
+    load()
+  }, [load])
+
+  return { reviews, loading, refetch: load }
 }

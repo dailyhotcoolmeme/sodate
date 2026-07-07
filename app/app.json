@@ -38,8 +38,8 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "androidAppId": "ca-app-pub-2792582436871752~3146482592",
+          "iosAppId": "ca-app-pub-2792582436871752~7698724284",
           "userTrackingUsageDescription": "회원님께 더 관련성 높은 광고를 제공하기 위해 사용됩니다."
         }
       ]

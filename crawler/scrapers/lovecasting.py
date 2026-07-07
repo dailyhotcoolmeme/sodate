@@ -270,7 +270,7 @@ class LovecastingScraper(BaseScraper):
             unique_url = f'{post_url}#evt={date_key}'
 
             # 본문 설명 추출 (페이지 soup에서 og + 본문; 카드 텍스트보다 풍부)
-            description = extract_description_from_soup(soup, 800) or build_description(card_text, 800)
+            description = extract_description_from_soup(soup, 6000) or build_description(card_text, 6000)
 
             try:
                 events.append(EventModel(
@@ -534,7 +534,7 @@ class LovecastingScraper(BaseScraper):
         lines = [l.strip() for l in content.split('\n') if l.strip()]
 
         # 본문 설명 추출 (해시태그 자동생성용 특색 키워드 확보)
-        description = build_description(content, 800)
+        description = build_description(content, 6000)
 
         year_match = re.search(r'(\d{4})년?', post_title + content)
         current_year = int(year_match.group(1)) if year_match else datetime.now().year

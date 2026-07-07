@@ -366,7 +366,7 @@ class InssumPartyScraper(BaseScraper):
         full_text = text + '\n' + listing_text
 
         # 본문 설명 추출 (해시태그 자동생성용 특색 키워드 확보)
-        description = build_description(full_text, 800)
+        description = build_description(full_text, 6000)
 
         # ── 가격 파싱 ──────────────────────────────────────────────
         price_male = None

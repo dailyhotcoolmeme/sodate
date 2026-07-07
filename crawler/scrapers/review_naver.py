@@ -34,6 +34,27 @@ HEADERS = {
 }
 
 
+def canonical_post_url(href: str) -> Optional[str]:
+    """실제 '블로그 글' 주소만 정규화해서 반환. 블로그 메인/작성자 링크는 None.
+    - blog.naver.com/<id>/<logNo>            → 그대로
+    - .../PostView.naver?blogId=x&logNo=123  → blog.naver.com/x/123 로 변환
+    - m.blog.naver.com 도 동일 처리
+    글 번호(logNo)가 없으면(=메인 주소) None → 후기에서 제외.
+    """
+    if not href:
+        return None
+    # PostView 형식: 쿼리스트링에서 blogId + logNo 추출
+    m = re.search(r'blogId=([^&]+).*?logNo=(\d+)', href)
+    if m:
+        return f'https://blog.naver.com/{m.group(1)}/{m.group(2)}'
+    # 경로 형식: blog.naver.com/<id>/<숫자>
+    base = href.split('?')[0].split('#')[0]
+    m = re.search(r'(?:m\.)?blog\.naver\.com/([^/?#]+)/(\d+)', base)
+    if m:
+        return f'https://blog.naver.com/{m.group(1)}/{m.group(2)}'
+    return None
+
+
 def fetch_naver_blog_results(keyword: str) -> list[dict]:
     """네이버 블로그 검색 결과에서 후기 파싱 (URL 기반 그룹핑)"""
     results = []
@@ -55,8 +76,12 @@ def fetch_naver_blog_results(keyword: str) -> list[dict]:
 
         all_links = soup.find_all('a', href=True)
         for a in all_links:
-            href = a.get('href', '')
-            if 'blog.naver.com' not in href:
+            raw = a.get('href', '')
+            if 'blog.naver.com' not in raw:
+                continue
+            # 글 주소(logNo 있음)만 채택. 블로그 메인/작성자 링크는 스킵.
+            href = canonical_post_url(raw)
+            if not href:
                 continue
             text = a.get_text(strip=True)
             # 긴 텍스트 = 제목, 중간 텍스트 = 설명

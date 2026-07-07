@@ -27,13 +27,16 @@ serve(async (_req) => {
     const payload = msg.message
     const tokens: string[] = payload.target_tokens || []
 
-    // Expo Push API 형식으로 변환
+    const title = payload.type === 'new_event'
+      ? `ㅅㄱㅌㅁㅇ - ${payload.location_region} 새 일정`
+      : `ㅅㄱㅌㅁㅇ - ${payload.location_region} 마감 임박`
+
+    // Expo Push API 형식으로 변환.
+    // ⚠️ 잠금화면 프라이버시: 본문(내용)은 넣지 않고 '제목만' 표시("…새 일정").
+    //    소개팅/파티 내용이 타인에게 노출되지 않도록. (앱 내 알림 내역엔 내용 유지)
     const notifications = tokens.map((token: string) => ({
       to: token,
-      title: payload.type === 'new_event'
-        ? `소개팅모아 - ${payload.location_region} 새 일정`
-        : `소개팅모아 - ${payload.location_region} 마감 임박`,
-      body: payload.event_title,
+      title,
       data: {
         event_id: payload.event_id,
         source_url: payload.source_url,
@@ -41,6 +44,21 @@ serve(async (_req) => {
       sound: 'default',
       badge: 1,
     }))
+
+    // 알림 내역(인앱) 로그 — 토큰별 1행
+    if (tokens.length > 0) {
+      const rows = tokens.map((token: string) => ({
+        token,
+        event_id: payload.event_id ?? null,
+        type: payload.type ?? 'new_event',
+        title,
+        body: payload.event_title ?? '',
+        location_region: payload.location_region ?? null,
+        company_name: payload.company_name ?? null,
+        source_url: payload.source_url ?? null,
+      }))
+      await supabase.from('notification_logs').insert(rows)
+    }
 
     // Expo Push API 호출 (100개씩 배치)
     const BATCH = 100

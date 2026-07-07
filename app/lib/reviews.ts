@@ -3,6 +3,7 @@ import {
   getOrCreateToken,
   addMyReviewId,
   removeMyReviewId,
+  setLastNickname,
 } from '@/lib/reviewIdentity'
 
 /**
@@ -32,14 +33,27 @@ interface UpdateParams {
 }
 
 /** 서버 함수 응답에서 사용자 친화적 에러 메시지 추출 */
-function extractError(error: any, data: any): string | null {
+async function extractError(error: any, data: any): Promise<string | null> {
   // supabase-js는 non-2xx 시 error(FunctionsHttpError)를 반환. 서버 body의 error 문구를 우선 노출.
   if (data && typeof data.error === 'string') return data.error
   if (error) {
-    // FunctionsHttpError.context.body 에 서버 JSON이 들어있을 수 있음
-    const ctxBody = error?.context?.body
-    if (ctxBody && typeof ctxBody === 'object' && typeof ctxBody.error === 'string') {
-      return ctxBody.error
+    // FunctionsHttpError.context 는 Response 객체 → body를 파싱해야 실제 서버 메시지가 나온다.
+    const ctx = error?.context
+    try {
+      if (ctx && typeof ctx.json === 'function') {
+        const body = await ctx.json()
+        if (body && typeof body.error === 'string') return body.error
+      } else if (ctx && typeof ctx.text === 'function') {
+        const t = await ctx.text()
+        try {
+          const j = JSON.parse(t)
+          if (j && typeof j.error === 'string') return j.error
+        } catch {
+          if (t) return t
+        }
+      }
+    } catch {
+      // 파싱 실패 시 아래 기본 메시지로 폴백
     }
     return error.message || '후기 처리 중 오류가 발생했습니다.'
   }
@@ -60,11 +74,12 @@ export async function submitReview(
       ownerToken,
     },
   })
-  const errMsg = extractError(error, data)
+  const errMsg = await extractError(error, data)
   if (errMsg) return { error: errMsg }
   const review = data?.review as SubmittedReview | undefined
   if (!review) return { error: '후기를 저장하지 못했습니다.' }
   await addMyReviewId(review.id)
+  await setLastNickname(params.nickname)
   return { review }
 }
 
@@ -82,10 +97,11 @@ export async function updateReview(
   if (params.nickname !== undefined) body.nickname = params.nickname
 
   const { data, error } = await supabase.functions.invoke('reviews', { body })
-  const errMsg = extractError(error, data)
+  const errMsg = await extractError(error, data)
   if (errMsg) return { error: errMsg }
   const review = data?.review as SubmittedReview | undefined
   if (!review) return { error: '후기를 수정하지 못했습니다.' }
+  if (params.nickname) await setLastNickname(params.nickname)
   return { review }
 }
 
@@ -96,7 +112,7 @@ export async function deleteReview(
   const { data, error } = await supabase.functions.invoke('reviews', {
     body: { action: 'delete', reviewId, ownerToken },
   })
-  const errMsg = extractError(error, data)
+  const errMsg = await extractError(error, data)
   if (errMsg) return { error: errMsg }
   await removeMyReviewId(reviewId)
   return { ok: true }
@@ -111,7 +127,7 @@ export async function reportReview(
   const { data, error } = await supabase.functions.invoke('reviews', {
     body: { action: 'report', reviewId, reporterToken, reason },
   })
-  const errMsg = extractError(error, data)
+  const errMsg = await extractError(error, data)
   if (errMsg) return { error: errMsg }
   return { ok: true, already: data?.already === true }
 }

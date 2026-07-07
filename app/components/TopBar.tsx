@@ -1,10 +1,12 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useFilter } from '@/hooks/useFilter'
 
 /**
  * 공용 상단 톱바 — 모든 화면 공통.
@@ -30,6 +32,12 @@ export default function TopBar({
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const [menuVisible, setMenuVisible] = useState(false)
+  const unread = useNotificationStore((s) => s.unread)
+  const refreshUnread = useNotificationStore((s) => s.refreshUnread)
+  useEffect(() => {
+    refreshUnread()
+  }, [refreshUnread])
+  const { activeFilterCount } = useFilter()
 
   const styles = useMemo(() => StyleSheet.create({
     wrap: { backgroundColor: colors.background },
@@ -65,13 +73,12 @@ export default function TopBar({
   }), [colors])
 
   const MENU: { label: string; icon: string; action: () => void }[] = [
+    { label: '후기 모음', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
+    { label: '관심 모임', icon: 'heart-outline', action: () => router.push('/favorites') },
+    { label: '알림 설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
     { label: '내 정보', icon: 'person-outline', action: () => (onProfilePress ? onProfilePress() : router.replace('/')) },
-    { label: '후기', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
-    { label: '관심', icon: 'heart-outline', action: () => router.push('/favorites') },
-    { label: '알림설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
     { label: '설정', icon: 'settings-outline', action: () => router.push('/settings') },
   ]
-  if (showBack) MENU.unshift({ label: '홈', icon: 'home-outline', action: () => router.replace('/') })
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]}>
@@ -90,16 +97,27 @@ export default function TopBar({
         </View>
 
         <View style={styles.right}>
-          {onFilterPress && (
-            <TouchableOpacity style={styles.iconBtn} onPress={onFilterPress}>
-              <Ionicons name="funnel-outline" size={20} color={colors.textPrimary} />
-              {filterCount > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{filterCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
+          {/* 필터 — 모든 톱바 페이지에 표시. 홈이 아니면 홈으로 이동해 필터 열기 */}
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={onFilterPress ?? (() => router.push({ pathname: '/', params: { openFilter: '1' } }))}
+          >
+            <Ionicons name="funnel-outline" size={20} color={colors.textPrimary} />
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {/* 알림 내역(종) — 필터-종-햄버거 */}
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/notifications')}>
+            <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+            {unread > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{unread > 99 ? '99+' : unread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={() => setMenuVisible(true)}>
             <Ionicons name="menu" size={26} color={colors.textPrimary} />
           </TouchableOpacity>

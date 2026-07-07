@@ -53,16 +53,8 @@ serve(async (req) => {
       if (text.length < 5 || text.length > 1000) return json({ error: '후기는 5~1000자로 입력해주세요.' }, 400)
       if (containsBadWord(nick) || containsBadWord(text)) return json({ error: '부적절한 표현이 포함되어 있습니다.' }, 400)
 
+      // 소유권 확인/수정·삭제용 해시(작성 제한 없음 — 한 기기가 같은 업체에 여러 후기 가능)
       const hash = await sha256(ownerToken)
-      // 기기당 업체별 1회 제한
-      const { data: dup } = await supabase
-        .from('reviews')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('owner_token', hash)
-        .eq('source', 'user')
-        .maybeSingle()
-      if (dup) return json({ error: '이미 이 업체에 후기를 작성하셨어요.' }, 409)
 
       const { data, error } = await supabase
         .from('reviews')

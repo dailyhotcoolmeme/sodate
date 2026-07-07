@@ -4,6 +4,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from utils.supabase_client import get_supabase
+
+
+def get_disabled_slugs() -> set:
+    """companies.crawl_enabled=false 인 업체 slug 집합.
+    휴면·수동전용 업체를 삭제 대신 이 플래그로 스킵(등록은 유지 → slug 중복 방지)."""
+    try:
+        r = get_supabase().table('companies').select('slug').eq('crawl_enabled', False).execute()
+        return {c['slug'] for c in (r.data or [])}
+    except Exception:
+        return set()
+
 from scrapers.yeonin import YeoninScraper
 from scrapers.emotional_orange import EmotionalOrangeScraper
 from scrapers.frip import FripScraper
@@ -41,12 +53,17 @@ SCRAPERS = [
 def run_all() -> int:
     """모든 스크래퍼 순차 실행. 전체 실패(성공 0개)일 때만 exit code 1 반환"""
     results = []
+    disabled = get_disabled_slugs()
     for ScraperClass in SCRAPERS:
         try:
             scraper = ScraperClass()
         except Exception as e:
             logger.error(f"[{ScraperClass.__name__}] 초기화 실패 (Secrets 미설정 등): {e}")
             results.append({'company': ScraperClass.__name__, 'status': 'failed', 'error': str(e)})
+            continue
+        # 크롤링 금지(휴면·수동전용) 업체는 스킵
+        if scraper.company_slug in disabled:
+            logger.info(f"[{scraper.company_slug}] 크롤링 금지(crawl_enabled=false) — 스킵")
             continue
         result = scraper.run()
         results.append({

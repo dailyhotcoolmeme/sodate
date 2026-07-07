@@ -34,13 +34,23 @@ type Row = {
   hashtags: string[]
   is_closed: boolean
   source: 'crawl' | 'manual'
+  price_detail: PriceDetail | null // 가격 티어(에모셔널오렌지 자동). 읽기전용 표시.
   saved: boolean
   saving: boolean
 }
 
+type GenderPrice = {
+  regular?: number
+  regular_soldout?: boolean
+  earlybird?: number
+  earlybird_soldout?: boolean
+}
+type PriceDetail = { male?: GenderPrice; female?: GenderPrice }
+
 export default function Register() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [filterCompany, setFilterCompany] = useState('')
+  const [statusTab, setStatusTab] = useState<'todo' | 'done'>('todo') // 해야할 것 / 입력 완료
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<string | null>(null)
@@ -69,7 +79,7 @@ export default function Register() {
     const horizon = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
     const { data, error } = await supabase
       .from('events')
-      .select('id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, age_male, age_female, hashtags, is_closed, source, companies(name)')
+      .select('id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, price_detail, age_male, age_female, hashtags, is_closed, source, companies(name)')
       .eq('is_active', true)
       .gte('event_date', now.toISOString())
       .lte('event_date', horizon.toISOString())
@@ -91,6 +101,7 @@ export default function Register() {
         capacity_male: s(e.capacity_male), seats_left_male: s(e.seats_left_male), price_male: s(e.price_male),
         capacity_female: s(e.capacity_female), seats_left_female: s(e.seats_left_female), price_female: s(e.price_female),
         age_male: e.age_male ?? '', age_female: e.age_female ?? '',
+        price_detail: e.price_detail ?? null,
         hashtags: e.hashtags ?? [],
         is_closed: e.is_closed ?? false,
         source: e.source === 'crawl' ? 'crawl' : 'manual', // crawl=미입력(흰), 그외=오너입력(노랑)
@@ -191,6 +202,163 @@ export default function Register() {
     }
   }
 
+  // ── 완료/해야할것 판정: 가격과 연령이 (남 또는 여) 모두 입력됐으면 "완료" ──
+  // source 값(manual/verified)이 섞여 불안정하므로, 실제 입력 여부로 판정한다.
+  const isRowDone = (r: Row) =>
+    (r.price_male.trim() !== '' || r.price_female.trim() !== '') &&
+    (r.age_male.trim() !== '' || r.age_female.trim() !== '')
+  const todoRows = useMemo(() => visibleRows.filter((r) => !isRowDone(r)), [visibleRows])
+  const doneRows = useMemo(() => visibleRows.filter((r) => isRowDone(r)), [visibleRows])
+  const shownRows = statusTab === 'todo' ? todoRows : doneRows
+
+  // ── 모바일 카드 한 장 렌더 ──
+  const renderCard = (r: Row) => (
+    <div key={r.key} className={`rounded-xl border p-4 shadow-sm ${isRowDone(r) ? 'border-gray-200 bg-white' : 'border-amber-300 bg-amber-50/50'}`}>
+      {/* 헤더: 업체명 옆에 확인하기 / 오른쪽에 마감·삭제 */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="font-bold text-gray-900 truncate min-w-0">{r.company_name}</span>
+        {r.saving ? <Loader2 size={14} className="animate-spin text-gray-400 shrink-0" /> : r.saved ? <Check size={15} className="text-green-500 shrink-0" /> : null}
+        {r.source_url && (
+          <a href={r.source_url} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1 text-pink-600 text-sm font-medium shrink-0">
+            <ExternalLink size={14} /> 확인하기
+          </a>
+        )}
+        <div className="flex-1" />
+        <label className="flex items-center gap-1 text-xs text-gray-600 shrink-0">
+          <input type="checkbox" checked={r.is_closed}
+            onChange={(e) => { patch(r.key, 'is_closed', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
+          마감
+        </label>
+        <button onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 shrink-0">
+          <Trash2 size={13} /> 삭제
+        </button>
+      </div>
+
+      {/* 링크 없을 때(수동 추가)만 URL 입력 */}
+      {!r.source_url && (
+        <div className="mb-3">
+          <p className="text-xs text-gray-400 mb-1">확인 링크 URL</p>
+          <input value={r.source_url} onChange={(e) => patch(r.key, 'source_url', e.target.value)}
+            onBlur={() => flushSave(r.key)} placeholder="링크 URL"
+            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full" />
+        </div>
+      )}
+
+      {/* 일시 + 지역 */}
+      <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+        <div className="min-w-0">
+          <p className="text-xs text-gray-400 mb-1">일시</p>
+          <DateTimePicker fullWidth value={r.event_date} onChange={(v) => patch(r.key, 'event_date', v)} onCommit={() => flushSave(r.key)} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-gray-400 mb-1">지역</p>
+          <input value={r.location_region} onChange={(e) => patch(r.key, 'location_region', e.target.value)}
+            onBlur={() => flushSave(r.key)}
+            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full bg-white" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="rounded-lg bg-blue-50/60 p-2.5">
+          <p className="text-xs font-semibold text-blue-600 mb-2">남성</p>
+          <div className="grid grid-cols-2 gap-2">
+            <CardInput label="가격" type="number" value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} />
+            <CardInput label="연령" value={r.age_male} placeholder="예 2734" onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
+          </div>
+        </div>
+        <div className="rounded-lg bg-pink-50/60 p-2.5">
+          <p className="text-xs font-semibold text-pink-600 mb-2">여성</p>
+          <div className="grid grid-cols-2 gap-2">
+            <CardInput label="가격" type="number" value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} />
+            <CardInput label="연령" value={r.age_female} placeholder="예 2532" onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
+          </div>
+        </div>
+      </div>
+
+      {/* 가격 티어 자동표시 (에모셔널오렌지 price_detail) — 읽기 전용 */}
+      {r.price_detail && <PriceDetailReadout detail={r.price_detail} />}
+
+      {/* 해시태그 */}
+      <div className="mt-2.5">
+        <p className="text-xs text-gray-400 mb-1">해시태그</p>
+        <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
+      </div>
+    </div>
+  )
+
+  // ── 데스크탑 표 행 렌더(2행: 입력행 + 추천 해시태그행) ──
+  const renderTableRow = (r: Row) => (
+    <Fragment key={r.key}>
+    <tr className={isRowDone(r) ? '' : 'bg-amber-50/60'}>
+      <td className="px-3 py-2">
+        {r.source_url ? (
+          <a href={r.source_url} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1 text-pink-600 hover:underline">
+            <ExternalLink size={14} /> 확인하기
+          </a>
+        ) : (
+          <input value={r.source_url} onChange={(e) => patch(r.key, 'source_url', e.target.value)}
+            onBlur={() => flushSave(r.key)} placeholder="링크 URL"
+            className="border border-gray-200 rounded px-2 py-1 text-sm w-36" />
+        )}
+      </td>
+      <td className="px-2 py-2 text-center">
+        {r.saving ? (
+          <Loader2 size={14} className="animate-spin text-gray-400" />
+        ) : r.saved ? (
+          <Check size={15} className="text-green-500" />
+        ) : null}
+      </td>
+      <td className="px-3 py-2">
+        <span className="font-medium text-gray-800">{r.company_name}</span>
+      </td>
+      <td className="px-3 py-2">
+        <DateTimePicker
+          value={r.event_date}
+          onChange={(v) => patch(r.key, 'event_date', v)}
+          onCommit={() => flushSave(r.key)}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <input value={r.location_region} onChange={(e) => patch(r.key, 'location_region', e.target.value)}
+          onBlur={() => flushSave(r.key)}
+          className="border border-gray-200 rounded px-2 py-1 text-sm w-20" />
+      </td>
+      <NumCell value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} wide />
+      <AgeCell value={r.age_male} onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
+      <NumCell value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} wide />
+      <AgeCell value={r.age_female} onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
+      <td className="px-3 py-2 align-middle">
+        <div className="w-64">
+          <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showSuggestions={false} compact />
+        </div>
+      </td>
+      <td className="px-3 py-2 text-center">
+        <input type="checkbox" checked={r.is_closed}
+          onChange={(e) => { patch(r.key, 'is_closed', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
+      </td>
+      <td className="px-3 py-2 text-right">
+        <button onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
+          className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-red-500">
+          <Trash2 size={14} /> 삭제
+        </button>
+      </td>
+    </tr>
+    <tr className={`border-b border-gray-100 ${isRowDone(r) ? '' : 'bg-amber-50/60'}`}>
+      <td colSpan={12} className="px-3 pt-0 pb-3 whitespace-normal">
+        <div className="flex items-start gap-2">
+          <span className="text-xs text-gray-400 shrink-0 pt-0.5">추천</span>
+          <div className="min-w-0 flex-1">
+            <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showInput={false} />
+          </div>
+        </div>
+      </td>
+    </tr>
+    </Fragment>
+  )
+
   return (
     <div className="p-4 md:p-8 max-w-[1500px]">
       <div className="mb-6">
@@ -222,99 +390,40 @@ export default function Register() {
           ))}
       </div>
 
-      <div className="flex items-center gap-3 mb-4 text-sm">
-        <span className="text-gray-400">{visibleRows.length}건</span>
-        {msg && <span className="text-gray-600 bg-gray-50 rounded-lg px-3 py-1.5">{msg}</span>}
+      {/* 상태 탭 — 해야할 것 / 입력 완료 각각 분리해서 봄 */}
+      <div className="flex items-center gap-2 mb-4 border-b border-gray-200">
+        <button
+          onClick={() => setStatusTab('todo')}
+          className={`px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${statusTab === 'todo' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+        >
+          🔴 해야할 것 <span className="ml-0.5">{todoRows.length}</span>
+        </button>
+        <button
+          onClick={() => setStatusTab('done')}
+          className={`px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${statusTab === 'done' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+        >
+          ✅ 입력 완료 <span className="ml-0.5">{doneRows.length}</span>
+        </button>
+        {msg && <span className="ml-auto text-gray-600 bg-gray-50 rounded-lg px-3 py-1.5 text-sm">{msg}</span>}
       </div>
 
       {loading ? (
         <div className="bg-white border border-gray-200 rounded-xl">
           <p className="text-sm text-gray-400 p-6">예정 날짜 불러오는 중...</p>
         </div>
-      ) : visibleRows.length === 0 ? (
+      ) : shownRows.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl">
           <p className="text-sm text-gray-400 p-6">
-            표시할 예정 날짜가 없습니다. 크롤러 발견(<code>discover_candidates.py</code>) 후 새로고침하거나 [직접 추가]로 입력하세요.
+            {statusTab === 'todo'
+              ? '해야할 것이 없습니다. 모두 입력 완료했거나, 크롤러 발견 후 새로고침하세요.'
+              : '입력 완료된 이벤트가 아직 없습니다. 해야할 것 탭에서 가격·연령을 입력하세요.'}
           </p>
         </div>
       ) : (
         <>
-        {/* 모바일: 카드형 (한 이벤트 = 세로 카드) */}
+        {/* 모바일: 카드형 — 선택된 탭 목록만 표시 */}
         <div className="md:hidden space-y-3">
-          {visibleRows.map((r) => (
-            <div key={r.key} className={`rounded-xl border p-4 shadow-sm ${r.source === 'manual' ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
-              {/* 헤더: 업체명 옆에 확인하기 / 오른쪽에 마감·삭제 */}
-              <div className="flex items-center gap-2 mb-3">
-                <span className="font-bold text-gray-900 truncate min-w-0">{r.company_name}</span>
-                {r.saving ? <Loader2 size={14} className="animate-spin text-gray-400 shrink-0" /> : r.saved ? <Check size={15} className="text-green-500 shrink-0" /> : null}
-                {r.source_url && (
-                  <a href={r.source_url} target="_blank" rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-pink-600 text-sm font-medium shrink-0">
-                    <ExternalLink size={14} /> 확인하기
-                  </a>
-                )}
-                <div className="flex-1" />
-                <label className="flex items-center gap-1 text-xs text-gray-600 shrink-0">
-                  <input type="checkbox" checked={r.is_closed}
-                    onChange={(e) => { patch(r.key, 'is_closed', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
-                  마감
-                </label>
-                <button onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 shrink-0">
-                  <Trash2 size={13} /> 삭제
-                </button>
-              </div>
-
-              {/* 링크 없을 때(수동 추가)만 URL 입력 */}
-              {!r.source_url && (
-                <div className="mb-3">
-                  <p className="text-xs text-gray-400 mb-1">확인 링크 URL</p>
-                  <input value={r.source_url} onChange={(e) => patch(r.key, 'source_url', e.target.value)}
-                    onBlur={() => flushSave(r.key)} placeholder="링크 URL"
-                    className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full" />
-                </div>
-              )}
-
-              {/* 일시 + 지역 — 아래 남/여 박스와 가로폭·라인 동일 (grid-cols-2 gap-2.5) */}
-              <div className="grid grid-cols-2 gap-2.5 mb-2.5">
-                <div className="min-w-0">
-                  <p className="text-xs text-gray-400 mb-1">일시</p>
-                  <DateTimePicker fullWidth value={r.event_date} onChange={(v) => patch(r.key, 'event_date', v)} onCommit={() => flushSave(r.key)} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-gray-400 mb-1">지역</p>
-                  <input value={r.location_region} onChange={(e) => patch(r.key, 'location_region', e.target.value)}
-                    onBlur={() => flushSave(r.key)}
-                    className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full bg-white" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="rounded-lg bg-blue-50/60 p-2.5">
-                  <p className="text-xs font-semibold text-blue-600 mb-2">남성</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {/* 정원·잔여는 실시간 갱신 전까지 숨김 (앱 표시도 숨김 상태) */}
-                    <CardInput label="가격" type="number" value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} />
-                    <CardInput label="연령" value={r.age_male} placeholder="예 2734" onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
-                  </div>
-                </div>
-                <div className="rounded-lg bg-pink-50/60 p-2.5">
-                  <p className="text-xs font-semibold text-pink-600 mb-2">여성</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {/* 정원·잔여는 실시간 갱신 전까지 숨김 (앱 표시도 숨김 상태) */}
-                    <CardInput label="가격" type="number" value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} />
-                    <CardInput label="연령" value={r.age_female} placeholder="예 2532" onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
-                  </div>
-                </div>
-              </div>
-
-              {/* 해시태그 — 성별 블록과 같은 카드 안에 하위 섹션으로 배치 */}
-              <div className="mt-2.5">
-                <p className="text-xs text-gray-400 mb-1">해시태그</p>
-                <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
-              </div>
-            </div>
-          ))}
+          {shownRows.map(renderCard)}
         </div>
 
         {/* 데스크탑: 표 */}
@@ -337,76 +446,7 @@ export default function Register() {
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map((r) => (
-                <Fragment key={r.key}>
-                <tr className={r.source === 'manual' ? 'bg-amber-50/30' : ''}>
-                  <td className="px-3 py-2">
-                    {r.source_url ? (
-                      <a href={r.source_url} target="_blank" rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-pink-600 hover:underline">
-                        <ExternalLink size={14} /> 확인하기
-                      </a>
-                    ) : (
-                      <input value={r.source_url} onChange={(e) => patch(r.key, 'source_url', e.target.value)}
-                        onBlur={() => flushSave(r.key)} placeholder="링크 URL"
-                        className="border border-gray-200 rounded px-2 py-1 text-sm w-36" />
-                    )}
-                  </td>
-                  <td className="px-2 py-2 text-center">
-                    {r.saving ? (
-                      <Loader2 size={14} className="animate-spin text-gray-400" />
-                    ) : r.saved ? (
-                      <Check size={15} className="text-green-500" />
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-2">
-                    {/* 업체명은 항상 고정값 (전체 탭 포함) */}
-                    <span className="font-medium text-gray-800">{r.company_name}</span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <DateTimePicker
-                      value={r.event_date}
-                      onChange={(v) => patch(r.key, 'event_date', v)}
-                      onCommit={() => flushSave(r.key)}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input value={r.location_region} onChange={(e) => patch(r.key, 'location_region', e.target.value)}
-                      onBlur={() => flushSave(r.key)}
-                      className="border border-gray-200 rounded px-2 py-1 text-sm w-20" />
-                  </td>
-                  <NumCell value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} wide />
-                  <AgeCell value={r.age_male} onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
-                  <NumCell value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} wide />
-                  <AgeCell value={r.age_female} onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
-                  <td className="px-3 py-2 align-middle">
-                    <div className="w-64">
-                      <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showSuggestions={false} compact />
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <input type="checkbox" checked={r.is_closed}
-                      onChange={(e) => { patch(r.key, 'is_closed', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <button onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
-                      className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-red-500">
-                      <Trash2 size={14} /> 삭제
-                    </button>
-                  </td>
-                </tr>
-                <tr className={`border-b border-gray-100 ${r.source === 'manual' ? 'bg-amber-50/30' : ''}`}>
-                  <td colSpan={12} className="px-3 pt-0 pb-3 whitespace-normal">
-                    <div className="flex items-start gap-2">
-                      <span className="text-xs text-gray-400 shrink-0 pt-0.5">추천</span>
-                      <div className="min-w-0 flex-1">
-                        <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showInput={false} />
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-                </Fragment>
-              ))}
+              {shownRows.map(renderTableRow)}
             </tbody>
           </table>
         </div>
@@ -435,6 +475,36 @@ function NumCell({ value, onChange, onBlur, wide }: {
 }
 
 // 모바일 카드용 라벨 달린 입력칸
+// 가격 티어 읽기 표시(에모셔널오렌지 자동). 얼리버드 품절이면 취소선.
+function PriceDetailReadout({ detail }: { detail: PriceDetail }) {
+  const won = (n: number) => `${n.toLocaleString()}원`
+  const line = (label: string, g?: GenderPrice) => {
+    if (!g || (g.regular == null && g.earlybird == null)) return null
+    return (
+      <div className="flex items-center gap-1.5 text-[11px]">
+        <span className="text-gray-400 w-8">{label}</span>
+        {g.regular != null && (
+          <span className={g.regular_soldout ? 'line-through text-gray-400' : 'text-gray-700'}>
+            {won(g.regular)}{g.regular_soldout ? ' (품절)' : ''}
+          </span>
+        )}
+        {g.earlybird != null && (
+          <span className={g.earlybird_soldout ? 'line-through text-gray-400' : 'text-gray-500'}>
+            · 얼리버드 {won(g.earlybird)}{g.earlybird_soldout ? ' (품절)' : ''}
+          </span>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="mt-2 rounded-lg bg-gray-50 px-2.5 py-1.5">
+      <p className="text-[10px] text-gray-400 mb-1">자동 크롤 가격(수정 불필요)</p>
+      {line('남', detail.male)}
+      {line('여', detail.female)}
+    </div>
+  )
+}
+
 function CardInput({ label, value, onChange, onBlur, type = 'text', placeholder }: {
   label: string; value: string; onChange: (v: string) => void; onBlur: () => void
   type?: string; placeholder?: string
@@ -482,6 +552,7 @@ function makeRow(p: Partial<Row>): Row {
     hashtags: [],
     is_closed: false,
     source: 'manual',
+    price_detail: null,
     saved: false,
     saving: false,
     ...p,

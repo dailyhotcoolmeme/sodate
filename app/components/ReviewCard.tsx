@@ -66,9 +66,14 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
       borderRadius: 8,
     },
     company: {
-      fontSize: 11,
-      color: colors.textSecondary,
-      fontWeight: '500',
+      fontSize: 11.5,
+      fontWeight: '700',
+      color: colors.primary,
+      backgroundColor: colors.primary + '1F',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+      overflow: 'hidden',
     },
     ratingRow: { flexDirection: 'row', marginLeft: 'auto' },
     content: {

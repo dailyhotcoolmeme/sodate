@@ -21,6 +21,18 @@ export interface ParticipantStats {
   seats_left_female?: number
 }
 
+// 성별 가격 티어(정가/얼리버드/품절). 에모셔널오렌지 자동크롤 전용. null=단일가.
+export interface GenderPriceDetail {
+  regular?: number
+  regular_soldout?: boolean
+  earlybird?: number
+  earlybird_soldout?: boolean
+}
+export interface PriceDetail {
+  male?: GenderPriceDetail
+  female?: GenderPriceDetail
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -84,6 +96,7 @@ export interface Database {
           location_detail: string | null
           price_male: number | null
           price_female: number | null
+          price_detail: PriceDetail | null
           gender_ratio: string | null
           capacity_male: number | null
           capacity_female: number | null
@@ -116,6 +129,7 @@ export interface Database {
           location_detail?: string | null
           price_male?: number | null
           price_female?: number | null
+          price_detail?: PriceDetail | null
           gender_ratio?: string | null
           capacity_male?: number | null
           capacity_female?: number | null
@@ -148,6 +162,7 @@ export interface Database {
           location_detail?: string | null
           price_male?: number | null
           price_female?: number | null
+          price_detail?: PriceDetail | null
           gender_ratio?: string | null
           capacity_male?: number | null
           capacity_female?: number | null
@@ -257,7 +272,7 @@ export interface Database {
         Row: {
           id: string
           company_id: string
-          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user'
+          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user' | 'youtube'
           author_name: string | null
           author_url: string | null
           content: string
@@ -274,7 +289,7 @@ export interface Database {
         Insert: {
           id?: string
           company_id: string
-          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user'
+          source: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user' | 'youtube'
           author_name?: string | null
           author_url?: string | null
           content: string
@@ -291,7 +306,7 @@ export interface Database {
         Update: {
           id?: string
           company_id?: string
-          source?: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user'
+          source?: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user' | 'youtube'
           author_name?: string | null
           author_url?: string | null
           content?: string

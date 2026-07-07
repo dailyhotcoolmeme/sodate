@@ -20,10 +20,17 @@ import { TestIds } from 'react-native-google-mobile-ads'
  *  - 실제 ID를 아직 안 넣었으면(빈 문자열) 자동으로 테스트 광고로 폴백합니다.
  *    → ID만 채우면 프로덕션에서 즉시 실광고로 전환됩니다. 다른 코드 수정 불필요.
  */
+// 자리별로 광고 단위를 분리(리포트/최적화 목적). AdMob에서 '네이티브' 형식으로 각각 생성.
 const REAL = {
-  native: {
-    ios: '',     // 예: 'ca-app-pub-1234567890123456/1111111111'
-    android: '', // 예: 'ca-app-pub-1234567890123456/2222222222'
+  // 피드 목록 사이
+  feedNative: {
+    ios: 'ca-app-pub-2792582436871752/2969141781',
+    android: 'ca-app-pub-2792582436871752/7824094203',
+  },
+  // 이벤트 상세 신청 버튼 위
+  detailNative: {
+    ios: 'ca-app-pub-2792582436871752/8391070415',
+    android: 'ca-app-pub-2792582436871752/1087295469',
   },
 } as const
 
@@ -33,5 +40,7 @@ function resolve(real: { ios: string; android: string }, test: string): string {
   return id || test
 }
 
-/** 피드 목록 사이 + 이벤트 상세 신청 버튼 위에 쓰는 네이티브 광고 단위 ID */
-export const NATIVE_AD_UNIT_ID = resolve(REAL.native, TestIds.NATIVE)
+/** 피드 목록 사이 네이티브 광고 단위 ID */
+export const FEED_NATIVE_AD_UNIT_ID = resolve(REAL.feedNative, TestIds.NATIVE)
+/** 이벤트 상세 신청 버튼 위 네이티브 광고 단위 ID */
+export const DETAIL_NATIVE_AD_UNIT_ID = resolve(REAL.detailNative, TestIds.NATIVE)

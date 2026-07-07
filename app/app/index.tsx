@@ -11,11 +11,12 @@ import {
   Platform,
   Modal,
   TextInput,
+  Keyboard,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import EventCard from '@/components/EventCard'
 import EventListItem from '@/components/EventListItem'
 import AdListItem from '@/components/AdListItem'
@@ -27,6 +28,7 @@ import { useFilter } from '@/hooks/useFilter'
 import { useFavorites } from '@/hooks/useFavorites'
 import { useColors } from '@/hooks/useColors'
 import { useRegions } from '@/hooks/useRegions'
+import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
 import { THEMES } from '@/constants/themes'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { DAY_OPTIONS, TIME_SLOTS } from '@/constants/filters'
@@ -56,18 +58,49 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets()
   const { events, loading, refetch } = useEvents()
   const [filterVisible, setFilterVisible] = useState(false)
-  const { regions, themes, maxPrice, dateRange, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
+  const { regions, themes, maxPrice, dateRange, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, setRegionsBulk, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
   const regionOptions = useRegions()
+
+  // 홈 지역 빠른탭 = 군(강남권·강북권·강서권·경기·인천·충청·호남·경북·경남·기타) 순서
+  const regionGroupChips = useMemo(() => {
+    const buckets: Record<string, string[]> = {}
+    for (const r of regionOptions) (buckets[regionGroupKey(r.label)] ??= []).push(r.id)
+    return REGION_GROUP_ORDER.filter((g) => buckets[g.key]?.length).map((g) => ({ key: g.key, ids: buckets[g.key] }))
+  }, [regionOptions])
   const companyOptions = useCompanies()
   const { sortBy, setSortBy } = useFilterStore()
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
   const { myAge, myGender, setMyAge, setMyGender } = useProfileStore()
   const [profileModalVisible, setProfileModalVisible] = useState(false)
+  // 프로필 모달: 키보드 높이만큼 시트를 올려 입력칸 가림 방지
+  const [profileKb, setProfileKb] = useState(0)
+  useEffect(() => {
+    if (!profileModalVisible) {
+      setProfileKb(0)
+      return
+    }
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const s = Keyboard.addListener(showEvt, (e) => setProfileKb(e.endCoordinates.height))
+    const h = Keyboard.addListener(hideEvt, () => setProfileKb(0))
+    return () => {
+      s.remove()
+      h.remove()
+    }
+  }, [profileModalVisible])
   const [ageInput, setAgeInput] = useState(myAge ? String(myAge) : '')
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
   const [showFab, setShowFab] = useState(false)
   const flatListRef = useRef<FlatList>(null)
   const router = useRouter()
+  // 다른 페이지의 톱바 필터 버튼 → '/?openFilter=1' 로 진입 시 필터 시트 자동 오픈
+  const { openFilter } = useLocalSearchParams<{ openFilter?: string }>()
+  useEffect(() => {
+    if (openFilter) {
+      setFilterVisible(true)
+      router.setParams({ openFilter: undefined })
+    }
+  }, [openFilter, router])
   const colors = useColors()
 
   // 앱 오픈 트래킹
@@ -468,6 +501,12 @@ export default function HomeScreen() {
     toggleRegion(regionId)
   }, [toggleRegion, events.length])
 
+  // 지역 '군' 칩 토글: 군에 속한 지명 전체를 한번에 선택/해제
+  const handleRegionGroupToggle = useCallback((groupKey: string, ids: string[], active: boolean) => {
+    track('filter_apply', { properties: { region_group: groupKey, result_count: events.length } })
+    setRegionsBulk(ids, !active)
+  }, [setRegionsBulk, events.length])
+
   const handleThemeToggle = useCallback((t: string) => {
     track('filter_apply', { properties: { theme: t } })
     toggleTheme(t)
@@ -479,7 +518,15 @@ export default function HomeScreen() {
   }, [toggleAgeGroup])
 
   const activeChips: { label: string; onRemove: () => void }[] = []
-  regions.forEach((r) => activeChips.push({ label: r, onRemove: () => toggleRegion(r) }))
+  // 지역: 완전히 선택된 군은 군 이름 하나로 묶어 표시, 나머지는 개별
+  const _remainRegions = new Set(regions)
+  for (const g of regionGroupChips) {
+    if (g.ids.every((id) => _remainRegions.has(id))) {
+      activeChips.push({ label: g.key, onRemove: () => setRegionsBulk(g.ids, false) })
+      g.ids.forEach((id) => _remainRegions.delete(id))
+    }
+  }
+  _remainRegions.forEach((r) => activeChips.push({ label: r, onRemove: () => toggleRegion(r) }))
   hashtags.forEach((t) => activeChips.push({ label: t, onRemove: () => toggleHashtag(t) }))
   ageGroups.forEach((id) => {
     const label = AGE_GROUP_FILTERS.find((a) => a.id === id)?.label ?? id
@@ -534,17 +581,20 @@ export default function HomeScreen() {
         contentContainerStyle={styles.regionRow}
         style={{ flex: 1 }}
       >
-        {regionOptions.map((r) => (
-          <TouchableOpacity
-            key={r.id}
-            style={[styles.regionChip, regions.includes(r.id) && styles.regionChipActive]}
-            onPress={() => handleRegionChange(r.id)}
-          >
-            <Text style={[styles.regionChipText, regions.includes(r.id) && styles.regionChipTextActive]}>
-              {r.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {regionGroupChips.map((g) => {
+          const active = g.ids.every((id) => regions.includes(id))
+          return (
+            <TouchableOpacity
+              key={g.key}
+              style={[styles.regionChip, active && styles.regionChipActive]}
+              onPress={() => handleRegionGroupToggle(g.key, g.ids, active)}
+            >
+              <Text style={[styles.regionChipText, active && styles.regionChipTextActive]}>
+                {g.key}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
       </ScrollView>
       </View>
 
@@ -683,6 +733,7 @@ export default function HomeScreen() {
               borderTopRightRadius: 20,
               padding: 24,
               paddingBottom: insets.bottom + 24,
+              marginBottom: profileKb,
               gap: 20,
             }}
             onStartShouldSetResponder={() => true}

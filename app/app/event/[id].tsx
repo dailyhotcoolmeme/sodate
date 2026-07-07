@@ -30,6 +30,7 @@ import type { ReviewRow } from '@/lib/supabase'
 import AdBanner from '@/components/AdBanner'
 import { daysUntil } from '@/lib/dday'
 import { genderInfoLine } from '@/lib/eventInfo'
+import PriceTierValue from '@/components/PriceTierValue'
 
 function cleanText(text: string): string {
   return text
@@ -43,9 +44,15 @@ function cleanText(text: string): string {
 // 줄을 나눠 마크다운형 리스트로 보여준다.
 const _DESC_MARKERS = '✅|✔|☑|⛔|🔺|🔻|▶|►|●|◆|◼|■|👉|💠|✳|✴|⭐|❗|‼|🎁|🍷'
 const _DESC_LEAD = new RegExp(`^((?:${_DESC_MARKERS})+|-|·|\\d+[.)])\\s*`, 'u')
+// 날짜 나열(예: "7.10(금) 오후 8시 로테이션 소개팅 C")은 대부분 지난 회차라 지저분함 → 제거.
+// 날짜+시각이 반드시 있어야 매칭되므로 "로테이션 소개팅 A 남:95~" 같은 조건 설명은 보존됨.
+const _SCHED_TUPLE =
+  /\d{1,2}\s*\.\s*\d{1,2}\s*(?:\([일월화수목금토]\))?\s*(?:오전|오후)?\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?(?:\s*(?:로테이션\s*)?소개팅\s*[A-Da-d]?)?/gu
 
 function descLines(raw: string): string[] {
   let t = (raw || '').replace(/_E\d+$/i, '').replace(/️/g, '')
+  // 날짜 나열 제거
+  t = t.replace(_SCHED_TUPLE, ' ')
   // 불릿 기호 묶음 앞에서 줄바꿈
   t = t.replace(new RegExp(`\\s*((?:${_DESC_MARKERS})+)`, 'gu'), '\n$1')
   // " - " 서브 불릿
@@ -175,6 +182,18 @@ export default function EventDetailScreen() {
     descSub: { paddingLeft: 14 },
     descBullet: { fontSize: 14, lineHeight: 22, color: colors.textSecondary },
     descRowText: { flex: 1, fontSize: 14, lineHeight: 22, color: colors.textSecondary },
+    descMoreBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 3,
+      marginTop: 8,
+      paddingVertical: 9,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    descMoreText: { fontSize: 13, fontWeight: '700', color: colors.primary },
     ctaBtn: {
       backgroundColor: colors.primary,
       borderRadius: 14,
@@ -226,7 +245,7 @@ export default function EventDetailScreen() {
       fontWeight: '700',
       fontSize: 15,
     },
-    reviewsSection: { gap: 0 },
+    reviewsSection: { gap: 0, marginTop: 14 },
     reviewsHeader: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -243,18 +262,12 @@ export default function EventDetailScreen() {
       color: colors.primary,
       fontWeight: '600',
     },
-    writeBtn: {
+    writeInline: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-      borderWidth: 1.5,
-      borderColor: colors.primary,
-      borderRadius: 12,
-      paddingVertical: 12,
-      marginTop: 12,
+      gap: 3,
     },
-    writeBtnText: {
+    writeInlineText: {
       color: colors.primary,
       fontWeight: '700',
       fontSize: 14,
@@ -275,13 +288,15 @@ export default function EventDetailScreen() {
   }), [colors])
 
   const companyId = event?.companies?.id ?? null
-  const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviews(companyId, 30)
+  // 한 업체 후기 전체를 가져와야 탭별(블로그/인스타/유튜브) 개수·목록이 잘리지 않음(업체 최대 ~164건)
+  const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviews(companyId, 300)
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
 
   // 후기 작성/수정 시트 + 내 후기 식별
   const [sheetVisible, setSheetVisible] = useState(false)
   const [editTarget, setEditTarget] = useState<ReviewSheetInitial | null>(null)
   const [myReviewIds, setMyReviewIds] = useState<string[]>([])
+  const [descExpanded, setDescExpanded] = useState(false)
 
   const loadMyReviewIds = useCallback(() => {
     getMyReviewIds().then(setMyReviewIds)
@@ -438,20 +453,30 @@ export default function EventDetailScreen() {
             <InfoRow label="장소" value={event.location_detail} styles={styles} />
           )}
           {(() => {
+            // price_detail(에모셔널오렌지 티어)이 있으면 티어 표시, 없으면 기존 단일가 한 줄.
+            const detail = event.price_detail
             const m = genderInfoLine({ capacity: event.capacity_male, seats: event.seats_left_male, price: event.price_male, age: event.age_male })
             const f = genderInfoLine({ capacity: event.capacity_female, seats: event.seats_left_female, price: event.price_female, age: event.age_female })
             return (
               <>
-                {!!m && (
+                {(!!detail?.male || !!m) && (
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: '#3B82F6', fontWeight: '700' }]}>남성</Text>
-                    <Text style={styles.infoValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{m}</Text>
+                    {detail?.male ? (
+                      <View style={styles.infoValue}><PriceTierValue gender={detail.male} age={event.age_male} /></View>
+                    ) : (
+                      <Text style={styles.infoValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{m}</Text>
+                    )}
                   </View>
                 )}
-                {!!f && (
+                {(!!detail?.female || !!f) && (
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: colors.primary, fontWeight: '700' }]}>여성</Text>
-                    <Text style={styles.infoValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{f}</Text>
+                    {detail?.female ? (
+                      <View style={styles.infoValue}><PriceTierValue gender={detail.female} age={event.age_female} /></View>
+                    ) : (
+                      <Text style={styles.infoValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{f}</Text>
+                    )}
                   </View>
                 )}
               </>
@@ -460,29 +485,50 @@ export default function EventDetailScreen() {
         </View>
 
 
-        {/* 설명 */}
-        {event.description && (
-          <View style={styles.descSection}>
-            <Text style={styles.sectionLabel}>상세 설명</Text>
-            {descLines(event.description).map((line, i) => {
-              const m = line.match(_DESC_LEAD)
-              if (m) {
-                const marker = m[1] === '-' ? '·' : m[1]
-                const rest = line.slice(m[0].length)
-                const sub = m[1] === '-'
+        {/* 설명 — 날짜 나열만 있던 경우 descLines가 비므로 섹션 자체를 숨김. 길면 더보기로 접힘 */}
+        {(() => {
+          const descItems = event.description ? descLines(event.description) : []
+          if (descItems.length === 0) return null
+          const COLLAPSE = 6
+          const collapsible = descItems.length > COLLAPSE
+          const shown = descExpanded || !collapsible ? descItems : descItems.slice(0, COLLAPSE)
+          return (
+            <View style={styles.descSection}>
+              <Text style={styles.sectionLabel}>상세 설명</Text>
+              {shown.map((line, i) => {
+                const m = line.match(_DESC_LEAD)
+                if (m) {
+                  const marker = m[1] === '-' ? '·' : m[1]
+                  const rest = line.slice(m[0].length)
+                  const sub = m[1] === '-'
+                  return (
+                    <View key={i} style={[styles.descRow, sub && styles.descSub]}>
+                      <Text style={styles.descBullet}>{marker}</Text>
+                      <Text style={styles.descRowText}>{rest}</Text>
+                    </View>
+                  )
+                }
                 return (
-                  <View key={i} style={[styles.descRow, sub && styles.descSub]}>
-                    <Text style={styles.descBullet}>{marker}</Text>
-                    <Text style={styles.descRowText}>{rest}</Text>
-                  </View>
+                  <Text key={i} style={[styles.description, styles.descPara]}>{line}</Text>
                 )
-              }
-              return (
-                <Text key={i} style={[styles.description, styles.descPara]}>{line}</Text>
-              )
-            })}
-          </View>
-        )}
+              })}
+              {collapsible && (
+                <TouchableOpacity
+                  style={styles.descMoreBtn}
+                  onPress={() => setDescExpanded((v) => !v)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.descMoreText}>{descExpanded ? '접기' : '더보기'}</Text>
+                  <Ionicons
+                    name={descExpanded ? 'chevron-up' : 'chevron-down'}
+                    size={15}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          )
+        })()}
 
         {/* 신청 버튼 위 광고 (CTA와 구분되는 외곽선형 + '광고' 배지) */}
         <AdBanner />
@@ -504,23 +550,17 @@ export default function EventDetailScreen() {
           </TouchableOpacity>
         )}
 
-        {/* 후기 작성 — 신청하기 바로 아래 (업체 식별 가능할 때만) */}
-        {companyId && (
-          <TouchableOpacity style={styles.writeBtn} onPress={openWrite} activeOpacity={0.85}>
-            <Ionicons name="create-outline" size={17} color={colors.primary} />
-            <Text style={styles.writeBtnText}>후기 작성</Text>
-          </TouchableOpacity>
-        )}
-
         {/* 업체 후기 섹션 */}
         <View style={styles.reviewsSection}>
           <View style={styles.reviewsHeader}>
             <Text style={styles.sectionTitle}>
               {event.companies?.name ?? '업체'} 후기
             </Text>
-            {!reviewsLoading && reviews.length > 0 && (
-              <TouchableOpacity onPress={() => router.push('/reviews')}>
-                <Text style={styles.moreLink}>전체보기 ›</Text>
+            {/* 후기 작성 — 제목 라인 오른쪽 끝에 연필+글자만(박스 없음) */}
+            {companyId && (
+              <TouchableOpacity style={styles.writeInline} onPress={openWrite} hitSlop={8} activeOpacity={0.7}>
+                <Ionicons name="create-outline" size={16} color={colors.primary} />
+                <Text style={styles.writeInlineText}>후기 작성</Text>
               </TouchableOpacity>
             )}
           </View>

@@ -17,6 +17,8 @@ export default function RootLayout() {
   useEffect(() => { load() }, [])
 
   // AdMob SDK 초기화 (1회)
+  // ⚠️ ATT(expo-tracking-transparency)는 네이티브 모듈이라 runtimeVersion(fingerprint)을 바꿔
+  //    기존 OTA 빌드가 업데이트를 못 받게 됨 → 출시 리빌드 시점에 함께 추가할 것.
   useEffect(() => {
     mobileAds().initialize().catch(() => {})
   }, [])
@@ -68,6 +70,7 @@ export default function RootLayout() {
         <Stack.Screen name="reviews/index" options={{ headerShown: false }} />
         <Stack.Screen name="favorites/index" options={{ headerShown: false }} />
         <Stack.Screen name="alerts" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="privacy" options={{ headerShown: false }} />
         <Stack.Screen name="terms" options={{ headerShown: false }} />

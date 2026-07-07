@@ -9,12 +9,12 @@ import {
 } from 'react-native-google-mobile-ads'
 import { Image } from 'expo-image'
 import { useColors } from '@/hooks/useColors'
-import { NATIVE_AD_UNIT_ID } from '@/lib/ads'
+import { DETAIL_NATIVE_AD_UNIT_ID } from '@/lib/ads'
 
 const ICON = 44
 
 // 광고 단위 ID는 @/lib/ads 에서 중앙 관리 (미설정 시 자동 테스트 광고 폴백)
-const AD_UNIT_ID = NATIVE_AD_UNIT_ID
+const AD_UNIT_ID = DETAIL_NATIVE_AD_UNIT_ID
 
 /**
  * 상세페이지 신청 버튼 바로 위에 들어가는 컴팩트 가로형 네이티브 광고.

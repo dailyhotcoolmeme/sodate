@@ -12,13 +12,15 @@ import {
   PanResponder,
   Dimensions,
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
+  type KeyboardEvent,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import { submitReview, updateReview, type SubmittedReview } from '@/lib/reviews'
+import { getLastNickname } from '@/lib/reviewIdentity'
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
 const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.85
@@ -50,8 +52,36 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
   const insets = useSafeAreaInsets()
   const colors = useColors()
   const translateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current
+  // 키보드 높이를 직접 추적해 시트를 밀어올림 → 닫힐 때 정확히 0으로 복귀(바닥에 딱 붙음)
+  const kbHeight = useRef(new Animated.Value(0)).current
 
   const isEdit = !!initial
+
+  useEffect(() => {
+    if (!visible) return
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const onShow = (e: KeyboardEvent) => {
+      Animated.timing(kbHeight, {
+        toValue: e.endCoordinates.height,
+        duration: e.duration || 250,
+        useNativeDriver: false,
+      }).start()
+    }
+    const onHide = (e: KeyboardEvent) => {
+      Animated.timing(kbHeight, {
+        toValue: 0,
+        duration: e?.duration || 200,
+        useNativeDriver: false,
+      }).start()
+    }
+    const s = Keyboard.addListener(showEvt, onShow)
+    const h = Keyboard.addListener(hideEvt, onHide)
+    return () => {
+      s.remove()
+      h.remove()
+    }
+  }, [visible, kbHeight])
 
   const [nickname, setNickname] = useState('')
   const [rating, setRating] = useState(0)
@@ -67,6 +97,12 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
       setContent(initial?.content ?? '')
       setError(null)
       setSubmitting(false)
+      // 신규 작성이면 마지막에 쓴 닉네임 자동 세팅(수정은 가능)
+      if (!initial) {
+        getLastNickname().then((last) => {
+          if (last) setNickname((cur) => (cur ? cur : last))
+        })
+      }
     }
   }, [visible, initial])
 
@@ -218,15 +254,10 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={closeSheet} statusBarTranslucent>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior="padding"
-        keyboardVerticalOffset={0}
-      >
-        <View style={styles.overlay}>
-          {/* 딤 배경 탭 → 닫기(시트 뒤 형제) */}
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
-          <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+      <Animated.View style={[styles.overlay, { paddingBottom: kbHeight }]}>
+        {/* 딤 배경 탭 → 닫기(시트 뒤 형제) */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
             {/* 드래그 핸들 + 헤더 (여기서만 스와이프 다운 닫기) */}
             <View {...panResponder.panHandlers}>
               <View style={styles.handleArea}>
@@ -325,9 +356,8 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
                 </Text>
               </TouchableOpacity>
             </View>
-          </Animated.View>
-        </View>
-      </KeyboardAvoidingView>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   )
 }

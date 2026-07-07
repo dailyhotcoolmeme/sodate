@@ -54,6 +54,74 @@ KHOUR_RE = re.compile(r'(\d{1,2})\s*시')
 AM_WORDS = ('오전', '아침', '새벽')
 PM_WORDS = ('오후', '낮', '저녁', '밤')
 
+# ── 에모셔널오렌지 전용: 가격/연령 티어 자동 채움 ──────────────────────────
+# 1차 옵션(일시) 콜에서 (그룹hash, value hash, 라벨) 추출 — 라벨엔 "(나이C)" 등 포함
+EO_OPT_RE = re.compile(r"selectRequireOption\('prod',\s*\d+,\s*'([^']+)',\s*'([^']+)',\s*'([^']+)'")
+# 2차 옵션(성별) 항목: "문정남성 55,000원 (품절)" 형태 → (라벨, 가격, 품절)
+EO_ITEM_RE = re.compile(
+    r'<span class="blocked margin-bottom-lg">([^<]+)</span>\s*'
+    r'<span[^>]*><strong>\s*([\d,]+)\s*원\s*(\(품절\))?', re.S)
+EO_AGE_CODE_RE = re.compile(r'\(나이([A-G])\)')
+EO_TITLE_BRACKET_RE = re.compile(r'\[([^\]]+)\]')
+# 티키타카 소개팅 나이코드 → (남성 만나이 min, max). /date는 전부 티키타카.
+EO_AGE_CODE_MAP = {
+    'A': (23, 28), 'B': (26, 31), 'C': (29, 34), 'D': (32, 37),
+    'E': (35, 40), 'F': (38, 43), 'G': (41, 49),
+}
+
+
+def eo_load_option(host, idx, extra=''):
+    """load_option.cm 호출 → option_html(unescape) 반환."""
+    try:
+        r = httpx.post(
+            f'https://{host}/shop/load_option.cm',
+            headers={'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest',
+                     'Referer': f'https://{host}/shop_view/?idx={idx}',
+                     'Content-Type': 'application/x-www-form-urlencoded'},
+            content=f'type=prod&prod_idx={idx}{extra}&__=1',
+            timeout=20, verify=False, follow_redirects=True)
+        body = r.text
+        try:
+            body = json.loads(body).get('option_html', body)
+        except Exception:
+            pass
+        return unescape(body)
+    except Exception:
+        return ''
+
+
+def eo_parse_tiers(dep_html):
+    """2차 옵션 응답 → {'male': {regular:{price,soldout}, earlybird:{...}}, 'female': {...}}"""
+    tiers = {}
+    for name, price, sold in EO_ITEM_RE.findall(dep_html):
+        name = name.strip()
+        g = 'male' if '남' in name else ('female' if '여' in name else None)
+        if not g:
+            continue
+        kind = 'earlybird' if '얼리버드' in name else 'regular'
+        tiers.setdefault(g, {})[kind] = {
+            'price': int(price.replace(',', '')), 'soldout': bool(sold)}
+    return tiers
+
+
+def eo_build_price_detail(tiers):
+    """price_detail JSON 구성. 정가/얼리버드/품절. 값 없으면 성별 키 자체 생략."""
+    out = {}
+    for g in ('male', 'female'):
+        t = tiers.get(g, {})
+        if 'regular' not in t and 'earlybird' not in t:
+            continue
+        d = {}
+        if 'regular' in t:
+            d['regular'] = t['regular']['price']
+            if t['regular']['soldout']:
+                d['regular_soldout'] = True
+        if 'earlybird' in t:
+            d['earlybird'] = t['earlybird']['price']
+            d['earlybird_soldout'] = t['earlybird']['soldout']
+        out[g] = d
+    return out
+
 
 def build_dt(label: str):
     dm = KDATE_RE.search(label)
@@ -209,6 +277,285 @@ def discover_imweb(slug, list_urls, page):
     return len(rows)
 
 
+def discover_emotional_orange(slug, list_urls, page):
+    """에모셔널오렌지 전용 — 날짜+링크뿐 아니라 성별 가격 티어·남성 연령까지 자동 채움.
+
+    - 1차 옵션(일시)에서 날짜/시간/나이코드, 2차 옵션(성별)에서 정가·얼리버드·품절 파싱.
+    - 기존 이벤트(오너가 날짜만 넣어둔 manual 행)를 source_url 로 매칭해 UPDATE(가격/연령/티어).
+      → 오너의 날짜·지역 데이터 보존, 빈 가격/연령만 채움. 없는 날짜는 crawl 로 신규 삽입.
+    - source_url 형식은 manual 행과 동일하게 shop_view + #evt 앵커로 맞춤.
+    """
+    cid = company_id(slug)
+    host = list_urls[0].split('/')[2]
+    products = imweb_products(page, list_urls)
+
+    # 기존 이벤트 source_url → id 매핑(업데이트 대상 판별)
+    existing = {}
+    er = sb.table('events').select('id,source_url').eq('company_id', cid).execute()
+    for e in (er.data or []):
+        existing[e['source_url']] = e['id']
+
+    updated = 0
+    inserts = []
+    for prod_url, text in products.items():
+        m = re.search(r'idx=(\d+)', prod_url)
+        if not m:
+            continue
+        idx = m.group(1)
+        region = None
+        bm = EO_TITLE_BRACKET_RE.search(text)
+        if bm:
+            region = bm.group(1).strip()  # 예: "송파 문정" (manual 행과 동일 스타일)
+
+        base = eo_load_option(host, idx)
+        date_opts = [(gh, vh, lb) for gh, vh, lb in EO_OPT_RE.findall(base) if '월' in lb]
+        for gh, vh, label in date_opts:
+            dt = build_dt(label)
+            if not dt or not (NOW <= dt <= HORIZON):
+                continue
+            # 2차 옵션(성별) 로드 → 티어
+            extra = (
+                '&selected_require_options%5B0%5D%5Bvalue_type%5D=SELECT'
+                f'&selected_require_options%5B0%5D%5Boption_code%5D={gh}'
+                f'&selected_require_options%5B0%5D%5Bvalue_code%5D={vh}')
+            tiers = eo_parse_tiers(eo_load_option(host, idx, extra))
+            price_detail = eo_build_price_detail(tiers)
+            if not price_detail:
+                continue
+            price_male = price_detail.get('male', {}).get('regular')
+            price_female = price_detail.get('female', {}).get('regular')
+
+            # 남성 연령(나이코드), 여성은 무관
+            age_male = None
+            age_min = age_max = None
+            ac = EO_AGE_CODE_RE.search(label)
+            if ac and ac.group(1) in EO_AGE_CODE_MAP:
+                age_min, age_max = EO_AGE_CODE_MAP[ac.group(1)]
+                age_male = f'{age_min}~{age_max}'
+
+            # 정가 남·여 모두 품절이면 마감
+            m_sold = price_detail.get('male', {}).get('regular_soldout', False)
+            f_sold = price_detail.get('female', {}).get('regular_soldout', False)
+
+            anchor = dt.strftime('%Y%m%d%H%M')
+            su = f'https://{host}/shop_view/?idx={idx}#evt={anchor}'
+
+            fields = {
+                'price_male': price_male,
+                'price_female': price_female,
+                'age_male': age_male,
+                'age_range_min': age_min,
+                'age_range_max': age_max,
+                'price_detail': price_detail,
+            }
+            if m_sold and f_sold:
+                fields['is_closed'] = True
+
+            if su in existing:
+                sb.table('events').update(fields).eq('id', existing[su]).execute()
+                updated += 1
+            else:
+                inserts.append({
+                    'company_id': cid,
+                    'title': _NAME_CACHE.get(cid) or '모임',
+                    'event_date': dt.isoformat(),
+                    'location_region': region or '미정',
+                    'source_url': su,
+                    'is_active': True,
+                    'is_closed': bool(m_sold and f_sold),
+                    'source': 'crawl',
+                    **fields,
+                })
+
+    if inserts:
+        sb.table('events').upsert(
+            inserts, on_conflict='source_url', ignore_duplicates=True).execute()
+    return updated + len(inserts)
+
+
+def discover_loco(slug, list_urls, page):
+    """로꼬(lovecommunity-loco) 전용 — imweb 3단계 옵션(일시→성별→참가프로그램).
+    참가프로그램의 **'와인파티 참석권' 기본가만** 사용(후기특가·동반할인 무시, 오너 지정).
+    나이 정보 없음(가격만). source_url 시각이 DB(19:00)와 discover 기본(20:00) 불일치 →
+    (idx, YYYYMMDD)로 매칭해 기존 이벤트 UPDATE(신규 발견은 안 함)."""
+    cid = company_id(slug)
+    host = list_urls[0].split('/')[2]
+    products = imweb_products(page, list_urls)
+    idxs = sorted({m.group(1) for u in products
+                   for m in [re.search(r'idx=(\d+)', u)] if m})
+
+    db = sb.table('events').select('id,source_url').eq('company_id', cid).execute().data or []
+    dbmap = {}
+    for e in db:
+        mi = re.search(r'idx=(\d+)', e['source_url'])
+        an = re.search(r'evt=(\d{8})', e['source_url'])
+        if mi and an:
+            dbmap[(mi.group(1), an.group(1))] = e['id']
+
+    def sel_str(pairs):
+        return ''.join(
+            f'&selected_require_options%5B{i}%5D%5Bvalue_type%5D=SELECT'
+            f'&selected_require_options%5B{i}%5D%5Boption_code%5D={gh}'
+            f'&selected_require_options%5B{i}%5D%5Bvalue_code%5D={vh}'
+            for i, (gh, vh) in enumerate(pairs))
+
+    def wine_price(body):
+        for m in EO_ITEM_RE.finditer(body):
+            if '와인파티' in m.group(1):
+                return int(m.group(2).replace(',', ''))
+        return None
+
+    # idx → 지역(상품 제목 대괄호). 예: idx=1 "[수원]" → 수원
+    idx_region = {}
+    for u, text in products.items():
+        mi = re.search(r'idx=(\d+)', u)
+        bm = re.search(r'\[([^\]]+)\]', text or '')
+        if mi and bm and mi.group(1) not in idx_region:
+            phrase = bm.group(1).strip()
+            if not re.search(r'\d', phrase):  # "6/27 GRAND OPEN" 같은 날짜 대괄호 제외
+                idx_region[mi.group(1)] = phrase
+
+    updated = 0
+    inserts = []
+    for idx in idxs:
+        region = idx_region.get(idx)
+        dates = [o for o in EO_OPT_RE.findall(eo_load_option(host, idx)) if '/' in o[2]]
+        for dgh, dvh, dlb in dates:
+            dm = re.search(r'(\d{1,2})/(\d{1,2})', dlb)
+            if not dm:
+                continue
+            mo, da = int(dm.group(1)), int(dm.group(2))
+            yr = NOW.year + 1 if mo < NOW.month else NOW.year
+            try:
+                dt = datetime(yr, mo, da, 19, 0, tzinfo=KST)
+            except ValueError:
+                continue
+            if not (NOW <= dt <= HORIZON):
+                continue
+            genders = [o for o in EO_OPT_RE.findall(
+                eo_load_option(host, idx, sel_str([(dgh, dvh)])))
+                if '남' in o[2] or '여' in o[2]]
+            pm = pf = None
+            for ggh, gvh, glb in genders:
+                w = wine_price(eo_load_option(host, idx, sel_str([(dgh, dvh), (ggh, gvh)])))
+                if '남' in glb:
+                    pm = w
+                elif '여' in glb:
+                    pf = w
+            if pm is None and pf is None:
+                continue
+            key = (idx, dt.strftime('%Y%m%d'))
+            if key in dbmap:
+                sb.table('events').update(
+                    {'price_male': pm, 'price_female': pf}).eq('id', dbmap[key]).execute()
+                updated += 1
+            else:
+                # DB에 없던 날짜 → 신규 생성(오너 확인: 사이트 12개 전부 나와야 함)
+                su = f'https://{host}/party/?idx={idx}#evt={dt.strftime("%Y%m%d")}1900'
+                inserts.append({
+                    'company_id': cid,
+                    'title': _NAME_CACHE.get(cid) or '모임',
+                    'event_date': dt.isoformat(),
+                    'location_region': region or '미정',
+                    'source_url': su,
+                    'is_active': True,
+                    'is_closed': False,
+                    'source': 'crawl',
+                    'price_male': pm,
+                    'price_female': pf,
+                })
+    if inserts:
+        sb.table('events').upsert(
+            inserts, on_conflict='source_url', ignore_duplicates=True).execute()
+    return updated + len(inserts)
+
+
+# 러브캐스팅 전용 정규식 (모듈 스코프 컴파일)
+LC_POST_RE = re.compile(r'lovecasting\.co\.kr/\d')
+LC_STATION_RE = re.compile(r'([가-힣]{2,4}역)')  # 리스팅의 역명(예: 삼성역) = 지역
+LC_PM_RE = re.compile(r'([\d,]+)\s*원[^0-9]*남\s*\d{2,3}\s*세')
+LC_PF_RE = re.compile(r'([\d,]+)\s*원[^0-9]*여\s*\d{2,3}\s*세')
+LC_AM_RE = re.compile(r'남\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
+LC_AF_RE = re.compile(r'여\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
+
+
+def discover_lovecasting(slug='lovecasting'):
+    """러브캐스팅 전용 — 성별 가격 + 성별 나이(남/여 다름)를 리스팅 카드에서 직접 파싱.
+    Elementor DOM이 조각나 스크래퍼가 나이를 놓침 → 포스트링크의 상위 카드 컨테이너를 직접 읽음.
+    source_url의 #evt 앵커를 뗀 경로로 기존 이벤트 매칭 UPDATE(신규 발견은 discover_platform 담당)."""
+    from bs4 import BeautifulSoup
+    cid = company_id(slug)
+    CATS = ['https://lovecasting.co.kr/커피미팅/', 'https://lovecasting.co.kr/호프미팅/']
+
+    def path_of(u):
+        return u.split('#')[0].rstrip('/')
+
+    def card_of(a):
+        anc = a
+        for _ in range(6):
+            if not anc:
+                return None
+            t = anc.get_text(' ', strip=True)
+            if LC_AM_RE.search(t) and LC_AF_RE.search(t) and LC_PM_RE.search(t):
+                return anc
+            anc = anc.parent
+        return None
+
+    db = sb.table('events').select('id,source_url').eq('company_id', cid).execute().data or []
+    dbmap = {path_of(e['source_url']): e['id'] for e in db}
+
+    parsed = {}
+    with sync_playwright() as p:
+        b = p.chromium.launch(headless=True)
+        pg = b.new_context(ignore_https_errors=True, user_agent=UA).new_page()
+        for cat in CATS:
+            try:
+                pg.goto(cat, timeout=30000, wait_until='domcontentloaded')
+                pg.wait_for_timeout(2500)
+                soup = BeautifulSoup(pg.content(), 'html.parser')
+            except Exception as e:
+                print(f"  러브캐스팅 목록 실패 {cat}: {e}")
+                continue
+            for a in soup.find_all('a', href=LC_POST_RE):
+                pth = path_of(a.get('href', ''))
+                if pth in parsed:
+                    continue
+                c = card_of(a)
+                if not c:
+                    continue
+                t = c.get_text(' ', strip=True)
+                pm, pf = LC_PM_RE.search(t), LC_PF_RE.search(t)
+                am, af = LC_AM_RE.search(t), LC_AF_RE.search(t)
+                # 지역 = 리스팅의 역명(제목 '[' 앞쪽에 있음). 예: 삼성역
+                st = LC_STATION_RE.search(t.split('[')[0])
+                parsed[pth] = {
+                    'price_male': int(pm.group(1).replace(',', '')) if pm else None,
+                    'price_female': int(pf.group(1).replace(',', '')) if pf else None,
+                    'age_male': f'{am.group(1)}~{am.group(2)}' if am else None,
+                    'age_female': f'{af.group(1)}~{af.group(2)}' if af else None,
+                    'region': st.group(1) if st else None,
+                    'ages': [int(x) for x in (
+                        (am.groups() if am else ()) + (af.groups() if af else ()))],
+                }
+        b.close()
+
+    updated = 0
+    for pth, r in parsed.items():
+        if pth not in dbmap:
+            continue  # 신규 발견은 discover_platform이 담당 — 여기선 기존 채움만
+        fields = {
+            'price_male': r['price_male'], 'price_female': r['price_female'],
+            'age_male': r['age_male'], 'age_female': r['age_female'],
+            'age_range_min': min(r['ages']) if r['ages'] else None,
+            'age_range_max': max(r['ages']) if r['ages'] else None,
+        }
+        if r.get('region'):
+            fields['location_region'] = r['region']  # 역명(삼성역 등)으로 지역 교체
+        sb.table('events').update(fields).eq('id', dbmap[pth]).execute()
+        updated += 1
+    return updated
+
+
 def discover_wix(slug, cfg):
     cid = company_id(slug)
     api = (f"https://2yeonsi.com/?_simpleApps=etc/calendar_scheduler&mvwiz={cfg['idx']}/{cfg['col']}"
@@ -264,6 +611,70 @@ def discover_platform(slug, ScraperClass):
     return len(rows)
 
 
+def discover_platform_enriched(slug, ScraperClass):
+    """플랫폼 스크래퍼가 이미 뽑는 가격/연령까지 채우는 판(괜찮소 등 단순 남/여 단일가 업체).
+    - 스크래퍼 EventModel의 price_male/female + age_range 를 그대로 사용.
+    - 기존 이벤트를 source_url 로 매칭해 UPDATE(오너 날짜 보존), 없으면 crawl 삽입.
+    - 얼리버드 티어 없는 업체 전용(price_detail 불필요). 나이는 남/여 공통 범위로 취급.
+    """
+    cid = company_id(slug)
+    events = ScraperClass().scrape()
+
+    existing = {}
+    er = sb.table('events').select('id,source_url').eq('company_id', cid).execute()
+    for e in (er.data or []):
+        existing[e['source_url']] = e['id']
+
+    updated = 0
+    inserts = []
+    for ev in events:
+        d = ev.model_dump()
+        dt = d.get('event_date')
+        if not isinstance(dt, datetime):
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=KST)
+        dt = dt.astimezone(KST)
+        if not (NOW <= dt <= HORIZON):
+            continue
+        su = d.get('source_url')
+        if not su:
+            continue
+
+        amin, amax = d.get('age_range_min'), d.get('age_range_max')
+        age_text = f'{amin}~{amax}' if (amin and amax) else None
+        fields = {
+            'price_male': d.get('price_male'),
+            'price_female': d.get('price_female'),
+            'age_range_min': amin,
+            'age_range_max': amax,
+            # 나이는 남/여 공통 범위(에모셔널오렌지와 달리 성별 구분 없음)
+            'age_male': age_text,
+            'age_female': age_text,
+        }
+        if su in existing:
+            sb.table('events').update(fields).eq('id', existing[su]).execute()
+            updated += 1
+        else:
+            inserts.append({
+                'company_id': cid,
+                'title': _NAME_CACHE.get(cid) or '모임',
+                'event_date': dt.isoformat(),
+                'location_region': d.get('location_region') or '미정',
+                'location_detail': d.get('location_detail'),
+                'source_url': su,
+                'is_active': True,
+                'is_closed': False,
+                'source': 'crawl',
+                **fields,
+            })
+
+    if inserts:
+        sb.table('events').upsert(
+            inserts, on_conflict='source_url', ignore_duplicates=True).execute()
+    return updated + len(inserts)
+
+
 def main():
     only = sys.argv[1] if len(sys.argv) > 1 else None
 
@@ -285,15 +696,30 @@ def main():
     deleted = sb.table('events').delete().eq('source', 'crawl').lt('event_date', NOW.isoformat()).execute()
     print(f"과거 crawl 이벤트 삭제: {len(deleted.data) if deleted.data else 0}건")
 
+    # 크롤링 금지(휴면·수동전용) 업체 slug — companies.crawl_enabled=false. 삭제 대신 스킵.
+    try:
+        dr = sb.table('companies').select('slug').eq('crawl_enabled', False).execute()
+        DISABLED = {c['slug'] for c in (dr.data or [])}
+    except Exception:
+        DISABLED = set()
+    if DISABLED:
+        print(f"크롤링 금지 업체 스킵: {sorted(DISABLED)}")
+
     total = 0
     with sync_playwright() as p:
         b = p.chromium.launch(headless=True)
         page = b.new_context(ignore_https_errors=True, locale='ko-KR', user_agent=UA).new_page()
         for slug, urls in IMWEB.items():
-            if only and only not in slug:
+            if (only and only not in slug) or slug in DISABLED:
                 continue
             try:
-                n = discover_imweb(slug, urls, page)
+                # 가격/연령까지 자동 채우는 imweb 업체(전용 경로)
+                if slug == 'emotional-orange':
+                    n = discover_emotional_orange(slug, urls, page)
+                elif slug == 'lovecommunity-loco':
+                    n = discover_loco(slug, urls, page)
+                else:
+                    n = discover_imweb(slug, urls, page)
                 total += n
                 print(f"[{slug}] {n}건")
             except Exception as e:
@@ -301,7 +727,7 @@ def main():
         b.close()
 
     for slug, cfg in WIX.items():
-        if only and only not in slug:
+        if (only and only not in slug) or slug in DISABLED:
             continue
         try:
             n = discover_wix(slug, cfg)
@@ -310,11 +736,18 @@ def main():
         except Exception as e:
             print(f"[{slug}] 실패: {e}")
 
+    # 가격/연령까지 자동 채우는 업체(스크래퍼가 이미 파싱, 단순 남/여 단일가). 검증된 것만 추가.
+    PLATFORM_ENRICHED = {'yeongyul'}
     for slug, ScraperClass in PLATFORM.items():
-        if only and only not in slug:
+        if (only and only not in slug) or slug in DISABLED:
             continue
         try:
-            n = discover_platform(slug, ScraperClass)
+            if slug == 'lovecasting':
+                n = discover_lovecasting(slug)
+            elif slug in PLATFORM_ENRICHED:
+                n = discover_platform_enriched(slug, ScraperClass)
+            else:
+                n = discover_platform(slug, ScraperClass)
             total += n
             print(f"[{slug}] {n}건")
         except Exception as e:

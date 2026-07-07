@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const TOKEN_KEY = 'sodate_review_token'
 const MY_IDS_KEY = 'sodate_my_review_ids'
+const LAST_NICK_KEY = 'sodate_last_nickname'
 
 function generateToken(): string {
   // 40자 이상 보장: 타임스탬프 + Math.random 여러 번 이어붙임
@@ -63,6 +64,25 @@ export async function removeMyReviewId(id: string): Promise<void> {
     const ids = await getMyReviewIds()
     const next = ids.filter((v) => v !== id)
     await AsyncStorage.setItem(MY_IDS_KEY, JSON.stringify(next))
+  } catch {
+    // ignore
+  }
+}
+
+/** 마지막으로 후기 작성/수정에 사용한 닉네임(다음 작성 시 자동 세팅용) */
+export async function getLastNickname(): Promise<string> {
+  try {
+    return (await AsyncStorage.getItem(LAST_NICK_KEY)) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** 후기 작성/수정 성공 시 닉네임 기억 */
+export async function setLastNickname(name: string): Promise<void> {
+  try {
+    const v = (name ?? '').trim()
+    if (v) await AsyncStorage.setItem(LAST_NICK_KEY, v)
   } catch {
     // ignore
   }

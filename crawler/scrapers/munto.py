@@ -403,7 +403,7 @@ class MuntoScraper(BaseScraper):
                         events.append(EventModel(
                             external_id=f'munto_{socialing_id}',
                             title=title,
-                            description=sanitize_text(introduce, 500) if introduce else None,
+                            description=sanitize_text(introduce, 6000) if introduce else None,
                             thumbnail_urls=thumbnails,
                             event_date=event_date,
                             location_region=region,

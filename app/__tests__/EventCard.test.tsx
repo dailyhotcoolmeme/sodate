@@ -43,6 +43,7 @@ const mockEvent: EventWithCompany = {
   location_detail: null,
   price_male: 40000,
   price_female: 35000,
+  price_detail: null,
   gender_ratio: '8:8',
   capacity_male: 8,
   capacity_female: 8,

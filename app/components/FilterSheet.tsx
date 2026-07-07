@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { useColors } from '@/hooks/useColors'
 import { useRegions } from '@/hooks/useRegions'
+import { REGION_GROUP_ORDER, regionGroupKey, TAG_GROUP_ORDER, tagGroupKey } from '@/constants/chipGroups'
 import { useCompanies } from '@/hooks/useCompanies'
 import { useHashtags } from '@/hooks/useHashtags'
 import TopBar from '@/components/TopBar'
@@ -80,6 +81,19 @@ export default function FilterSheet({ visible, onClose }: Props) {
     const merged = [...hashtags.filter((t) => !base.includes(t)), ...base]
     return merged
   }, [hashtagOptions, hashtagQuery, hashtags])
+
+  // 지역/태그 칩을 '군(群)'으로 묶어 표시(알림 설정과 동일 규칙)
+  const groupedRegions = useMemo(() => {
+    const buckets: Record<string, typeof regionOptions> = {}
+    for (const r of regionOptions) (buckets[regionGroupKey(r.label)] ??= []).push(r)
+    return REGION_GROUP_ORDER.filter((g) => buckets[g.key]?.length).map((g) => ({ ...g, items: buckets[g.key] }))
+  }, [regionOptions])
+
+  const groupedHashtags = useMemo(() => {
+    const buckets: Record<string, string[]> = {}
+    for (const t of filteredHashtags) (buckets[tagGroupKey(t)] ??= []).push(t)
+    return TAG_GROUP_ORDER.filter((k) => buckets[k]?.length).map((k) => ({ key: k, items: buckets[k] }))
+  }, [filteredHashtags])
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
@@ -132,6 +146,11 @@ export default function FilterSheet({ visible, onClose }: Props) {
       gap: 8,
       flexWrap: 'wrap',
     },
+    groupTop: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginTop: 12, marginBottom: 2 },
+    groupRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, gap: 8 },
+    groupRowLabel: { width: 60, paddingLeft: 10, paddingTop: 7, fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+    groupRowLabelTop: { width: 60, paddingTop: 6, fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+    groupRowChips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     searchInput: {
       backgroundColor: colors.surfaceHigh,
       borderRadius: 12,
@@ -145,9 +164,9 @@ export default function FilterSheet({ visible, onClose }: Props) {
     },
     chip: {
       backgroundColor: colors.surfaceHigh,
-      borderRadius: 20,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -235,31 +254,45 @@ export default function FilterSheet({ visible, onClose }: Props) {
 
           {/* 지역 */}
           <Section title="지역" styles={styles}>
-            <View style={styles.chipGrid}>
-              {regionOptions.map((r) => (
-                <Chip
-                  key={r.id}
-                  label={r.label}
-                  selected={regions.includes(r.id)}
-                  onPress={() => toggleRegion(r.id)}
-                  styles={styles}
-                />
-              ))}
-            </View>
+            {groupedRegions.map((g, gi) => {
+              const showParent = !!g.parent && (gi === 0 || groupedRegions[gi - 1].parent !== g.parent)
+              return (
+                <View key={g.key}>
+                  {showParent && <Text style={styles.groupTop}>{g.parent}</Text>}
+                  <View style={styles.groupRow}>
+                    <Text style={g.parent ? styles.groupRowLabel : styles.groupRowLabelTop}>{g.key}</Text>
+                    <View style={styles.groupRowChips}>
+                      {g.items.map((r) => (
+                        <Chip
+                          key={r.id}
+                          label={r.label}
+                          selected={regions.includes(r.id)}
+                          onPress={() => toggleRegion(r.id)}
+                          styles={styles}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              )
+            })}
           </Section>
 
           {/* 나이대 */}
-          <Section title="나이대" styles={styles}>
-            <View style={styles.chipGrid}>
-              {AGE_GROUP_FILTERS.map((a) => (
-                <Chip
-                  key={a.id}
-                  label={a.label}
-                  selected={ageGroups.includes(a.id)}
-                  onPress={() => toggleAgeGroup(a.id)}
-                  styles={styles}
-                />
-              ))}
+          <Section styles={styles}>
+            <View style={styles.groupRow}>
+              <Text style={styles.groupRowLabelTop}>나이대</Text>
+              <View style={styles.groupRowChips}>
+                {AGE_GROUP_FILTERS.map((a) => (
+                  <Chip
+                    key={a.id}
+                    label={a.label}
+                    selected={ageGroups.includes(a.id)}
+                    onPress={() => toggleAgeGroup(a.id)}
+                    styles={styles}
+                  />
+                ))}
+              </View>
             </View>
           </Section>
 
@@ -274,92 +307,112 @@ export default function FilterSheet({ visible, onClose }: Props) {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <View style={styles.chipGrid}>
-              {filteredHashtags.map((t) => (
-                <Chip
-                  key={t}
-                  label={t}
-                  selected={hashtags.includes(t)}
-                  onPress={() => toggleHashtag(t)}
-                  styles={styles}
-                />
-              ))}
-            </View>
+            {groupedHashtags.map((g) => (
+              <View key={g.key} style={styles.groupRow}>
+                <Text style={styles.groupRowLabelTop}>{g.key}</Text>
+                <View style={styles.groupRowChips}>
+                  {g.items.map((t) => (
+                    <Chip
+                      key={t}
+                      label={t}
+                      selected={hashtags.includes(t)}
+                      onPress={() => toggleHashtag(t)}
+                      styles={styles}
+                    />
+                  ))}
+                </View>
+              </View>
+            ))}
           </Section>
 
           {/* 요일 */}
-          <Section title="요일" styles={styles}>
-            <View style={styles.chipRow}>
-              {DAY_OPTIONS.map((d) => (
-                <Chip
-                  key={d.id}
-                  label={d.label}
-                  selected={days.includes(d.id)}
-                  onPress={() => toggleDay(d.id)}
-                  styles={styles}
-                />
-              ))}
+          <Section styles={styles}>
+            <View style={styles.groupRow}>
+              <Text style={styles.groupRowLabelTop}>요일</Text>
+              <View style={styles.groupRowChips}>
+                {DAY_OPTIONS.map((d) => (
+                  <Chip
+                    key={d.id}
+                    label={d.label}
+                    selected={days.includes(d.id)}
+                    onPress={() => toggleDay(d.id)}
+                    styles={styles}
+                  />
+                ))}
+              </View>
             </View>
           </Section>
 
           {/* 시간대 */}
-          <Section title="시간대" styles={styles}>
-            <View style={styles.chipRow}>
-              {TIME_SLOTS.map((t) => (
-                <Chip
-                  key={t.id}
-                  label={t.label}
-                  selected={timeSlots.includes(t.id)}
-                  onPress={() => toggleTimeSlot(t.id)}
-                  styles={styles}
-                />
-              ))}
+          <Section styles={styles}>
+            <View style={styles.groupRow}>
+              <Text style={styles.groupRowLabelTop}>시간</Text>
+              <View style={styles.groupRowChips}>
+                {TIME_SLOTS.map((t) => (
+                  <Chip
+                    key={t.id}
+                    label={t.label}
+                    selected={timeSlots.includes(t.id)}
+                    onPress={() => toggleTimeSlot(t.id)}
+                    styles={styles}
+                  />
+                ))}
+              </View>
             </View>
           </Section>
 
           {/* 날짜 */}
-          <Section title="날짜" styles={styles}>
-            <View style={styles.chipRow}>
-              {DATE_RANGES.map((d) => (
-                <Chip
-                  key={d.id}
-                  label={d.label}
-                  selected={dateRange === d.id}
-                  onPress={() => setDateRange(d.id)}
-                  styles={styles}
-                />
-              ))}
+          <Section styles={styles}>
+            <View style={styles.groupRow}>
+              <Text style={styles.groupRowLabelTop}>날짜</Text>
+              <View style={styles.groupRowChips}>
+                {DATE_RANGES.map((d) => (
+                  <Chip
+                    key={d.id}
+                    label={d.label}
+                    selected={dateRange === d.id}
+                    onPress={() => setDateRange(d.id)}
+                    styles={styles}
+                  />
+                ))}
+              </View>
             </View>
           </Section>
 
           {/* 가격 */}
-          <Section title="최대 가격" styles={styles}>
-            <View style={styles.chipRow}>
-              {PRICE_OPTIONS.map((p) => (
-                <Chip
-                  key={String(p.value)}
-                  label={p.label}
-                  selected={maxPrice === p.value}
-                  onPress={() => setMaxPrice(p.value)}
-                  styles={styles}
-                />
-              ))}
+          <Section styles={styles}>
+            <View style={styles.groupRow}>
+              <Text style={styles.groupRowLabelTop}>가격</Text>
+              <View style={styles.groupRowChips}>
+                {PRICE_OPTIONS.map((p) => (
+                  <Chip
+                    key={String(p.value)}
+                    label={p.label}
+                    selected={maxPrice === p.value}
+                    onPress={() => setMaxPrice(p.value)}
+                    styles={styles}
+                  />
+                ))}
+              </View>
             </View>
           </Section>
 
           {/* 업체 */}
           {companyOptions.length > 0 && (
-            <Section title="업체" styles={styles}>
-              <View style={styles.chipGrid}>
-                {companyOptions.map((c) => (
-                  <Chip
-                    key={c.id}
-                    label={c.name}
-                    selected={companies.includes(c.id)}
-                    onPress={() => toggleCompany(c.id)}
-                    styles={styles}
-                  />
-                ))}
+            <Section styles={styles}>
+              <View style={styles.groupRow}>
+                <Text style={styles.groupRowLabelTop}>업체</Text>
+                <View style={styles.groupRowChips}>
+                  {companyOptions.map((c) => (
+                    <Chip
+                      key={c.id}
+                      label={c.name}
+                      selected={companies.includes(c.id)}
+                      onPress={() => toggleCompany(c.id)}
+                      styles={styles}
+                    />
+                  ))}
+                </View>
               </View>
             </Section>
           )}
@@ -376,13 +429,13 @@ function Section({
   children,
   styles,
 }: {
-  title: string
+  title?: string
   children: React.ReactNode
   styles: any
 }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      {!!title && <Text style={styles.sectionTitle}>{title}</Text>}
       {children}
     </View>
   )

@@ -175,7 +175,7 @@ class ModpartyScraper(BaseScraper):
         네비/푸터 보일러플레이트는 본문 영역 선택자로 배제한다.
         """
         # imweb .detail_detail_wrap 등 컨테이너 + og + 본문 폴백을 공용 추출기로 처리
-        return extract_description_from_soup(soup, 800)
+        return extract_description_from_soup(soup, 6000)
 
     def _parse_age_group(self, text: str) -> tuple[Optional[int], Optional[int], Optional[str]]:
         """제목/텍스트에서 나이대 파싱. (min_age, max_age, label) 반환"""

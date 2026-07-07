@@ -71,10 +71,16 @@ serve(async (req) => {
       if (price > sub.max_price) continue
     }
 
-    // 테마 조건
+    // 테마 조건(레거시 — 현재 event.theme는 대부분 '소개팅' 단일값이라 실질 무의미하나 하위호환 유지)
     if (sub.themes && sub.themes.length > 0) {
       const hasTheme = event.theme?.some((t: string) => sub.themes.includes(t))
       if (!hasTheme) continue
+    }
+
+    // 해시태그 조건(현재 앱 필터 기준) — 구독자가 고른 태그 중 하나라도 이벤트에 있으면 매칭
+    if (sub.hashtags && sub.hashtags.length > 0) {
+      const hasTag = event.hashtags?.some((t: string) => sub.hashtags.includes(t))
+      if (!hasTag) continue
     }
 
     // 특정 업체 조건

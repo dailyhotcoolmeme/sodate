@@ -1,4 +1,7 @@
-"""인스타그램 후기 크롤러 — DuckDuckGo 검색으로 instagram.com 포스트 수집"""
+"""인스타그램 후기 크롤러 — DuckDuckGo 검색으로 instagram.com 포스트 수집.
+썸네일은 링크프리뷰봇(facebookexternalhit) UA로 og:image를 얻어
+Supabase Storage(review-thumbs)에 재호스팅한다(인스타 CDN URL은 ~4일 만료되므로)."""
+import os
 import re
 import time
 import httpx
@@ -12,6 +15,64 @@ from utils.supabase_client import get_supabase
 logger = get_logger('review_instagram')
 
 DDG_SEARCH = 'https://html.duckduckgo.com/html/'
+
+# 링크 프리뷰 봇 UA — 로그인 없이 og:image(썸네일)를 노출받는다
+FB_UA = 'facebookexternalhit/1.1'
+THUMB_BUCKET = 'review-thumbs'
+
+
+def _og_image(post_url: str) -> str | None:
+    try:
+        r = httpx.get(post_url, headers={'User-Agent': FB_UA, 'Accept-Language': 'ko-KR,ko;q=0.9'},
+                      timeout=12, follow_redirects=True)
+        m = re.search(r'property="og:image" content="([^"]+)"', r.text)
+        if m:
+            return m.group(1).replace('&amp;', '&')
+    except Exception as e:
+        logger.debug(f'og:image 실패 {post_url}: {e}')
+    return None
+
+
+def fetch_and_store_thumb(supabase, source_url: str) -> str | None:
+    """인스타 게시물/릴스 썸네일을 Storage에 재호스팅 → 공개 URL. 실패 시 None."""
+    m = re.search(r'/(p|reel|reels|tv)/([^/?#]+)', source_url)
+    if not m:
+        return None
+    code = m.group(2)
+    img = _og_image(source_url)
+    if not img:
+        return None
+    try:
+        resp = httpx.get(img, headers={'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'},
+                         timeout=12, follow_redirects=True)
+        if resp.status_code != 200 or not resp.content:
+            return None
+        path = f'insta/{code}.jpg'
+        supabase.storage.from_(THUMB_BUCKET).upload(
+            path, resp.content,
+            {'content-type': 'image/jpeg', 'upsert': 'true'},
+        )
+        base = os.environ['SUPABASE_URL'].rstrip('/')
+        return f'{base}/storage/v1/object/public/{THUMB_BUCKET}/{path}'
+    except Exception as e:
+        logger.warning(f'인스타 썸네일 저장 실패 {source_url}: {e}')
+        return None
+
+
+def backfill_thumbs():
+    """기존 썸네일 없는 인스타 후기에 재호스팅 썸네일을 채운다."""
+    supabase = get_supabase()
+    rows = supabase.table('reviews').select('id, source_url') \
+        .eq('source', 'instagram').is_('thumbnail_url', 'null').execute().data or []
+    logger.info(f'인스타 썸네일 백필 대상: {len(rows)}건')
+    done = 0
+    for row in rows:
+        url = fetch_and_store_thumb(supabase, row['source_url'])
+        if url:
+            supabase.table('reviews').update({'thumbnail_url': url}).eq('id', row['id']).execute()
+            done += 1
+        time.sleep(1.2)
+    logger.info(f'인스타 썸네일 백필 완료: {done}/{len(rows)}건')
 
 COMPANY_KEYWORDS = {
     'yeonin':           ['site:instagram.com 연인어때 소개팅 후기', 'site:instagram.com 연인어때 로테이션'],
@@ -133,6 +194,10 @@ def run_instagram_crawl():
             try:
                 review['company_id'] = company_id
                 review['crawled_at'] = datetime.utcnow().isoformat()
+                # 썸네일 재호스팅(실패해도 후기는 저장)
+                thumb = fetch_and_store_thumb(supabase, review['source_url'])
+                if thumb:
+                    review['thumbnail_url'] = thumb
                 res = supabase.table('reviews').upsert(
                     review, on_conflict='source_url'
                 ).execute()
@@ -146,4 +211,8 @@ def run_instagram_crawl():
 
 
 if __name__ == '__main__':
-    run_instagram_crawl()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == 'backfill':
+        backfill_thumbs()
+    else:
+        run_instagram_crawl()

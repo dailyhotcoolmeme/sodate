@@ -2,9 +2,11 @@ import { useEffect, useRef } from 'react'
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
-import { Platform } from 'react-native'
+import { Platform, AppState } from 'react-native'
 import { router } from 'expo-router'
 import { supabase } from '@/lib/supabase'
+import { setCachedPushToken } from '@/lib/pushToken'
+import { useNotificationStore } from '@/stores/notificationStore'
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -24,14 +26,17 @@ export function usePushNotification() {
     registerForPushNotifications()
 
     notificationListener.current = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        console.log('알림 수신:', notification)
+      () => {
+        // 앱 켜진 상태로 알림 수신 → 종 배지 갱신
+        useNotificationStore.getState().refreshUnread()
       }
     )
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data
+        // 알림을 눌러 진입 → 읽음 처리 + 종 배지 0
+        useNotificationStore.getState().markReadOnServer()
         if (data?.event_id) {
           // 이벤트 상세 화면으로 이동
           router.push(`/event/${data.event_id}`)
@@ -47,6 +52,19 @@ export function usePushNotification() {
       notificationListener.current?.remove()
       responseListener.current?.remove()
     }
+  }, [])
+
+  // 앱 아이콘 배지 초기화(OS) + 종 배지(인앱) 동기화: 실행 시 + 포그라운드 복귀 시
+  useEffect(() => {
+    const onActive = () => {
+      Notifications.setBadgeCountAsync(0).catch(() => {}) // OS 아이콘 배지
+      useNotificationStore.getState().refreshUnread() // 인앱 종 배지(안읽음 수)
+    }
+    onActive()
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') onActive()
+    })
+    return () => sub.remove()
   }, [])
 }
 
@@ -82,6 +100,7 @@ async function registerForPushNotifications(): Promise<string | null> {
     projectId: Constants.expoConfig?.extra?.eas?.projectId,
   })
 
+  setCachedPushToken(token.data)
   await registerTokenToSupabase(token.data)
   return token.data
 }
