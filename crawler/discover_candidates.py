@@ -65,6 +65,8 @@ EO_ITEM_RE = re.compile(
     r'<span[^>]*><strong>\s*([\d,]+)\s*원\s*(\(품절\))?', re.S)
 EO_AGE_CODE_RE = re.compile(r'\(나이([A-G])\)')
 EO_TITLE_BRACKET_RE = re.compile(r'\[([^\]]+)\]')
+# 품절(비활성) 날짜 항목 라벨: opacity-40 항목의 span 텍스트 "7월 4일 ... (나이A) (품절)"
+EO_SOLDOUT_RE = re.compile(r'opacity-40.*?<span[^>]*>([^<]+)</span>', re.S)
 # 티키타카 소개팅 나이코드 → (남성 만나이 min, max). /date는 전부 티키타카.
 EO_AGE_CODE_MAP = {
     'A': (23, 28), 'B': (26, 31), 'C': (29, 34), 'D': (32, 37),
@@ -293,9 +295,14 @@ def discover_emotional_orange(slug, list_urls, page):
 
     # 기존 이벤트 source_url → id 매핑(업데이트 대상 판별)
     existing = {}
+    existing_key = {}  # (idx, YYYYMMDD) → id (품절 매칭용, 시각 불일치 대비)
     er = sb.table('events').select('id,source_url').eq('company_id', cid).execute()
     for e in (er.data or []):
         existing[e['source_url']] = e['id']
+        mi = re.search(r'idx=(\d+)', e['source_url'])
+        an = re.search(r'evt=(\d{8})', e['source_url'])
+        if mi and an:
+            existing_key[(mi.group(1), an.group(1))] = e['id']
 
     updated = 0
     inserts = []
@@ -369,6 +376,30 @@ def discover_emotional_orange(slug, list_urls, page):
                     'source': 'crawl',
                     **fields,
                 })
+
+        # 품절(비활성) 날짜: 선택 불가 → 가격 없음. 기존 이벤트에 마감(is_closed)+나이만 채움.
+        for so_label in EO_SOLDOUT_RE.findall(base):
+            if '품절' not in so_label or '월' not in so_label:
+                continue
+            dt = build_dt(so_label)
+            if not dt or not (NOW <= dt <= HORIZON):
+                continue
+            key = (idx, dt.strftime('%Y%m%d'))
+            if key not in existing_key:
+                continue  # 오너가 등록한 기존 이벤트만 채움(신규 품절은 추가 안 함)
+            age_male = age_min = age_max = None
+            ac = EO_AGE_CODE_RE.search(so_label)
+            if ac and ac.group(1) in EO_AGE_CODE_MAP:
+                age_min, age_max = EO_AGE_CODE_MAP[ac.group(1)]
+                age_male = f'{age_min}~{age_max}'
+            sb.table('events').update({
+                'is_closed': True,
+                'age_male': age_male,
+                'age_female': '나이 무관',
+                'age_range_min': age_min,
+                'age_range_max': age_max,
+            }).eq('id', existing_key[key]).execute()
+            updated += 1
 
     if inserts:
         sb.table('events').upsert(
