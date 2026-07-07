@@ -104,7 +104,8 @@ class LovecastingScraper(BaseScraper):
     #   여 33세~43세 | 20,000원
 
     # 카드 날짜: "04.04 | 토요일 | PM 5:00 | 삼성역"
-    CARD_DATE_RE = re.compile(r'(\d{1,2})\.(\d{1,2})\s*\|?\s*[월화수목금토일]요일\s*\|?\s*(?:PM|AM)\s*(\d{1,2}):(\d{2})')
+    # AM/PM을 캡처(그룹3)해서 오후 보정(+12)에 사용. 이전엔 비캡처라 PM5:00→05:00으로 잘못 저장됐음.
+    CARD_DATE_RE = re.compile(r'(\d{1,2})\.(\d{1,2})\s*\|?\s*[월화수목금토일]요일\s*\|?\s*(PM|AM|오전|오후)\s*(\d{1,2}):(\d{2})')
     # 접수 현황: "17명 접수중"
     APPLICANTS_COUNT_RE = re.compile(r'(\d+)\s*명\s*접수중')
 
@@ -165,22 +166,25 @@ class LovecastingScraper(BaseScraper):
             if not lines:
                 continue
 
-            # 날짜 추출
+            # 날짜+시간 추출 (요일/시간이 개행으로 나뉠 수 있어 카드 전체를 한 줄로 정규화 후 검색)
             event_date = None
             card_date_line = ''
-            for line in lines:
-                m = self.CARD_DATE_RE.search(line)
-                if m:
-                    mo, d = int(m.group(1)), int(m.group(2))
-                    hour, minute = int(m.group(3)), int(m.group(4))
-                    try:
-                        event_date = datetime(current_year, mo, d, hour, minute)
-                        if event_date < now:
-                            event_date = datetime(current_year + 1, mo, d, hour, minute)
-                        card_date_line = line
-                        break
-                    except ValueError:
-                        continue
+            m = self.CARD_DATE_RE.search(' '.join(lines))
+            if m:
+                mo, d = int(m.group(1)), int(m.group(2))
+                period = m.group(3)
+                hour, minute = int(m.group(4)), int(m.group(5))
+                if period in ('PM', '오후') and hour < 12:
+                    hour += 12
+                elif period in ('AM', '오전') and hour == 12:
+                    hour = 0
+                try:
+                    event_date = datetime(current_year, mo, d, hour, minute)
+                    if event_date < now:
+                        event_date = datetime(current_year + 1, mo, d, hour, minute)
+                    card_date_line = m.group(0)
+                except ValueError:
+                    event_date = None
 
             if not event_date or event_date < now:
                 continue
@@ -355,6 +359,10 @@ class LovecastingScraper(BaseScraper):
         from urllib.parse import unquote
         slug = unquote(url.rstrip('/').split('/')[-1])
 
+        # URL엔 시간이 없음 → 카테고리별 실제 시각(커피=오후5시/호프=오후7시). 없으면 14시 폴백.
+        _low = f'{slug} {title or ""}'
+        hh = 17 if '커피' in _low else (19 if '호프' in _low else 14)
+
         # 패턴1: YY-MM-DD (예: 26-03-21)
         m = re.search(r'(\d{2})-(\d{2})-(\d{2})', slug)
         if m:
@@ -362,7 +370,7 @@ class LovecastingScraper(BaseScraper):
             year = 2000 + yy
             if 1 <= mo <= 12 and 1 <= d <= 31:
                 try:
-                    event_date = datetime(year, mo, d, 14, 0)
+                    event_date = datetime(year, mo, d, hh, 0)
                     if event_date < datetime.now():
                         return None
                     # 지역 (슬러그/제목에서 장소명 스캔)
@@ -398,9 +406,9 @@ class LovecastingScraper(BaseScraper):
 
         year = datetime.now().year
         try:
-            event_date = datetime(year, mo, d, 14, 0)
+            event_date = datetime(year, mo, d, hh, 0)
             if event_date < datetime.now():
-                event_date = datetime(year + 1, mo, d, 14, 0)
+                event_date = datetime(year + 1, mo, d, hh, 0)
         except ValueError:
             return None
 

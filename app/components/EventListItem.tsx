@@ -10,7 +10,7 @@ import type { EventWithCompany } from '@/lib/supabase'
 import DeadlineBadge from './DeadlineBadge'
 import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
-import { genderInfoLine } from '@/lib/eventInfo'
+import PriceTierValue from '@/components/PriceTierValue'
 
 interface Props {
   event: EventWithCompany
@@ -114,15 +114,15 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
       paddingVertical: 2,
     },
     deadlineText: { fontSize: 10, color: '#fff', fontWeight: '700' },
-    info: { flex: 1, gap: 3 },
+    info: { flex: 1, gap: 2 },  // 제목·해시태그·meta·성별 줄 간격 균일(gap 하나로만 제어)
     company: { fontSize: 11, color: colors.textTertiary, fontWeight: '600' },
     title: { fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
-    meta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    meta: { fontSize: 12, color: colors.textSecondary },
     price: { fontSize: 12, color: colors.textSecondary },
     seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
     seatsLabel: { fontSize: 12, color: colors.textSecondary, marginRight: 6 },
     seatsText: { fontSize: 12, color: colors.textPrimary, fontWeight: '500' },
-    genderBlock: { marginTop: 5, gap: 2 },
+    genderBlock: { gap: 2 },
     genderRow: { flexDirection: 'row', alignItems: 'center' },
     genderTag: { fontSize: 12.5, fontWeight: '700', marginRight: 7, width: 28 },
     genderMale: { color: '#3B82F6' },
@@ -174,24 +174,24 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
         )}
         <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
         {/* 해시태그 배지 (제목 바로 아래) */}
-        <HashtagChips hashtags={event.hashtags} size="sm" max={3} />
+        <HashtagChips hashtags={event.hashtags} size="sm" max={3} tight />
         <Text style={styles.meta}>{formatDate(event.event_date)} · {event.location_region}</Text>
         {(() => {
-          const m = genderInfoLine({ capacity: event.capacity_male, seats: event.seats_left_male, price: event.price_male, age: event.age_male })
-          const f = genderInfoLine({ capacity: event.capacity_female, seats: event.seats_left_female, price: event.price_female, age: event.age_female })
-          if (!m && !f) return null
+          const hasM = event.price_male != null || !!event.price_detail?.male || !!event.age_male
+          const hasF = event.price_female != null || !!event.price_detail?.female || !!event.age_female
+          if (!hasM && !hasF) return null
           return (
             <View style={styles.genderBlock}>
-              {!!m && (
+              {hasM && (
                 <View style={styles.genderRow}>
                   <Text style={[styles.genderTag, styles.genderMale]}>남성</Text>
-                  <Text style={styles.genderInfo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{m}</Text>
+                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.male} price={event.price_male} age={event.age_male} compact /></View>
                 </View>
               )}
-              {!!f && (
+              {hasF && (
                 <View style={styles.genderRow}>
                   <Text style={[styles.genderTag, styles.genderFemale]}>여성</Text>
-                  <Text style={styles.genderInfo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{f}</Text>
+                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.female} price={event.price_female} age={event.age_female} compact /></View>
                 </View>
               )}
             </View>

@@ -3,10 +3,11 @@ import { Text, StyleSheet } from 'react-native'
 import { useColors } from '@/hooks/useColors'
 
 /**
- * 성별 가격 티어 표시(에모셔널오렌지 전용 price_detail).
- * - 정가 + 얼리버드(할인가)를 함께 노출.
- * - 얼리버드가 품절이면 "얼리버드 N원 (품절)" 글자에 취소선.
- * - price_detail 이 없으면 상위에서 fallback 문자열을 그대로 쓴다(이 컴포넌트 미사용).
+ * 성별 가격+연령 표시 (카드·목록·상세 공용).
+ * - price_detail(에모셔널오렌지/연인어때 등)이 있으면 정가·얼리버드·품절을 표시.
+ * - 품절이면 "가격 (품절)"에 취소선.
+ * - price_detail 없으면 단순 price + age.
+ * - compact: 카드/목록용(작은 글자, 얼리버드 생략, 한 줄).
  */
 export type GenderPrice = {
   regular?: number
@@ -16,50 +17,58 @@ export type GenderPrice = {
 }
 
 const won = (n: number) => `${n.toLocaleString()}원`
+// 숫자로 끝나면 "세" 부착(27~34→27~34세), 아니면 그대로("나이 무관")
+const fmtAge = (age?: string | null) =>
+  age ? (/\d\s*$/.test(age) ? `${age}세` : age) : null
 
 export default function PriceTierValue({
-  gender,
+  detail,
+  price,
   age,
+  compact,
 }: {
-  gender: GenderPrice
+  detail?: GenderPrice | null
+  price?: number | null
   age?: string | null
+  compact?: boolean
 }) {
   const colors = useColors()
+  const size = compact ? 12 : 14
   const styles = StyleSheet.create({
-    base: { fontSize: 14, color: colors.textPrimary },
-    muted: { color: colors.textSecondary },
-    strike: { textDecorationLine: 'line-through', color: colors.textTertiary },
-    sold: { color: colors.textTertiary },
+    base: { fontSize: size, color: colors.textPrimary },
+    muted: { fontSize: size, color: colors.textSecondary },
+    strike: { fontSize: size, textDecorationLine: 'line-through', color: colors.textTertiary },
   })
 
-  const ageText = age ? (/세\s*$/.test(age) ? age : `${age}세`) : null
+  const regular = detail?.regular ?? (price ?? null)
+  const regularSold = detail?.regular_soldout ?? false
+  const at = fmtAge(age)
+  if (regular == null && !at) return null
 
   return (
-    <Text style={styles.base} numberOfLines={2}>
-      {/* 정가 */}
-      {gender.regular != null && (
-        <Text style={gender.regular_soldout ? styles.strike : undefined}>
-          {won(gender.regular)}
-          {gender.regular_soldout ? ' (품절)' : ''}
+    <Text style={styles.base} numberOfLines={compact ? 1 : 2} adjustsFontSizeToFit={compact} minimumFontScale={0.6}>
+      {/* 정가 (품절이면 취소선) */}
+      {regular != null && (
+        <Text style={regularSold ? styles.strike : undefined}>
+          {won(regular)}{regularSold ? ' (품절)' : ''}
         </Text>
       )}
 
-      {/* 얼리버드(할인가) */}
-      {gender.earlybird != null && (
+      {/* 얼리버드 — 상세에서만(카드는 compact로 생략) */}
+      {!compact && detail?.earlybird != null && (
         <>
           <Text style={styles.muted}>{'  ·  '}</Text>
-          <Text style={gender.earlybird_soldout ? styles.strike : styles.muted}>
-            얼리버드 {won(gender.earlybird)}
-            {gender.earlybird_soldout ? ' (품절)' : ''}
+          <Text style={detail.earlybird_soldout ? styles.strike : styles.muted}>
+            얼리버드 {won(detail.earlybird)}{detail.earlybird_soldout ? ' (품절)' : ''}
           </Text>
         </>
       )}
 
       {/* 연령 */}
-      {ageText && (
+      {at && (
         <>
-          <Text style={styles.muted}>{'  ·  '}</Text>
-          <Text style={styles.muted}>{ageText}</Text>
+          <Text style={styles.muted}>{regular != null ? '  ·  ' : ''}</Text>
+          <Text style={styles.muted}>{at}</Text>
         </>
       )}
     </Text>

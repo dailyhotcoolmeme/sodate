@@ -20,6 +20,7 @@ type Row = {
   candidate_id: string | null
   company_id: string
   company_name: string
+  company_slug: string
   event_date: string // datetime-local
   source_url: string // 확인 링크
   location_region: string
@@ -79,7 +80,7 @@ export default function Register() {
     const horizon = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
     const { data, error } = await supabase
       .from('events')
-      .select('id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, price_detail, age_male, age_female, hashtags, is_closed, source, companies(name)')
+      .select('id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, price_detail, age_male, age_female, hashtags, is_closed, source, companies(name, slug)')
       .eq('is_active', true)
       .gte('event_date', now.toISOString())
       .lte('event_date', horizon.toISOString())
@@ -95,6 +96,7 @@ export default function Register() {
       makeRow({
         company_id: e.company_id,
         company_name: e.companies?.name ?? '',
+        company_slug: e.companies?.slug ?? '',
         event_date: toLocalInput(e.event_date),
         source_url: e.source_url,
         location_region: e.location_region ?? '',
@@ -265,19 +267,19 @@ export default function Register() {
           <p className="text-xs font-semibold text-blue-600 mb-2">남성</p>
           <div className="grid grid-cols-2 gap-2">
             <CardInput label="가격" type="number" value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} />
-            <CardInput label="연령" value={r.age_male} placeholder="예 2734" onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
+            <CardInput label="연령" value={r.age_male} placeholder="예 2734" hint={bornHint(r.company_slug, r.age_male)} onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
           </div>
         </div>
         <div className="rounded-lg bg-pink-50/60 p-2.5">
           <p className="text-xs font-semibold text-pink-600 mb-2">여성</p>
           <div className="grid grid-cols-2 gap-2">
             <CardInput label="가격" type="number" value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} />
-            <CardInput label="연령" value={r.age_female} placeholder="예 2532" onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
+            <CardInput label="연령" value={r.age_female} placeholder="예 2532" hint={bornHint(r.company_slug, r.age_female)} onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
           </div>
         </div>
       </div>
 
-      {/* 가격 티어 자동표시 (에모셔널오렌지 price_detail) — 읽기 전용 */}
+      {/* 자동 크롤 가격/품절 참고표시 (읽기용, 입력란은 위에서 편집 가능) */}
       {r.price_detail && <PriceDetailReadout detail={r.price_detail} />}
 
       {/* 해시태그 */}
@@ -327,9 +329,9 @@ export default function Register() {
           className="border border-gray-200 rounded px-2 py-1 text-sm w-20" />
       </td>
       <NumCell value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} wide />
-      <AgeCell value={r.age_male} onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
+      <AgeCell value={r.age_male} hint={bornHint(r.company_slug, r.age_male)} onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
       <NumCell value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} wide />
-      <AgeCell value={r.age_female} onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
+      <AgeCell value={r.age_female} hint={bornHint(r.company_slug, r.age_female)} onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
       <td className="px-3 py-2 align-middle">
         <div className="w-64">
           <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showSuggestions={false} compact />
@@ -476,6 +478,47 @@ function NumCell({ value, onChange, onBlur, wide }: {
 
 // 모바일 카드용 라벨 달린 입력칸
 // 가격 티어 읽기 표시(에모셔널오렌지 자동). 얼리버드 품절이면 취소선.
+function CardInput({ label, value, onChange, onBlur, type = 'text', placeholder, hint }: {
+  label: string; value: string; onChange: (v: string) => void; onBlur: () => void
+  type?: string; placeholder?: string; hint?: string | null
+}) {
+  return (
+    <div>
+      <p className="text-[11px] text-gray-400 mb-0.5">{label}</p>
+      <input type={type} value={value} placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
+        className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full text-center bg-white placeholder:text-gray-300" />
+      {hint && <p className="text-[10px] text-gray-400 mt-0.5 text-center">{hint}</p>}
+    </div>
+  )
+}
+
+// 참가 연령대 — 사이트에서 본 그대로 자유 입력 (예: "27~34", "20대~30대 초반")
+function AgeCell({ value, onChange, onBlur, hint }: {
+  value: string; onChange: (v: string) => void; onBlur: () => void; hint?: string | null
+}) {
+  return (
+    <td className="px-2 py-2 text-center">
+      <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
+        placeholder="예 2734"
+        className="border border-gray-200 rounded px-2 py-1 text-sm text-center w-20 placeholder:text-gray-300" />
+      {hint && <p className="text-[10px] text-gray-400 mt-0.5">{hint}</p>}
+    </td>
+  )
+}
+
+// 만나이→출생연도 힌트 (만나이 환산 업체만: 사이트가 출생연도로 표시하므로 검증용)
+const BIRTH_YEAR_VENDORS = new Set(['yeonin', 'lovecommunity-loco'])
+function bornHint(slug: string, age: string): string | null {
+  if (!BIRTH_YEAR_VENDORS.has(slug)) return null
+  const m = age.match(/^(\d{1,2})\s*[~\-]\s*(\d{1,2})$/)
+  if (!m) return null
+  const yr = new Date().getFullYear()
+  const p = (n: number) => String(((n % 100) + 100) % 100).padStart(2, '0')
+  return `${p(yr - parseInt(m[2]))}-${p(yr - parseInt(m[1]))}년생`  // 나이많은쪽(이른출생)-나이적은쪽
+}
+
+// 자동 크롤 가격/품절 참고표시 (읽기용 — 입력란은 별도로 편집 가능)
 function PriceDetailReadout({ detail }: { detail: PriceDetail }) {
   const won = (n: number) => `${n.toLocaleString()}원`
   const line = (label: string, g?: GenderPrice) => {
@@ -498,37 +541,10 @@ function PriceDetailReadout({ detail }: { detail: PriceDetail }) {
   }
   return (
     <div className="mt-2 rounded-lg bg-gray-50 px-2.5 py-1.5">
-      <p className="text-[10px] text-gray-400 mb-1">자동 크롤 가격(수정 불필요)</p>
+      <p className="text-[10px] text-gray-400 mb-1">자동 크롤 가격·품절(참고)</p>
       {line('남', detail.male)}
       {line('여', detail.female)}
     </div>
-  )
-}
-
-function CardInput({ label, value, onChange, onBlur, type = 'text', placeholder }: {
-  label: string; value: string; onChange: (v: string) => void; onBlur: () => void
-  type?: string; placeholder?: string
-}) {
-  return (
-    <div>
-      <p className="text-[11px] text-gray-400 mb-0.5">{label}</p>
-      <input type={type} value={value} placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
-        className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full text-center bg-white placeholder:text-gray-300" />
-    </div>
-  )
-}
-
-// 참가 연령대 — 사이트에서 본 그대로 자유 입력 (예: "27~34", "20대~30대 초반")
-function AgeCell({ value, onChange, onBlur }: {
-  value: string; onChange: (v: string) => void; onBlur: () => void
-}) {
-  return (
-    <td className="px-2 py-2 text-center">
-      <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
-        placeholder="예 2734"
-        className="border border-gray-200 rounded px-2 py-1 text-sm text-center w-20 placeholder:text-gray-300" />
-    </td>
   )
 }
 
@@ -538,6 +554,7 @@ function makeRow(p: Partial<Row>): Row {
     candidate_id: null,
     company_id: '',
     company_name: '',
+    company_slug: '',
     event_date: '',
     source_url: '',
     location_region: '',

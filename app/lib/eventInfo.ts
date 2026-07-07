@@ -20,8 +20,8 @@ export function genderInfoLine(opts: {
   // 참가비
   if (opts.price != null) parts.push(`${opts.price.toLocaleString()}원`)
 
-  // 연령 (오너가 "세"를 이미 붙였으면 그대로)
-  if (opts.age) parts.push(/세\s*$/.test(opts.age) ? opts.age : `${opts.age}세`)
+  // 연령: 숫자로 끝나면 "세" 부착(27~34→27~34세), 아니면 그대로("나이 무관", "35~45세")
+  if (opts.age) parts.push(/\d\s*$/.test(opts.age) ? `${opts.age}세` : opts.age)
 
   return parts.join(' · ')
 }

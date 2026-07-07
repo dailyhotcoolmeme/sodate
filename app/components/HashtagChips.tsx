@@ -17,11 +17,13 @@ interface Props {
   size?: 'sm' | 'md'
   // 한 줄에 노출할 최대 개수 (넘치면 가로 스크롤)
   max?: number
+  // 리스트에서 줄간격 균일하게: 자체 상하 마진 제거
+  tight?: boolean
 }
 
 // 소개팅 제목 바로 아래에 표시하는 해시태그 배지.
 // 누르면 해당 태그로 필터를 적용하고 목록(홈)으로 이동한다.
-export default function HashtagChips({ hashtags, size = 'sm', max = 3 }: Props) {
+export default function HashtagChips({ hashtags, size = 'sm', max = 3, tight = false }: Props) {
   const colors = useColors()
   const router = useRouter()
 
@@ -33,10 +35,10 @@ export default function HashtagChips({ hashtags, size = 'sm', max = 3 }: Props) 
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        scroll: { marginTop: 1, marginBottom: 2 },
+        scroll: tight ? { marginTop: 0, marginBottom: 0 } : { marginTop: 1, marginBottom: 2 },
         row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
         chip: {
-          paddingVertical: 2,
+          paddingVertical: tight ? 0 : 2,
         },
         chipText: {
           color: colors.primary,
@@ -44,7 +46,7 @@ export default function HashtagChips({ hashtags, size = 'sm', max = 3 }: Props) 
           fontWeight: '700',
         },
       }),
-    [colors, size]
+    [colors, size, tight]
   )
 
   if (tags.length === 0) return null

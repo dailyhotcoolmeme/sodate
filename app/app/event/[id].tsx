@@ -29,7 +29,6 @@ import { getMyReviewIds } from '@/lib/reviewIdentity'
 import type { ReviewRow } from '@/lib/supabase'
 import AdBanner from '@/components/AdBanner'
 import { daysUntil } from '@/lib/dday'
-import { genderInfoLine } from '@/lib/eventInfo'
 import PriceTierValue from '@/components/PriceTierValue'
 
 function cleanText(text: string): string {
@@ -449,34 +448,22 @@ export default function EventDetailScreen() {
         <View style={styles.infoCard}>
           <InfoRow label="일시" value={formatDate(event.event_date)} styles={styles} />
           <InfoRow label="지역" value={event.location_region} styles={styles} />
-          {event.location_detail && (
-            <InfoRow label="장소" value={event.location_detail} styles={styles} />
-          )}
           {(() => {
-            // price_detail(에모셔널오렌지 티어)이 있으면 티어 표시, 없으면 기존 단일가 한 줄.
             const detail = event.price_detail
-            const m = genderInfoLine({ capacity: event.capacity_male, seats: event.seats_left_male, price: event.price_male, age: event.age_male })
-            const f = genderInfoLine({ capacity: event.capacity_female, seats: event.seats_left_female, price: event.price_female, age: event.age_female })
+            const hasM = event.price_male != null || !!detail?.male || !!event.age_male
+            const hasF = event.price_female != null || !!detail?.female || !!event.age_female
             return (
               <>
-                {(!!detail?.male || !!m) && (
+                {hasM && (
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: '#3B82F6', fontWeight: '700' }]}>남성</Text>
-                    {detail?.male ? (
-                      <View style={styles.infoValue}><PriceTierValue gender={detail.male} age={event.age_male} /></View>
-                    ) : (
-                      <Text style={styles.infoValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{m}</Text>
-                    )}
+                    <View style={styles.infoValue}><PriceTierValue detail={detail?.male} price={event.price_male} age={event.age_male} /></View>
                   </View>
                 )}
-                {(!!detail?.female || !!f) && (
+                {hasF && (
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: colors.primary, fontWeight: '700' }]}>여성</Text>
-                    {detail?.female ? (
-                      <View style={styles.infoValue}><PriceTierValue gender={detail.female} age={event.age_female} /></View>
-                    ) : (
-                      <Text style={styles.infoValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{f}</Text>
-                    )}
+                    <View style={styles.infoValue}><PriceTierValue detail={detail?.female} price={event.price_female} age={event.age_female} /></View>
                   </View>
                 )}
               </>

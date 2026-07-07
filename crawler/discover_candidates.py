@@ -24,6 +24,8 @@ ENV = dotenv_values('/Users/ourmine/dev/sodate/crawler/.env')
 from supabase import create_client
 sb = create_client(ENV['SUPABASE_URL'], ENV['SUPABASE_SERVICE_ROLE_KEY'])
 
+from utils.hashtags import derive_hashtags
+
 KST = timezone(timedelta(hours=9))
 NOW = datetime.now(KST)
 HORIZON = NOW + timedelta(days=60)  # 오늘+2개월
@@ -344,6 +346,7 @@ def discover_emotional_orange(slug, list_urls, page):
                 'price_male': price_male,
                 'price_female': price_female,
                 'age_male': age_male,
+                'age_female': '나이 무관',  # 에모셔널오렌지 여성=연령 무관
                 'age_range_min': age_min,
                 'age_range_max': age_max,
                 'price_detail': price_detail,
@@ -405,20 +408,66 @@ def discover_loco(slug, list_urls, page):
                 return int(m.group(2).replace(',', ''))
         return None
 
-    # idx → 지역(상품 제목 대괄호). 예: idx=1 "[수원]" → 수원
+    # idx → 지역(상품 제목 대괄호)·상품텍스트(해시태그 생성용)
     idx_region = {}
+    idx_text = {}
     for u, text in products.items():
         mi = re.search(r'idx=(\d+)', u)
+        if not mi:
+            continue
+        if mi.group(1) not in idx_text:
+            idx_text[mi.group(1)] = text or ''
         bm = re.search(r'\[([^\]]+)\]', text or '')
-        if mi and bm and mi.group(1) not in idx_region:
+        if bm and mi.group(1) not in idx_region:
             phrase = bm.group(1).strip()
             if not re.search(r'\d', phrase):  # "6/27 GRAND OPEN" 같은 날짜 대괄호 제외
                 idx_region[mi.group(1)] = phrase
+
+    # idx → 만나이 범위. 본문 "모집연령: 88년생 ~ 04년생" → 만나이(2026: 88년생=38, 04년생=22).
+    # 상품당 고정(모든 날짜 공통). 성별 구분 없음(남=여 공통).
+    LOCO_AGE_RE = re.compile(r'모집\s*연령\s*[:：]?\s*(\d{2})\s*년생\s*[~∼\-]\s*(\d{2})\s*년생')
+    # 본문 시작시각(요일별 패턴: 금19:30/토18:30). "🍷 7 월 10일(금) 19:30~22:00 사당"
+    # 본문엔 임박한 2개 날짜만 나와서 요일→시각으로 학습해 전체 날짜에 적용.
+    LOCO_TIME_RE = re.compile(
+        r'\d{1,2}\s*월\s*\d{1,2}\s*일\s*\(([월화수목금토일])\)\s*(\d{1,2}):(\d{2})')
+
+    def _age(yy):
+        yy = int(yy)
+        return NOW.year - (2000 + yy if yy < 30 else 1900 + yy)
+
+    idx_age = {}
+    time_map = {}  # (지역, 월, 일) → (시, 분)
+    for idx in idxs:
+        try:
+            page.goto(f'https://{host}/shop_view/?idx={idx}',
+                      timeout=30000, wait_until='domcontentloaded')
+            page.wait_for_timeout(2500)
+            body = page.inner_text('body')
+        except Exception:
+            continue
+        am = LOCO_AGE_RE.search(body)
+        if am:
+            a1, a2 = _age(am.group(1)), _age(am.group(2))
+            idx_age[idx] = (min(a1, a2), max(a1, a2))
+        for tm in LOCO_TIME_RE.finditer(body):
+            time_map[tm.group(1)] = (int(tm.group(2)), int(tm.group(3)))  # 요일 → (시,분)
 
     updated = 0
     inserts = []
     for idx in idxs:
         region = idx_region.get(idx)
+        age = idx_age.get(idx)
+        age_fields = {}
+        if age:
+            age_fields = {'age_male': f'{age[0]}~{age[1]}',
+                          'age_female': f'{age[0]}~{age[1]}',
+                          'age_range_min': age[0], 'age_range_max': age[1]}
+        # 해시태그(상품 텍스트 '와인파티 직장인' + 지역 + 나이 기반). 비면 미설정.
+        _tags = derive_hashtags(title=idx_text.get(idx), region=region,
+                                age_min=age[0] if age else None,
+                                age_max=age[1] if age else None)
+        if _tags:
+            age_fields['hashtags'] = _tags
         dates = [o for o in EO_OPT_RE.findall(eo_load_option(host, idx)) if '/' in o[2]]
         for dgh, dvh, dlb in dates:
             dm = re.search(r'(\d{1,2})/(\d{1,2})', dlb)
@@ -426,10 +475,13 @@ def discover_loco(slug, list_urls, page):
                 continue
             mo, da = int(dm.group(1)), int(dm.group(2))
             yr = NOW.year + 1 if mo < NOW.month else NOW.year
+            # 본문 시각(요일 패턴: 금19:30/토18:30). 해당 요일 없으면 19:00 폴백
             try:
-                dt = datetime(yr, mo, da, 19, 0, tzinfo=KST)
+                dow = '월화수목금토일'[datetime(yr, mo, da).weekday()]
             except ValueError:
                 continue
+            hh, mm = time_map.get(dow, (19, 0))
+            dt = datetime(yr, mo, da, hh, mm, tzinfo=KST)
             if not (NOW <= dt <= HORIZON):
                 continue
             genders = [o for o in EO_OPT_RE.findall(
@@ -444,17 +496,20 @@ def discover_loco(slug, list_urls, page):
                     pf = w
             if pm is None and pf is None:
                 continue
+            title = idx_text.get(idx, '').split('\n')[0].strip() or region or '모임'
             key = (idx, dt.strftime('%Y%m%d'))
             if key in dbmap:
                 sb.table('events').update(
-                    {'price_male': pm, 'price_female': pf}).eq('id', dbmap[key]).execute()
+                    {'price_male': pm, 'price_female': pf,
+                     'event_date': dt.isoformat(), 'title': title, **age_fields}
+                ).eq('id', dbmap[key]).execute()
                 updated += 1
             else:
                 # DB에 없던 날짜 → 신규 생성(오너 확인: 사이트 12개 전부 나와야 함)
-                su = f'https://{host}/party/?idx={idx}#evt={dt.strftime("%Y%m%d")}1900'
+                su = f'https://{host}/party/?idx={idx}#evt={dt.strftime("%Y%m%d%H%M")}'
                 inserts.append({
                     'company_id': cid,
-                    'title': _NAME_CACHE.get(cid) or '모임',
+                    'title': (idx_text.get(idx, '').split('\n')[0].strip() or region or '모임'),
                     'event_date': dt.isoformat(),
                     'location_region': region or '미정',
                     'source_url': su,
@@ -463,6 +518,7 @@ def discover_loco(slug, list_urls, page):
                     'source': 'crawl',
                     'price_male': pm,
                     'price_female': pf,
+                    **age_fields,
                 })
     if inserts:
         sb.table('events').upsert(
@@ -477,6 +533,8 @@ LC_PM_RE = re.compile(r'([\d,]+)\s*원[^0-9]*남\s*\d{2,3}\s*세')
 LC_PF_RE = re.compile(r'([\d,]+)\s*원[^0-9]*여\s*\d{2,3}\s*세')
 LC_AM_RE = re.compile(r'남\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
 LC_AF_RE = re.compile(r'여\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
+LC_DATE_RE = re.compile(r'(\d{1,2})[./](\d{1,2})')            # 리스팅 날짜 07.11
+LC_TIME_RE = re.compile(r'(오전|오후|AM|PM)\s*(\d{1,2}):(\d{2})')  # 시간 PM 5:00(커피)/PM 7:00(호프)
 
 
 def discover_lovecasting(slug='lovecasting'):
@@ -527,13 +585,30 @@ def discover_lovecasting(slug='lovecasting'):
                 pm, pf = LC_PM_RE.search(t), LC_PF_RE.search(t)
                 am, af = LC_AM_RE.search(t), LC_AF_RE.search(t)
                 # 지역 = 리스팅의 역명(제목 '[' 앞쪽에 있음). 예: 삼성역
-                st = LC_STATION_RE.search(t.split('[')[0])
+                head = t.split('[')[0]
+                st = LC_STATION_RE.search(head)
+                # 날짜+시간(리스팅 실제 시각: 커피 PM5:00=17시 / 호프 PM7:00=19시)
+                dm, tm = LC_DATE_RE.search(head), LC_TIME_RE.search(head)
+                event_date = None
+                if dm and tm:
+                    mo, da = int(dm.group(1)), int(dm.group(2))
+                    period, hh, mm = tm.group(1), int(tm.group(2)), int(tm.group(3))
+                    if period in ('오후', 'PM') and hh < 12:
+                        hh += 12
+                    elif period in ('오전', 'AM') and hh == 12:
+                        hh = 0
+                    yr = NOW.year + 1 if mo < NOW.month else NOW.year
+                    try:
+                        event_date = datetime(yr, mo, da, hh, mm, tzinfo=KST).isoformat()
+                    except ValueError:
+                        pass
                 parsed[pth] = {
                     'price_male': int(pm.group(1).replace(',', '')) if pm else None,
                     'price_female': int(pf.group(1).replace(',', '')) if pf else None,
                     'age_male': f'{am.group(1)}~{am.group(2)}' if am else None,
                     'age_female': f'{af.group(1)}~{af.group(2)}' if af else None,
                     'region': st.group(1) if st else None,
+                    'event_date': event_date,
                     'ages': [int(x) for x in (
                         (am.groups() if am else ()) + (af.groups() if af else ()))],
                 }
@@ -551,9 +626,151 @@ def discover_lovecasting(slug='lovecasting'):
         }
         if r.get('region'):
             fields['location_region'] = r['region']  # 역명(삼성역 등)으로 지역 교체
+        if r.get('event_date'):
+            fields['event_date'] = r['event_date']    # 실제 시각으로 교체(커피17시/호프19시)
         sb.table('events').update(fields).eq('id', dbmap[pth]).execute()
         updated += 1
     return updated
+
+
+# 연인어때 전용 정규식
+YN_DATE_RE = re.compile(r'(\d{1,2})/(\d{1,2})')
+YN_TIME_RE = re.compile(r'(오전|오후)?\s*(\d{1,2})\s*시\s*(?:(\d{1,2})\s*분)?')
+YN_AGE_RE = re.compile(r'남[:\s]*(\d{2})[-~](\d{2})')  # 남 출생연도 예: 92-99
+
+
+def discover_yeonin(slug='yeonin'):
+    """연인어때 전용 — imweb 3단계(지역→성별→일시). 일시 옵션 라벨+가격span에서
+    슬롯별 날짜/시간/남성나이(출생연도→만나이)/성별가격/품절을 파싱.
+    지역상품 9개(최신 서머리 연관상품)를 돌며 (지역×날짜×시간)슬롯당 1이벤트 생성.
+    기존 이벤트(잘못된 형식)는 전부 삭제 후 교체(오너 승인). 품절=price_detail.regular_soldout(앱 취소선)."""
+    cid = company_id(slug)
+    HOST = 'yeonin.co.kr'
+
+    def sel_str(pairs):
+        return ''.join(
+            f'&selected_require_options%5B{i}%5D%5Bvalue_type%5D=SELECT'
+            f'&selected_require_options%5B{i}%5D%5Boption_code%5D={gh}'
+            f'&selected_require_options%5B{i}%5D%5Bvalue_code%5D={vh}'
+            for i, (gh, vh) in enumerate(pairs))
+
+    def to_age(yy):
+        yy = int(yy)
+        return NOW.year - (2000 + yy if yy < 30 else 1900 + yy)
+
+    def parse_slots(body):
+        out = {}
+        for it in re.findall(r'<div class="dropdown-item.*?</a>', body, re.S):
+            lb = re.search(r'margin-bottom-lg">([^<]+)<', it)
+            pr = re.search(r'<strong>\s*₩?\s*([\d,]+)', it)
+            if not lb or not pr:
+                continue
+            L = lb.group(1)
+            dm, tm = YN_DATE_RE.search(L), YN_TIME_RE.search(L)
+            if not dm or not tm:
+                continue
+            mo, da = int(dm.group(1)), int(dm.group(2))
+            per, h, mi = tm.group(1), int(tm.group(2)), int(tm.group(3) or 0)
+            if per == '오후' and h < 12:
+                h += 12
+            elif not per and 1 <= h <= 9:
+                h += 12
+            yr = NOW.year + 1 if mo < NOW.month else NOW.year
+            try:
+                dt = datetime(yr, mo, da, h, mi, tzinfo=KST)
+            except ValueError:
+                continue
+            if not (NOW <= dt <= HORIZON):
+                continue
+            am = YN_AGE_RE.search(L)
+            age = (to_age(am.group(2)), to_age(am.group(1))) if am else None
+            out[dt] = {'price': int(pr.group(1).replace(',', '')),
+                       'soldout': '품절' in it, 'age': age}
+        return out
+
+    # 1) 지역상품 확보 (최신 월 서머리의 연관상품)
+    products = {}
+    names = {}  # idx → 상품명(이벤트 제목)
+    with sync_playwright() as p:
+        b = p.chromium.launch(headless=True)
+        pg = b.new_context(ignore_https_errors=True, locale='ko-KR', user_agent=UA).new_page()
+        try:
+            pg.goto('https://yeonin.co.kr/schedule', timeout=30000, wait_until='domcontentloaded')
+            pg.wait_for_timeout(2500)
+            links = pg.eval_on_selector_all(
+                'a[href*="idx="]', 'els=>els.map(e=>({h:e.href,t:e.innerText.trim()}))')
+            summ = next((x for x in links if '로테이션 소개팅 일정' in x['t']), None)
+            if summ:
+                url = summ['h'] if 'bmode' in summ['h'] else summ['h'] + '&bmode=view'
+                pg.goto(url, timeout=30000, wait_until='domcontentloaded')
+                pg.wait_for_timeout(3000)
+                rel = pg.eval_on_selector_all(
+                    'a[href*="shop_view"]', 'els=>els.map(e=>({h:e.href,t:e.innerText.trim()}))')
+                for it in rel:
+                    m = re.search(r'idx=(\d+)', it['h'])
+                    reg = re.search(r'\[([^\]]+)\]', it['t'])
+                    if m and reg and m.group(1) not in products:
+                        products[m.group(1)] = reg.group(1).strip()
+                        # 상품명(첫 줄) = 이벤트 제목
+                        nm = (it['t'] or '').split('\n')[0].strip()
+                        names[m.group(1)] = nm or reg.group(1).strip()
+        except Exception as e:
+            print(f"연인어때 상품 확보 실패: {e}")
+        b.close()
+    if not products:
+        print("연인어때 상품 0개 — 중단(기존 삭제 안 함)")
+        return 0
+
+    # 2) 각 상품 파싱 → 슬롯 이벤트
+    rows = []
+    for idx, region in products.items():
+        base = eo_load_option(HOST, idx)
+        regs = EO_OPT_RE.findall(base)
+        if not regs:
+            continue
+        r0 = regs[0]
+        b2 = eo_load_option(HOST, idx, sel_str([(r0[0], r0[1])]))
+        gmap = {o[2]: (o[0], o[1]) for o in EO_OPT_RE.findall(b2) if o[2] in ('남성', '여성')}
+        M = parse_slots(eo_load_option(HOST, idx, sel_str([(r0[0], r0[1]), gmap['남성']]))) if '남성' in gmap else {}
+        F = parse_slots(eo_load_option(HOST, idx, sel_str([(r0[0], r0[1]), gmap['여성']]))) if '여성' in gmap else {}
+        for dt in sorted(set(M) | set(F)):
+            m, f = M.get(dt), F.get(dt)
+            age = (m or f).get('age')
+            detail = {}
+            if m:
+                detail['male'] = {'regular': m['price'], **({'regular_soldout': True} if m['soldout'] else {})}
+            if f:
+                detail['female'] = {'regular': f['price'], **({'regular_soldout': True} if f['soldout'] else {})}
+            age_male = f'{age[0]}~{age[1]}' if age else None
+            su = f'https://{HOST}/shop_view?idx={idx}#evt={dt.strftime("%Y%m%d%H%M")}'
+            tags = derive_hashtags(title='직장인 로테이션 소개팅', region=region,
+                                   age_min=age[0] if age else None, age_max=age[1] if age else None)
+            rows.append({
+                'company_id': cid, 'title': names.get(idx) or region,
+                'event_date': dt.isoformat(), 'location_region': region,
+                'source_url': su, 'is_active': True,
+                'is_closed': bool(m and m['soldout'] and f and f['soldout']),
+                'source': 'crawl',
+                'price_male': m['price'] if m else None,
+                'price_female': f['price'] if f else None,
+                'age_male': age_male,
+                'age_female': '나이 무관',  # 연인어때 여성=제한 없음
+                'age_range_min': age[0] if age else None,
+                'age_range_max': age[1] if age else None,
+                'price_detail': detail or None,
+                'hashtags': tags or None,
+            })
+
+    if not rows:
+        print("연인어때 슬롯 0개 — 중단(기존 삭제 안 함)")
+        return 0
+
+    # 3) 기존 전부 삭제 후 교체 (오너 승인 A)
+    sb.table('events').delete().eq('company_id', cid).execute()
+    for i in range(0, len(rows), 100):
+        sb.table('events').upsert(rows[i:i+100], on_conflict='source_url',
+                                  ignore_duplicates=True).execute()
+    return len(rows)
 
 
 def discover_wix(slug, cfg):
@@ -744,6 +961,8 @@ def main():
         try:
             if slug == 'lovecasting':
                 n = discover_lovecasting(slug)
+            elif slug == 'yeonin':
+                n = discover_yeonin(slug)
             elif slug in PLATFORM_ENRICHED:
                 n = discover_platform_enriched(slug, ScraperClass)
             else:

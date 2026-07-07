@@ -15,7 +15,7 @@ import DeadlineBadge from './DeadlineBadge'
 import ThemeTag from './ThemeTag'
 import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
-import { genderInfoLine } from '@/lib/eventInfo'
+import PriceTierValue from '@/components/PriceTierValue'
 import CompanyBadge from './CompanyBadge'
 import EventThumbnail from './EventThumbnail'
 import FavoriteButton from './FavoriteButton'
@@ -233,23 +233,23 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
           <Text style={styles.meta}>{event.location_region}</Text>
         </View>
 
-        {/* 남성 / 여성 한 줄 요약 */}
+        {/* 남성 / 여성 한 줄 요약 (품절이면 취소선) */}
         {(() => {
-          const m = genderInfoLine({ capacity: event.capacity_male, seats: event.seats_left_male, price: event.price_male, age: event.age_male })
-          const f = genderInfoLine({ capacity: event.capacity_female, seats: event.seats_left_female, price: event.price_female, age: event.age_female })
-          if (!m && !f) return null
+          const hasM = event.price_male != null || !!event.price_detail?.male || !!event.age_male
+          const hasF = event.price_female != null || !!event.price_detail?.female || !!event.age_female
+          if (!hasM && !hasF) return null
           return (
             <View style={styles.genderBlock}>
-              {!!m && (
+              {hasM && (
                 <View style={styles.genderRow}>
                   <Text style={[styles.genderTag, styles.genderMale]}>남성</Text>
-                  <Text style={styles.genderInfo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{m}</Text>
+                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.male} price={event.price_male} age={event.age_male} compact /></View>
                 </View>
               )}
-              {!!f && (
+              {hasF && (
                 <View style={styles.genderRow}>
                   <Text style={[styles.genderTag, styles.genderFemale]}>여성</Text>
-                  <Text style={styles.genderInfo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{f}</Text>
+                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.female} price={event.price_female} age={event.age_female} compact /></View>
                 </View>
               )}
             </View>

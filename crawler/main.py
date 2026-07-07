@@ -49,6 +49,13 @@ SCRAPERS = [
     LovecommunityLoco,
 ]
 
+# discover_candidates.py가 가격/시간/나이/해시태그를 정확히 채우는 업체.
+# 옛 스크래퍼(main.py)가 이들을 건드리면 시간/가격을 잘못된 값으로 되돌리므로(revert) 스킵한다.
+# → 이 업체들은 discover_candidates.py가 전담(크론 연결 예정).
+DISCOVER_MANAGED = {
+    'emotional-orange', 'yeongyul', 'lovecasting', 'lovecommunity-loco', 'yeonin',
+}
+
 
 def run_all() -> int:
     """모든 스크래퍼 순차 실행. 전체 실패(성공 0개)일 때만 exit code 1 반환"""
@@ -64,6 +71,10 @@ def run_all() -> int:
         # 크롤링 금지(휴면·수동전용) 업체는 스킵
         if scraper.company_slug in disabled:
             logger.info(f"[{scraper.company_slug}] 크롤링 금지(crawl_enabled=false) — 스킵")
+            continue
+        # discover_candidates 전담 업체는 옛 스크래퍼가 건드리면 되돌림 → 스킵
+        if scraper.company_slug in DISCOVER_MANAGED:
+            logger.info(f"[{scraper.company_slug}] discover 전담(main.py 스킵 — 되돌림 방지)")
             continue
         result = scraper.run()
         results.append({
