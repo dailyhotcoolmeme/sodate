@@ -17,17 +17,32 @@ describe('filterStore', () => {
   // --- 기본값 ---
   it('기본값이 올바르게 설정된다', () => {
     const state = useFilterStore.getState()
-    expect(state.region).toBe('all')
+    expect(state.regions).toEqual([])
     expect(state.dateRange).toBe('all')
     expect(state.maxPrice).toBeNull()
     expect(state.themes).toEqual([])
     expect(state.sortBy).toBe('date')
   })
 
-  // --- setRegion ---
-  it('setRegion 호출 시 region이 변경된다', () => {
-    useFilterStore.getState().setRegion('강남')
-    expect(useFilterStore.getState().region).toBe('강남')
+  // --- toggleRegion (다중 지역) ---
+  it('toggleRegion 호출 시 지역이 추가된다', () => {
+    useFilterStore.getState().toggleRegion('강남')
+    expect(useFilterStore.getState().regions).toContain('강남')
+  })
+
+  it('toggleRegion을 두 번 호출하면 지역이 제거된다', () => {
+    useFilterStore.getState().toggleRegion('강남')
+    useFilterStore.getState().toggleRegion('강남')
+    expect(useFilterStore.getState().regions).not.toContain('강남')
+  })
+
+  it('여러 지역을 독립적으로 선택할 수 있다', () => {
+    useFilterStore.getState().toggleRegion('강남')
+    useFilterStore.getState().toggleRegion('홍대')
+    const { regions } = useFilterStore.getState()
+    expect(regions).toContain('강남')
+    expect(regions).toContain('홍대')
+    expect(regions).toHaveLength(2)
   })
 
   // --- setDateRange ---
@@ -77,14 +92,14 @@ describe('filterStore', () => {
 
   // --- resetFilters ---
   it('resetFilters 호출 시 모든 필터가 기본값으로 돌아간다', () => {
-    useFilterStore.getState().setRegion('홍대')
+    useFilterStore.getState().toggleRegion('홍대')
     useFilterStore.getState().setDateRange('week')
     useFilterStore.getState().setMaxPrice(50000)
     useFilterStore.getState().toggleTheme('와인')
     useFilterStore.getState().setSortBy('deadline')
     useFilterStore.getState().resetFilters()
     const state = useFilterStore.getState()
-    expect(state.region).toBe('all')
+    expect(state.regions).toEqual([])
     expect(state.dateRange).toBe('all')
     expect(state.maxPrice).toBeNull()
     expect(state.themes).toEqual([])
@@ -93,36 +108,36 @@ describe('filterStore', () => {
 
   // --- saveRecentFilter ---
   it('saveRecentFilter 호출 시 현재 필터가 recentFilters에 저장된다', () => {
-    useFilterStore.getState().setRegion('강남')
+    useFilterStore.getState().toggleRegion('강남')
     useFilterStore.getState().toggleTheme('와인')
     useFilterStore.getState().saveRecentFilter()
     const { recentFilters } = useFilterStore.getState()
     expect(recentFilters).toHaveLength(1)
-    expect(recentFilters[0].region).toBe('강남')
+    expect(recentFilters[0].regions).toContain('강남')
     expect(recentFilters[0].themes).toContain('와인')
   })
 
   it('최근 필터는 최대 5개까지만 저장된다', () => {
     for (let i = 0; i < 7; i++) {
-      useFilterStore.getState().setRegion(`region-${i}`)
+      useFilterStore.getState().toggleRegion(`region-${i}`)
       useFilterStore.getState().saveRecentFilter()
     }
     expect(useFilterStore.getState().recentFilters).toHaveLength(5)
   })
 
   it('최신 필터가 recentFilters 맨 앞에 위치한다', () => {
-    useFilterStore.getState().setRegion('강남')
+    useFilterStore.getState().toggleRegion('강남')
     useFilterStore.getState().saveRecentFilter()
-    useFilterStore.getState().setRegion('홍대')
+    useFilterStore.getState().toggleRegion('홍대')
     useFilterStore.getState().saveRecentFilter()
-    expect(useFilterStore.getState().recentFilters[0].region).toBe('홍대')
+    expect(useFilterStore.getState().recentFilters[0].regions).toContain('홍대')
   })
 
   // --- applyRecentFilter ---
   it('applyRecentFilter 호출 시 스냅샷 값이 적용된다', () => {
     const snapshot: FilterSnapshot = {
       id: 'snap-1',
-      region: '이태원',
+      regions: ['이태원'],
       dateRange: 'month',
       maxPrice: 30000,
       themes: ['파티'],
@@ -130,7 +145,7 @@ describe('filterStore', () => {
     }
     useFilterStore.getState().applyRecentFilter(snapshot)
     const state = useFilterStore.getState()
-    expect(state.region).toBe('이태원')
+    expect(state.regions).toContain('이태원')
     expect(state.dateRange).toBe('month')
     expect(state.maxPrice).toBe(30000)
     expect(state.themes).toContain('파티')
