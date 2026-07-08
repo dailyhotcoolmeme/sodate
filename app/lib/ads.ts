@@ -1,5 +1,6 @@
 import { Platform } from 'react-native'
 import { TestIds } from 'react-native-google-mobile-ads'
+import * as Updates from 'expo-updates'
 
 /**
  * 광고 단위 ID 중앙 관리 파일.
@@ -34,8 +35,21 @@ const REAL = {
   },
 } as const
 
+// 실제 광고는 "production(스토어) 채널" 빌드에서만 사용한다.
+// - 개발(__DEV__)·preview(테스트) 빌드는 항상 구글 테스트 광고.
+//   (preview 빌드는 __DEV__=false라, 실광고ID를 그대로 쓰면 테스트 앱ID 바이너리에서
+//    실광고가 안 떠 배너가 통째로 사라짐. 또 테스트 중 실광고 클릭=AdMob 계정 정지 위험)
+// - Updates.channel 은 스토어 프로덕션 빌드에서만 'production'.
+function isProductionBuild(): boolean {
+  try {
+    return Updates.channel === 'production'
+  } catch {
+    return false
+  }
+}
+
 function resolve(real: { ios: string; android: string }, test: string): string {
-  if (__DEV__) return test
+  if (__DEV__ || !isProductionBuild()) return test
   const id = Platform.OS === 'ios' ? real.ios : real.android
   return id || test
 }
