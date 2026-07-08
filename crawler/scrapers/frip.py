@@ -23,8 +23,11 @@ from utils.region import resolve_region
 FRIP_GQL = 'https://gql.frip.co.kr/graphql'
 FRIP_BASE = 'https://frip.co.kr'
 
-# 소셜/소개팅모임 카테고리 ID
-CATEGORY_IDS = [2841]
+# 소개팅 관련 카테고리 ID
+#   2841=소셜/게더링(파티성), 2834=미팅(12대12 로테이션 소개팅 등 핵심), 2844=파티
+# 과거 2841만 봐서 미팅(2834) 카테고리 전체(로테이션 소개팅 다수)를 놓쳤음.
+# 술19금(2392)은 순수 음주 클래스 노이즈 우려로 제외. source_url로 중복 제거됨.
+CATEGORY_IDS = [2841, 2834, 2844]
 
 PRICE_RE = re.compile(r'[\d.]+')
 REGION_KW = ['강남', '서초', '홍대', '신촌', '잠실', '건대', '성수', '이태원', '합정', '여의도',
