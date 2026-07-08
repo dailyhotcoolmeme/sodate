@@ -1102,7 +1102,11 @@ def discover_frip(slug, ScraperClass):
         pm, pf = d.get('price_male'), d.get('price_female')
         sm, sf = d.get('seats_left_male'), d.get('seats_left_female')
         amin, amax = d.get('age_range_min'), d.get('age_range_max')
-        has_age = bool(amin and amax)  # 결정 A: 상·하한 둘 다 있을 때만
+        age_label = d.get('age_group_label')
+        # 프립 나이는 업체가 명시한 "XX~YY년생"에서 나온 것만 신뢰(오너가 링크에서 확인 가능).
+        # "N0대" 추측('10대 사절' 등 노이즈까지 나이로 잡아 18~39 같은 엉터리 생성)·
+        # recommendedAge(하한만)는 버린다.
+        has_age = bool(amin and amax and age_label and age_label.endswith('년생'))
 
         detail = {}
         if pm is not None:
@@ -1124,6 +1128,11 @@ def discover_frip(slug, ScraperClass):
             age_text = f'{amin}~{amax}'
             fields.update({'age_male': age_text, 'age_female': age_text,
                            'age_range_min': amin, 'age_range_max': amax})
+        else:
+            # 신뢰 안 되는 나이(대-추측 등)는 명시적으로 비움 — 과거 실행이 넣은
+            # 엉터리 값(18~39 등)이 병합에서 안 지워지고 남는 것 방지.
+            fields.update({'age_male': None, 'age_female': None,
+                           'age_range_min': None, 'age_range_max': None})
 
         if su in existing:
             # 기존 행(설명·제목·날짜·source 보존) — 가격/품절/나이만 채움

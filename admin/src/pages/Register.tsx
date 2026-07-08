@@ -507,8 +507,9 @@ function AgeCell({ value, onChange, onBlur, hint }: {
   )
 }
 
-// 만나이→출생연도 힌트 (만나이 환산 업체만: 사이트가 출생연도로 표시하므로 검증용)
-const BIRTH_YEAR_VENDORS = new Set(['yeonin', 'lovecommunity-loco'])
+// 만나이→출생연도 힌트 (사이트가 출생연도로 안내하는 업체 전부: 오너 검증용).
+// yeonin·loco·talkblossom = 출생연도(YY) 표기, frip = "XX~YY년생" 표기 → 모두 년도 기반.
+const BIRTH_YEAR_VENDORS = new Set(['yeonin', 'lovecommunity-loco', 'talkblossom', 'frip'])
 function bornHint(slug: string, age: string): string | null {
   if (!BIRTH_YEAR_VENDORS.has(slug)) return null
   const m = age.match(/^(\d{1,2})\s*[~\-]\s*(\d{1,2})$/)
