@@ -564,6 +564,11 @@ export default function HomeScreen() {
         rows.push({ type: 'ad', key: `ad-${i}` })
       }
     })
+    // 필터 결과가 AD_INTERVAL보다 짧으면 위 로직이 광고를 하나도 못 넣음
+    // → 결과가 2개 이상인데 광고가 없으면 결과 끝에 광고 1개 보장(수익 누락 방지)
+    if (events.length >= 2 && !rows.some((r) => r.type === 'ad')) {
+      rows.push({ type: 'ad', key: 'ad-tail' })
+    }
     return rows
   }, [events])
 
