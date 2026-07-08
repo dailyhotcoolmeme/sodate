@@ -11,12 +11,16 @@ import { useColors } from '@/hooks/useColors'
  */
 export type GenderPrice = {
   regular?: number
+  regular_max?: number       // 있으면 범위 표시(예: MVP 59,000~74,900원)
   regular_soldout?: boolean
   earlybird?: number
   earlybird_soldout?: boolean
 }
 
 const won = (n: number) => `${n.toLocaleString()}원`
+// 단일가 또는 범위(min~max) 표기
+const wonRange = (min: number, max?: number | null) =>
+  max != null && max > min ? `${min.toLocaleString()}~${max.toLocaleString()}원` : won(min)
 // 숫자로 끝나면 "세" 부착(27~34→27~34세), 아니면 그대로("나이 무관")
 const fmtAge = (age?: string | null) =>
   age ? (/\d\s*$/.test(age) ? `${age}세` : age) : null
@@ -50,7 +54,7 @@ export default function PriceTierValue({
       {/* 정가 (품절이면 취소선) */}
       {regular != null && (
         <Text style={regularSold ? styles.strike : undefined}>
-          {won(regular)}{regularSold ? ' (품절)' : ''}
+          {wonRange(regular, detail?.regular_max)}{regularSold ? ' (품절)' : ''}
         </Text>
       )}
 

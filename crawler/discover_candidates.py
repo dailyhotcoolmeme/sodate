@@ -804,6 +804,149 @@ def discover_yeonin(slug='yeonin'):
     return len(rows)
 
 
+# ── 토크블라썸 전용: Cafe24 연동옵션(성별→일시) 캐스케이드 ──────────────────
+# 일시 옵션 라벨 = "7월 18일 토|13:30|99-86|결혼|리뷰필수 (-2,000원)"
+#   = 날짜 | 시간 | 출생연도(만나이) | 테마(STAR/결혼/MVP) | (변형/예약대기석)
+# 예약대기석=품절, 리뷰필수(-2,000)=조건부할인(무시·정가), MVP=가산옵션(2티어 범위).
+TB_URL = 'https://talkblossom.co.kr/product/detail.html?product_no=17'
+TB_REGION = '서울역·충정로역'  # 상설 장소(옵션 라벨에 지역 없음 — 기존 크롤값 유지)
+TB_DATE_RE = re.compile(r'(\d{1,2})\s*월\s*(\d{1,2})\s*일')
+TB_TIME_RE = re.compile(r'(\d{1,2}):(\d{2})')
+TB_AGE_RE = re.compile(r'(\d{2})\s*-\s*(\d{2})')
+TB_ADJ_RE = re.compile(r'\(\s*([+\-])\s*([\d,]+)\s*원\s*\)')
+TB_THEME_MAP = [('MVP', 'MVP'), ('STAR', 'STAR'), ('결혼', '결혼희망')]
+
+
+def discover_talkblossom(slug='talkblossom'):
+    """토크블라썸 전용 — Cafe24 연동옵션(성별→일시)을 Playwright로 캐스케이드.
+    슬롯당 (날짜·시간·테마) 1이벤트. 나이=출생연도→만나이, 품절=예약대기석(성별별),
+    MVP는 2티어 가격범위(regular_max), 리뷰필수 할인은 무시(정가). 기존 전부 삭제 후 교체."""
+    cid = company_id(slug)
+
+    def to_age(yy):
+        yy = int(yy)
+        return NOW.year - (2000 + yy if yy < 30 else 1900 + yy)
+
+    def parse_label(L, base):
+        dm, tm = TB_DATE_RE.search(L), TB_TIME_RE.search(L)
+        if not dm or not tm:
+            return None
+        mo, da = int(dm.group(1)), int(dm.group(2))
+        h, mi = int(tm.group(1)), int(tm.group(2))
+        yr = NOW.year + 1 if mo < NOW.month else NOW.year
+        try:
+            dt = datetime(yr, mo, da, h, mi, tzinfo=KST)
+        except ValueError:
+            return None
+        if not (NOW <= dt <= HORIZON):
+            return None
+        theme = next((norm for key, norm in TB_THEME_MAP if key in L), '소개팅')
+        am = TB_AGE_RE.search(L)
+        age = (to_age(am.group(1)), to_age(am.group(2))) if am else None
+        is_review = '리뷰필수' in L
+        adj = TB_ADJ_RE.search(L)
+        # 리뷰필수=조건부 할인 → 정가(base)로 취급. MVP 등 가산옵션만 반영.
+        price = base if is_review else (
+            base + int(adj.group(2).replace(',', '')) * (1 if adj.group(1) == '+' else -1)
+            if adj else base)
+        return {'dt': dt, 'theme': theme, 'price': price,
+                'is_review': is_review, 'soldout': '예약대기' in L, 'age': age}
+
+    def collect(pg, gender):
+        sels = pg.query_selector_all('select')
+        if len(sels) < 2:
+            return []
+        sid0, sid1 = sels[0].get_attribute('id'), sels[1].get_attribute('id')
+        pg.select_option(f'#{sid0}', label=gender)
+        pg.wait_for_timeout(1800)
+        labels = pg.eval_on_selector_all(f'#{sid1} option', 'els=>els.map(e=>e.innerText.trim())')
+        return [l for l in labels if '월' in l and ':' in l]
+
+    def group(labels, base):
+        g = {}
+        for L in labels:
+            p = parse_label(L, base)
+            if not p:
+                continue
+            key = (p['dt'], p['theme'])
+            entry = g.setdefault(key, {'variants': [], 'age': None})
+            entry['variants'].append(p)
+            if p['age'] and not entry['age']:
+                entry['age'] = p['age']
+        out = {}
+        for key, entry in g.items():
+            prices = [v['price'] for v in entry['variants']]
+            out[key] = {'pmin': min(prices), 'pmax': max(prices),
+                        'soldout': all(v['soldout'] for v in entry['variants']),
+                        'age': entry['age']}
+        return out
+
+    with sync_playwright() as p:
+        b = p.chromium.launch(headless=True)
+        pg = b.new_context(ignore_https_errors=True, locale='ko-KR', user_agent=UA).new_page()
+        try:
+            pg.goto(TB_URL, timeout=40000, wait_until='domcontentloaded')
+            pg.wait_for_timeout(3500)
+            base_txt = pg.evaluate(
+                "()=>{const e=document.querySelector('#span_product_price_text');return e?e.innerText:''}")
+            base = int(re.sub(r'[^\d]', '', base_txt) or 0)
+            M = group(collect(pg, '남자'), base)
+            pg.goto(TB_URL, timeout=40000, wait_until='domcontentloaded')
+            pg.wait_for_timeout(3000)
+            F = group(collect(pg, '여자'), base)
+        except Exception as e:
+            print(f"토크블라썸 옵션 수집 실패: {e}")
+            b.close()
+            return 0
+        b.close()
+
+    if not base or not (M or F):
+        print("토크블라썸 슬롯 0개 — 중단(기존 삭제 안 함)")
+        return 0
+
+    rows = []
+    for dt, theme in sorted(set(M) | set(F)):
+        m, f = M.get((dt, theme)), F.get((dt, theme))
+        age = (m or f)['age']
+        detail = {}
+        for gk, gv in (('male', m), ('female', f)):
+            if not gv:
+                continue
+            d = {'regular': gv['pmin']}
+            if gv['pmax'] > gv['pmin']:
+                d['regular_max'] = gv['pmax']
+            if gv['soldout']:
+                d['regular_soldout'] = True
+            detail[gk] = d
+        present = [gv for gv in (m, f) if gv]
+        age_str = f'{age[0]}~{age[1]}' if age else None
+        su = f'{TB_URL}#evt={dt.strftime("%Y%m%d%H%M")}'
+        tags = derive_hashtags(title='로테이션 소개팅', region=TB_REGION,
+                               age_min=age[0] if age else None, age_max=age[1] if age else None)
+        rows.append({
+            'company_id': cid, 'title': '토크블라썸 로테이션 소개팅',
+            'event_date': dt.isoformat(), 'location_region': TB_REGION,
+            'source_url': su, 'is_active': True,
+            'is_closed': bool(present) and all(gv['soldout'] for gv in present),
+            'source': 'crawl',
+            'price_male': m['pmin'] if m else None,
+            'price_female': f['pmin'] if f else None,
+            'age_male': age_str, 'age_female': age_str,
+            'age_range_min': age[0] if age else None,
+            'age_range_max': age[1] if age else None,
+            'price_detail': detail or None,
+            'theme': [theme],
+            'hashtags': tags or None,
+        })
+
+    # 기존 전부 삭제 후 교체 (오너 승인)
+    sb.table('events').delete().eq('company_id', cid).execute()
+    for i in range(0, len(rows), 100):
+        sb.table('events').upsert(rows[i:i+100], on_conflict='source_url',
+                                  ignore_duplicates=True).execute()
+    return len(rows)
+
+
 def discover_wix(slug, cfg):
     cid = company_id(slug)
     api = (f"https://2yeonsi.com/?_simpleApps=etc/calendar_scheduler&mvwiz={cfg['idx']}/{cfg['col']}"
@@ -923,6 +1066,92 @@ def discover_platform_enriched(slug, ScraperClass):
     return updated + len(inserts)
 
 
+def discover_frip(slug, ScraperClass):
+    """프립 전용 — GraphQL 스크래퍼가 뽑은 성별 가격/성별 잔여석/나이로 기존 행을 '채운다'(병합).
+    프립은 옛 스크래퍼가 만든 행(설명O·가격X)이 이미 있어서(source manual/verified),
+    상품URL(앵커 없음)로 매칭해 가격·품절·나이만 UPDATE(설명·제목·날짜·source 보존).
+    - 가격: 남/여 각각. 잔여석 0 → 그 성별 품절(price_detail 취소선). 마감: 남·여 잔여 모두 0.
+    - 나이: 상·하한 둘 다 있는 것만(결정 A). 하한만/없음은 손대지 않음(부실값 노출 금지).
+    - 매칭 없는 신규 상품만 crawl 로 삽입. source_url=상품URL(앵커 없음)."""
+    cid = company_id(slug)
+    events = ScraperClass().scrape()
+
+    existing = {}
+    er = sb.table('events').select('id,source_url').eq('company_id', cid).execute()
+    for e in (er.data or []):
+        existing[e['source_url']] = e['id']
+
+    updated = 0
+    inserts = []
+    seen = set()
+    for ev in events:
+        d = ev.model_dump()
+        dt = d.get('event_date')
+        if not isinstance(dt, datetime):
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=KST)
+        dt = dt.astimezone(KST)
+        if not (NOW <= dt <= HORIZON):
+            continue
+        su = d.get('source_url')  # 앵커 없는 상품 URL — 기존 manual 행과 동일 키
+        if not su or su in seen:
+            continue
+        seen.add(su)
+
+        pm, pf = d.get('price_male'), d.get('price_female')
+        sm, sf = d.get('seats_left_male'), d.get('seats_left_female')
+        amin, amax = d.get('age_range_min'), d.get('age_range_max')
+        has_age = bool(amin and amax)  # 결정 A: 상·하한 둘 다 있을 때만
+
+        detail = {}
+        if pm is not None:
+            detail['male'] = {'regular': pm, **({'regular_soldout': True} if sm == 0 else {})}
+        if pf is not None:
+            detail['female'] = {'regular': pf, **({'regular_soldout': True} if sf == 0 else {})}
+        # 마감: 남·여 잔여 모두 파악됐고 둘 다 0
+        is_closed = (sm == 0 and sf == 0) if (sm is not None and sf is not None) else False
+
+        # 채울 필드(가격/품절/잔여/마감). 나이는 신뢰될 때만 포함.
+        fields = {
+            'price_male': pm, 'price_female': pf,
+            'price_detail': detail or None,
+            'seats_left_male': sm, 'seats_left_female': sf,
+            'capacity_male': d.get('capacity_male'), 'capacity_female': d.get('capacity_female'),
+            'is_closed': is_closed,
+        }
+        if has_age:
+            age_text = f'{amin}~{amax}'
+            fields.update({'age_male': age_text, 'age_female': age_text,
+                           'age_range_min': amin, 'age_range_max': amax})
+
+        if su in existing:
+            # 기존 행(설명·제목·날짜·source 보존) — 가격/품절/나이만 채움
+            sb.table('events').update(fields).eq('id', existing[su]).execute()
+            updated += 1
+        else:
+            region = d.get('location_region') or '미정'
+            tags = derive_hashtags(title=d.get('title') or '', region=region,
+                                   age_min=amin if has_age else None,
+                                   age_max=amax if has_age else None)
+            inserts.append({
+                'company_id': cid,
+                'title': d.get('title') or _NAME_CACHE.get(cid) or '모임',
+                'event_date': dt.isoformat(),
+                'location_region': region,
+                'location_detail': d.get('location_detail'),
+                'source_url': su, 'is_active': True,
+                'source': 'crawl',
+                'hashtags': tags or [],  # NOT NULL → 빈 배열
+                **fields,
+            })
+
+    if inserts:
+        sb.table('events').upsert(inserts, on_conflict='source_url',
+                                  ignore_duplicates=True).execute()
+    return updated + len(inserts)
+
+
 def main():
     only = sys.argv[1] if len(sys.argv) > 1 else None
 
@@ -994,6 +1223,10 @@ def main():
                 n = discover_lovecasting(slug)
             elif slug == 'yeonin':
                 n = discover_yeonin(slug)
+            elif slug == 'talkblossom':
+                n = discover_talkblossom(slug)
+            elif slug == 'frip':
+                n = discover_frip(slug, ScraperClass)
             elif slug in PLATFORM_ENRICHED:
                 n = discover_platform_enriched(slug, ScraperClass)
             else:

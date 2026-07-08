@@ -30,6 +30,8 @@ import type { ReviewRow } from '@/lib/supabase'
 import AdBanner from '@/components/AdBanner'
 import { daysUntil } from '@/lib/dday'
 import PriceTierValue from '@/components/PriceTierValue'
+import ThemeBadge from '@/components/ThemeBadge'
+import { getThemeBadge } from '@/constants/themeBadges'
 
 function cleanText(text: string): string {
   return text
@@ -159,6 +161,20 @@ export default function EventDetailScreen() {
       fontWeight: '500',
     },
     hashtagRow: { marginTop: -14, marginBottom: 16 },
+    hashtagRowWithTheme: { marginTop: 0 },
+    themeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: -10,
+      marginBottom: 12,
+    },
+    themeNote: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
     tagsSection: { marginBottom: 20 },
     sectionLabel: {
       fontSize: 13,
@@ -439,8 +455,16 @@ export default function EventDetailScreen() {
         {/* 제목 */}
         <Text style={styles.title}>{cleanText(event.title)}</Text>
 
+        {/* 테마 배지 + 한줄 설명 (있을 때만) */}
+        {getThemeBadge(event.theme) && (
+          <View style={styles.themeRow}>
+            <ThemeBadge theme={event.theme} size="md" />
+            <Text style={styles.themeNote}>{getThemeBadge(event.theme)!.note}</Text>
+          </View>
+        )}
+
         {/* 해시태그 배지 (제목 바로 아래) — title 하단 여백을 끌어올려 붙임 */}
-        <View style={styles.hashtagRow}>
+        <View style={[styles.hashtagRow, getThemeBadge(event.theme) && styles.hashtagRowWithTheme]}>
           <HashtagChips hashtags={event.hashtags} size="md" max={4} />
         </View>
 

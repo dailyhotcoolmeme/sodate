@@ -12,7 +12,7 @@ import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
 import DeadlineBadge from './DeadlineBadge'
-import ThemeTag from './ThemeTag'
+import ThemeBadge from './ThemeBadge'
 import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
 import PriceTierValue from '@/components/PriceTierValue'
@@ -104,11 +104,17 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
       backgroundColor: '#FF6B9D18',
     },
     content: { padding: 16, gap: 4 },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginVertical: 6,
+    },
     title: {
+      flex: 1,
       fontSize: 16,
       color: colors.textPrimary,
       fontWeight: '700',
-      marginVertical: 6,
       lineHeight: 22,
     },
     metaRow: { flexDirection: 'row', gap: 12, marginTop: 2 },
@@ -218,10 +224,13 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
           />
         )}
 
-        {/* 제목 */}
-        <Text style={styles.title} numberOfLines={2}>
-          {cleanTitle(event.title)}
-        </Text>
+        {/* 테마 배지 + 제목 (같은 줄) */}
+        <View style={styles.titleRow}>
+          <ThemeBadge theme={event.theme} />
+          <Text style={styles.title} numberOfLines={2}>
+            {cleanTitle(event.title)}
+          </Text>
+        </View>
 
         {/* 해시태그 배지 (제목 바로 아래) */}
         <HashtagChips hashtags={event.hashtags} size="sm" />

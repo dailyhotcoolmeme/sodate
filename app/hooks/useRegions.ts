@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 
 export type RegionOption = { id: string; label: string }
+
+const REGION_CACHE_KEY = 'sodate-regions-cache'
 
 // 서울·수도권으로 보는 지역들
 const SEOUL_METRO = new Set([
@@ -22,9 +25,18 @@ function rankOf(region: string): number {
 // 다중 선택이라 '전체' 칩은 없음(아무것도 안 고르면 전체).
 export function useRegions(): RegionOption[] {
   const [regions, setRegions] = useState<RegionOption[]>([])
+  const gotFresh = useRef(false)
 
   useEffect(() => {
     let alive = true
+    // 1) 캐시 먼저 즉시 표시(칩 늦게 뜨는 것 방지). DB 응답 오면 덮어씀.
+    AsyncStorage.getItem(REGION_CACHE_KEY).then((raw) => {
+      if (!alive || gotFresh.current || !raw) return
+      try {
+        setRegions(JSON.parse(raw))
+      } catch {}
+    })
+    // 2) DB 최신 조회 → 갱신 + 캐시 저장
     ;(async () => {
       const { data } = await supabase
         .from('events')
@@ -46,7 +58,9 @@ export function useRegions(): RegionOption[] {
           return b[1] - a[1] // 같은 그룹: 건수 많은 순
         })
         .map(([r]) => ({ id: r, label: r }))
+      gotFresh.current = true
       setRegions(sorted)
+      AsyncStorage.setItem(REGION_CACHE_KEY, JSON.stringify(sorted)).catch(() => {})
     })()
     return () => {
       alive = false

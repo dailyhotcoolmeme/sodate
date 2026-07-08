@@ -157,3 +157,19 @@ export const useFilterStore = create<FilterState>()(
 )
 
 export type { FilterSnapshot, FilterState }
+
+// persist(AsyncStorage) 하이드레이션 완료 여부 — 완료 전 필터 UI를 렌더하면
+// 기본값(전체)이 잠깐 보였다 저장값으로 바뀌는 깜빡임이 생김. 이걸로 게이트.
+import { useState, useEffect } from 'react'
+export function useFilterHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(() => useFilterStore.persist.hasHydrated())
+  useEffect(() => {
+    if (useFilterStore.persist.hasHydrated()) {
+      setHydrated(true)
+      return
+    }
+    const unsub = useFilterStore.persist.onFinishHydration(() => setHydrated(true))
+    return unsub
+  }, [])
+  return hydrated
+}

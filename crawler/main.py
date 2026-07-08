@@ -53,7 +53,8 @@ SCRAPERS = [
 # 옛 스크래퍼(main.py)가 이들을 건드리면 시간/가격을 잘못된 값으로 되돌리므로(revert) 스킵한다.
 # → 이 업체들은 discover_candidates.py가 전담(크론 연결 예정).
 DISCOVER_MANAGED = {
-    'emotional-orange', 'yeongyul', 'lovecasting', 'lovecommunity-loco', 'yeonin',
+    'emotional-orange', 'yeongyul', 'lovecasting', 'lovecommunity-loco', 'yeonin', 'talkblossom',
+    'frip',
 }
 
 

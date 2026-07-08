@@ -1,14 +1,28 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 
 export type CompanyOption = { id: string; name: string }
 
+const COMPANY_CACHE_KEY = 'sodate-companies-cache'
+
 // 활성·미래 이벤트가 있는 업체 목록 (필터 칩용). 이벤트 많은 순.
+// 캐시 우선 → DB 최신으로 갱신. 콜드스타트 때 id→이름 해석이 늦어 필터칩에
+// UUID가 잠깐 보이던 문제 방지(캐시가 있으면 즉시 이름으로 뜸).
 export function useCompanies(): CompanyOption[] {
   const [companies, setCompanies] = useState<CompanyOption[]>([])
+  const gotFresh = useRef(false)
 
   useEffect(() => {
     let alive = true
+    // 1) 캐시 먼저 즉시 표시. DB 응답 오면 덮어씀.
+    AsyncStorage.getItem(COMPANY_CACHE_KEY).then((raw) => {
+      if (!alive || gotFresh.current || !raw) return
+      try {
+        setCompanies(JSON.parse(raw))
+      } catch {}
+    })
+    // 2) DB 최신 조회 → 갱신 + 캐시 저장
     ;(async () => {
       const { data } = await supabase
         .from('events')
@@ -26,7 +40,9 @@ export function useCompanies(): CompanyOption[] {
       const sorted = Object.entries(counts)
         .sort((a, b) => b[1].n - a[1].n)
         .map(([id, v]) => ({ id, name: v.name }))
+      gotFresh.current = true
       setCompanies(sorted)
+      AsyncStorage.setItem(COMPANY_CACHE_KEY, JSON.stringify(sorted)).catch(() => {})
     })()
     return () => {
       alive = false

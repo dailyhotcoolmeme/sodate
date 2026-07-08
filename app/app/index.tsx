@@ -34,7 +34,7 @@ import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { DAY_OPTIONS, TIME_SLOTS } from '@/constants/filters'
 import { useCompanies } from '@/hooks/useCompanies'
 import TopBar from '@/components/TopBar'
-import { useFilterStore, type FilterState } from '@/stores/filterStore'
+import { useFilterStore, useFilterHydrated, type FilterState } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { track } from '@/lib/analytics'
 
@@ -60,6 +60,7 @@ export default function HomeScreen() {
   const [filterVisible, setFilterVisible] = useState(false)
   const { regions, themes, maxPrice, dateRange, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, setRegionsBulk, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
   const regionOptions = useRegions()
+  const filterHydrated = useFilterHydrated()  // persist 로드 완료 전엔 필터칩 렌더 보류(깜빡임 방지)
 
   // 홈 지역 빠른탭 = 군(강남권·강북권·강서권·경기·인천·충청·호남·경북·경남·기타) 순서
   const regionGroupChips = useMemo(() => {
@@ -541,8 +542,11 @@ export default function HomeScreen() {
     activeChips.push({ label, onRemove: () => toggleTimeSlot(s) })
   })
   companies.forEach((id) => {
-    const label = companyOptions.find((c) => c.id === id)?.name ?? id
-    activeChips.push({ label, onRemove: () => toggleCompany(id) })
+    // 업체명이 아직 해석 안 됐으면(캐시·DB 미로드) UUID를 칩으로 노출하지 말고 생략.
+    // 캐시 우선(useCompanies)이라 거의 즉시 이름으로 뜨고, 미해석 순간에도 코드가 안 보임.
+    const name = companyOptions.find((c) => c.id === id)?.name
+    if (!name) return
+    activeChips.push({ label: name, onRemove: () => toggleCompany(id) })
   })
   if (maxPrice !== null) activeChips.push({ label: `${(maxPrice / 10000).toFixed(0)}만원 이하`, onRemove: () => useFilterStore.getState().setMaxPrice(null) })
   if (dateRange !== 'all') {
@@ -581,7 +585,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.regionRow}
         style={{ flex: 1 }}
       >
-        {regionGroupChips.map((g) => {
+        {filterHydrated && regionGroupChips.map((g) => {
           const active = g.ids.every((id) => regions.includes(id))
           return (
             <TouchableOpacity

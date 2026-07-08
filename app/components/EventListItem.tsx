@@ -8,6 +8,7 @@ import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
 import DeadlineBadge from './DeadlineBadge'
+import ThemeBadge from './ThemeBadge'
 import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
 import PriceTierValue from '@/components/PriceTierValue'
@@ -116,7 +117,8 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     deadlineText: { fontSize: 10, color: '#fff', fontWeight: '700' },
     info: { flex: 1, gap: 2 },  // 제목·해시태그·meta·성별 줄 간격 균일(gap 하나로만 제어)
     company: { fontSize: 11, color: colors.textTertiary, fontWeight: '600' },
-    title: { fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
     meta: { fontSize: 12, color: colors.textSecondary },
     price: { fontSize: 12, color: colors.textSecondary },
     seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
@@ -172,7 +174,10 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
         {event.companies && (
           <Text style={styles.company}>{event.companies.name}</Text>
         )}
-        <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
+        <View style={styles.titleRow}>
+          <ThemeBadge theme={event.theme} />
+          <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
+        </View>
         {/* 해시태그 배지 (제목 바로 아래) */}
         <HashtagChips hashtags={event.hashtags} size="sm" max={3} tight />
         <Text style={styles.meta}>{formatDate(event.event_date)} · {event.location_region}</Text>
