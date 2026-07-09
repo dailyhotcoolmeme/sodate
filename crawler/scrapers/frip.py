@@ -440,6 +440,26 @@ class FripScraper(BaseScraper):
                 return (max(18, base), min(60, base + 9), f'{base}대')
         return (None, None, None)
 
+    def _gender_age_from_text(self, text: str) -> Optional[tuple]:
+        """본문의 '남성: XX~YY년생 … 여성: XX~YY년생' → ((m_min,m_max),(f_min,f_max)).
+        모드파티류가 성별로 참가연령이 다름. 없으면 None."""
+        text = text or ''
+        yr = datetime.now().year
+
+        def y2a(y1, y2):
+            b1 = (1900 + y1) if y1 >= 50 else (2000 + y1)
+            b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
+            return (max(18, yr - max(b1, b2)), min(60, yr - min(b1, b2)))
+
+        m = re.search(r'남[성자]?\s*[:：]\s*(\d{2})\s*[~-]\s*(\d{2})\s*년생'
+                      r'.{0,25}?여[성자]?\s*[:：]\s*(\d{2})\s*[~-]\s*(\d{2})\s*년생', text)
+        if m:
+            ma = y2a(int(m.group(1)), int(m.group(2)))
+            fa = y2a(int(m.group(3)), int(m.group(4)))
+            if ma[0] <= ma[1] and fa[0] <= fa[1]:
+                return (ma, fa)
+        return None
+
     def _parse_age_smart(self, select_items: list[dict], title: str,
                          description: str, recommended_age: Optional[int] = None) -> tuple:
         """일정 나이 → (min, max, label). 오너 확정 우선순위:
@@ -731,8 +751,15 @@ class FripScraper(BaseScraper):
                         continue  # 이 지점에 판매 옵션 없음
                     amin, amax, disp = self._parse_age_smart(v_items, title, description_text,
                                                              recommended_age)
-                    # disp 있으면 '2030' 등 그대로 표시, 없으면 admin/앱이 'min~max세'로
-                    age_label = disp
+                    # 기본 표시(남/여 동일): disp('2030' 등) 또는 'min~max'
+                    male_disp = female_disp = disp or (f'{amin}~{amax}' if (amin and amax) else None)
+                    # 옵션에 나이 없고 본문에 성별 구분(남:/여:)이 있으면 남/여 각각 + 필터는 union
+                    if amin and not self._parse_age_from_items(v_items)[0]:
+                        g = self._gender_age_from_text(description_text)
+                        if g:
+                            (mmin, mmax), (fmin, fmax) = g
+                            male_disp, female_disp = f'{mmin}~{mmax}', f'{fmin}~{fmax}'
+                            amin, amax = min(mmin, fmin), max(mmax, fmax)
                     sched_region = resolve_region(region_phrase=v, title=title, body=None) if v else region
                     if sc.get('remains') == 0:
                         if sm is None:
@@ -749,7 +776,8 @@ class FripScraper(BaseScraper):
                         source_url=su, thumbnail_urls=thumbnails, theme=theme,
                         seats_left_male=sm, seats_left_female=sf,
                         capacity_male=cm, capacity_female=cf,
-                        age_range_min=amin, age_range_max=amax, age_group_label=age_label,
+                        age_range_min=amin, age_range_max=amax,
+                        age_male=male_disp, age_female=female_disp,
                     ))
             return events
         except Exception as e:

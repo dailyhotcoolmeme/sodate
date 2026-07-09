@@ -22,6 +22,8 @@ class EventModel(BaseModel):
     hashtags: list[str] = []                     # 자동 생성 해시태그 (admin 검수·수정)
     age_range_min: Optional[int] = None
     age_range_max: Optional[int] = None
+    age_male: Optional[str] = None              # 남성 나이 표시(예 '26~36'/'2030')
+    age_female: Optional[str] = None            # 여성 나이 표시(성별 다르면 남과 다름)
     format: Optional[str] = None
     age_group_label: Optional[str] = None      # 나이대 그룹 라벨
     participant_stats: Optional[dict] = None    # 참가자 현황 JSON

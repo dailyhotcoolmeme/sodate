@@ -1099,9 +1099,10 @@ def discover_frip(slug, ScraperClass):
         # 확인 완료). 앱에 뜨는 프립은 100% 나이 있음.
         if not has_age:
             continue
-        # 표시값: 스크래퍼 age_group_label 있으면(예 '2030') 그대로, 없으면 'min~max'.
-        # 필터는 항상 age_range_min/max(숫자)로 걸림.
-        age_text = d.get('age_group_label') or f'{amin}~{amax}'
+        # 표시값: 스크래퍼가 남/여 각각 계산(성별 다르면 다름, 밴드면 '2030').
+        # 필터는 항상 age_range_min/max(숫자, union)로 걸림.
+        age_male_text = d.get('age_male') or f'{amin}~{amax}'
+        age_female_text = d.get('age_female') or f'{amin}~{amax}'
 
         detail = {}
         if pm is not None:
@@ -1124,7 +1125,7 @@ def discover_frip(slug, ScraperClass):
             'source_url': su, 'is_active': True, 'is_closed': is_closed,
             'source': 'crawl',
             'price_male': pm, 'price_female': pf,
-            'age_male': age_text, 'age_female': age_text,
+            'age_male': age_male_text, 'age_female': age_female_text,
             'age_range_min': amin if has_age else None,
             'age_range_max': amax if has_age else None,
             'price_detail': detail or None,
