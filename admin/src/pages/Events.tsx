@@ -14,8 +14,11 @@ interface Event {
   is_active: boolean; is_closed: boolean; is_featured: boolean
   verified: boolean
   hashtags: string[] | null
+  image_type_id: string | null
   companies: { name: string } | null
 }
+
+interface ImageType { id: string; company_id: string; name: string; is_default: boolean; sort_order: number }
 
 type SortKey = 'date_asc' | 'date_desc' | 'company_asc'
 
@@ -31,8 +34,27 @@ export default function Events() {
   const [filterVerified, setFilterVerified] = useState<'all' | 'unverified' | 'verified'>('all')
   const [editTarget, setEditTarget] = useState<Event | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [typesByCompany, setTypesByCompany] = useState<Record<string, ImageType[]>>({})
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadImageTypes() }, [])
+
+  async function loadImageTypes() {
+    const { data } = await supabase
+      .from('company_image_types')
+      .select('id, company_id, name, is_default, sort_order')
+      .order('sort_order')
+    const map: Record<string, ImageType[]> = {}
+    for (const t of (data as ImageType[]) ?? []) {
+      (map[t.company_id] ??= []).push(t)
+    }
+    setTypesByCompany(map)
+  }
+
+  async function updateImageType(id: string, imageTypeId: string) {
+    const value = imageTypeId || null
+    await supabase.from('events').update({ image_type_id: value }).eq('id', id)
+    setEvents((prev) => prev.map((e) => e.id === id ? { ...e, image_type_id: value } : e))
+  }
 
   async function load() {
     const now = new Date().toISOString()
@@ -40,7 +62,7 @@ export default function Events() {
 
     const { data, error } = await supabase
       .from('events')
-      .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, is_featured, verified, hashtags, companies(name)')
+      .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, is_featured, verified, hashtags, image_type_id, companies(name)')
       .gte('event_date', now)
       .lte('event_date', oneMonthLater)
       .order('event_date', { ascending: true })
@@ -48,7 +70,7 @@ export default function Events() {
     if (error) {
       const { data: data2 } = await supabase
         .from('events')
-        .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, verified, hashtags, companies(name)')
+        .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, verified, hashtags, image_type_id, companies(name)')
         .gte('event_date', now)
         .lte('event_date', oneMonthLater)
         .order('event_date', { ascending: true })
@@ -187,6 +209,25 @@ export default function Events() {
           <Star size={15} className={`mx-auto ${event.is_featured ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`} />
         </button>
       </td>
+      <td className="px-4 py-3 text-center">
+        {(() => {
+          const opts = typesByCompany[event.company_id] ?? []
+          const defName = opts.find((t) => t.is_default)?.name
+          if (opts.length === 0) return <span className="text-gray-300 text-xs">유형 없음</span>
+          return (
+            <select
+              value={event.image_type_id ?? ''}
+              onChange={(e) => updateImageType(event.id, e.target.value)}
+              className="px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white max-w-40"
+            >
+              <option value="">기본{defName ? ` (${defName})` : ''}</option>
+              {opts.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' (기본)' : ''}</option>
+              ))}
+            </select>
+          )
+        })()}
+      </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2 justify-center">
           <button onClick={() => { setEditTarget(event); setShowForm(true) }}>
@@ -294,6 +335,7 @@ export default function Events() {
                 <th className="px-4 py-3 text-center font-medium">현황</th>
                 <th className="px-4 py-3 text-center font-medium">노출</th>
                 <th className="px-4 py-3 text-center font-medium">추천</th>
+                <th className="px-4 py-3 text-center font-medium">상세 이미지 유형</th>
                 <th className="px-4 py-3 text-center font-medium">액션</th>
               </tr>
             </thead>
@@ -301,7 +343,7 @@ export default function Events() {
               {/* ── 미완료 구획: 가격·연령 아직 안 넣은 새 이벤트 (매일 여기만 처리) ── */}
               {filterVerified !== 'verified' && pendingList.length > 0 && (
                 <tr className="bg-amber-100/70">
-                  <td colSpan={11} className="px-4 py-2 text-xs font-bold text-amber-800">
+                  <td colSpan={12} className="px-4 py-2 text-xs font-bold text-amber-800">
                     🔴 미완료 · 가격/연령 입력 필요 ({pendingList.length})
                   </td>
                 </tr>
@@ -311,7 +353,7 @@ export default function Events() {
               {/* ── 완료 구획: 검증완료(크롤러가 안 건드림) ── */}
               {filterVerified !== 'unverified' && doneList.length > 0 && (
                 <tr className="bg-emerald-50">
-                  <td colSpan={11} className="px-4 py-2 text-xs font-bold text-emerald-700">
+                  <td colSpan={12} className="px-4 py-2 text-xs font-bold text-emerald-700">
                     ✅ 완료 · 검증완료 ({doneList.length})
                   </td>
                 </tr>
@@ -320,7 +362,7 @@ export default function Events() {
 
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-gray-400 text-sm">
+                  <td colSpan={12} className="px-4 py-8 text-center text-gray-400 text-sm">
                     조건에 맞는 이벤트가 없습니다.
                   </td>
                 </tr>

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
-import { ToggleLeft, ToggleRight } from 'lucide-react'
+import { ToggleLeft, ToggleRight, ChevronDown, ChevronRight, Images } from 'lucide-react'
+import CompanyImageTypes from '../components/CompanyImageTypes'
 
 interface Company {
   id: string; name: string; slug: string; base_url: string
@@ -18,6 +19,7 @@ const PLAN_COLORS: Record<string, string> = {
 export default function Companies() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.from('companies').select('*').order('created_at').then(({ data }) => {
@@ -49,36 +51,56 @@ export default function Companies() {
                 <th className="px-4 py-3 text-left font-medium">지역</th>
                 <th className="px-4 py-3 text-center font-medium">플랜</th>
                 <th className="px-4 py-3 text-center font-medium">크롤링</th>
+                <th className="px-4 py-3 text-center font-medium">상세 이미지</th>
               </tr>
             </thead>
             <tbody>
               {companies.map((c) => (
-                <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{c.name}</p>
-                    <p className="text-xs text-gray-400">{c.slug}</p>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{c.crawl_type}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{c.regions?.join(', ')}</td>
-                  <td className="px-4 py-3 text-center">
-                    <select
-                      value={c.plan ?? 'free'}
-                      onChange={(e) => updatePlan(c.id, e.target.value)}
-                      className={`px-2 py-1 rounded-full text-xs font-medium border-0 focus:outline-none ${PLAN_COLORS[c.plan ?? 'free']}`}
-                    >
-                      {Object.entries(PLAN_LABELS).map(([val, label]) => (
-                        <option key={val} value={val}>{label}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button onClick={() => toggleActive(c.id, c.is_active)}>
-                      {c.is_active
-                        ? <ToggleRight size={22} className="text-green-500 mx-auto" />
-                        : <ToggleLeft size={22} className="text-gray-300 mx-auto" />}
-                    </button>
-                  </td>
-                </tr>
+                <Fragment key={c.id}>
+                  <tr className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900">{c.name}</p>
+                      <p className="text-xs text-gray-400">{c.slug}</p>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{c.crawl_type}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{c.regions?.join(', ')}</td>
+                    <td className="px-4 py-3 text-center">
+                      <select
+                        value={c.plan ?? 'free'}
+                        onChange={(e) => updatePlan(c.id, e.target.value)}
+                        className={`px-2 py-1 rounded-full text-xs font-medium border-0 focus:outline-none ${PLAN_COLORS[c.plan ?? 'free']}`}
+                      >
+                        {Object.entries(PLAN_LABELS).map(([val, label]) => (
+                          <option key={val} value={val}>{label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button onClick={() => toggleActive(c.id, c.is_active)}>
+                        {c.is_active
+                          ? <ToggleRight size={22} className="text-green-500 mx-auto" />
+                          : <ToggleLeft size={22} className="text-gray-300 mx-auto" />}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => setExpanded((prev) => prev === c.id ? null : c.id)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100"
+                      >
+                        <Images size={14} />
+                        이미지 유형 관리
+                        {expanded === c.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </button>
+                    </td>
+                  </tr>
+                  {expanded === c.id && (
+                    <tr className="border-t border-gray-100 bg-gray-50/60">
+                      <td colSpan={6} className="px-4 py-4">
+                        <CompanyImageTypes companyId={c.id} slug={c.slug} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

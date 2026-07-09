@@ -11,8 +11,8 @@ interface Env {
   SUPABASE_SERVICE_ROLE_KEY: string
 }
 
-// supabase-js 가 사용하는 경로만 허용 (rest/v1 = PostgREST)
-const ALLOWED_PREFIXES = ['rest/v1/']
+// supabase-js 가 사용하는 경로만 허용 (rest/v1 = PostgREST, storage/v1 = Storage)
+const ALLOWED_PREFIXES = ['rest/v1/', 'storage/v1/']
 
 const FORWARD_REQ_HEADERS = [
   'content-type',
@@ -23,9 +23,11 @@ const FORWARD_REQ_HEADERS = [
   'range',
   'range-unit',
   'x-client-info',
+  'x-upsert',
+  'cache-control',
 ]
 
-const FORWARD_RES_HEADERS = ['content-type', 'content-range', 'range-unit', 'prefer']
+const FORWARD_RES_HEADERS = ['content-type', 'content-range', 'range-unit', 'prefer', 'etag', 'location']
 
 export const onRequest: PagesFunction<Env> = async ({ request, env, params }) => {
   const authed = await verifySession(env.SESSION_SECRET, getCookie(request, COOKIE))
@@ -54,7 +56,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
 
   const init: RequestInit = { method: request.method, headers }
   if (request.method !== 'GET' && request.method !== 'HEAD') {
-    init.body = await request.text()
+    // 바이너리(이미지 업로드) 안전하게 전달하려면 arrayBuffer 로 읽는다.
+    init.body = await request.arrayBuffer()
   }
 
   const upstream = await fetch(target, init)

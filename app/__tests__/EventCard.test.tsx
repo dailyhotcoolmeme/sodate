@@ -58,6 +58,7 @@ const mockEvent: EventWithCompany = {
   format: null,
   thumbnail_urls: ['https://example.com/img.jpg'],
   participant_stats: null,
+  image_type_id: null,
   source_url: 'https://frip.co.kr/event/1',
   is_active: true,
   is_closed: false,

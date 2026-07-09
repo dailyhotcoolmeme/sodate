@@ -41,32 +41,29 @@ function cleanText(text: string): string {
     .trim()
 }
 
-// 상세 설명: 크롤 시 줄바꿈이 공백으로 합쳐지므로, 불릿/섹션 기호(✅⛔🔺 등) 앞에서
-// 줄을 나눠 마크다운형 리스트로 보여준다.
-const _DESC_MARKERS = '✅|✔|☑|⛔|🔺|🔻|▶|►|●|◆|◼|■|👉|💠|✳|✴|⭐|❗|‼|🎁|🍷'
-const _DESC_LEAD = new RegExp(`^((?:${_DESC_MARKERS})+|-|·|\\d+[.)])\\s*`, 'u')
-// 날짜 나열(예: "7.10(금) 오후 8시 로테이션 소개팅 C")은 대부분 지난 회차라 지저분함 → 제거.
-// 날짜+시각이 반드시 있어야 매칭되므로 "로테이션 소개팅 A 남:95~" 같은 조건 설명은 보존됨.
-const _SCHED_TUPLE =
-  /\d{1,2}\s*\.\s*\d{1,2}\s*(?:\([일월화수목금토]\))?\s*(?:오전|오후)?\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?(?:\s*(?:로테이션\s*)?소개팅\s*[A-Da-d]?)?/gu
-
-function descLines(raw: string): string[] {
-  let t = (raw || '').replace(/_E\d+$/i, '').replace(/️/g, '')
-  // 날짜 나열 제거
-  t = t.replace(_SCHED_TUPLE, ' ')
-  // 불릿 기호 묶음 앞에서 줄바꿈
-  t = t.replace(new RegExp(`\\s*((?:${_DESC_MARKERS})+)`, 'gu'), '\n$1')
-  // " - " 서브 불릿
-  t = t.replace(/\s+-\s+/g, '\n- ')
-  // 문장 끝(마침표/느낌표/물음표 + 공백)에서 줄바꿈 — 기호 없는 문장형 설명 대응
-  t = t.replace(/([가-힣A-Za-z0-9)\]」』】])([.!?]+)\s+/g, '$1$2\n')
-  // 번호 목록 "N." "N)" 앞에서 줄바꿈
-  t = t.replace(/\s+(\d{1,2}[.)]\s)/g, '\n$1')
-  const onlyMarker = new RegExp(`^(?:${_DESC_MARKERS}|\\s)+$`, 'u')
-  return t
-    .split('\n')
-    .map((s) => s.replace(/\s+/g, ' ').trim())
-    .filter((s) => s && !onlyMarker.test(s))
+// 상세 설명은 업체/일정별로 등록한 이미지 유형(company_image_types)으로만 표시한다.
+// 전체 폭으로 채우고 원본 비율대로 높이를 맞춘다.
+function DescImage({ uri }: { uri: string }) {
+  const [ratio, setRatio] = useState<number | null>(null)
+  return (
+    <Image
+      source={{ uri }}
+      contentFit="cover"
+      transition={150}
+      onLoad={(e) => {
+        const w = e?.source?.width
+        const h = e?.source?.height
+        if (w && h) setRatio(w / h)
+      }}
+      style={{
+        width: '100%',
+        aspectRatio: ratio ?? 1.4,
+        borderRadius: 10,
+        marginBottom: 8,
+        backgroundColor: 'rgba(0,0,0,0.03)',
+      }}
+    />
+  )
 }
 
 function formatDate(dateStr: string): string {
@@ -311,7 +308,6 @@ export default function EventDetailScreen() {
   const [sheetVisible, setSheetVisible] = useState(false)
   const [editTarget, setEditTarget] = useState<ReviewSheetInitial | null>(null)
   const [myReviewIds, setMyReviewIds] = useState<string[]>([])
-  const [descExpanded, setDescExpanded] = useState(false)
 
   const loadMyReviewIds = useCallback(() => {
     getMyReviewIds().then(setMyReviewIds)
@@ -496,50 +492,15 @@ export default function EventDetailScreen() {
         </View>
 
 
-        {/* 설명 — 날짜 나열만 있던 경우 descLines가 비므로 섹션 자체를 숨김. 길면 더보기로 접힘 */}
-        {(() => {
-          const descItems = event.description ? descLines(event.description) : []
-          if (descItems.length === 0) return null
-          const COLLAPSE = 6
-          const collapsible = descItems.length > COLLAPSE
-          const shown = descExpanded || !collapsible ? descItems : descItems.slice(0, COLLAPSE)
-          return (
-            <View style={styles.descSection}>
-              <Text style={styles.sectionLabel}>상세 설명</Text>
-              {shown.map((line, i) => {
-                const m = line.match(_DESC_LEAD)
-                if (m) {
-                  const marker = m[1] === '-' ? '·' : m[1]
-                  const rest = line.slice(m[0].length)
-                  const sub = m[1] === '-'
-                  return (
-                    <View key={i} style={[styles.descRow, sub && styles.descSub]}>
-                      <Text style={styles.descBullet}>{marker}</Text>
-                      <Text style={styles.descRowText}>{rest}</Text>
-                    </View>
-                  )
-                }
-                return (
-                  <Text key={i} style={[styles.description, styles.descPara]}>{line}</Text>
-                )
-              })}
-              {collapsible && (
-                <TouchableOpacity
-                  style={styles.descMoreBtn}
-                  onPress={() => setDescExpanded((v) => !v)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.descMoreText}>{descExpanded ? '접기' : '더보기'}</Text>
-                  <Ionicons
-                    name={descExpanded ? 'chevron-up' : 'chevron-down'}
-                    size={15}
-                    color={colors.primary}
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-          )
-        })()}
+        {/* 상세 설명 — 업체/일정별로 등록된 이미지 유형으로만 표시. 이미지 없으면 섹션 숨김(크롤 텍스트는 미노출) */}
+        {event.descImages && event.descImages.length > 0 && (
+          <View style={styles.descSection}>
+            <Text style={styles.sectionLabel}>상세 설명</Text>
+            {event.descImages.map((uri, i) => (
+              <DescImage key={`${uri}-${i}`} uri={uri} />
+            ))}
+          </View>
+        )}
 
         {/* 신청 버튼 위 광고 (CTA와 구분되는 외곽선형 + '광고' 배지) */}
         <AdBanner />

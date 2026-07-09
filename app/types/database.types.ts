@@ -113,6 +113,7 @@ export interface Database {
           is_closed: boolean
           is_active: boolean
           participant_stats: ParticipantStats | null
+          image_type_id: string | null
           crawled_at: string
           created_at: string
           updated_at: string
@@ -146,6 +147,7 @@ export interface Database {
           is_closed?: boolean
           is_active?: boolean
           participant_stats?: ParticipantStats | null
+          image_type_id?: string | null
           crawled_at?: string
           created_at?: string
           updated_at?: string
@@ -179,7 +181,40 @@ export interface Database {
           is_closed?: boolean
           is_active?: boolean
           participant_stats?: ParticipantStats | null
+          image_type_id?: string | null
           crawled_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      company_image_types: {
+        Row: {
+          id: string
+          company_id: string
+          name: string
+          images: string[]
+          is_default: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          name: string
+          images?: string[]
+          is_default?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          name?: string
+          images?: string[]
+          is_default?: boolean
+          sort_order?: number
           created_at?: string
           updated_at?: string
         }

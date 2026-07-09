@@ -11,3 +11,12 @@ export const supabase = createClient(PROXY_URL, 'proxy', {
     fetch: (input, init) => fetch(input, { ...init, credentials: 'include' }),
   },
 })
+
+// Storage 공개 URL 은 실제 Supabase 호스트로 만든다(프록시 호스트가 아님).
+// 이 프로젝트 URL 은 공개값(앱 번들에도 노출됨) 이라 하드코딩해도 안전하다.
+export const SUPABASE_PUBLIC_URL = 'https://xgcldcnqfqcugkcifyae.supabase.co'
+
+export function publicImageUrl(bucket: string, path: string): string {
+  const encoded = path.split('/').map(encodeURIComponent).join('/')
+  return `${SUPABASE_PUBLIC_URL}/storage/v1/object/public/${bucket}/${encoded}`
+}
