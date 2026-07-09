@@ -43,7 +43,10 @@ function cleanText(text: string): string {
 
 // 상세 설명은 업체/일정별로 등록한 이미지 유형(company_image_types)으로만 표시한다.
 // 전체 폭으로 채우고 원본 비율대로 높이를 맞춘다.
-function DescImage({ uri }: { uri: string }) {
+// 나눠 캡처한 이미지가 한 장처럼 보이도록 위아래로 딱 붙임(간격 0).
+// 바깥 모서리만 라운드: 첫 장 위쪽, 마지막 장 아래쪽 (다른 카드와 동일한 12).
+const DESC_IMG_RADIUS = 12
+function DescImage({ uri, first, last }: { uri: string; first: boolean; last: boolean }) {
   const [ratio, setRatio] = useState<number | null>(null)
   return (
     <Image
@@ -59,9 +62,10 @@ function DescImage({ uri }: { uri: string }) {
       style={{
         width: '100%',
         aspectRatio: ratio ?? 1.4,
-        borderRadius: 10,
-        marginBottom: 8,
-        backgroundColor: 'rgba(0,0,0,0.03)',
+        borderTopLeftRadius: first ? DESC_IMG_RADIUS : 0,
+        borderTopRightRadius: first ? DESC_IMG_RADIUS : 0,
+        borderBottomLeftRadius: last ? DESC_IMG_RADIUS : 0,
+        borderBottomRightRadius: last ? DESC_IMG_RADIUS : 0,
       }}
     />
   )
@@ -496,9 +500,16 @@ export default function EventDetailScreen() {
         {/* 상세 설명 — 업체/일정별로 등록된 이미지 유형으로만 표시. 이미지 없으면 섹션 숨김(크롤 텍스트는 미노출) */}
         {event.descImages && event.descImages.length > 0 && (
           <View style={styles.descSection}>
+            {/* 상세 이미지가 길어 하단 광고가 안 보일 수 있어 설명 시작 위에도 광고 노출 */}
+            <AdBanner />
             <Text style={styles.sectionLabel}>상세 설명</Text>
             {event.descImages.map((uri, i) => (
-              <DescImage key={`${uri}-${i}`} uri={uri} />
+              <DescImage
+                key={`${uri}-${i}`}
+                uri={uri}
+                first={i === 0}
+                last={i === event.descImages!.length - 1}
+              />
             ))}
           </View>
         )}
