@@ -410,6 +410,7 @@ export default function EventDetailScreen() {
           region={event.location_region}
           style={styles.image}
           size="detail"
+          naturalRatio
         />
         {daysLeft <= 3 && daysLeft >= 0 && (
           <DeadlineBadge daysLeft={daysLeft} />
