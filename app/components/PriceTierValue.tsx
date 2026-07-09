@@ -1,6 +1,19 @@
 import React from 'react'
-import { Text, StyleSheet } from 'react-native'
+import { Text, View, StyleSheet } from 'react-native'
 import { useColors } from '@/hooks/useColors'
+
+// 년생(출생연도) 기반 업체 — 연령을 만나이로 저장하되 출생연도 보조표시를 붙인다(admin과 동일).
+export const BIRTH_YEAR_VENDORS = new Set(['yeonin', 'lovecommunity-loco', 'talkblossom', 'frip', 'modparty'])
+
+// 만나이 'NN~NN' → 출생연도 힌트 'YY~YY년생' (년생 기반 업체용, 오너 표준). admin과 동일 로직.
+export function bornHint(age?: string | null): string | null {
+  if (!age) return null
+  const m = age.replace(/\s/g, '').match(/^(\d{1,2})~(\d{1,2})$/)
+  if (!m) return null
+  const yr = new Date().getFullYear()
+  const p = (n: number) => String(((n % 100) + 100) % 100).padStart(2, '0')
+  return `${p(yr - parseInt(m[2]))}~${p(yr - parseInt(m[1]))}년생` // 나이많은쪽(이른출생)~나이적은쪽
+}
 
 /**
  * 성별 가격+연령 표시 (카드·목록·상세 공용).
@@ -31,11 +44,15 @@ export default function PriceTierValue({
   price,
   age,
   compact,
+  soldout,
+  birthYear,
 }: {
   detail?: GenderPrice | null
   price?: number | null
   age?: string | null
   compact?: boolean
+  soldout?: boolean          // 이 성별 좌석 마감 → 가격 취소선 + (마감)
+  birthYear?: boolean        // 년생 기반 업체 → 연령 밑에 출생연도 보조표시
 }) {
   const colors = useColors()
   const size = compact ? 12 : 14
@@ -43,21 +60,26 @@ export default function PriceTierValue({
     base: { fontSize: size, color: colors.textPrimary },
     muted: { fontSize: size, color: colors.textSecondary },
     strike: { fontSize: size, textDecorationLine: 'line-through', color: colors.textTertiary },
+    born: { fontSize: size - 3, color: colors.textTertiary, marginTop: 1 },
   })
 
   const regular = detail?.regular ?? (price ?? null)
-  const regularSold = detail?.regular_soldout ?? false
+  const regularSold = (detail?.regular_soldout ?? false) || !!soldout
   const at = fmtAge(age)
-  if (regular == null && !at) return null
+  if (regular == null && !at && !regularSold) return null
 
-  return (
+  const born = birthYear ? bornHint(age) : null
+
+  const line = (
     <Text style={styles.base} numberOfLines={compact ? 1 : 2} adjustsFontSizeToFit={compact} minimumFontScale={0.6}>
-      {/* 정가 (품절이면 취소선) */}
-      {regular != null && (
+      {/* 정가 (품절이면 취소선). 가격 없이 매진이면 '마감'만 표시 */}
+      {regular != null ? (
         <Text style={regularSold ? styles.strike : undefined}>
-          {wonRange(regular, detail?.regular_max)}{regularSold ? ' (품절)' : ''}
+          {wonRange(regular, detail?.regular_max)}{regularSold ? ' (마감)' : ''}
         </Text>
-      )}
+      ) : regularSold ? (
+        <Text style={styles.muted}>마감</Text>
+      ) : null}
 
       {/* 얼리버드 — 상세에서만(카드는 compact로 생략) */}
       {!compact && detail?.earlybird != null && (
@@ -77,5 +99,14 @@ export default function PriceTierValue({
         </>
       )}
     </Text>
+  )
+
+  // 출생연도 보조표시는 연령 밑 작은 글씨(년생 기반 업체만)
+  if (!born) return line
+  return (
+    <View>
+      {line}
+      <Text style={styles.born}>{born}</Text>
+    </View>
   )
 }

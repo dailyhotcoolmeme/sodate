@@ -15,7 +15,7 @@ import DeadlineBadge from './DeadlineBadge'
 import ThemeBadge from './ThemeBadge'
 import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
-import PriceTierValue from '@/components/PriceTierValue'
+import PriceTierValue, { BIRTH_YEAR_VENDORS } from '@/components/PriceTierValue'
 import CompanyBadge from './CompanyBadge'
 import EventThumbnail from './EventThumbnail'
 import FavoriteButton from './FavoriteButton'
@@ -247,18 +247,21 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
           const hasM = event.price_male != null || !!event.price_detail?.male || !!event.age_male
           const hasF = event.price_female != null || !!event.price_detail?.female || !!event.age_female
           if (!hasM && !hasF) return null
+          const by = BIRTH_YEAR_VENDORS.has(event.companies?.slug ?? '')
+          const soldM = event.seats_left_male != null && event.seats_left_male <= 0
+          const soldF = event.seats_left_female != null && event.seats_left_female <= 0
           return (
             <View style={styles.genderBlock}>
               {hasM && (
                 <View style={styles.genderRow}>
                   <Text style={[styles.genderTag, styles.genderMale]}>남성</Text>
-                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.male} price={event.price_male} age={event.age_male} compact /></View>
+                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.male} price={event.price_male} age={event.age_male} soldout={soldM} birthYear={by} compact /></View>
                 </View>
               )}
               {hasF && (
                 <View style={styles.genderRow}>
                   <Text style={[styles.genderTag, styles.genderFemale]}>여성</Text>
-                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.female} price={event.price_female} age={event.age_female} compact /></View>
+                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.female} price={event.price_female} age={event.age_female} soldout={soldF} birthYear={by} compact /></View>
                 </View>
               )}
             </View>

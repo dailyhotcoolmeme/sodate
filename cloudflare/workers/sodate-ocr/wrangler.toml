@@ -1,0 +1,12 @@
+name = "sodate-ocr"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# Workers AI (Neurons — CF 유료플랜 무료 할당). 이미지→나이(년생) 추출용.
+[ai]
+binding = "AI"
+
+# 이미지 URL별 OCR 결과 캐시 → 이미지당 AI 1회만 실행(매 크롤마다 재실행 방지)
+[[kv_namespaces]]
+binding = "CACHE"
+id = "728c1f1f2b3b485691699124005f7dbc"

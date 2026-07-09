@@ -13,6 +13,17 @@ from utils.hashtags import derive_hashtags
 
 
 class BaseScraper(ABC):
+    # 기본은 가격/좌석을 크롤러가 안 쓴다(관리자 전용). 단, 업체 공식 소스에서
+    # 정확히 뽑는 스크래퍼는 WRITES_PRICE=True 로 가격을 채운다(예: 모드파티).
+    WRITES_PRICE = False
+
+    # True면 이번 크롤에 없는 미검증 이벤트를 삭제한다(매진·삭제된 옛 회차 자동 정리).
+    # 업체 공식 소스에서 전체 일정을 안정적으로 뽑는 스크래퍼만 켠다(예: 모드파티).
+    DELETE_STALE = False
+
+    # True면 좌석/정원도 크롤러가 채운다(품절·잔여석 표시용). 업체 공식소스에서 정확히 뽑는 경우만.
+    WRITES_SEATS = False
+
     def __init__(self, company_slug: str):
         self.company_slug = company_slug
         self.supabase = get_supabase()
@@ -42,6 +53,7 @@ class BaseScraper(ABC):
         company_id = self.get_company_id()
         new_count = 0
         updated_count = 0
+        current_urls = {e.source_url for e in events}
 
         # 관리자 검증완료(verified) 이벤트는 크롤러가 절대 건드리지 않는다 → 입력한 가격·연령 영구 보존.
         verified_urls: set = set()
@@ -69,10 +81,15 @@ class BaseScraper(ABC):
             data['company_id'] = company_id
             data['crawled_at'] = datetime.now(timezone.utc).isoformat()
 
-            # 정원/잔여석/가격은 크롤러가 절대 쓰지 않는다(관리자 전용). upsert 데이터에서 제거 →
+            # 정원/잔여석/가격은 기본적으로 크롤러가 쓰지 않는다(관리자 전용). upsert 데이터에서 제거 →
             # 신규 행은 NULL, 기존 행은 관리자 입력값이 덮이지 않는다.
-            for _k in ('capacity_male', 'capacity_female', 'seats_left_male',
-                       'seats_left_female', 'price_male', 'price_female'):
+            # 단, WRITES_PRICE 스크래퍼는 업체 공식소스에서 뽑은 가격을 유지한다.
+            _strip = []
+            if not self.WRITES_SEATS:
+                _strip += ['capacity_male', 'capacity_female', 'seats_left_male', 'seats_left_female']
+            if not self.WRITES_PRICE:
+                _strip += ['price_male', 'price_female']
+            for _k in _strip:
                 data.pop(_k, None)
 
             # 테마는 구분하지 않는다 — 전부 소개팅. 스크래퍼가 뭘 넣든 일괄 고정.
@@ -143,7 +160,27 @@ class BaseScraper(ABC):
                 )
                 # 해당 이벤트만 스킵하고 계속 진행
 
-        return {'new': new_count, 'updated': updated_count}
+        # 이번 크롤에 없는 미검증 이벤트 정리(매진·삭제·시간변경된 옛 회차). verified는 절대 안 건드림.
+        deleted = 0
+        if self.DELETE_STALE and current_urls:
+            try:
+                existing = (
+                    self.supabase.table('events')
+                    .select('id,source_url')
+                    .eq('company_id', company_id)
+                    .eq('verified', False)
+                    .execute()
+                )
+                stale_ids = [r['id'] for r in (existing.data or []) if r['source_url'] not in current_urls]
+                for i in range(0, len(stale_ids), 50):
+                    self.supabase.table('events').delete().in_('id', stale_ids[i:i + 50]).execute()
+                deleted = len(stale_ids)
+                if deleted:
+                    self.logger.info(f"[{self.company_slug}] 스테일 이벤트 {deleted}개 삭제(이번 크롤에 없음)")
+            except Exception as e:
+                self.logger.warning(f"[{self.company_slug}] 스테일 정리 실패(계속): {e}")
+
+        return {'new': new_count, 'updated': updated_count, 'deleted': deleted}
 
     def log_result(
         self,
