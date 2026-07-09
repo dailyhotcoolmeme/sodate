@@ -395,23 +395,44 @@ class FripScraper(BaseScraper):
         return None
 
     def _parse_age_smart(self, select_items: list[dict], title: str,
-                         description: str) -> tuple:
-        """일정 나이(만나이) 다중소스: 1)옵션이름 '28-37세/30대'(일정별·최우선)
-        2)제목·설명 'XX-YY년생'→만나이 3)제목 '2030/3040/N0대'. 없으면 (None,None).
-        설명의 'N0대'는 노이즈(과거 18~39 버그)라 3)은 제목만 본다."""
+                         description: str, recommended_age: Optional[int] = None) -> tuple:
+        """일정 나이(만나이) 다중소스. 1)옵션이름 '28-37세/[87-02년생]/30대'(일정별·최우선)
+        2)제목·설명의 년생('88-04년생' 또는 '88년생~04년생') 3)'N0세 이하/이상'
+        4)제목·설명 '2030/3040/N0대'. 없으면 (None,None).
+        설명의 단독 'N0대'만은 노이즈(과거 18~39 버그)라 4)의 N0대는 제목만 본다."""
         a = self._parse_age_from_items(select_items)
         if a[0]:
             return a
         yr = datetime.now().year
+
+        def yrs_to_age(y1, y2):
+            b1 = (1900 + y1) if y1 >= 50 else (2000 + y1)
+            b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
+            lo, hi = yr - max(b1, b2), yr - min(b1, b2)
+            return (max(18, lo), min(60, hi)) if lo <= hi else None
+
         for text in (title or '', description or ''):
+            # 'XX-YY년생'
             m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년생', text)
             if m:
-                y1, y2 = int(m.group(1)), int(m.group(2))
-                b1 = (1900 + y1) if y1 >= 50 else (2000 + y1)
-                b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
-                lo, hi = yr - max(b1, b2), yr - min(b1, b2)
-                if lo <= hi:
-                    return (max(18, lo), min(60, hi))
+                r = yrs_to_age(int(m.group(1)), int(m.group(2)))
+                if r:
+                    return r
+            # 'XX년생 ~ YY년생' (년생이 양쪽에)
+            m = re.search(r'(\d{2})\s*년생\s*[-~]\s*(\d{2})\s*년생', text)
+            if m:
+                r = yrs_to_age(int(m.group(1)), int(m.group(2)))
+                if r:
+                    return r
+        # 'N0세 이하/이상' (상·하한 단독) — 설명에 라벨로 명시되는 신뢰 형식
+        floor = recommended_age if (recommended_age and recommended_age >= 18) else 20
+        for text in (title or '', description or ''):
+            m = re.search(r'만?\s*(\d{2})\s*세\s*이하', text)
+            if m:
+                return (min(floor, int(m.group(1))), min(60, int(m.group(1))))
+            m = re.search(r'만?\s*(\d{2})\s*세\s*이상', text)
+            if m:
+                return (max(18, int(m.group(1))), 49)
         t = title or ''
         m = re.search(r'(\d0)\s*대', t)
         if m:
@@ -684,8 +705,9 @@ class FripScraper(BaseScraper):
                 sid = sc['id']
                 select_items = self._fetch_select_items(product_id, sid, client)
                 pm, pf, sm, sf, cm, cf = self._parse_gender_items(select_items)
-                # 나이: 옵션이름(28-37세) → 제목·설명 년생 → 제목 2030/3040 순
-                amin, amax = self._parse_age_smart(select_items, title, description_text)
+                # 나이: 옵션이름(28-37세) → 년생 → N세이하/이상 → 2030/3040 순
+                amin, amax = self._parse_age_smart(select_items, title, description_text,
+                                                   recommended_age)
                 age_label = f'{amin}~{amax}세' if (amin and amax) else None
                 # 지점: 옵션이름에 지점 박힌 업체(통합상품 포함)는 일정별 지역을 정확히 분리
                 loc_kw = self._parse_location_from_items(select_items)
