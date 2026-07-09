@@ -1099,7 +1099,9 @@ def discover_frip(slug, ScraperClass):
         # 확인 완료). 앱에 뜨는 프립은 100% 나이 있음.
         if not has_age:
             continue
-        age_text = f'{amin}~{amax}'
+        # 표시값: 스크래퍼 age_group_label 있으면(예 '2030') 그대로, 없으면 'min~max'.
+        # 필터는 항상 age_range_min/max(숫자)로 걸림.
+        age_text = d.get('age_group_label') or f'{amin}~{amax}'
 
         detail = {}
         if pm is not None:
@@ -1136,8 +1138,9 @@ def discover_frip(slug, ScraperClass):
     if not rows:
         print("프립 이벤트 0개 — 중단(기존 삭제 안 함)")
         return 0
-    # 옛 스크래퍼 산출물(crawl/manual) 전부 삭제, verified(오너 확정)만 보존
-    sb.table('events').delete().eq('company_id', cid).in_('source', ['crawl', 'manual']).execute()
+    # 프립 기존 행 전부 삭제 후 재적재(전량 크롤 관리). 옛 'verified' 행도 나이 없는
+    # 껍데기라 crawl과 중복만 만들어(verified 플래그=False) 삭제 대상.
+    sb.table('events').delete().eq('company_id', cid).in_('source', ['crawl', 'manual', 'verified']).execute()
     for i in range(0, len(rows), 100):
         sb.table('events').upsert(rows[i:i+100], on_conflict='source_url',
                                   ignore_duplicates=True).execute()

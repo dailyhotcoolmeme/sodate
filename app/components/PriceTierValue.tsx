@@ -21,9 +21,10 @@ const won = (n: number) => `${n.toLocaleString()}원`
 // 단일가 또는 범위(min~max) 표기
 const wonRange = (min: number, max?: number | null) =>
   max != null && max > min ? `${min.toLocaleString()}~${max.toLocaleString()}원` : won(min)
-// 숫자로 끝나면 "세" 부착(27~34→27~34세), 아니면 그대로("나이 무관")
+// 'NN' 또는 'NN~NN' 형태만 "세" 부착(27~34→27~34세). 그 외는 그대로 표시
+// ('2030'→2030, '30대'→30대, '나이 무관'→나이 무관)
 const fmtAge = (age?: string | null) =>
-  age ? (/\d\s*$/.test(age) ? `${age}세` : age) : null
+  age ? (/^\d{1,2}(~\d{1,2})?$/.test(age.replace(/\s/g, '')) ? `${age}세` : age) : null
 
 export default function PriceTierValue({
   detail,
