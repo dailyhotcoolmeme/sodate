@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, uploadDetailImage, deleteDetailImage } from '../lib/supabase'
-import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Check } from 'lucide-react'
+import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Check, Pencil } from 'lucide-react'
 
 interface ImageType {
   id: string
@@ -113,9 +113,10 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
       {types.map((t) => (
         <div key={t.id} className="rounded-lg border border-gray-200 bg-white p-3">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <button onClick={() => renameType(t)} className="font-semibold text-gray-900 hover:underline truncate">
-                {t.name}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-semibold text-gray-900 truncate">{t.name}</span>
+              <button onClick={() => renameType(t)} title="이름 수정" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-gray-500 bg-gray-100 hover:bg-gray-200 shrink-0">
+                <Pencil size={11} /> 이름
               </button>
               {t.is_default ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium shrink-0">
@@ -135,12 +136,13 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
           {t.images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {t.images.map((url, idx) => (
-                <div key={url} className="relative w-24 group">
-                  <img src={url} alt="" className="w-24 h-32 object-cover rounded border border-gray-200" />
-                  <div className="absolute inset-x-0 bottom-0 flex justify-between bg-black/45 rounded-b opacity-0 group-hover:opacity-100 transition">
-                    <button onClick={() => moveImage(t, idx, -1)} disabled={idx === 0} className="p-1 text-white disabled:opacity-30"><ArrowUp size={13} /></button>
-                    <button onClick={() => deleteImage(t, url)} className="p-1 text-white"><Trash2 size={13} /></button>
-                    <button onClick={() => moveImage(t, idx, 1)} disabled={idx === t.images.length - 1} className="p-1 text-white disabled:opacity-30"><ArrowDown size={13} /></button>
+                <div key={url} className="relative w-28">
+                  <img src={url} alt="" className="w-28 h-36 object-cover rounded-t border border-gray-200" />
+                  {/* 컨트롤 항상 표시(모바일엔 hover 없음) */}
+                  <div className="flex justify-between border border-t-0 border-gray-200 rounded-b bg-gray-50">
+                    <button onClick={() => moveImage(t, idx, -1)} disabled={idx === 0} title="위로" className="p-1.5 text-gray-600 disabled:opacity-25 active:bg-gray-200"><ArrowUp size={15} /></button>
+                    <button onClick={() => deleteImage(t, url)} title="삭제" className="p-1.5 text-red-500 active:bg-red-50"><Trash2 size={15} /></button>
+                    <button onClick={() => moveImage(t, idx, 1)} disabled={idx === t.images.length - 1} title="아래로" className="p-1.5 text-gray-600 disabled:opacity-25 active:bg-gray-200"><ArrowDown size={15} /></button>
                   </div>
                   <span className="absolute top-1 left-1 bg-black/55 text-white text-[10px] px-1 rounded">{idx + 1}</span>
                 </div>
