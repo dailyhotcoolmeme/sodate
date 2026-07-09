@@ -405,54 +405,55 @@ class FripScraper(BaseScraper):
                     return kw
         return None
 
-    def _parse_age_smart(self, select_items: list[dict], title: str,
-                         description: str, recommended_age: Optional[int] = None) -> tuple:
-        """일정 나이 → (min, max, label). label 있으면 그 문자열을 '그대로 표시'(예 '2030'),
-        None이면 'min~max세'로 표시. 필터는 항상 숫자 min/max로 건다.
-        우선순위: 1)옵션이름 '28-37세/[87-02년생]/30대'(일정별·숫자표시) 2)년생(숫자표시)
-        3)'N세 이하/이상'(숫자표시) 4)'2030/3040/2040'(그대로표시) 5)'N0대'(그대로표시)."""
-        a = self._parse_age_from_items(select_items)
-        if a[0]:
-            return a  # (min, max, label) — 옵션이름의 세/년생(숫자) 또는 밴드('3040')
+    def _age_from_text(self, text: str, recommended_age: Optional[int],
+                       allow_decade: bool) -> tuple:
+        """텍스트 하나에서 나이 → (min,max,label). 년생 → N세이하/이상 → 2030/3040 밴드
+        → (allow_decade면) N0대. label은 밴드('3040')/N0대('30대')일 때만, 년생·세는 None."""
+        text = text or ''
         yr = datetime.now().year
-
-        def yrs_to_age(y1, y2):
+        m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년생', text) \
+            or re.search(r'(\d{2})\s*년생\s*[-~]\s*(\d{2})\s*년생', text)
+        if m:
+            y1, y2 = int(m.group(1)), int(m.group(2))
             b1 = (1900 + y1) if y1 >= 50 else (2000 + y1)
             b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
             lo, hi = yr - max(b1, b2), yr - min(b1, b2)
-            return (max(18, lo), min(60, hi)) if lo <= hi else None
-
-        for text in (title or '', description or ''):
-            m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년생', text) \
-                or re.search(r'(\d{2})\s*년생\s*[-~]\s*(\d{2})\s*년생', text)
-            if m:
-                r = yrs_to_age(int(m.group(1)), int(m.group(2)))
-                if r:
-                    return (r[0], r[1], None)
-        # 'N세 이하/이상' (상·하한 단독)
+            if lo <= hi:
+                return (max(18, lo), min(60, hi), None)
         floor = recommended_age if (recommended_age and recommended_age >= 18) else 20
-        for text in (title or '', description or ''):
-            m = re.search(r'만?\s*(\d{2})\s*세\s*이하', text)
-            if m:
-                return (min(floor, int(m.group(1))), min(60, int(m.group(1))), None)
-            m = re.search(r'만?\s*(\d{2})\s*세\s*이상', text)
-            if m:
-                return (max(18, int(m.group(1))), 49, None)
-        # '2030/3040/2040' 밴드 — 그대로 표시(label), 필터는 숫자범위. N0대보다 먼저 체크
-        # (안 그러면 '2030 대화'의 '30대'로 오인). 제목·설명 둘 다.
-        for text in (title or '', description or ''):
-            if re.search(r'20\s*30(?!\d)', text):
-                return (20, 39, '2030')
-            if re.search(r'30\s*40(?!\d)', text):
-                return (30, 49, '3040')
-            if re.search(r'20\s*40(?!\d)', text):
-                return (20, 49, '2040')
-        # 'N0대' — 앞에 숫자 없고 대 바로 뒤(공백 없이) = 진짜 나이대('2030 대화' 오매칭 방지)
-        m = re.search(r'(?<!\d)(\d0)대', title or '')
+        m = re.search(r'만?\s*(\d{2})\s*세\s*이하', text)
         if m:
-            base = int(m.group(1))
-            return (max(18, base), min(60, base + 9), f'{base}대')
+            return (min(floor, int(m.group(1))), min(60, int(m.group(1))), None)
+        m = re.search(r'만?\s*(\d{2})\s*세\s*이상', text)
+        if m:
+            return (max(18, int(m.group(1))), 49, None)
+        if re.search(r'20\s*30(?!\d)', text):
+            return (20, 39, '2030')
+        if re.search(r'30\s*40(?!\d)', text):
+            return (30, 49, '3040')
+        if re.search(r'20\s*40(?!\d)', text):
+            return (20, 49, '2040')
+        if allow_decade:  # N0대는 제목만('10대 사절' 등 본문 노이즈 방지)
+            m = re.search(r'(?<!\d)(\d0)대', text)
+            if m:
+                base = int(m.group(1))
+                return (max(18, base), min(60, base + 9), f'{base}대')
         return (None, None, None)
+
+    def _parse_age_smart(self, select_items: list[dict], title: str,
+                         description: str, recommended_age: Optional[int] = None) -> tuple:
+        """일정 나이 → (min, max, label). 오너 확정 우선순위:
+        1순위) 신청하기 옵션(selectItems) — 28-37세/년생/3040밴드
+        2순위) 본문(설명) — 년생/N세이하·이상/2030밴드 (N0대 제외: '10대 사절' 노이즈)
+        3순위) 제목 — 년생/N세/2030밴드/N0대
+        label 있으면 '그대로 표시'(예 '2030'), 없으면 'min~max세'. 필터는 항상 숫자 min/max."""
+        a = self._parse_age_from_items(select_items)   # 1순위: 옵션
+        if a[0]:
+            return a
+        r = self._age_from_text(description, recommended_age, allow_decade=False)  # 2순위: 본문
+        if r[0]:
+            return r
+        return self._age_from_text(title, recommended_age, allow_decade=True)      # 3순위: 제목
 
     def _parse_gender_items(self, select_items: list[dict]) -> tuple:
         """
