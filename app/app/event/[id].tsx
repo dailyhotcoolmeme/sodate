@@ -29,7 +29,7 @@ import { getMyReviewIds } from '@/lib/reviewIdentity'
 import type { ReviewRow } from '@/lib/supabase'
 import AdBanner from '@/components/AdBanner'
 import { daysUntil } from '@/lib/dday'
-import PriceTierValue, { BIRTH_YEAR_VENDORS } from '@/components/PriceTierValue'
+import PriceTierValue from '@/components/PriceTierValue'
 import ThemeBadge from '@/components/ThemeBadge'
 import { getThemeBadge } from '@/constants/themeBadges'
 
@@ -477,7 +477,6 @@ export default function EventDetailScreen() {
             const detail = event.price_detail
             const hasM = event.price_male != null || !!detail?.male || !!event.age_male
             const hasF = event.price_female != null || !!detail?.female || !!event.age_female
-            const by = BIRTH_YEAR_VENDORS.has(event.companies?.slug ?? '')
             const soldM = event.seats_left_male != null && event.seats_left_male <= 0
             const soldF = event.seats_left_female != null && event.seats_left_female <= 0
             return (
@@ -485,13 +484,13 @@ export default function EventDetailScreen() {
                 {hasM && (
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: '#3B82F6', fontWeight: '700' }]}>남성</Text>
-                    <View style={styles.infoValue}><PriceTierValue detail={detail?.male} price={event.price_male} age={event.age_male} soldout={soldM} birthYear={by} /></View>
+                    <View style={styles.infoValue}><PriceTierValue detail={detail?.male} price={event.price_male} age={event.age_male} soldout={soldM} /></View>
                   </View>
                 )}
                 {hasF && (
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: colors.primary, fontWeight: '700' }]}>여성</Text>
-                    <View style={styles.infoValue}><PriceTierValue detail={detail?.female} price={event.price_female} age={event.age_female} soldout={soldF} birthYear={by} /></View>
+                    <View style={styles.infoValue}><PriceTierValue detail={detail?.female} price={event.price_female} age={event.age_female} soldout={soldF} /></View>
                   </View>
                 )}
               </>

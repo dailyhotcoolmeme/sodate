@@ -134,12 +134,12 @@ class ModpartyScraper(BaseScraper):
                         page.wait_for_load_state('domcontentloaded', timeout=8000)
                         page.wait_for_timeout(2500)  # 예약위젯 로드 대기
                         self._enrich_from_detail(data, BeautifulSoup(page.content(), 'html.parser'))
-                        # 성별 실가격: 예약위젯 옵션 AJAX(남성 79,000/여성 44,000처럼 다름)
-                        pm, pf = self._extract_gender_prices(page, idx)
-                        if pm:
-                            data['price_male'] = pm
-                        if pf:
-                            data['price_female'] = pf
+                        # 성별 실가격+매진: 예약위젯 옵션 AJAX(매진=대기신청도 가격 있음)
+                        gp = self._extract_gender_prices(page, idx)
+                        if gp.get('남성'):
+                            data['price_male'], data['male_sold'] = gp['남성']
+                        if gp.get('여성'):
+                            data['price_female'], data['female_sold'] = gp['여성']
                     except Exception as e:
                         self.logger.warning(f'모드파티 상품 idx={idx} 상세 수집 실패: {e}')
 
@@ -421,19 +421,19 @@ class ModpartyScraper(BaseScraper):
         except Exception:
             return r or ''
 
-    def _extract_gender_prices(self, page, idx: str) -> tuple[Optional[int], Optional[int]]:
-        """예약위젯 옵션 AJAX 3단계(날짜→성별→성별선택)로 실제 남/여 가격 추출.
-        예: 압구정 남79,000/여44,000, 청담3040 남75,000/여65,000."""
+    def _extract_gender_prices(self, page, idx: str) -> dict:
+        """예약위젯 옵션 AJAX 3단계(날짜→성별→성별선택)로 남/여 가격+매진(대기신청) 추출.
+        매진이어도 옵션은 '남성(대기신청) 79,000원' 형태로 살아있음 → 가격 확보 가능.
+        반환: {'남성': (price, soldout), '여성': (price, soldout)}"""
+        out: dict = {}
         try:
             h1 = self._load_option_html(page, idx, [])
             oc1_m = re.search(r'_form_select_wrap_(O[0-9a-f]+)', h1)
             dates = re.findall(r"'(O[0-9a-f]{10,})',\s*'([^']*?\d+월\d+일[^']*)'", h1)
             if not (oc1_m and dates):
-                return None, None
+                return out
             oc1 = oc1_m.group(1)
-            out = {}
-            # 성별 매진이면 그 날짜엔 해당 성별 옵션이 없음 → 여러 날짜를 돌며 각 성별 가격 확보.
-            for vc, vn in dates[:5]:
+            for vc, vn in dates[:4]:
                 if '남성' in out and '여성' in out:
                     break
                 h2 = self._load_option_html(page, idx, [(oc1, vc, vn)])
@@ -444,17 +444,20 @@ class ModpartyScraper(BaseScraper):
                         break
                 if not oc2:
                     continue
-                for gvc, gname in re.findall(r"'(O[0-9a-f]{10,})',\s*'(남성|여성)'", h2):
-                    if gname in out:
+                # '남성' 또는 '남성(대기신청)'/'여성(대기신청)' 등 접두 매칭
+                for gvc, gfull in re.findall(r"'(O[0-9a-f]{10,})',\s*'((?:남성|여성)[^']*)'", h2):
+                    gender = '남성' if gfull.startswith('남성') else '여성'
+                    if gender in out:
                         continue
-                    h3 = self._load_option_html(page, idx, [(oc1, vc, vn), (oc2, gvc, gname)])
+                    soldout = ('대기' in gfull) or ('마감' in gfull)
+                    h3 = self._load_option_html(page, idx, [(oc1, vc, vn), (oc2, gvc, gfull)])
                     pm = re.search(r'([1-9]\d?,\d{3}|[1-9]\d{4,6})\s*원', re.sub(r'\s+', ' ', h3))
                     if pm:
-                        out[gname] = int(pm.group(1).replace(',', ''))
-            return out.get('남성'), out.get('여성')
+                        out[gender] = (int(pm.group(1).replace(',', '')), soldout)
+            return out
         except Exception as e:
             self.logger.warning(f'모드파티 성별가격 추출 실패 idx={idx}: {str(e)[:60]}')
-            return None, None
+            return out
 
     def _enrich_from_detail(self, data: dict, soup: BeautifulSoup) -> None:
         """상품 상세페이지에서 제목·이미지·본문·가격 보강(목록에 없던 상품 포함)"""
@@ -583,13 +586,16 @@ class ModpartyScraper(BaseScraper):
                         base = val
             price_male = data.get('price_male')
             price_female = data.get('price_female')
-            male_sold = female_sold = False
+            # 매진(대기신청)은 위젯 옵션명으로 판별 — 가격은 있음.
+            male_sold = bool(data.get('male_sold'))
+            female_sold = bool(data.get('female_sold'))
             if price_male is None and price_female is None:
-                price_male = price_female = base   # 추출 실패 → base 폴백(매진 아님)
+                price_male = price_female = base   # 추출 실패 → base 폴백
+                male_sold = female_sold = False
             elif price_male is None:
-                male_sold = True                   # 남성 옵션 없음 = 매진
+                price_male = base
             elif price_female is None:
-                female_sold = True
+                price_female = base
 
             theme = ['와인'] if '와인' in scan else ['일반']
             if '요리' in scan or '쿡' in scan:
