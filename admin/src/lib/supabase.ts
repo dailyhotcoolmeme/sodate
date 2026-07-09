@@ -12,11 +12,27 @@ export const supabase = createClient(PROXY_URL, 'proxy', {
   },
 })
 
-// Storage 공개 URL 은 실제 Supabase 호스트로 만든다(프록시 호스트가 아님).
-// 이 프로젝트 URL 은 공개값(앱 번들에도 노출됨) 이라 하드코딩해도 안전하다.
-export const SUPABASE_PUBLIC_URL = 'https://xgcldcnqfqcugkcifyae.supabase.co'
+// 이미지 업로드는 R2(이그레스 무료)로. 서버 Pages Function(/api/upload)이 세션 검증 후 R2 에 저장,
+// 공개 서빙은 /media/<key>. Supabase Storage 는 이그레스 비용 때문에 쓰지 않는다.
+export async function uploadDetailImage(file: File, slug: string, typeId: string): Promise<string> {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('slug', slug)
+  fd.append('typeId', typeId)
+  const res = await fetch('/api/upload', { method: 'POST', body: fd, credentials: 'include' })
+  if (!res.ok) throw new Error(`업로드 실패 (${res.status})`)
+  const data = await res.json()
+  return data.url as string
+}
 
-export function publicImageUrl(bucket: string, path: string): string {
-  const encoded = path.split('/').map(encodeURIComponent).join('/')
-  return `${SUPABASE_PUBLIC_URL}/storage/v1/object/public/${bucket}/${encoded}`
+export async function deleteDetailImage(url: string): Promise<void> {
+  const key = detailImageKey(url)
+  if (!key) return
+  await fetch(`/api/upload?key=${encodeURIComponent(key)}`, { method: 'DELETE', credentials: 'include' })
+}
+
+// 공개 URL(/media/<key>) → R2 키 추출
+export function detailImageKey(url: string): string | null {
+  const i = url.indexOf('/media/')
+  return i < 0 ? null : url.slice(i + '/media/'.length)
 }

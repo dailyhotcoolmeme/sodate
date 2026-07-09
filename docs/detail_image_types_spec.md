@@ -33,9 +33,13 @@ create index on company_image_types(company_id);
 alter table events add column image_type_id uuid references company_image_types(id) on delete set null;
 ```
 
-## Storage
-- 공개 버킷 `company-desc`. 경로: `{company_slug}/{type_id}/{순번}.{ext}`
-- read: public / insert·update·delete: authenticated(admin)
+## Storage — R2 (Supabase Storage 아님! 이그레스 비용 때문)
+- R2 버킷 `sodate-media`, 키: `detail/{slug}/{type_id}/{uuid}.{ext}`
+- admin Pages 에 R2 바인딩 `MEDIA` (admin/wrangler.toml)
+- 업로드: `POST /api/upload` (세션 인증) → R2 put → 공개 URL 반환
+- 삭제: `DELETE /api/upload?key=` (세션 인증)
+- 공개 서빙: `GET /media/{key}` (무인증, `immutable` 캐시, 이그레스 무료)
+- 앱은 expo-image 로 로컬(memory-disk) 캐시 → 재요청 거의 없음
 
 ## Admin
 - **/companies**: 업체별 이미지 유형 관리 (유형 추가/삭제/이름수정, 이미지 여러 장 업로드/삭제, 기본 지정)

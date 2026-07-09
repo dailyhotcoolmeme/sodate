@@ -1,0 +1,8 @@
+name = "sodate-admin"
+compatibility_date = "2026-01-01"
+pages_build_output_dir = "dist"
+
+# 상세 이미지 저장용 R2 (이그레스 무료). 업로드=/api/upload, 공개서빙=/media/*
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "sodate-media"

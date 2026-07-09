@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { supabase, publicImageUrl } from '../lib/supabase'
+import { supabase, uploadDetailImage, deleteDetailImage } from '../lib/supabase'
 import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Check } from 'lucide-react'
-
-const BUCKET = 'company-desc'
 
 interface ImageType {
   id: string
@@ -61,9 +59,8 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
 
   async function deleteType(t: ImageType) {
     if (!window.confirm(`'${t.name}' 유형을 삭제할까요? 이 유형을 쓰던 일정은 기본 유형으로 표시됩니다.`)) return
-    // 스토리지 파일 정리(실패해도 진행)
-    const paths = t.images.map(storagePathFromUrl).filter(Boolean) as string[]
-    if (paths.length) { try { await supabase.storage.from(BUCKET).remove(paths) } catch { /* noop */ } }
+    // R2 파일 정리(실패해도 진행)
+    for (const url of t.images) { try { await deleteDetailImage(url) } catch { /* noop */ } }
     await supabase.from('company_image_types').delete().eq('id', t.id)
     await load()
   }
@@ -73,17 +70,11 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
     try {
       const urls: string[] = []
       for (let i = 0; i < files.length; i++) {
-        const f = files[i]
-        const ext = (f.name.split('.').pop() || 'jpg').toLowerCase()
-        const safe = `${Date.now()}_${i}.${ext}`
-        const path = `${slug}/${t.id}/${safe}`
-        const { error } = await supabase.storage.from(BUCKET).upload(path, f, {
-          upsert: true,
-          contentType: f.type || undefined,
-          cacheControl: '3600',
-        })
-        if (error) { alert(`업로드 실패: ${error.message}`); continue }
-        urls.push(publicImageUrl(BUCKET, path))
+        try {
+          urls.push(await uploadDetailImage(files[i], slug, t.id))
+        } catch (e) {
+          alert(`업로드 실패: ${(e as Error).message}`)
+        }
       }
       if (urls.length) {
         const next = [...t.images, ...urls]
@@ -98,8 +89,7 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
   async function deleteImage(t: ImageType, url: string) {
     const next = t.images.filter((u) => u !== url)
     await supabase.from('company_image_types').update({ images: next, updated_at: new Date().toISOString() }).eq('id', t.id)
-    const p = storagePathFromUrl(url)
-    if (p) { try { await supabase.storage.from(BUCKET).remove([p]) } catch { /* noop */ } }
+    try { await deleteDetailImage(url) } catch { /* noop */ }
     await load()
   }
 
@@ -179,12 +169,4 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
       </button>
     </div>
   )
-}
-
-// 공개 URL → 스토리지 내부 경로 추출 (삭제용)
-function storagePathFromUrl(url: string): string | null {
-  const marker = `/object/public/${BUCKET}/`
-  const i = url.indexOf(marker)
-  if (i < 0) return null
-  return decodeURIComponent(url.slice(i + marker.length))
 }

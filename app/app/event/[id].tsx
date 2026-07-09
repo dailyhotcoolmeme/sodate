@@ -50,6 +50,7 @@ function DescImage({ uri }: { uri: string }) {
       source={{ uri }}
       contentFit="cover"
       transition={150}
+      cachePolicy="memory-disk"
       onLoad={(e) => {
         const w = e?.source?.width
         const h = e?.source?.height
