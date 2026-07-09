@@ -33,6 +33,25 @@ PRICE_RE = re.compile(r'[\d.]+')
 REGION_KW = ['강남', '서초', '홍대', '신촌', '잠실', '건대', '성수', '이태원', '합정', '여의도',
              '마포', '종로', '용산', '동작', '관악', '수원', '인천', '부산', '대구', '대전']
 
+# 예약옵션 이름에 지점이 박혀있는 업체(어바웃와인 등) — 일정별 지역을 옵션이름에서 추출.
+# 통합상품(건대잠실합정)도 일정마다 옵션이름이 "건대…"/"잠실…"이라 지점별로 정확히 나뉨.
+VENUE_KW = ['자양', '건대', '잠실', '송리단', '합정', '홍대', '신논현', '강남', '서초', '신촌',
+            '성수', '종로', '을지로', '사당', '수원', '문래', '청담', '압구정', '신림', '당산',
+            '서울대입구', '용산', '일산', '판교', '분당', '인천', '부산']
+
+# 중복 제거용 지역 정규화 — 같은 물리적 지점의 다른 표기를 하나로 묶어(통합상품↔지점상품
+# 겹침 제거). 저장 지역은 그대로 두고, dedup 키에서만 이 정규화를 씀.
+_CANON_REGION = {
+    '합정': '홍대', '마포': '홍대', '마포·서대문·은평': '홍대', '서대문': '홍대',
+    '송리단': '잠실', '송파·강동': '잠실', '송파': '잠실', '강동': '잠실',
+    '자양': '건대', '성동·광진': '건대', '성동': '건대', '광진': '건대',
+    '서초': '강남', '강남·서초': '강남', '신논현': '강남', '청담': '강남', '압구정': '강남', '역삼': '강남',
+}
+
+
+def _canon_region(r):
+    return _CANON_REGION.get(r, r)
+
 # 나이대 패턴
 AGE_RANGE_RE = re.compile(r'(\d{2})[~\-～](\d{2})년생')
 # 나이 단독 패턴 (예: "30대", "20~30대")
@@ -175,8 +194,15 @@ class FripScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f'프립 크롤링 실패: {e}')
 
-        seen: set[str] = set()
-        unique = [ev for ev in events if ev.source_url not in seen and not seen.add(ev.source_url)]  # type: ignore
+        # (지역+정확한 일시)로 중복 제거 — 통합상품(건대잠실합정)과 지점상품이 같은
+        # 지점·날짜·시간 이벤트를 각각 내므로 겹침. 나이 있는 쪽을 우선 보존.
+        best: dict = {}
+        for ev in events:
+            key = (_canon_region(ev.location_region), int(ev.event_date.timestamp()))
+            cur = best.get(key)
+            if cur is None or (ev.age_range_min and not cur.age_range_min):
+                best[key] = ev
+        unique = list(best.values())
         filtered = []
         for ev in unique:
             if is_within_one_month(ev.event_date):
@@ -347,6 +373,47 @@ class FripScraper(BaseScraper):
             if d:
                 base = int(d.group(1))
                 return (max(18, base), min(60, base + 9))
+        return (None, None)
+
+    def _parse_location_from_items(self, select_items: list[dict]) -> Optional[str]:
+        """예약옵션 이름에서 지점 추출(어바웃와인 등). 통합상품(건대잠실합정)도 일정마다
+        옵션이름이 '건대…'/'잠실…'이라 지점별로 정확히 나뉨. 없으면 None."""
+        for it in select_items:
+            name = it.get('name') or ''
+            for kw in VENUE_KW:
+                if kw in name:
+                    return kw
+        return None
+
+    def _parse_age_smart(self, select_items: list[dict], title: str,
+                         description: str) -> tuple:
+        """일정 나이(만나이) 다중소스: 1)옵션이름 '28-37세/30대'(일정별·최우선)
+        2)제목·설명 'XX-YY년생'→만나이 3)제목 '2030/3040/N0대'. 없으면 (None,None).
+        설명의 'N0대'는 노이즈(과거 18~39 버그)라 3)은 제목만 본다."""
+        a = self._parse_age_from_items(select_items)
+        if a[0]:
+            return a
+        yr = datetime.now().year
+        for text in (title or '', description or ''):
+            m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년생', text)
+            if m:
+                y1, y2 = int(m.group(1)), int(m.group(2))
+                b1 = (1900 + y1) if y1 >= 50 else (2000 + y1)
+                b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
+                lo, hi = yr - max(b1, b2), yr - min(b1, b2)
+                if lo <= hi:
+                    return (max(18, lo), min(60, hi))
+        t = title or ''
+        if re.search(r'20\s*30', t):
+            return (20, 39)
+        if re.search(r'30\s*40', t):
+            return (30, 49)
+        if re.search(r'20\s*40', t):
+            return (20, 49)
+        m = re.search(r'(\d0)\s*대', t)
+        if m:
+            base = int(m.group(1))
+            return (max(18, base), min(60, base + 9))
         return (None, None)
 
     def _parse_gender_items(self, select_items: list[dict]) -> tuple:
@@ -560,11 +627,6 @@ class FripScraper(BaseScraper):
             title = node.get('title') or ''
             if not any(kw in title for kw in ['소개팅', '미팅', '로테이션', '파티', '번개', '썸', '솔로']):
                 return []
-            # 통합(다지점) 상품 제외 — 제목에 지점 3곳+ (예: "건대잠실합정")은 여러 지점이
-            # 한 상품에 섞여 지역이 틀리게 붙고 지점별 상품과 중복됨. 지점별 상품만 크롤.
-            if sum(1 for k in set(REGION_KW) if k in title) >= 3:
-                self.logger.debug(f'통합(다지점) 상품 스킵: {title[:40]}')
-                return []
             product_id = str(node.get('id'))
             area = node.get('areaName') or ''
 
@@ -611,9 +673,13 @@ class FripScraper(BaseScraper):
                 sid = sc['id']
                 select_items = self._fetch_select_items(product_id, sid, client)
                 pm, pf, sm, sf, cm, cf = self._parse_gender_items(select_items)
-                # 나이: 예약옵션 이름(28-37세/30대) = 업체 달력과 일치하는 신뢰값
-                amin, amax = self._parse_age_from_items(select_items)
+                # 나이: 옵션이름(28-37세) → 제목·설명 년생 → 제목 2030/3040 순
+                amin, amax = self._parse_age_smart(select_items, title, description_text)
                 age_label = f'{amin}~{amax}세' if (amin and amax) else None
+                # 지점: 옵션이름에 지점 박힌 업체(통합상품 포함)는 일정별 지역을 정확히 분리
+                loc_kw = self._parse_location_from_items(select_items)
+                sched_region = resolve_region(region_phrase=loc_kw, title=title,
+                                              body=None) if loc_kw else region
                 # 일정 전체가 마감(remains 0)이면 성별 잔여 0으로 간주
                 if sc.get('remains') == 0:
                     if sm is None:
@@ -624,7 +690,7 @@ class FripScraper(BaseScraper):
                 source_url = f'{FRIP_BASE}/products/{product_id}#evt={kst.strftime("%Y%m%d%H%M")}'
                 events.append(EventModel(
                     title=title_clean, description=desc_clean,
-                    event_date=event_date, location_region=region, location_detail=area or None,
+                    event_date=event_date, location_region=sched_region, location_detail=area or None,
                     price_male=pm, price_female=pf, gender_ratio=None,
                     source_url=source_url, thumbnail_urls=thumbnails, theme=theme,
                     seats_left_male=sm, seats_left_female=sf,
