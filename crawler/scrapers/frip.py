@@ -704,32 +704,44 @@ class FripScraper(BaseScraper):
                     continue
                 sid = sc['id']
                 select_items = self._fetch_select_items(product_id, sid, client)
-                pm, pf, sm, sf, cm, cf = self._parse_gender_items(select_items)
-                # 나이: 옵션이름(28-37세) → 년생 → N세이하/이상 → 2030/3040 순
-                amin, amax = self._parse_age_smart(select_items, title, description_text,
-                                                   recommended_age)
-                age_label = f'{amin}~{amax}세' if (amin and amax) else None
-                # 지점: 옵션이름에 지점 박힌 업체(통합상품 포함)는 일정별 지역을 정확히 분리
-                loc_kw = self._parse_location_from_items(select_items)
-                sched_region = resolve_region(region_phrase=loc_kw, title=title,
-                                              body=None) if loc_kw else region
-                # 일정 전체가 마감(remains 0)이면 성별 잔여 0으로 간주
-                if sc.get('remains') == 0:
-                    if sm is None:
-                        sm = 0
-                    if sf is None:
-                        sf = 0
                 kst = event_date.astimezone(KST)
-                source_url = f'{FRIP_BASE}/products/{product_id}#evt={kst.strftime("%Y%m%d%H%M")}'
-                events.append(EventModel(
-                    title=title_clean, description=desc_clean,
-                    event_date=event_date, location_region=sched_region, location_detail=area or None,
-                    price_male=pm, price_female=pf, gender_ratio=None,
-                    source_url=source_url, thumbnail_urls=thumbnails, theme=theme,
-                    seats_left_male=sm, seats_left_female=sf,
-                    capacity_male=cm, capacity_female=cf,
-                    age_range_min=amin, age_range_max=amax, age_group_label=age_label,
-                ))
+                anchor = kst.strftime("%Y%m%d%H%M")
+
+                # 한 일정에 지점이 여러 개면(예: 사당+수원 각각 가격) 지점별로 분리 → 각각 이벤트.
+                # 지점 1개(또는 0개)면 분리 안 함(전체 옵션 사용) — 가격옵션에 지점 키워드가
+                # 없어도 누락 안 되게. 2개 이상일 때만 지점 키워드로 옵션을 나눈다.
+                venues = list(dict.fromkeys(
+                    kw for kw in VENUE_KW if any(kw in (it.get('name') or '') for it in select_items)))
+                multi = len(venues) >= 2
+                if multi:
+                    groups = [(v, [it for it in select_items if v in (it.get('name') or '')]) for v in venues]
+                else:
+                    groups = [(venues[0] if venues else None, select_items)]
+
+                for v, v_items in groups:
+                    pm, pf, sm, sf, cm, cf = self._parse_gender_items(v_items)
+                    if pm is None and pf is None:
+                        continue  # 이 지점에 판매 옵션 없음
+                    amin, amax = self._parse_age_smart(v_items, title, description_text, recommended_age)
+                    age_label = f'{amin}~{amax}세' if (amin and amax) else None
+                    sched_region = resolve_region(region_phrase=v, title=title, body=None) if v else region
+                    if sc.get('remains') == 0:
+                        if sm is None:
+                            sm = 0
+                        if sf is None:
+                            sf = 0
+                    su = f'{FRIP_BASE}/products/{product_id}#evt={anchor}'
+                    if multi and v:
+                        su += f'-{v}'  # 같은 일정 다지점 → source_url 유니크
+                    events.append(EventModel(
+                        title=title_clean, description=desc_clean,
+                        event_date=event_date, location_region=sched_region, location_detail=area or None,
+                        price_male=pm, price_female=pf, gender_ratio=None,
+                        source_url=su, thumbnail_urls=thumbnails, theme=theme,
+                        seats_left_male=sm, seats_left_female=sf,
+                        capacity_male=cm, capacity_female=cf,
+                        age_range_min=amin, age_range_max=amax, age_group_label=age_label,
+                    ))
             return events
         except Exception as e:
             self.logger.warning(f'프립 상품 파싱 실패 {node.get("id")}: {e}')
