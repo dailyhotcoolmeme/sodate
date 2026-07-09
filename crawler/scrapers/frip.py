@@ -9,7 +9,7 @@
 
 import re
 import html as html_module
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
@@ -140,6 +140,24 @@ query GetProductDetailPageData($id: ID!) {
 }
 '''
 
+# 상품의 월별 전체 일정(반복 일정 업체=어바웃와인 등 핵심). 상품당 1일정만 보던
+# firstPurchasableSchedule 한계를 해결 — 예약창의 "날짜 변경"이 쓰는 쿼리.
+GQL_SCHEDULES_QUERY = '''
+query GetSchedules($productId: ID!, $yearMonth: String) {
+  product {
+    schedulesByYearMonth(productId: $productId, statusIn: [OPENED, SOLD_OUT], yearMonth: $yearMonth) {
+      schedules {
+        id
+        status
+        counts { quota remains sale }
+        term { startedAt endedAt }
+        waitingInfo { isWaiting }
+      }
+    }
+  }
+}
+'''
+
 
 class FripScraper(BaseScraper):
     def __init__(self):
@@ -153,9 +171,7 @@ class FripScraper(BaseScraper):
 
             with httpx.Client(timeout=20) as client:
                 for node in nodes:
-                    ev = self._node_to_event(node, client)
-                    if ev:
-                        events.append(ev)
+                    events.extend(self._product_to_events(node, client))
         except Exception as e:
             self.logger.error(f'프립 크롤링 실패: {e}')
 
@@ -279,6 +295,59 @@ class FripScraper(BaseScraper):
         text = re.sub(r'[ \t]+', ' ', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()
+
+    def _fetch_schedules_multi(self, product_id: str, client: httpx.Client) -> list[dict]:
+        """상품의 이번달~다음2달 전체 일정 조회(schedulesByYearMonth). 미래 일정만 반환.
+        반환: [{'id','startedAt'(ms), 'remains','quota','isWaiting'}] 시간순."""
+        out = []
+        now_kst = datetime.now(timezone(timedelta(hours=9)))
+        yms = set()
+        for i in range(3):  # 이번달 + 2달
+            m = now_kst.month + i
+            y = now_kst.year + (m - 1) // 12
+            m = (m - 1) % 12 + 1
+            yms.add(f'{y}-{m:02d}')
+        for ym in sorted(yms):
+            try:
+                resp = client.post(FRIP_GQL, json={
+                    'operationName': 'GetSchedules', 'query': GQL_SCHEDULES_QUERY,
+                    'variables': {'productId': product_id, 'yearMonth': ym}}, headers=GQL_HEADERS)
+                resp.raise_for_status()
+                days = ((resp.json().get('data') or {}).get('product') or {}).get('schedulesByYearMonth') or []
+                for day in days:
+                    for s in (day.get('schedules') or []):
+                        term = s.get('term') or {}
+                        st = term.get('startedAt')
+                        if not st:
+                            continue
+                        counts = s.get('counts') or {}
+                        out.append({
+                            'id': s.get('id'), 'startedAt': int(st),
+                            'remains': counts.get('remains'), 'quota': counts.get('quota'),
+                            'isWaiting': (s.get('waitingInfo') or {}).get('isWaiting'),
+                        })
+            except Exception as e:
+                self.logger.debug(f'월별 일정 조회 실패 {product_id} {ym}: {e}')
+        # 중복 제거(같은 id) + 시간순
+        uniq = {s['id']: s for s in out if s['id']}
+        return sorted(uniq.values(), key=lambda s: s['startedAt'])
+
+    def _parse_age_from_items(self, select_items: list[dict]) -> tuple:
+        """selectItems 이름에서 나이대(만나이) 추출. '여성추가(28-37세)'→(28,37),
+        '남성추가(30대모임)'→(30,39). 명시 없으면(2030 등) (None,None).
+        프립 예약옵션 이름은 업체 달력과 일치하는 신뢰값이라 그대로 사용."""
+        for item in select_items:
+            name = item.get('name', '') or ''
+            m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*세', name)
+            if m:
+                a, b = int(m.group(1)), int(m.group(2))
+                lo, hi = min(a, b), max(a, b)
+                return (max(18, lo), min(60, hi))
+            d = re.search(r'(\d0)\s*대', name)  # 30대 → 30~39
+            if d:
+                base = int(d.group(1))
+                return (max(18, base), min(60, base + 9))
+        return (None, None)
 
     def _parse_gender_items(self, select_items: list[dict]) -> tuple:
         """
@@ -482,9 +551,92 @@ class FripScraper(BaseScraper):
                 return f"{m.group(1)}~{m.group(2)}년생"
         return None
 
-    # ─── 메인 변환 ──────────────────────────────────────────────────────────────
+    # ─── 메인 변환 (상품 → 일정별 이벤트 목록) ─────────────────────────────────
 
-    def _node_to_event(self, node: dict, client: httpx.Client) -> Optional[EventModel]:
+    def _product_to_events(self, node: dict, client: httpx.Client) -> list[EventModel]:
+        """상품 하나의 모든 일정을 이벤트로. 상품정보(제목·설명·지역·썸네일)는 1회,
+        일정별 selectItems로 나이/성별가격/잔여석을 뽑아 각각 이벤트 생성."""
+        try:
+            title = node.get('title') or ''
+            if not any(kw in title for kw in ['소개팅', '미팅', '로테이션', '파티', '번개', '썸', '솔로']):
+                return []
+            # 통합(다지점) 상품 제외 — 제목에 지점 3곳+ (예: "건대잠실합정")은 여러 지점이
+            # 한 상품에 섞여 지역이 틀리게 붙고 지점별 상품과 중복됨. 지점별 상품만 크롤.
+            if sum(1 for k in set(REGION_KW) if k in title) >= 3:
+                self.logger.debug(f'통합(다지점) 상품 스킵: {title[:40]}')
+                return []
+            product_id = str(node.get('id'))
+            area = node.get('areaName') or ''
+
+            # ── 상품 상세(설명·recommendedAge) 1회 ──
+            detail = self._fetch_detail(product_id, client)
+            description_text = ''
+            recommended_age: Optional[int] = None
+            if detail:
+                contents = detail.get('contents') or []
+                html_parts = [c.get('content', '') for c in contents if c.get('content')]
+                full_html = ' '.join(html_parts)
+                if full_html:
+                    description_text = self._html_to_text(full_html)
+                rec_age = (detail.get('frip') or {}).get('recommendedAge')
+                if rec_age and int(rec_age) > 0:
+                    recommended_age = int(rec_age)
+
+            region = resolve_region(region_phrase=area or None, title=title,
+                                    body=description_text or None)
+            thumbnails: list[str] = []
+            for hc in node.get('headerContents') or []:
+                thumb = (hc.get('content') or {}).get('thumbnail')
+                if thumb:
+                    thumbnails.append(thumb)
+                    break
+            theme = ['일반']
+            if '와인' in title:
+                theme = ['와인']
+            elif '쿠킹' in title or '요리' in title:
+                theme = ['쿠킹']
+            desc_clean = sanitize_text(description_text, 6000) if description_text else None
+            title_clean = sanitize_text(f'[프립] {title}', 80)
+
+            # ── 전체 일정 조회 → 일정별 이벤트 ──
+            KST = timezone(timedelta(hours=9))
+            now_utc = datetime.now(timezone.utc)
+            horizon = now_utc + timedelta(days=62)
+            schedules = self._fetch_schedules_multi(product_id, client)
+            events: list[EventModel] = []
+            for sc in schedules:
+                event_date = datetime.fromtimestamp(sc['startedAt'] / 1000, tz=timezone.utc)
+                if event_date < now_utc or event_date > horizon:
+                    continue
+                sid = sc['id']
+                select_items = self._fetch_select_items(product_id, sid, client)
+                pm, pf, sm, sf, cm, cf = self._parse_gender_items(select_items)
+                # 나이: 예약옵션 이름(28-37세/30대) = 업체 달력과 일치하는 신뢰값
+                amin, amax = self._parse_age_from_items(select_items)
+                age_label = f'{amin}~{amax}세' if (amin and amax) else None
+                # 일정 전체가 마감(remains 0)이면 성별 잔여 0으로 간주
+                if sc.get('remains') == 0:
+                    if sm is None:
+                        sm = 0
+                    if sf is None:
+                        sf = 0
+                kst = event_date.astimezone(KST)
+                source_url = f'{FRIP_BASE}/products/{product_id}#evt={kst.strftime("%Y%m%d%H%M")}'
+                events.append(EventModel(
+                    title=title_clean, description=desc_clean,
+                    event_date=event_date, location_region=region, location_detail=area or None,
+                    price_male=pm, price_female=pf, gender_ratio=None,
+                    source_url=source_url, thumbnail_urls=thumbnails, theme=theme,
+                    seats_left_male=sm, seats_left_female=sf,
+                    capacity_male=cm, capacity_female=cf,
+                    age_range_min=amin, age_range_max=amax, age_group_label=age_label,
+                ))
+            return events
+        except Exception as e:
+            self.logger.warning(f'프립 상품 파싱 실패 {node.get("id")}: {e}')
+            return []
+
+    def _node_to_event_OLD(self, node: dict, client: httpx.Client) -> Optional[EventModel]:
         try:
             ts = node.get('scheduleFirstDate')
             if not ts:

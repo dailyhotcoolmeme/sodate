@@ -1067,22 +1067,14 @@ def discover_platform_enriched(slug, ScraperClass):
 
 
 def discover_frip(slug, ScraperClass):
-    """프립 전용 — GraphQL 스크래퍼가 뽑은 성별 가격/성별 잔여석/나이로 기존 행을 '채운다'(병합).
-    프립은 옛 스크래퍼가 만든 행(설명O·가격X)이 이미 있어서(source manual/verified),
-    상품URL(앵커 없음)로 매칭해 가격·품절·나이만 UPDATE(설명·제목·날짜·source 보존).
-    - 가격: 남/여 각각. 잔여석 0 → 그 성별 품절(price_detail 취소선). 마감: 남·여 잔여 모두 0.
-    - 나이: 상·하한 둘 다 있는 것만(결정 A). 하한만/없음은 손대지 않음(부실값 노출 금지).
-    - 매칭 없는 신규 상품만 crawl 로 삽입. source_url=상품URL(앵커 없음)."""
+    """프립 전용 — schedulesByYearMonth로 상품당 '전체 일정'을 이벤트화(옛 1일정 한계 해결).
+    - 일정별: 성별 가격/성별 잔여석/나이(예약옵션 이름 '28-37세'=업체 달력과 일치). 잔여 0→품절.
+    - source_url=상품URL#evt=일시(일정별 유니크). 통합(다지점) 상품은 스크래퍼가 스킵.
+    - 기존 crawl+manual(옛 스크래퍼 산출물) 전부 삭제 후 재적재. verified(오너 확정)는 보존."""
     cid = company_id(slug)
     events = ScraperClass().scrape()
 
-    existing = {}
-    er = sb.table('events').select('id,source_url').eq('company_id', cid).execute()
-    for e in (er.data or []):
-        existing[e['source_url']] = e['id']
-
-    updated = 0
-    inserts = []
+    rows = []
     seen = set()
     for ev in events:
         d = ev.model_dump()
@@ -1094,7 +1086,7 @@ def discover_frip(slug, ScraperClass):
         dt = dt.astimezone(KST)
         if not (NOW <= dt <= HORIZON):
             continue
-        su = d.get('source_url')  # 앵커 없는 상품 URL — 기존 manual 행과 동일 키
+        su = d.get('source_url')  # 스크래퍼가 #evt=일시 앵커 포함해 유니크하게 생성
         if not su or su in seen:
             continue
         seen.add(su)
@@ -1102,63 +1094,50 @@ def discover_frip(slug, ScraperClass):
         pm, pf = d.get('price_male'), d.get('price_female')
         sm, sf = d.get('seats_left_male'), d.get('seats_left_female')
         amin, amax = d.get('age_range_min'), d.get('age_range_max')
-        age_label = d.get('age_group_label')
-        # 프립 나이는 업체가 명시한 "XX~YY년생"에서 나온 것만 신뢰(오너가 링크에서 확인 가능).
-        # "N0대" 추측('10대 사절' 등 노이즈까지 나이로 잡아 18~39 같은 엉터리 생성)·
-        # recommendedAge(하한만)는 버린다.
-        has_age = bool(amin and amax and age_label and age_label.endswith('년생'))
+        has_age = bool(amin and amax)  # 예약옵션 이름 기반 = 신뢰(만나이 그대로)
+        age_text = f'{amin}~{amax}' if has_age else None
 
         detail = {}
         if pm is not None:
             detail['male'] = {'regular': pm, **({'regular_soldout': True} if sm == 0 else {})}
         if pf is not None:
             detail['female'] = {'regular': pf, **({'regular_soldout': True} if sf == 0 else {})}
-        # 마감: 남·여 잔여 모두 파악됐고 둘 다 0
         is_closed = (sm == 0 and sf == 0) if (sm is not None and sf is not None) else False
 
-        # 채울 필드(가격/품절/잔여/마감). 나이는 신뢰될 때만 포함.
-        fields = {
+        region = d.get('location_region') or '미정'
+        tags = derive_hashtags(title=d.get('title') or '', region=region,
+                               age_min=amin if has_age else None,
+                               age_max=amax if has_age else None)
+        rows.append({
+            'company_id': cid,
+            'title': d.get('title') or _NAME_CACHE.get(cid) or '모임',
+            'description': d.get('description'),
+            'event_date': dt.isoformat(),
+            'location_region': region,
+            'location_detail': d.get('location_detail'),
+            'source_url': su, 'is_active': True, 'is_closed': is_closed,
+            'source': 'crawl',
             'price_male': pm, 'price_female': pf,
+            'age_male': age_text, 'age_female': age_text,
+            'age_range_min': amin if has_age else None,
+            'age_range_max': amax if has_age else None,
             'price_detail': detail or None,
             'seats_left_male': sm, 'seats_left_female': sf,
             'capacity_male': d.get('capacity_male'), 'capacity_female': d.get('capacity_female'),
-            'is_closed': is_closed,
-        }
-        if has_age:
-            age_text = f'{amin}~{amax}'
-            fields.update({'age_male': age_text, 'age_female': age_text,
-                           'age_range_min': amin, 'age_range_max': amax})
-        else:
-            # 신뢰 안 되는 나이(대-추측 등)는 명시적으로 비움 — 과거 실행이 넣은
-            # 엉터리 값(18~39 등)이 병합에서 안 지워지고 남는 것 방지.
-            fields.update({'age_male': None, 'age_female': None,
-                           'age_range_min': None, 'age_range_max': None})
+            'thumbnail_urls': d.get('thumbnail_urls') or None,
+            'theme': d.get('theme') or ['일반'],
+            'hashtags': tags or [],
+        })
 
-        if su in existing:
-            # 기존 행(설명·제목·날짜·source 보존) — 가격/품절/나이만 채움
-            sb.table('events').update(fields).eq('id', existing[su]).execute()
-            updated += 1
-        else:
-            region = d.get('location_region') or '미정'
-            tags = derive_hashtags(title=d.get('title') or '', region=region,
-                                   age_min=amin if has_age else None,
-                                   age_max=amax if has_age else None)
-            inserts.append({
-                'company_id': cid,
-                'title': d.get('title') or _NAME_CACHE.get(cid) or '모임',
-                'event_date': dt.isoformat(),
-                'location_region': region,
-                'location_detail': d.get('location_detail'),
-                'source_url': su, 'is_active': True,
-                'source': 'crawl',
-                'hashtags': tags or [],  # NOT NULL → 빈 배열
-                **fields,
-            })
-
-    if inserts:
-        sb.table('events').upsert(inserts, on_conflict='source_url',
+    if not rows:
+        print("프립 이벤트 0개 — 중단(기존 삭제 안 함)")
+        return 0
+    # 옛 스크래퍼 산출물(crawl/manual) 전부 삭제, verified(오너 확정)만 보존
+    sb.table('events').delete().eq('company_id', cid).in_('source', ['crawl', 'manual']).execute()
+    for i in range(0, len(rows), 100):
+        sb.table('events').upsert(rows[i:i+100], on_conflict='source_url',
                                   ignore_duplicates=True).execute()
-    return updated + len(inserts)
+    return len(rows)
 
 
 def main():

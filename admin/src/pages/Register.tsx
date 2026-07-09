@@ -507,9 +507,10 @@ function AgeCell({ value, onChange, onBlur, hint }: {
   )
 }
 
-// 만나이→출생연도 힌트 (사이트가 출생연도로 안내하는 업체 전부: 오너 검증용).
-// yeonin·loco·talkblossom = 출생연도(YY) 표기, frip = "XX~YY년생" 표기 → 모두 년도 기반.
-const BIRTH_YEAR_VENDORS = new Set(['yeonin', 'lovecommunity-loco', 'talkblossom', 'frip'])
+// 만나이→출생연도 힌트 (사이트가 출생연도로 안내하는 업체만: 오너 검증용).
+// yeonin·loco·talkblossom = 출생연도(YY) 표기. frip은 예약옵션이 '28-37세'처럼
+// 만나이로 안내 → 년생 힌트 불필요(제외).
+const BIRTH_YEAR_VENDORS = new Set(['yeonin', 'lovecommunity-loco', 'talkblossom'])
 function bornHint(slug: string, age: string): string | null {
   if (!BIRTH_YEAR_VENDORS.has(slug)) return null
   const m = age.match(/^(\d{1,2})\s*[~\-]\s*(\d{1,2})$/)
