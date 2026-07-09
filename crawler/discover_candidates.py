@@ -579,6 +579,18 @@ def discover_lovecasting(slug='lovecasting'):
     def path_of(u):
         return u.split('#')[0].rstrip('/')
 
+    def lc_image(page_url):
+        """이벤트 페이지 최상단 실이미지(로고·noname 제외 첫 이미지). 없으면 None."""
+        try:
+            r = httpx.get(page_url + '/', headers={'User-Agent': UA}, timeout=15, follow_redirects=True)
+            imgs = re.findall(r'<img[^>]+(?:data-src|src)="([^"]+\.(?:png|jpg|jpeg|webp))"', r.text)
+            for s in imgs:
+                if not re.search(r'logo|noname|icon|favicon|placeholder|blank', s, re.I):
+                    return s
+        except Exception as e:
+            print(f"  러브캐스팅 이미지 실패 {page_url}: {e}")
+        return None
+
     def card_of(a):
         anc = a
         for _ in range(6):
@@ -659,6 +671,9 @@ def discover_lovecasting(slug='lovecasting'):
             fields['location_region'] = r['region']  # 역명(삼성역 등)으로 지역 교체
         if r.get('event_date'):
             fields['event_date'] = r['event_date']    # 실제 시각으로 교체(커피17시/호프19시)
+        img = lc_image(pth)                            # noname.png → 실제 이벤트 이미지로 교체
+        if img:
+            fields['thumbnail_urls'] = [img]
         sb.table('events').update(fields).eq('id', dbmap[pth]).execute()
         updated += 1
     return updated

@@ -17,6 +17,8 @@ type Company = { id: string; name: string }
 
 type Row = {
   key: string
+  id: string | null            // 저장된 이벤트 id (이미지 유형 지정용)
+  title: string                // 실제 앱에 보이는 모임 제목
   candidate_id: string | null
   company_id: string
   company_name: string
@@ -24,6 +26,7 @@ type Row = {
   event_date: string // datetime-local
   source_url: string // 확인 링크
   location_region: string
+  image_type_id: string | null // 상세페이지 상세설명 이미지 유형
   price_male: string
   price_female: string
   capacity_male: string
@@ -55,6 +58,15 @@ export default function Register() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<string | null>(null)
+  // 업체별 상세 이미지 유형 (company_id → [{id,name}]). 슬롯에서 유형 선택용.
+  const [typesByCompany, setTypesByCompany] = useState<Record<string, { id: string; name: string; is_default: boolean }[]>>({})
+
+  async function updateImageType(row: Row, imageTypeId: string) {
+    if (!row.id) return
+    const value = imageTypeId || null
+    await supabase.from('events').update({ image_type_id: value }).eq('id', row.id)
+    setRows((prev) => prev.map((r) => r.key === row.key ? { ...r, image_type_id: value } : r))
+  }
 
   // 자동저장 시 최신 row 참조용 + 디바운스 타이머 + 저장중/추가편집 추적
   const rowsRef = useRef<Row[]>([])
@@ -69,6 +81,15 @@ export default function Register() {
       .select('id, name')
       .order('name')
       .then(({ data }) => setCompanies(data ?? []))
+    supabase
+      .from('company_image_types')
+      .select('id, company_id, name, is_default')
+      .order('sort_order')
+      .then(({ data }) => {
+        const map: Record<string, { id: string; name: string; is_default: boolean }[]> = {}
+        for (const t of (data as any[]) ?? []) (map[t.company_id] ??= []).push(t)
+        setTypesByCompany(map)
+      })
     loadCandidates()
   }, [])
 
@@ -80,7 +101,7 @@ export default function Register() {
     const horizon = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
     const { data, error } = await supabase
       .from('events')
-      .select('id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, price_detail, age_male, age_female, hashtags, is_closed, source, companies(name, slug)')
+      .select('id, title, image_type_id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, price_detail, age_male, age_female, hashtags, is_closed, source, companies(name, slug)')
       .eq('is_active', true)
       .gte('event_date', now.toISOString())
       .lte('event_date', horizon.toISOString())
@@ -94,6 +115,9 @@ export default function Register() {
     const s = (v: number | null) => (v == null ? '' : String(v))
     const evRows: Row[] = (data ?? []).map((e: any) =>
       makeRow({
+        id: e.id,
+        title: e.title ?? '',
+        image_type_id: e.image_type_id ?? null,
         company_id: e.company_id,
         company_name: e.companies?.name ?? '',
         company_slug: e.companies?.slug ?? '',
@@ -169,7 +193,8 @@ export default function Register() {
     const ageNums = [...extractAges(row.age_male), ...extractAges(row.age_female)]
     const payload = {
       company_id: row.company_id,
-      title: row.company_name || '모임',
+      // 실제 앱 제목 보존(크롤 제목). 수동 신규만 업체명 폴백. (예전엔 업체명으로 덮어써 제목 손상)
+      title: row.title || row.company_name || '모임',
       event_date: new Date(row.event_date).toISOString(),
       location_region: row.location_region || '미정',
       source_url: row.source_url,
@@ -237,6 +262,12 @@ export default function Register() {
           <Trash2 size={13} /> 삭제
         </button>
       </div>
+
+      {/* 앱에 보이는 모임 제목 (일시·지역보다 앞) */}
+      {r.title && <p className="text-sm font-medium text-gray-800 mb-2.5 break-words">{r.title}</p>}
+
+      {/* 상세페이지 상세설명 이미지 유형 (업체에 등록된 유형 있을 때만) */}
+      <ImageTypeSelect row={r} opts={typesByCompany[r.company_id]} onChange={(v) => updateImageType(r, v)} />
 
       {/* 링크 없을 때(수동 추가)만 URL 입력 */}
       {!r.source_url && (
@@ -317,6 +348,9 @@ export default function Register() {
         <span className="font-medium text-gray-800">{r.company_name}</span>
       </td>
       <td className="px-3 py-2">
+        <span className="text-gray-700">{r.title}</span>
+      </td>
+      <td className="px-3 py-2">
         <DateTimePicker
           value={r.event_date}
           onChange={(v) => patch(r.key, 'event_date', v)}
@@ -337,6 +371,9 @@ export default function Register() {
           <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showSuggestions={false} compact />
         </div>
       </td>
+      <td className="px-3 py-2">
+        <ImageTypeSelect row={r} opts={typesByCompany[r.company_id]} onChange={(v) => updateImageType(r, v)} compact />
+      </td>
       <td className="px-3 py-2 text-center">
         <input type="checkbox" checked={r.is_closed}
           onChange={(e) => { patch(r.key, 'is_closed', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
@@ -349,7 +386,7 @@ export default function Register() {
       </td>
     </tr>
     <tr className={`border-b border-gray-100 ${isRowDone(r) ? '' : 'bg-amber-50/60'}`}>
-      <td colSpan={12} className="px-3 pt-0 pb-3 whitespace-normal">
+      <td colSpan={14} className="px-3 pt-0 pb-3 whitespace-normal">
         <div className="flex items-start gap-2">
           <span className="text-xs text-gray-400 shrink-0 pt-0.5">추천</span>
           <div className="min-w-0 flex-1">
@@ -436,6 +473,7 @@ export default function Register() {
                 <th className="px-3 py-2.5 text-left font-medium">확인</th>
                 <th className="px-3 py-2.5 text-left font-medium w-6"></th>
                 <th className="px-3 py-2.5 text-left font-medium">업체</th>
+                <th className="px-3 py-2.5 text-left font-medium">제목</th>
                 <th className="px-3 py-2.5 text-left font-medium">날짜/시간</th>
                 <th className="px-3 py-2.5 text-left font-medium">지역</th>
                 <th className="px-3 py-2.5 text-center font-medium text-blue-600">남 가격</th>
@@ -443,6 +481,7 @@ export default function Register() {
                 <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 가격</th>
                 <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 연령</th>
                 <th className="px-3 py-2.5 text-left font-medium">해시태그</th>
+                <th className="px-3 py-2.5 text-left font-medium">상세 이미지 유형</th>
                 <th className="px-3 py-2.5 text-center font-medium">마감</th>
                 <th className="px-3 py-2.5"></th>
               </tr>
@@ -520,6 +559,31 @@ function bornHint(slug: string, age: string): string | null {
   return `${p(yr - parseInt(m[2]))}-${p(yr - parseInt(m[1]))}년생`  // 나이많은쪽(이른출생)-나이적은쪽
 }
 
+// 슬롯별 상세페이지 상세설명 이미지 유형 선택 (업체에 유형 등록돼 있고, 저장된 이벤트일 때만).
+function ImageTypeSelect({ row, opts, onChange, compact }: {
+  row: Row
+  opts?: { id: string; name: string; is_default: boolean }[]
+  onChange: (v: string) => void
+  compact?: boolean
+}) {
+  if (!row.id || !opts || opts.length === 0) return compact ? <span className="text-gray-300 text-xs">-</span> : null
+  const defName = opts.find((t) => t.is_default)?.name
+  const sel = (
+    <select value={row.image_type_id ?? ''} onChange={(e) => onChange(e.target.value)}
+      className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white max-w-40">
+      <option value="">기본{defName ? ` (${defName})` : ''}</option>
+      {opts.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' (기본)' : ''}</option>)}
+    </select>
+  )
+  if (compact) return sel
+  return (
+    <div className="mb-3">
+      <p className="text-xs text-gray-400 mb-1">상세 이미지 유형</p>
+      {sel}
+    </div>
+  )
+}
+
 // 자동 크롤 가격/품절 참고표시 (읽기용 — 입력란은 별도로 편집 가능)
 function PriceDetailReadout({ detail }: { detail: PriceDetail }) {
   const won = (n: number) => `${n.toLocaleString()}원`
@@ -553,6 +617,9 @@ function PriceDetailReadout({ detail }: { detail: PriceDetail }) {
 function makeRow(p: Partial<Row>): Row {
   return {
     key: crypto.randomUUID(),
+    id: null,
+    title: '',
+    image_type_id: null,
     candidate_id: null,
     company_id: '',
     company_name: '',
