@@ -359,11 +359,12 @@ class FripScraper(BaseScraper):
         return sorted(uniq.values(), key=lambda s: s['startedAt'])
 
     def _parse_age_from_items(self, select_items: list[dict]) -> tuple:
-        """selectItems 이름들에서 나이대(만나이) 추출 → 전체 합집합(min~max).
-        '(28-37세)'→28~37, '[87-02년생]'→년생 환산, '(30대)'→30~39.
-        여러 옵션에 서로 다른 티어(88-93/94-00년생 등)면 전부 아울러 범위 산출."""
+        """selectItems 이름들에서 나이 → (min, max, label). '(28-37세)'/'[87-02년생]'는
+        숫자범위(label None), '3040'/'2030'/'N0대'는 밴드(label='3040' 등, 그대로 표시).
+        명시 범위(세/년생)가 밴드보다 우선. 여러 티어면 합집합."""
         yr = datetime.now().year
         los, his = [], []
+        band = None  # (lo, hi, label)
         for item in select_items:
             name = item.get('name', '') or ''
             m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*세', name)
@@ -376,13 +377,23 @@ class FripScraper(BaseScraper):
                 b1 = (1900 + y1) if y1 >= 50 else (2000 + y1)
                 b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
                 los.append(yr - max(b1, b2)); his.append(yr - min(b1, b2)); continue
-            d = re.search(r'(?<!\d)(\d0)대', name)  # 30대→30~39 ('2030 대화' 오매칭 방지)
-            if d:
-                base = int(d.group(1))
-                los.append(base); his.append(base + 9)
+            if band is None:  # 밴드 토큰(옵션에 '3040' 등) — 명시 범위 없을 때만 사용
+                if re.search(r'20\s*30(?!\d)', name):
+                    band = (20, 39, '2030')
+                elif re.search(r'30\s*40(?!\d)', name):
+                    band = (30, 49, '3040')
+                elif re.search(r'20\s*40(?!\d)', name):
+                    band = (20, 49, '2040')
+                else:
+                    d = re.search(r'(?<!\d)(\d0)대', name)  # 30대 ('2030 대화' 오매칭 방지)
+                    if d:
+                        base = int(d.group(1))
+                        band = (max(18, base), min(60, base + 9), f'{base}대')
         if los:
-            return (max(18, min(los)), min(60, max(his)))
-        return (None, None)
+            return (max(18, min(los)), min(60, max(his)), None)
+        if band:
+            return band
+        return (None, None, None)
 
     def _parse_location_from_items(self, select_items: list[dict]) -> Optional[str]:
         """예약옵션 이름에서 지점 추출(어바웃와인 등). 통합상품(건대잠실합정)도 일정마다
@@ -402,7 +413,7 @@ class FripScraper(BaseScraper):
         3)'N세 이하/이상'(숫자표시) 4)'2030/3040/2040'(그대로표시) 5)'N0대'(그대로표시)."""
         a = self._parse_age_from_items(select_items)
         if a[0]:
-            return (a[0], a[1], None)
+            return a  # (min, max, label) — 옵션이름의 세/년생(숫자) 또는 밴드('3040')
         yr = datetime.now().year
 
         def yrs_to_age(y1, y2):
