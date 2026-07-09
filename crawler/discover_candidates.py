@@ -1094,8 +1094,12 @@ def discover_frip(slug, ScraperClass):
         pm, pf = d.get('price_male'), d.get('price_female')
         sm, sf = d.get('seats_left_male'), d.get('seats_left_female')
         amin, amax = d.get('age_range_min'), d.get('age_range_max')
-        has_age = bool(amin and amax)  # 예약옵션 이름 기반 = 신뢰(만나이 그대로)
-        age_text = f'{amin}~{amax}' if has_age else None
+        has_age = bool(amin and amax)  # 옵션이름/년생/2030 등에서 뽑은 만나이
+        # 오너 방침: 나이 못 뽑는 이벤트는 아예 넣지 않는다(업체가 나이 미표기 →
+        # 뽑을 데이터 자체가 없음). 앱에 뜨는 프립은 100% 나이 있음.
+        if not has_age:
+            continue
+        age_text = f'{amin}~{amax}'
 
         detail = {}
         if pm is not None:

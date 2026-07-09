@@ -359,20 +359,29 @@ class FripScraper(BaseScraper):
         return sorted(uniq.values(), key=lambda s: s['startedAt'])
 
     def _parse_age_from_items(self, select_items: list[dict]) -> tuple:
-        """selectItems 이름에서 나이대(만나이) 추출. '여성추가(28-37세)'→(28,37),
-        '남성추가(30대모임)'→(30,39). 명시 없으면(2030 등) (None,None).
-        프립 예약옵션 이름은 업체 달력과 일치하는 신뢰값이라 그대로 사용."""
+        """selectItems 이름들에서 나이대(만나이) 추출 → 전체 합집합(min~max).
+        '(28-37세)'→28~37, '[87-02년생]'→년생 환산, '(30대)'→30~39.
+        여러 옵션에 서로 다른 티어(88-93/94-00년생 등)면 전부 아울러 범위 산출."""
+        yr = datetime.now().year
+        los, his = [], []
         for item in select_items:
             name = item.get('name', '') or ''
             m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*세', name)
             if m:
                 a, b = int(m.group(1)), int(m.group(2))
-                lo, hi = min(a, b), max(a, b)
-                return (max(18, lo), min(60, hi))
+                los.append(min(a, b)); his.append(max(a, b)); continue
+            m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년생', name)
+            if m:
+                y1, y2 = int(m.group(1)), int(m.group(2))
+                b1 = (1900 + y1) if y1 >= 50 else (2000 + y1)
+                b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
+                los.append(yr - max(b1, b2)); his.append(yr - min(b1, b2)); continue
             d = re.search(r'(\d0)\s*대', name)  # 30대 → 30~39
             if d:
                 base = int(d.group(1))
-                return (max(18, base), min(60, base + 9))
+                los.append(base); his.append(base + 9)
+        if los:
+            return (max(18, min(los)), min(60, max(his)))
         return (None, None)
 
     def _parse_location_from_items(self, select_items: list[dict]) -> Optional[str]:
@@ -404,16 +413,18 @@ class FripScraper(BaseScraper):
                 if lo <= hi:
                     return (max(18, lo), min(60, hi))
         t = title or ''
-        if re.search(r'20\s*30', t):
-            return (20, 39)
-        if re.search(r'30\s*40', t):
-            return (30, 49)
-        if re.search(r'20\s*40', t):
-            return (20, 49)
         m = re.search(r'(\d0)\s*대', t)
         if m:
             base = int(m.group(1))
             return (max(18, base), min(60, base + 9))
+        # 2030/3040/2040 은 특정 토큰이라 제목·설명 둘 다에서(노이즈 적음)
+        for text in (t, description or ''):
+            if re.search(r'20\s*30(?!\d)', text):
+                return (20, 39)
+            if re.search(r'30\s*40(?!\d)', text):
+                return (30, 49)
+            if re.search(r'20\s*40(?!\d)', text):
+                return (20, 49)
         return (None, None)
 
     def _parse_gender_items(self, select_items: list[dict]) -> tuple:
