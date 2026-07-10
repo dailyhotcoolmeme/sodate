@@ -39,7 +39,8 @@ def _load_option(page, idx: str, sels: list, body_prefix: str = '') -> str:
 
 
 def _price(text: str) -> Optional[int]:
-    m = _PRICE_RE.search(text.replace('\xa0', ' '))
+    t = text.replace('\xa0', ' ')
+    m = re.search(r'₩\s*([1-9][\d,]{2,})', t) or _PRICE_RE.search(t)
     return int(m.group(1).replace(',', '')) if m else None
 
 
@@ -53,6 +54,47 @@ def _aggregate(tickets: list) -> Optional[tuple]:
     if avail:
         return (min(avail), False)
     return (min(p for (p, _) in tickets), True)
+
+
+_YEONIN_DATE_RE = re.compile(r'(\d{1,2})/(\d{1,2})\([월화수목금토일]\)\s*(오전|오후|저녁|낮|밤)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?')
+
+
+def gender_soldout_yeonin(page, idx: str, body_prefix: str = '') -> dict:
+    """연인어때식(지역→성별→날짜) 캐스케이드. 날짜 옵션에 가격+품절이 붙는다.
+    라벨 예: '7/11(토) 오후 5시 30분(남: 89-96 / 여: 제한 ❌) ₩19,000 (품절)'
+    반환: { (mo,d,hour,minute): {'male':(price,soldout)|None, 'female':(price,soldout)|None} }
+    """
+    from bs4 import BeautifulSoup
+    out: dict = {}
+    try:
+        h1 = _load_option(page, idx, [], body_prefix)
+        regions = _OC_RE.findall(h1)
+        if not regions:
+            return out
+        rg = regions[0][0]  # 지역 그룹코드
+        for rgc, rvc, rlab in regions:  # 보통 지역 1개
+            h2 = _load_option(page, idx, [(rgc, rvc, rlab)], body_prefix)
+            genders = [x for x in _OC_RE.findall(h2)
+                       if x[0] != rg and (x[2].startswith('남') or x[2].startswith('여'))]
+            gg = genders[0][0] if genders else None
+            for ggc, gvc, glab in genders:
+                gk = 'male' if glab.startswith('남') else 'female'
+                h3 = _load_option(page, idx, [(rgc, rvc, rlab), (ggc, gvc, glab)], body_prefix)
+                for a in BeautifulSoup(h3, 'html.parser').select('.dropdown-item a, .dropdown-item span.blocked'):
+                    t = re.sub(r'\s+', ' ', a.get_text(' ', strip=True))
+                    dm = _YEONIN_DATE_RE.search(t)
+                    if not dm or '원' not in t and '₩' not in t and '품절' not in t:
+                        continue
+                    mo, d = int(dm.group(1)), int(dm.group(2))
+                    hh = int(dm.group(4)); mm = int(dm.group(5)) if dm.group(5) else 0
+                    if dm.group(3) in ('오후', '저녁', '밤') and hh < 12:
+                        hh += 12
+                    key = (mo, d, hh, mm)
+                    out.setdefault(key, {'male': None, 'female': None})
+                    out[key][gk] = (_price(t), '품절' in t or '마감' in t)
+        return out
+    except Exception:
+        return out
 
 
 def gender_soldout_by_label(page, idx: str, body_prefix: str = '',
