@@ -463,6 +463,11 @@ class SecretSalonScraper(BaseScraper):
             age_display = None
             if age_range_min is not None and age_range_max is not None:
                 age_display = f'{age_range_min}~{age_range_max}'
+            elif age_range_max is not None:
+                # 하한이 사이트에 숫자로 없고 그룹(2030/3040)만 있는 경우 → "3040(45세이하)"
+                gm = re.search(r'(20\d0|30\d0|40\d0)', title_line)
+                age_display = (f'{gm.group(1)}({age_range_max}세이하)' if gm
+                               else f'{age_range_max}세이하')
 
             # 양쪽 마감이면 스킵
             if (seats_left_male is not None and seats_left_female is not None
