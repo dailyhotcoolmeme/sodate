@@ -121,9 +121,9 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     // → 제목 1줄/2줄 상관없이 행 간격이 gap:2로 균일(늘어나며 분산되는 것 방지)
     info: { flex: 1, gap: 2, alignSelf: 'flex-start' },
     titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
-    // ⚠️ Fabric(신아키텍처): numberOfLines + 명시적 lineHeight면 1줄 내용도 2줄 높이를 예약
-    //   → 1줄 제목 아래 빈 줄만큼 간격이 벌어짐. lineHeight 미지정(자연 높이)으로 예약 제거.
-    title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700' },
+    // 제목 박스가 1줄 내용에도 2줄 높이를 잡아 제목-해시태그 간격이 벌어지는 문제 →
+    // numberOfLines 대신 maxHeight(2줄)+overflow로 클램프. 1줄이면 딱 1줄 높이만 차지.
+    title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 19, maxHeight: 38, overflow: 'hidden' },
     meta: { fontSize: 12, color: colors.textSecondary },
     price: { fontSize: 12, color: colors.textSecondary },
     seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
@@ -183,7 +183,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
       <View style={styles.info}>
         <View style={styles.titleRow}>
           <ThemeBadge theme={event.theme} />
-          <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
+          <Text style={styles.title} ellipsizeMode="tail">{cleanTitle(event.title)}</Text>
         </View>
         {/* 해시태그 배지 (제목 바로 아래) */}
         <HashtagChips hashtags={event.hashtags} size="sm" max={3} tight />
