@@ -84,11 +84,11 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
     footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
     author: { fontSize: 12, color: colors.textTertiary },
     date: { fontSize: 12, color: colors.textTertiary },
+    actionsWrap: { paddingHorizontal: 14, paddingBottom: 12 },
     actionsRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 16,
-      marginTop: 10,
       paddingTop: 10,
       borderTopWidth: 1,
       borderTopColor: colors.divider,
@@ -117,17 +117,21 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
     ? { onPress: () => review.source_url && openOutlink(review.source_url), activeOpacity: 0.8 }
     : {}
 
+  const hasActions = isMine ? !!(onEdit || onDelete) : !!onReport
+
   return (
-    <CardWrap style={styles.card} {...wrapProps}>
-      {review.thumbnail_url && (
-        <Image
-          source={{ uri: review.thumbnail_url }}
-          style={styles.thumbnail}
-          contentFit="cover"
-        />
-      )}
-      <View style={styles.body}>
-        <View style={styles.header}>
+    <View style={styles.card}>
+      {/* 본문(썸네일+텍스트)만 링크 pressable — 액션 버튼은 이 영역 밖으로 빼서 탭 충돌 방지 */}
+      <CardWrap {...wrapProps}>
+        {review.thumbnail_url && (
+          <Image
+            source={{ uri: review.thumbnail_url }}
+            style={styles.thumbnail}
+            contentFit="cover"
+          />
+        )}
+        <View style={styles.body}>
+          <View style={styles.header}>
           {!hideSourceBadge && (
             <Text style={styles.source}>{SOURCE_LABELS[review.source] ?? review.source}</Text>
           )}
@@ -149,34 +153,37 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
           )}
           <Text style={styles.date}>{formatDate(review.published_at)}</Text>
         </View>
+      </View>
+      </CardWrap>
 
-        {/* 내 후기: 수정/삭제, 남의 후기: 신고 (텍스트 버튼 — 아이콘 단독 금지) */}
-        {isMine ? (
-          <View style={styles.actionsRow}>
-            {onEdit && (
-              <TouchableOpacity style={styles.actionBtn} onPress={() => onEdit(review)} hitSlop={6}>
-                <Ionicons name="create-outline" size={15} color={colors.textSecondary} />
-                <Text style={styles.actionText}>수정</Text>
-              </TouchableOpacity>
-            )}
-            {onDelete && (
-              <TouchableOpacity style={styles.actionBtn} onPress={handleDelete} hitSlop={6}>
-                <Ionicons name="trash-outline" size={15} color={colors.error} />
-                <Text style={[styles.actionText, styles.deleteText]}>삭제</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          onReport && (
+      {/* 액션(신고/수정/삭제) — 링크 pressable 밖. 내 후기: 수정/삭제, 남의 후기: 신고 (아이콘 단독 금지) */}
+      {hasActions && (
+        <View style={styles.actionsWrap}>
+          {isMine ? (
             <View style={styles.actionsRow}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => onReport(review)} hitSlop={6}>
+              {onEdit && (
+                <TouchableOpacity style={styles.actionBtn} onPress={() => onEdit(review)} hitSlop={8}>
+                  <Ionicons name="create-outline" size={15} color={colors.textSecondary} />
+                  <Text style={styles.actionText}>수정</Text>
+                </TouchableOpacity>
+              )}
+              {onDelete && (
+                <TouchableOpacity style={styles.actionBtn} onPress={handleDelete} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={15} color={colors.error} />
+                  <Text style={[styles.actionText, styles.deleteText]}>삭제</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <View style={styles.actionsRow}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => onReport?.(review)} hitSlop={8}>
                 <Ionicons name="flag-outline" size={15} color={colors.textTertiary} />
                 <Text style={[styles.actionText, styles.reportText]}>신고</Text>
               </TouchableOpacity>
             </View>
-          )
-        )}
-      </View>
-    </CardWrap>
+          )}
+        </View>
+      )}
+    </View>
   )
 }
