@@ -24,7 +24,8 @@ import DeadlineBadge from '@/components/DeadlineBadge'
 import HashtagChips from '@/components/HashtagChips'
 import ReviewSection from '@/components/ReviewSection'
 import ReviewSheet, { type ReviewSheetInitial } from '@/components/ReviewSheet'
-import { deleteReview, reportReview } from '@/lib/reviews'
+import ReportSheet from '@/components/ReportSheet'
+import { deleteReview } from '@/lib/reviews'
 import { getMyReviewIds } from '@/lib/reviewIdentity'
 import type { ReviewRow } from '@/lib/supabase'
 import AdBanner from '@/components/AdBanner'
@@ -314,6 +315,7 @@ export default function EventDetailScreen() {
   const [sheetVisible, setSheetVisible] = useState(false)
   const [editTarget, setEditTarget] = useState<ReviewSheetInitial | null>(null)
   const [myReviewIds, setMyReviewIds] = useState<string[]>([])
+  const [reportTarget, setReportTarget] = useState<string | null>(null)
 
   const loadMyReviewIds = useCallback(() => {
     getMyReviewIds().then(setMyReviewIds)
@@ -348,26 +350,9 @@ export default function EventDetailScreen() {
     refetchReviews()
   }
 
+  // 신고 사유 선택 바텀시트 열기
   const handleReport = (review: ReviewRow) => {
-    Alert.alert(
-      '후기 신고',
-      '이 후기를 신고할까요? 부적절한 내용은 검토 후 조치됩니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '신고',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await reportReview(review.id)
-            if ('error' in result) {
-              Alert.alert('신고 실패', result.error)
-              return
-            }
-            Alert.alert('신고되었습니다', result.already ? '이미 신고한 후기입니다.' : '검토 후 조치하겠습니다.')
-          },
-        },
-      ]
-    )
+    setReportTarget(review.id)
   }
 
   useEffect(() => {
@@ -577,6 +562,14 @@ export default function EventDetailScreen() {
         onDone={handleSheetDone}
       />
     )}
+    <ReportSheet
+      visible={reportTarget !== null}
+      reviewId={reportTarget}
+      onClose={() => setReportTarget(null)}
+      onReported={(already) => {
+        Alert.alert('신고되었습니다', already ? '이미 신고한 후기입니다.' : '검토 후 조치하겠습니다.')
+      }}
+    />
     </View>
   )
 }
