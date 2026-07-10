@@ -48,7 +48,8 @@ const SORT_OPTIONS: SortOption[] = [
 
 const QUICK_THEMES = ['프리미엄', '직장인', '야외', '취미', '액티비티']
 
-// 리스트 N개마다 네이티브 광고 1개 삽입
+// 첫 광고는 3번째 피드 뒤(첫 화면 노출 = 광고수익), 이후는 AD_INTERVAL 간격
+const FIRST_AD_AFTER = 3
 const AD_INTERVAL = 8
 type ListRow =
   | { type: 'event'; event: import('@/lib/supabase').EventWithCompany }
@@ -557,10 +558,12 @@ export default function HomeScreen() {
   // 이벤트 사이사이에 광고 슬롯 삽입
   const listData = useMemo<ListRow[]>(() => {
     const rows: ListRow[] = []
+    const FIRST_IDX = FIRST_AD_AFTER - 1  // 첫 광고 = 3번째 피드(index 2) 뒤
     events.forEach((ev, i) => {
       rows.push({ type: 'event', event: ev })
-      // 마지막 항목 뒤에는 광고를 넣지 않음
-      if ((i + 1) % AD_INTERVAL === 0 && i < events.length - 1) {
+      // 첫 광고는 3번째 뒤, 이후는 그로부터 AD_INTERVAL 간격. 마지막 항목 뒤에는 안 넣음.
+      const isAdSlot = i >= FIRST_IDX && (i - FIRST_IDX) % AD_INTERVAL === 0
+      if (isAdSlot && i < events.length - 1) {
         rows.push({ type: 'ad', key: `ad-${i}` })
       }
     })
