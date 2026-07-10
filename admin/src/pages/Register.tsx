@@ -229,11 +229,13 @@ export default function Register() {
     }
   }
 
-  // ── 완료/해야할것 판정: 가격(남 또는 여)이 입력됐으면 "완료" ──
-  // 나이는 완료 조건이 아님 — 나이 제한 없는 모임(프립 등)이 많고, 없는 걸 확인해도
-  // 달라질 게 없어 오너가 "가격만 있으면 완료로 보라" 지시(2026-07). 가격 없으면 미완료.
+  // ── 완료/해야할것 판정: 가격 + 나이 둘 다 있어야 "완료" ──
+  // 가격(남 또는 여)이 있고, 나이(남 또는 여)도 있어야 완료. 나이가 비었으면 = 크롤러가
+  // 나이를 확인 못한 것 → 오너가 직접 확인하도록 "해야할 것"으로 남긴다(전 업체 공통, 2026-07).
+  // '제한 없음'도 확인된 값이므로 완료. 진짜 공란만 미완료.
   const isRowDone = (r: Row) =>
-    r.price_male.trim() !== '' || r.price_female.trim() !== ''
+    (r.price_male.trim() !== '' || r.price_female.trim() !== '') &&
+    (r.age_male.trim() !== '' || r.age_female.trim() !== '')
   const todoRows = useMemo(() => visibleRows.filter((r) => !isRowDone(r)), [visibleRows])
   const doneRows = useMemo(() => visibleRows.filter((r) => isRowDone(r)), [visibleRows])
   const shownRows = statusTab === 'todo' ? todoRows : doneRows
