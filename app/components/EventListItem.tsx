@@ -117,8 +117,10 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
       paddingVertical: 2,
     },
     deadlineText: { fontSize: 10, color: '#fff', fontWeight: '700' },
-    info: { flex: 1, gap: 2 },  // 제목·해시태그·meta·성별 줄 간격 균일(gap 하나로만 제어)
-    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    // alignSelf flex-start: 왼쪽칸(썸네일+업체명)이 더 높아도 info가 콘텐츠 높이로 top-정렬
+    // → 제목 1줄/2줄 상관없이 행 간격이 gap:2로 균일(늘어나며 분산되는 것 방지)
+    info: { flex: 1, gap: 2, alignSelf: 'flex-start' },
+    titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
     title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
     meta: { fontSize: 12, color: colors.textSecondary },
     price: { fontSize: 12, color: colors.textSecondary },
