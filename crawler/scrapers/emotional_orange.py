@@ -19,6 +19,7 @@ from models.event import EventModel
 from utils.security import sanitize_text
 from utils.date_filter import is_within_one_month
 from utils.region import resolve_region
+from utils.imweb_options import gender_soldout_by_label
 
 
 # 잔여석 한글 수사 → 정수
@@ -34,6 +35,10 @@ def _title_place(title_line: Optional[str]) -> Optional[str]:
 class EmotionalOrangeScraper(BaseScraper):
     BASE_URL = 'https://emotional0ranges.com'
     DATE_PAGE_URL = 'https://emotional0ranges.com/date'
+
+    # 예약위젯(load_option.cm)에서 성별 가격·매진을 정확히 추출 → DB 기록
+    WRITES_PRICE = True
+    WRITES_SEATS = True
 
     # 제목 대괄호의 동네 키워드 → 지역 라벨. 앞에서부터 매칭(첫 매칭 우선)하므로
     # 더 구체적인 키워드를 앞에 둔다.
@@ -133,6 +138,13 @@ class EmotionalOrangeScraper(BaseScraper):
                         time.sleep(1.5)
 
                         soup = BeautifulSoup(page.content(), 'html.parser')
+
+                        # 예약위젯 매진·가격 — ⚠️ 블로그 파싱이 페이지를 이동시키기 전(상품 페이지 상태)에 호출
+                        try:
+                            data['widget'] = gender_soldout_by_label(page, idx)
+                        except Exception as e:
+                            self.logger.warning(f'감정오렌지 위젯 매진 추출 실패(idx={idx}): {e}')
+                            data['widget'] = {}
 
                         # 블로그 참여자 명단 링크 추출
                         blog_url = self._extract_blog_url(soup)
@@ -355,6 +367,24 @@ class EmotionalOrangeScraper(BaseScraper):
         # 옵션 목록에서 날짜+나이코드 추출
         option_items = self._extract_option_items(soup)
 
+        # 예약위젯 매진·가격을 (월,일,시)로 정규화해 매칭 준비
+        widget_by_dt: dict = {}
+        for wlab, wgd in (listing_data.get('widget') or {}).items():
+            wm = self.DATE_RE.search(wlab)
+            if not wm:
+                continue
+            wmo, wd = int(wm.group(1)), int(wm.group(2))
+            whour = 19
+            wt = self.TIME_RE.search(wlab)
+            if wt:
+                wh = int(wt.group(2))
+                if wt.group(1) in ('오후', '저녁') and wh < 12:
+                    wh += 12
+                elif wt.group(1) == '새벽' and wh == 12:
+                    wh = 0
+                whour = wh
+            widget_by_dt[(wmo, wd, whour)] = wgd
+
         seen_dates: set[str] = set()
         for opt_text in option_items:
             date_m = self.DATE_RE.search(opt_text)
@@ -437,6 +467,18 @@ class EmotionalOrangeScraper(BaseScraper):
                 body=description,
             )
 
+            # 예약위젯 성별 가격·매진이 있으면 정본으로 override(실시간 매진).
+            # 판매중=seats None(수량 미상), 전부품절=seats 0(마감), 옵션없음=기존 유지.
+            ev_price_male, ev_price_female = price_male, price_female
+            wgd = widget_by_dt.get((mo, d, hour))
+            if wgd:
+                if wgd.get('male'):
+                    ev_price_male = wgd['male'][0]
+                    seats_left_male = 0 if wgd['male'][1] else None
+                if wgd.get('female'):
+                    ev_price_female = wgd['female'][0]
+                    seats_left_female = 0 if wgd['female'][1] else None
+
             source_url = (
                 f'{self.BASE_URL}/shop_view/?idx={idx}'
                 f'#evt={event_date.strftime("%Y%m%d%H%M")}'
@@ -449,8 +491,8 @@ class EmotionalOrangeScraper(BaseScraper):
                     event_date=event_date,
                     location_region=ev_region,
                     location_detail=ev_location_detail,
-                    price_male=price_male,
-                    price_female=price_female,
+                    price_male=ev_price_male,
+                    price_female=ev_price_female,
                     gender_ratio=None,
                     source_url=source_url,
                     thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
