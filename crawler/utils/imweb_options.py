@@ -44,16 +44,28 @@ def _price(text: str) -> Optional[int]:
     return int(m.group(1).replace(',', '')) if m else None
 
 
-def _aggregate(tickets: list) -> Optional[tuple]:
-    """tickets=[(price:int|None, soldout:bool)] → (price, soldout) 또는 None(옵션없음).
-    품절 아닌 티켓 있으면 최저가+판매중, 전부 품절이면 최저가+마감."""
-    tickets = [(p, s) for (p, s) in tickets if p is not None]
+# 한정 할인·부가 옵션(표시가에서 제외 — 일반가를 보여준다)
+_PROMO = ('특가', '선착순', '할인', '동반', '얼리버드', '얼리 버드', '패키지', '온라인매칭')
+
+
+def _is_base(label: str) -> bool:
+    return not any(k in label for k in _PROMO)
+
+
+def _aggregate_base(tickets: list) -> Optional[tuple]:
+    """tickets=[(label, price, soldout)] → (price, soldout) 또는 None(옵션없음).
+    표시가 = **일반가**(특가/선착순/할인/동반/얼리버드/패키지 제외) 우선.
+    판매중 여부: 예약 가능한(품절 아닌) 티켓이 하나라도 있으면 판매중, 전부 품절이면 마감.
+    (오너 지시: 한정 선착순/특가가가 아니라 일반가를 표시. 마감은 그 성별 예약 자체가 불가할 때만.)"""
+    tickets = [(l, p, s) for (l, p, s) in tickets if p is not None]
     if not tickets:
         return None
-    avail = [p for (p, s) in tickets if not s]
+    avail = [(l, p) for (l, p, s) in tickets if not s]
     if avail:
-        return (min(avail), False)
-    return (min(p for (p, _) in tickets), True)
+        base = [p for (l, p) in avail if _is_base(l)]
+        return (min(base) if base else min(p for _, p in avail), False)
+    base_all = [p for (l, p, s) in tickets if _is_base(l)]
+    return (min(base_all) if base_all else min(p for _, p, _ in tickets), True)
 
 
 _YEONIN_DATE_RE = re.compile(r'(\d{1,2})/(\d{1,2})\([월화수목금토일]\)\s*(오전|오후|저녁|낮|밤)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?')
@@ -131,14 +143,7 @@ def gender_soldout_loco(page, idx: str, body_prefix: str = '') -> dict:
                     pr = _price(t)
                     if pr is not None:
                         tickets.append((t, pr, '품절' in t or '마감' in t))
-                if not tickets:
-                    continue
-                avail = [(l, pr) for (l, pr, s) in tickets if not s]
-                if avail:
-                    base = [pr for (l, pr) in avail if ('참석' in l or '참가' in l) and '특가' not in l and '동반' not in l and '할인' not in l]
-                    entry[gk] = (base[0] if base else min(pr for _, pr in avail), False)
-                else:
-                    entry[gk] = (min(pr for (_, pr, _) in tickets), True)
+                entry[gk] = _aggregate_base(tickets)
             out[key] = entry
         return out
     except Exception:
@@ -167,13 +172,15 @@ def gender_soldout_by_label(page, idx: str, body_prefix: str = '',
             female: list = []
             for a in soup.select('.dropdown-item a, .dropdown-item span.blocked'):
                 t = re.sub(r'\s+', ' ', a.get_text(' ', strip=True))
-                if '원' not in t:
+                pr = _price(t)
+                if pr is None:
                     continue
+                rec = (t, pr, '품절' in t or '마감' in t)
                 if '남성' in t:
-                    male.append((_price(t), '품절' in t or '마감' in t))
+                    male.append(rec)
                 elif '여성' in t:
-                    female.append((_price(t), '품절' in t or '마감' in t))
-            entry = {'male': _aggregate(male), 'female': _aggregate(female)}
+                    female.append(rec)
+            entry = {'male': _aggregate_base(male), 'female': _aggregate_base(female)}
             if entry['male'] or entry['female']:
                 out[lab1] = entry
         return out
