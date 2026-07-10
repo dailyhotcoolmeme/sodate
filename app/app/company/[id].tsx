@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
+import HeartSpinner from '@/components/HeartSpinner'
 import TopBar from '@/components/TopBar'
 import {
   View,
@@ -149,7 +150,7 @@ export default function CompanyDetailScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
+        <HeartSpinner />
       </View>
     )
   }

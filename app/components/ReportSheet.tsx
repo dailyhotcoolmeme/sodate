@@ -18,6 +18,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import { reportReview } from '@/lib/reviews'
 
@@ -248,14 +249,14 @@ export default function ReportSheet({ visible, onClose, reviewId, onReported }: 
               disabled={submitting}
               activeOpacity={0.85}
             >
-              {submitting && <ActivityIndicator color="#fff" size="small" />}
               <Text style={[styles.submitBtnText, !canSubmit && styles.submitBtnTextDisabled]}>
-                {submitting ? '처리 중' : '신고하기'}
+                신고하기
               </Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
       </Animated.View>
+      <LoadingOverlay visible={submitting} />
     </Modal>
   )
 }

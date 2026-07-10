@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react'
+import HeartSpinner from '@/components/HeartSpinner'
 import EventThumbnail from '@/components/EventThumbnail'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
@@ -364,7 +365,7 @@ export default function EventDetailScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
+        <HeartSpinner />
       </View>
     )
   }
@@ -538,7 +539,7 @@ export default function EventDetailScreen() {
           </View>
 
           {reviewsLoading ? (
-            <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+            <View style={{ alignItems: 'center', marginVertical: 16 }}><HeartSpinner size={32} /></View>
           ) : (
             <ReviewSection
               reviews={reviews}

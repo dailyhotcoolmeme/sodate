@@ -18,6 +18,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import { submitReview, updateReview, type SubmittedReview } from '@/lib/reviews'
 import { getLastNickname } from '@/lib/reviewIdentity'
@@ -350,14 +351,14 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
                 disabled={submitting}
                 activeOpacity={0.85}
               >
-                {submitting && <ActivityIndicator color="#fff" size="small" />}
                 <Text style={[styles.submitBtnText, !canSubmit && styles.submitBtnTextDisabled]}>
-                  {submitting ? '처리 중' : isEdit ? '수정 완료' : '후기 등록'}
+                  {isEdit ? '수정 완료' : '후기 등록'}
                 </Text>
               </TouchableOpacity>
             </View>
         </Animated.View>
       </Animated.View>
+      <LoadingOverlay visible={submitting} />
     </Modal>
   )
 }

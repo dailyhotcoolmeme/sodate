@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { Ionicons } from '@expo/vector-icons'
+import HeartSpinner from '@/components/HeartSpinner'
 import TopBar from '@/components/TopBar'
 import {
   View,
@@ -266,7 +267,7 @@ export default function ReviewsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+          <HeartSpinner />
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.center}>

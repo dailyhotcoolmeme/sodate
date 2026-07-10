@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
+import HeartSpinner from '@/components/HeartSpinner'
 import TopBar from '@/components/TopBar'
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native'
 import { useRouter } from 'expo-router'
@@ -81,7 +82,7 @@ export default function FavoritesScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+          <HeartSpinner />
         </View>
       ) : events.length === 0 ? (
         <View style={styles.center}>
