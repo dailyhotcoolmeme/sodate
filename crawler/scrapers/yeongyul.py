@@ -174,12 +174,11 @@ class YeongyulScraper(BaseScraper):
         text = soup.get_text(separator='\n', strip=True)
         lines = [l.strip() for l in text.split('\n') if l.strip()]
 
-        # 상태 확인 (양쪽 다 마감이면 스킵)
-        status_block = ' '.join(lines[30:45])
-        is_male_closed = '남자마감' in status_block
-        is_female_closed = '여자마감' in status_block
-        if is_male_closed and is_female_closed:
-            return None
+        # 상태 확인 — 괜찮소는 성별 마감이 아니라 "괜찮소 안내 [진행중/마감/종료]" 전체 상태.
+        # '진행중'=신청가능. 마감/종료/완료면 이벤트 전체 마감(is_closed). 명확한 종료어일 때만(오검출 방지).
+        status_m = re.search(r'괜찮소\s*안내\s*\[\s*([^\]]+?)\s*\]', text)
+        status = status_m.group(1).strip() if status_m else ''
+        is_ended = any(w in status for w in ('마감', '종료', '완료'))
 
         # 제목: "모임 :" 다음 라인
         title = ''
@@ -324,6 +323,7 @@ class YeongyulScraper(BaseScraper):
                 source_url=source_url,
                 thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
                 theme=['일반'],
+                is_closed=is_ended,
                 seats_left_male=None,
                 seats_left_female=None,
                 age_range_min=age_range_min,
