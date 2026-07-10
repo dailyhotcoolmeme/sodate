@@ -3,11 +3,11 @@ name: Refresh Soldout (경량 매진·가격)
 # 전체 크롤과 별개로, imweb 예약위젯에서 성별 매진·가격만 자주 갱신(발굴·블로그 없이 가벼움).
 # 퍼블릭 레포 = Actions 무료 무제한 → 짧은 간격 가능.
 #   - 임박(2일내) 이벤트: 15분마다 (near-realtime)
-#   - 전체 미래 이벤트(imweb) + 비-imweb(프립·토크블라썸·괜찮소 스크래퍼 재사용): 2시간마다
+#   - 전체 미래 이벤트(imweb) + 비-imweb(프립·토크블라썸·괜찮소 스크래퍼 재사용): 1시간마다
 on:
   schedule:
     - cron: '*/15 * * * *'   # 15분마다 → 임박(2일내)
-    - cron: '7 */2 * * *'    # 2시간마다 → 전체 미래
+    - cron: '7 * * * *'      # 1시간마다 → 전체(imweb+비imweb)
   workflow_dispatch:
     inputs:
       days:
