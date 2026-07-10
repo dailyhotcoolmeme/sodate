@@ -97,6 +97,54 @@ def gender_soldout_yeonin(page, idx: str, body_prefix: str = '') -> dict:
         return out
 
 
+_MD_RE = re.compile(r'(\d{1,2})/(\d{1,2})')
+
+
+def gender_soldout_loco(page, idx: str, body_prefix: str = '') -> dict:
+    """로꼬식(날짜→성별(남자/여자)→티켓) 3단계. 날짜 라벨 '07/10(금)'엔 시간 없음 → (mo,d) 키.
+    대표가 = 기본 참석권(특가/동반 제외) 우선, 없으면 판매중 최저가. 성별 전 티켓 품절이면 마감.
+    반환: { (mo,d): {'male':(price,soldout)|None, 'female':...} }
+    """
+    from bs4 import BeautifulSoup
+    out: dict = {}
+    try:
+        h1 = _load_option(page, idx, [], body_prefix)
+        dates = _OC_RE.findall(h1)
+        if not dates:
+            return out
+        dg = dates[0][0]
+        for dgc, dvc, dlab in dates:
+            dm = _MD_RE.search(dlab)
+            if not dm:
+                continue
+            key = (int(dm.group(1)), int(dm.group(2)))
+            entry = {'male': None, 'female': None}
+            h2 = _load_option(page, idx, [(dgc, dvc, dlab)], body_prefix)
+            genders = [x for x in _OC_RE.findall(h2)
+                       if x[0] != dg and ('남' in x[2] or '여' in x[2])]
+            for ggc, gvc, glab in genders:
+                gk = 'male' if '남' in glab else 'female'
+                h3 = _load_option(page, idx, [(dgc, dvc, dlab), (ggc, gvc, glab)], body_prefix)
+                tickets = []  # (label, price, soldout)
+                for a in BeautifulSoup(h3, 'html.parser').select('.dropdown-item a, .dropdown-item span.blocked'):
+                    t = re.sub(r'\s+', ' ', a.get_text(' ', strip=True))
+                    pr = _price(t)
+                    if pr is not None:
+                        tickets.append((t, pr, '품절' in t or '마감' in t))
+                if not tickets:
+                    continue
+                avail = [(l, pr) for (l, pr, s) in tickets if not s]
+                if avail:
+                    base = [pr for (l, pr) in avail if ('참석' in l or '참가' in l) and '특가' not in l and '동반' not in l and '할인' not in l]
+                    entry[gk] = (base[0] if base else min(pr for _, pr in avail), False)
+                else:
+                    entry[gk] = (min(pr for (_, pr, _) in tickets), True)
+            out[key] = entry
+        return out
+    except Exception:
+        return out
+
+
 def gender_soldout_by_label(page, idx: str, body_prefix: str = '',
                             from_bs4=None) -> dict:
     """날짜별 성별 가격·매진 추출(2단계: 날짜→성별옵션에 가격 포함형).

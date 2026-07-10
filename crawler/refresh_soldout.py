@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 
 from utils.supabase_client import get_supabase
-from utils.imweb_options import gender_soldout_by_label, gender_soldout_yeonin
+from utils.imweb_options import gender_soldout_by_label, gender_soldout_yeonin, gender_soldout_loco
 
 
 def _eo_norm(res: dict) -> dict:
@@ -49,14 +49,20 @@ VENDORS = {
         'url': 'https://yeonin.co.kr/shop_view?idx={idx}',
         'extract': lambda pg, idx: _yeonin_norm(gender_soldout_yeonin(pg, idx)),
     },
+    'lovecommunity-loco': {
+        'url': 'https://lovecommunity.imweb.me/party/?idx={idx}',
+        'extract': lambda pg, idx: gender_soldout_loco(pg, idx),  # (mo,d) 키
+    },
 }
 
 _IDX_RE = re.compile(r'idx=(\d+)')
 
 
-def refresh(slugs=None):
+def refresh(slugs=None, days=None):
+    """days 지정 시 앞으로 N일 내 이벤트만 갱신(임박 우선·빠름). None이면 전체 미래."""
     sb = get_supabase()
     now = datetime.now(timezone.utc)
+    horizon = (now + timedelta(days=days)).isoformat() if days else None
     comps = {c['slug']: c['id'] for c in sb.table('companies').select('id,slug').execute().data}
     targets = slugs or list(VENDORS.keys())
 
@@ -70,9 +76,12 @@ def refresh(slugs=None):
             cid = comps.get(slug)
             if not cfg or not cid:
                 continue
-            ev = sb.table('events').select(
+            q = sb.table('events').select(
                 'id,source_url,event_date,price_male,price_female,seats_left_male,seats_left_female,is_closed'
-            ).eq('company_id', cid).eq('is_active', True).gte('event_date', now.isoformat()).execute().data
+            ).eq('company_id', cid).eq('is_active', True).gte('event_date', now.isoformat())
+            if horizon:
+                q = q.lte('event_date', horizon)
+            ev = q.execute().data
 
             # idx별로 이벤트 그룹 (임박순: 가까운 날짜 idx 먼저)
             by_idx: dict[str, list] = {}
@@ -95,7 +104,8 @@ def refresh(slugs=None):
                 for e in evs:
                     d = datetime.fromisoformat(e['event_date'].replace('Z', '+00:00'))
                     dk = d + timedelta(hours=9)  # KST
-                    gd = norm.get((dk.month, dk.day, dk.hour))
+                    # (월,일,시) 우선, 없으면 (월,일) — 로꼬 등 시간없는 위젯 대응
+                    gd = norm.get((dk.month, dk.day, dk.hour)) or norm.get((dk.month, dk.day))
                     if not gd:
                         continue
                     upd = {}
@@ -118,4 +128,12 @@ def refresh(slugs=None):
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    refresh(slugs=args or None)
+    days = None
+    slugs = []
+    i = 0
+    while i < len(args):
+        if args[i] == '--days' and i + 1 < len(args):
+            days = int(args[i + 1]); i += 2
+        else:
+            slugs.append(args[i]); i += 1
+    refresh(slugs=slugs or None, days=days)
