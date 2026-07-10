@@ -20,7 +20,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import EventCard from '@/components/EventCard'
 import EventListItem from '@/components/EventListItem'
 import AdListItem from '@/components/AdListItem'
-import HeartSpinner from '@/components/HeartSpinner'
+import AppSpinner from '@/components/AppSpinner'
 import FilterSheet from '@/components/FilterSheet'
 import EmptyState from '@/components/EmptyState'
 import { useEvents } from '@/hooks/useEvents'
@@ -689,7 +689,7 @@ export default function HomeScreen() {
       {/* ── 이벤트 리스트 ── */}
       {loading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 100 }}>
-          <HeartSpinner />
+          <AppSpinner />
         </View>
       ) : (
         <FlatList

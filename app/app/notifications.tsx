@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import HeartSpinner from '@/components/HeartSpinner'
+import AppSpinner from '@/components/AppSpinner'
 import TopBar from '@/components/TopBar'
 import { useColors } from '@/hooks/useColors'
 import { useNotifications, type NotificationRow } from '@/hooks/useNotifications'
@@ -68,7 +68,7 @@ export default function NotificationsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <HeartSpinner />
+          <AppSpinner />
         </View>
       ) : items.length === 0 ? (
         <View style={styles.center}>
