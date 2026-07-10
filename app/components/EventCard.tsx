@@ -16,7 +16,6 @@ import ThemeBadge from './ThemeBadge'
 import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
 import PriceTierValue from '@/components/PriceTierValue'
-import CompanyBadge from './CompanyBadge'
 import EventThumbnail from './EventThumbnail'
 import FavoriteButton from './FavoriteButton'
 
@@ -103,12 +102,12 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
       borderColor: '#FF6B9D',
       backgroundColor: '#FF6B9D18',
     },
-    content: { padding: 16, gap: 4 },
+    content: { padding: 16, gap: 2 },  // 리스트형(info gap:2)과 줄간격 통일
+    company: { fontSize: 11, color: colors.textTertiary, fontWeight: '600' },  // 리스트형과 동일
     titleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      marginVertical: 6,
     },
     title: {
       flex: 1,
@@ -117,14 +116,14 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
       fontWeight: '700',
       lineHeight: 22,
     },
-    metaRow: { flexDirection: 'row', gap: 12, marginTop: 2 },
+    metaRow: { flexDirection: 'row', gap: 12 },
     meta: { fontSize: 13, color: colors.textSecondary },
     metaDot: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 4 },
     price: { fontSize: 13, color: colors.textSecondary },
     seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
     seatsLabel: { fontSize: 13, color: colors.textSecondary, marginRight: 6 },
     seatsValue: { fontSize: 13, fontWeight: '600' },
-    genderBlock: { marginTop: 6, gap: 3 },
+    genderBlock: { gap: 2 },
     genderRow: { flexDirection: 'row', alignItems: 'center' },
     genderTag: { fontSize: 13, fontWeight: '700', marginRight: 8, width: 30 },
     genderMale: { color: '#3B82F6' },
@@ -216,12 +215,9 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
 
       {/* 카드 내용 */}
       <View style={styles.content}>
-        {/* 업체 배지 */}
+        {/* 업체명 — 리스트형과 동일 스타일 */}
         {event.companies && (
-          <CompanyBadge
-            name={event.companies.name}
-            logoUrl={event.companies.logo_url}
-          />
+          <Text style={styles.company}>{event.companies.name}</Text>
         )}
 
         {/* 테마 배지 + 제목 (같은 줄) */}

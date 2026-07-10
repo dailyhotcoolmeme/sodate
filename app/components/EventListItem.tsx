@@ -94,8 +94,10 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
       fontWeight: '700',
       letterSpacing: 1,
     },
+    leftCol: { alignItems: 'center', width: THUMB },
     thumbWrap: { position: 'relative' },
     thumb: { width: THUMB, height: THUMB, borderRadius: 10 },
+    companyUnder: { fontSize: 11, color: colors.textTertiary, fontWeight: '600', marginTop: 4, width: THUMB, textAlign: 'center' },
     thumbPlaceholder: {
       width: THUMB,
       height: THUMB,
@@ -116,7 +118,6 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     },
     deadlineText: { fontSize: 10, color: '#fff', fontWeight: '700' },
     info: { flex: 1, gap: 2 },  // 제목·해시태그·meta·성별 줄 간격 균일(gap 하나로만 제어)
-    company: { fontSize: 11, color: colors.textTertiary, fontWeight: '600' },
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
     meta: { fontSize: 12, color: colors.textSecondary },
@@ -153,27 +154,29 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
       onPress={() => router.push(`/event/${event.id}`)}
       activeOpacity={0.82}
     >
-      {/* 썸네일 */}
-      <View style={styles.thumbWrap}>
-        <EventThumbnail
-          url={event.thumbnail_urls?.[0]}
-          companyName={event.companies?.name}
-          region={event.location_region}
-          style={styles.thumb}
-          size="small"
-        />
-        {daysLeft <= 3 && daysLeft >= 0 && (
-          <View style={styles.deadlineDot}>
-            <Text style={styles.deadlineText}>{daysLeft === 0 ? '오늘' : `D-${daysLeft}`}</Text>
-          </View>
+      {/* 썸네일 + 업체명(썸네일 밑) */}
+      <View style={styles.leftCol}>
+        <View style={styles.thumbWrap}>
+          <EventThumbnail
+            url={event.thumbnail_urls?.[0]}
+            companyName={event.companies?.name}
+            region={event.location_region}
+            style={styles.thumb}
+            size="small"
+          />
+          {daysLeft <= 3 && daysLeft >= 0 && (
+            <View style={styles.deadlineDot}>
+              <Text style={styles.deadlineText}>{daysLeft === 0 ? '오늘' : `D-${daysLeft}`}</Text>
+            </View>
+          )}
+        </View>
+        {event.companies && (
+          <Text style={styles.companyUnder} numberOfLines={1}>{event.companies.name}</Text>
         )}
       </View>
 
       {/* 내용 */}
       <View style={styles.info}>
-        {event.companies && (
-          <Text style={styles.company}>{event.companies.name}</Text>
-        )}
         <View style={styles.titleRow}>
           <ThemeBadge theme={event.theme} />
           <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
