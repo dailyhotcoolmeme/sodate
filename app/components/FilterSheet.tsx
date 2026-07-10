@@ -102,7 +102,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
       paddingHorizontal: 20,
       paddingVertical: 16,
       borderBottomWidth: 1,
@@ -113,32 +113,38 @@ export default function FilterSheet({ visible, onClose }: Props) {
       fontWeight: '700',
       color: colors.textPrimary,
     },
-    resetText: {
-      fontSize: 14,
-      color: colors.textSecondary,
-    },
-    applyText: {
-      fontSize: 14,
-      color: colors.primary,
-      fontWeight: '700',
-    },
     applyBar: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
+      flexDirection: 'row',
+      gap: 10,
       paddingHorizontal: 16,
       paddingTop: 10,
       backgroundColor: colors.background,
       borderTopWidth: 1,
       borderTopColor: colors.border,
     },
-    applyFab: {
-      backgroundColor: colors.primary,
+    barBtn: {
+      flex: 1,                 // 초기화·적용하기 동일 너비
       borderRadius: 14,
       paddingVertical: 15,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    resetBtn: {
+      backgroundColor: colors.surfaceHigh,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    resetBtnText: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    applyFab: {
+      backgroundColor: colors.primary,
       shadowColor: '#000',
       shadowOpacity: 0.18,
       shadowRadius: 12,
@@ -240,15 +246,9 @@ export default function FilterSheet({ visible, onClose }: Props) {
     >
       <View style={styles.container}>
         <TopBar onBeforeNavigate={onClose} />
-        {/* 헤더 */}
+        {/* 헤더 — 초기화·적용은 하단 플로팅으로 이동 */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={resetFilters} hitSlop={8}>
-            <Text style={styles.resetText}>초기화</Text>
-          </TouchableOpacity>
           <Text style={styles.headerTitle}>필터</Text>
-          <TouchableOpacity onPress={handleApply} hitSlop={8}>
-            <Text style={styles.applyText}>적용</Text>
-          </TouchableOpacity>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }}>
@@ -448,9 +448,12 @@ export default function FilterSheet({ visible, onClose }: Props) {
           <View style={{ height: insets.bottom + 24 }} />
         </ScrollView>
 
-        {/* 하단 플로팅 적용 버튼 — 여러 필터 선택 후 스크롤해도 바로 누를 수 있게 */}
+        {/* 하단 플로팅 바 — 초기화 · 적용하기 한 줄, 동일 너비 */}
         <View style={[styles.applyBar, { paddingBottom: insets.bottom + 10 }]}>
-          <TouchableOpacity style={styles.applyFab} onPress={handleApply} activeOpacity={0.85}>
+          <TouchableOpacity style={[styles.barBtn, styles.resetBtn]} onPress={resetFilters} activeOpacity={0.85}>
+            <Text style={styles.resetBtnText}>초기화</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.barBtn, styles.applyFab]} onPress={handleApply} activeOpacity={0.85}>
             <Text style={styles.applyFabText}>적용하기</Text>
           </TouchableOpacity>
         </View>
