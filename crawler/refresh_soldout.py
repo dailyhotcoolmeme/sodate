@@ -59,11 +59,16 @@ _IDX_RE = re.compile(r'idx=(\d+)')
 
 
 def _nonimweb_scrapers():
-    """비-imweb 업체: 스크래퍼의 좌석/마감 로직을 그대로 재사용(발굴 포함하지만 소규모라 빠름)."""
+    """스크래퍼 재사용 업체(공용 imweb 헬퍼 안 쓰는 곳): 좌석/마감/가격 로직을 그대로 재사용.
+    소규모·API라 빠름. #evt 또는 source_url로 기존 이벤트 매칭해 seats/price/is_closed 갱신."""
     from scrapers.frip import FripScraper
     from scrapers.talkblossom import TalkblossomScraper
     from scrapers.yeongyul import YeongyulScraper
-    return {'frip': FripScraper, 'talkblossom': TalkblossomScraper, 'yeongyul': YeongyulScraper}
+    from scrapers.munto import MuntoScraper
+    from scrapers.secretsalon import SecretSalonScraper
+    from scrapers.modparty import ModpartyScraper
+    return {'frip': FripScraper, 'talkblossom': TalkblossomScraper, 'yeongyul': YeongyulScraper,
+            'munto': MuntoScraper, 'secretsalon': SecretSalonScraper, 'modparty': ModpartyScraper}
 
 
 _EVT_RE = re.compile(r'#evt=(\d{12})')
@@ -94,7 +99,13 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
         d = ev.model_dump() if hasattr(ev, 'model_dump') else ev.__dict__
         sm, sf = d.get('seats_left_male'), d.get('seats_left_female')
         ic = bool(d.get('is_closed')) or (sm is not None and sf is not None and sm <= 0 and sf <= 0)
-        sb.table('events').update({'seats_left_male': sm, 'seats_left_female': sf, 'is_closed': ic}).eq('id', eid).execute()
+        upd = {'seats_left_male': sm, 'seats_left_female': sf, 'is_closed': ic}
+        # 가격은 값이 있을 때만 갱신(None으로 기존값 덮지 않음)
+        if d.get('price_male') is not None:
+            upd['price_male'] = d['price_male']
+        if d.get('price_female') is not None:
+            upd['price_female'] = d['price_female']
+        sb.table('events').update(upd).eq('id', eid).execute()
         updated += 1
     return updated
 
