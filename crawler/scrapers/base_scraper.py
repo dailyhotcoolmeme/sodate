@@ -92,6 +92,12 @@ class BaseScraper(ABC):
             for _k in _strip:
                 data.pop(_k, None)
 
+            # ⚠️ 크롤러가 값을 안 준(None) 성별 나이표시는 upsert에서 제외 → 기존값(스크래퍼/관리자 입력) 보존.
+            #    (age_male/female를 세팅 안 하는 스크래퍼가 기존 나이를 None으로 덮어써 지우던 버그 방지)
+            for _k in ('age_male', 'age_female'):
+                if data.get(_k) is None:
+                    data.pop(_k, None)
+
             # 테마는 구분하지 않는다 — 전부 소개팅. 스크래퍼가 뭘 넣든 일괄 고정.
             data['theme'] = ['소개팅']
 

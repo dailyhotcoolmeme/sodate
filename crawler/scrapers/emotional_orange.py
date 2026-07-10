@@ -26,6 +26,17 @@ from utils.imweb_options import gender_soldout_by_label
 SEAT_WORDS = {'한자리': 1, '두자리': 2, '세자리': 3, '네자리': 4, '다섯자리': 5}
 
 
+def _eo_age_disp(mn: Optional[int], mx: Optional[int]) -> Optional[str]:
+    """age_range → 앱 성별 나이 표시 문자열(만나이). 감정오렌지는 이벤트 전체나이 → 남=여 동일."""
+    if mn is not None and mx is not None:
+        return f'{mn}~{mx}'
+    if mx is not None:
+        return f'~{mx}'
+    if mn is not None:
+        return f'{mn}~'
+    return None
+
+
 def _title_place(title_line: Optional[str]) -> Optional[str]:
     """제목 대괄호 안 지명을 '그대로' 반환 (예: '가산디지털단지', '강남 삼성', '송파 문정')."""
     m = re.search(r'\[([^\]]+)\]', title_line or '')
@@ -502,6 +513,8 @@ class EmotionalOrangeScraper(BaseScraper):
                     age_range_min=age_range_min,
                     age_range_max=age_range_max,
                     age_group_label=age_group_label,
+                    age_male=_eo_age_disp(age_range_min, age_range_max),
+                    age_female=_eo_age_disp(age_range_min, age_range_max),
                     participant_stats=participant_stats,
                     description=description,
                 ))
@@ -1034,6 +1047,8 @@ class EmotionalOrangeScraper(BaseScraper):
                     age_range_min=age_range_min,
                     age_range_max=age_range_max,
                     age_group_label=age_group_label,
+                    age_male=_eo_age_disp(age_range_min, age_range_max),
+                    age_female=_eo_age_disp(age_range_min, age_range_max),
                     participant_stats=participant_stats,
                     description=description,
                 ))
