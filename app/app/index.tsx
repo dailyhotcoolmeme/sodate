@@ -689,7 +689,7 @@ export default function HomeScreen() {
       {/* ── 이벤트 리스트 ── */}
       {loading ? (
         <View style={{ flex: 1 }}>
-          {[1, 2, 3].map((i) => <EventCardSkeleton key={i} />)}
+          {[1, 2, 3, 4].map((i) => <EventCardSkeleton key={i} variant={viewMode} />)}
         </View>
       ) : (
         <FlatList

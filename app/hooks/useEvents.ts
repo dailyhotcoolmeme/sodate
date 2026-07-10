@@ -20,7 +20,8 @@ export function useEvents() {
     try {
       let query = supabase
         .from('events')
-        .select('*, companies(id, name, logo_url, slug, base_url, description, is_active, crawl_url, crawl_type, regions, instagram_url, created_at, updated_at)')
+        // 피드는 companies.name만 사용 → 조인 최소화(불필요한 description 등 미포함, 페이로드↓)
+        .select('*, companies(id, name, slug)')
         .eq('is_active', true)
         // 마감(is_closed) 이벤트도 목록엔 노출 — 카드에서 흐림+마감 배지 처리
         .gte('event_date', new Date().toISOString())
