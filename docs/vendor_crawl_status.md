@@ -17,10 +17,10 @@ companies 테이블 = 등록 업체의 정본(13개). 크롤 여부는 **`compan
 | 괜찮소 | yeongyul | ✅ true | |
 | 러브캐스팅 | lovecasting | ✅ true | |
 | 모드파티 | modparty | ✅ true | |
-| 시크릿살롱 | secretsalon | ❌ false | 이벤트 0 (휴면) — 크롤 금지 |
-| 인썸파티 | inssumparty | ❌ false | 이벤트 0 (휴면) — 크롤 금지 |
-| 플리포 | flipo | ❌ false | 이벤트 0 (휴면) — 크롤 금지 |
-| 이연시(투연시) | twoyeonsi | ❌ false | 이벤트 0 (휴면) — 크롤 금지 |
+| 시크릿살롱 | secretsalon | ✅ true | 2026-07-10 재활성. 예약위젯 캐스케이드로 성별 실결제가·매진·나이 정확화 |
+| 인썸파티 | inssumparty | ❌ false | 오너 확인=현재 일정 없음 |
+| 플리포 | flipo | ❌ false | 이벤트 0 (휴면) |
+| 이연시(투연시) | twoyeonsi | ❌ false | 오너 지시=크롤 안 함 |
 
 ## 참고
 - `scrapers/seolrem.py`(설렘한편)는 **companies에 등록도 안 됐고 main.py에도 import 안 됨 = 죽은 코드**. 업체 아님.
