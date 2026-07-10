@@ -35,7 +35,11 @@ export default function HashtagChips({ hashtags, size = 'sm', max = 3, tight = f
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        scroll: tight ? { marginTop: 0, marginBottom: 0 } : { marginTop: 1, marginBottom: 2 },
+        // tight(리스트/카드): 가로 ScrollView가 세로 flex 안에서 높이가 애매하게 커져
+        //   제목-해시태그 간격이 슬롯마다 달라지는 문제 → 명시적 높이로 고정.
+        scroll: tight
+          ? { marginTop: 0, marginBottom: 0, height: size === 'md' ? 20 : 17, flexGrow: 0, flexShrink: 0 }
+          : { marginTop: 1, marginBottom: 2 },
         row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
         chip: {
           paddingVertical: tight ? 0 : 2,
@@ -44,6 +48,7 @@ export default function HashtagChips({ hashtags, size = 'sm', max = 3, tight = f
           color: colors.primary,
           fontSize: size === 'md' ? 12.5 : 11,
           fontWeight: '700',
+          lineHeight: tight ? (size === 'md' ? 18 : 15) : undefined,
         },
       }),
     [colors, size, tight]
