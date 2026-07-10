@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 from bs4 import BeautifulSoup
 
 from .base_scraper import BaseScraper
@@ -18,6 +18,10 @@ from utils.region import resolve_region
 class SecretSalonScraper(BaseScraper):
     BASE_URL = 'https://secretsalon.co.kr'
     SHOP_URL = 'https://secretsalon.co.kr/36'
+
+    # 예약위젯(load_option.cm) 실결제가·매진을 정확히 추출 → DB에 기록(모드파티와 동일 정책)
+    WRITES_PRICE = True
+    WRITES_SEATS = True
 
     # "2026. 04.02 (THU) 19:30" 또는 "2026.04.02 (THU) 19:30"
     DATE_RE_FULL = re.compile(
@@ -49,6 +53,92 @@ class SecretSalonScraper(BaseScraper):
     def __init__(self):
         super().__init__('secretsalon')
 
+    def _settle(self, page, timeout: int = 6000):
+        """imweb은 광고·추적으로 networkidle이 안 잡혀 타임아웃 → 무시하고 진행(콘텐츠는 sleep/selector로 확보)."""
+        try:
+            page.wait_for_load_state('networkidle', timeout=timeout)
+        except PWTimeout:
+            pass
+
+    # ── 예약위젯 옵션 AJAX(load_option.cm) 재현 — 날짜→성별→종류 캐스케이드 ──
+    # secretsalon body 형식: prod_idx={idx} (모드파티의 type=prod 없음)
+    _OPT_FETCH_JS = """async (body) => {
+      const r = await fetch('/shop/load_option.cm', {method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'},
+        body});
+      return await r.text();
+    }"""
+    # changeCartSelectRequireOption(idx,'그룹코드','값코드','라벨',...)
+    _OC_RE = re.compile(r"changeCartSelectRequireOption\(\d+,'(O[0-9a-fA-F]+)','(O[0-9a-fA-F]+)',\s*'([^']+)'")
+
+    def _load_option_html(self, page, idx: str, sels: list) -> str:
+        body = f'prod_idx={idx}'
+        for i, (oc, vc, vn) in enumerate(sels):
+            body += (f'&selected_require_options[{i}][value_type]=SELECT'
+                     f'&selected_require_options[{i}][option_code]={oc}'
+                     f'&selected_require_options[{i}][value_code]={vc}'
+                     f'&selected_require_options[{i}][value_name]={vn}')
+        r = page.evaluate(self._OPT_FETCH_JS, body)
+        try:
+            return json.loads(r).get('option_html', '') or ''
+        except Exception:
+            return r or ''
+
+    @staticmethod
+    def _date_key(month: int, day: int, hour: int, minute: int) -> str:
+        return f'{month:02d}{day:02d}_{hour:02d}{minute:02d}'
+
+    def _gender_prices_by_date(self, page, idx: str) -> dict:
+        """예약위젯 캐스케이드(날짜→성별→참여권종류)로 날짜별 성별 대표가 추출.
+        대표가 = 그 성별 3단계 옵션 중 최저가(= '1회참여권' 기본가, 동반할인 등 상위상품 제외).
+        성별 옵션이 아예 없으면 그 성별은 매진/미제공 → None.
+        반환: {date_key('MMDD_HHMM'): {'male': int|None, 'female': int|None}}"""
+        out: dict = {}
+        # 옵션 라벨은 "7/10 금 19:30" 또는 "7/16 목요일 19:30 (만25-36세)" 형태 → 요일 전체명도 허용
+        label_re = re.compile(r'(\d{1,2})/(\d{1,2})\s*[월화수목금토일](?:요일)?\s*(?:오전|오후|PM|AM)?\s*(\d{1,2}):(\d{2})')
+        try:
+            h1 = self._load_option_html(page, idx, [])
+            date_opts = self._OC_RE.findall(h1)
+            if not date_opts:
+                return out
+            grp1 = date_opts[0][0]
+            for g1, v1, lab1 in date_opts:
+                m = label_re.search(lab1)
+                if not m:
+                    continue
+                key = self._date_key(int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)))
+                entry = {'male': None, 'female': None, 'age_min': None, 'age_max': None}
+                # 날짜 라벨의 "(만25-36세)" → 그 회차의 정확한 나이대(만나이)
+                am = re.search(r'만\s*(\d{2,3})\s*[-~]\s*(\d{2,3})\s*세', lab1)
+                if am:
+                    entry['age_min'] = int(am.group(1))
+                    entry['age_max'] = int(am.group(2))
+                h2 = self._load_option_html(page, idx, [(g1, v1, lab1)])
+                genders = [x for x in self._OC_RE.findall(h2) if x[0] != grp1 and (x[2].startswith('남성') or x[2].startswith('여성'))]
+                for g2, gv, glabel in genders:
+                    gk = 'male' if glabel.startswith('남성') else 'female'
+                    h3 = self._load_option_html(page, idx, [(g1, v1, lab1), (g2, gv, glabel)])
+                    # 3단계 '참여권 종류' 옵션 라벨에서 가격 파싱(라벨 예: '1회참여권 69,000원').
+                    # 전체 HTML 스캔은 적립금·정가 등 스팸값이 섞이므로 옵션 라벨만 사용.
+                    tsoup = BeautifulSoup(h3, 'html.parser')
+                    tickets: list[tuple[str, int]] = []
+                    for a in tsoup.select('.dropdown-item a'):
+                        tl = re.sub(r'\s+', ' ', a.get_text(' ', strip=True))
+                        pm = re.search(r'([1-9]\d?,\d{3}|[1-9]\d{4,6})\s*원', tl)
+                        if pm:
+                            tickets.append((tl, int(pm.group(1).replace(',', ''))))
+                    # 기본가 = '1회참여권'으로 시작·'+'/'동반' 없는 옵션(대표 단건 참가비)
+                    base = [p for (l, p) in tickets if l.startswith('1회참여권') and '+' not in l and '동반' not in l]
+                    if base:
+                        entry[gk] = min(base)
+                    elif tickets:
+                        entry[gk] = min(p for _, p in tickets)  # 폴백: 최저 티켓가
+                out[key] = entry
+            return out
+        except Exception as e:
+            self.logger.warning(f'시크릿살롱 성별가격 캐스케이드 실패 idx={idx}: {str(e)[:70]}')
+            return out
+
     def scrape(self) -> list[EventModel]:
         events: list[EventModel] = []
         try:
@@ -61,8 +151,8 @@ class SecretSalonScraper(BaseScraper):
                 page = context.new_page()
 
                 # 1. 목록 페이지 방문
-                page.goto(self.SHOP_URL, timeout=20000)
-                page.wait_for_load_state('networkidle', timeout=10000)
+                page.goto(self.SHOP_URL, timeout=30000, wait_until='domcontentloaded')
+                self._settle(page, 10000)
                 time.sleep(2)
 
                 products = self._collect_products(page)
@@ -72,8 +162,8 @@ class SecretSalonScraper(BaseScraper):
                 for idx, data in products.items():
                     try:
                         detail_url = f'{self.BASE_URL}/shop/?idx={idx}'
-                        page.goto(detail_url, timeout=15000)
-                        page.wait_for_load_state('networkidle', timeout=8000)
+                        page.goto(detail_url, timeout=30000, wait_until='domcontentloaded')
+                        self._settle(page, 8000)
                         time.sleep(1.5)
 
                         # 현재 URL이 시크릿살롱이 아닌 외부로 리다이렉트됐는지 확인
@@ -83,17 +173,19 @@ class SecretSalonScraper(BaseScraper):
                                 f'시크릿살롱 idx={idx} 외부 URL로 리다이렉트: {current_url}'
                             )
                             # 목록 페이지로 돌아가서 재수집
-                            page.goto(self.SHOP_URL, timeout=15000)
-                            page.wait_for_load_state('networkidle', timeout=8000)
+                            page.goto(self.SHOP_URL, timeout=30000, wait_until='domcontentloaded')
+                            self._settle(page, 8000)
                             continue
 
                         soup = BeautifulSoup(page.content(), 'html.parser')
 
                         # 드롭다운 옵션 텍스트 수집 (날짜+나이대 포함)
                         option_texts = self._collect_option_texts_via_api(page, idx)
+                        # 성별 실결제가(1회참여권) + 매진 — 예약위젯 캐스케이드
+                        gender_prices = self._gender_prices_by_date(page, idx)
 
                         new_events = self._parse_product_page(
-                            page, soup, idx, data, option_texts
+                            page, soup, idx, data, option_texts, gender_prices
                         )
                         events.extend(new_events)
                     except Exception as e:
@@ -180,6 +272,7 @@ class SecretSalonScraper(BaseScraper):
         idx: str,
         listing_data: dict,
         option_texts: list[str],
+        gender_prices: Optional[dict] = None,
     ) -> list[EventModel]:
         events: list[EventModel] = []
         now = datetime.now()
@@ -345,6 +438,32 @@ class SecretSalonScraper(BaseScraper):
                 # 날짜가 하나이고 좌석 현황도 하나면 그것을 사용
                 (seats_left_male, seats_left_female) = list(page_seats.values())[0]
 
+            # ── 성별 실결제가(1회참여권) + 매진: 예약위젯 캐스케이드 결과로 확정 ──
+            # 텍스트 기반 _extract_prices는 부정확(상품표기가·남녀동일) → 위젯가로 덮어씀.
+            ev_price_male = price_male
+            ev_price_female = price_female
+            gp = (gender_prices or {}).get(
+                self._date_key(event_date.month, event_date.day, event_date.hour, event_date.minute)
+            )
+            if gp:
+                ev_price_male = gp.get('male')
+                ev_price_female = gp.get('female')
+                # 위젯에 성별 옵션이 없으면(=매진/미제공) 그 성별 잔여석 0
+                if ev_price_male is None:
+                    seats_left_male = 0
+                if ev_price_female is None:
+                    seats_left_female = 0
+                # 회차 라벨의 정확한 나이대(만나이)가 있으면 우선 적용
+                if gp.get('age_min') is not None and gp.get('age_max') is not None:
+                    age_range_min = gp['age_min']
+                    age_range_max = gp['age_max']
+                    age_group_label = f"만{age_range_min}-{age_range_max}세"
+
+            # 앱 표시용 성별 나이 문자열(시크릿살롱은 이벤트 전체나이 → 남=여 동일)
+            age_display = None
+            if age_range_min is not None and age_range_max is not None:
+                age_display = f'{age_range_min}~{age_range_max}'
+
             # 양쪽 마감이면 스킵
             if (seats_left_male is not None and seats_left_female is not None
                     and seats_left_male <= 0 and seats_left_female <= 0):
@@ -382,8 +501,8 @@ class SecretSalonScraper(BaseScraper):
                     event_date=event_date,
                     location_region=region,
                     location_detail='양재',
-                    price_male=price_male,
-                    price_female=price_female,
+                    price_male=ev_price_male,
+                    price_female=ev_price_female,
                     gender_ratio=None,
                     source_url=source_url,
                     thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
@@ -393,6 +512,8 @@ class SecretSalonScraper(BaseScraper):
                     age_group_label=age_group_label,
                     age_range_min=age_range_min,
                     age_range_max=age_range_max,
+                    age_male=age_display,
+                    age_female=age_display,
                     participant_stats=participant_stats,
                 ))
             except Exception:
