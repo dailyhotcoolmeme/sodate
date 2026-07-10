@@ -152,17 +152,16 @@ def refresh(slugs=None, days=None):
             print(f'[{slug}] 갱신 {updated}건 (상품 {len(by_idx)}개)')
         browser.close()
 
-    # 비-imweb 업체(프립·토크블라썸·괜찮소): 스크래퍼 좌석/마감 로직 재사용.
-    # 전체 갱신(days 미지정)에서만 — 15분 imweb-only는 빠르게 유지.
-    if not horizon:
-        for slug, Sc in _nonimweb_scrapers().items():
-            if slugs and slug not in slugs:
-                continue
-            cid = comps.get(slug)
-            if not cid:
-                continue
-            n = _refresh_via_scraper(sb, cid, Sc)
-            print(f'[{slug}] 갱신 {n}건 (스크래퍼 재사용)')
+    # 비-imweb 업체(프립·토크블라썸·괜찮소): 스크래퍼 좌석/마감 로직 재사용 — 매 실행(15분)마다.
+    # 스크래퍼가 all-or-nothing이라 days 필터는 무시하고 항상 전체 갱신(소규모라 빠름).
+    for slug, Sc in _nonimweb_scrapers().items():
+        if slugs and slug not in slugs:
+            continue
+        cid = comps.get(slug)
+        if not cid:
+            continue
+        n = _refresh_via_scraper(sb, cid, Sc)
+        print(f'[{slug}] 갱신 {n}건 (스크래퍼 재사용)')
 
 
 if __name__ == '__main__':
