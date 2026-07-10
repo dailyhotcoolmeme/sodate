@@ -66,22 +66,36 @@ def _nonimweb_scrapers():
     return {'frip': FripScraper, 'talkblossom': TalkblossomScraper, 'yeongyul': YeongyulScraper}
 
 
+_EVT_RE = re.compile(r'#evt=(\d{12})')
+
+
 def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
-    """스크래퍼 scrape() 결과로 기존 이벤트의 seats/is_closed만 갱신(source_url 매칭)."""
-    updated = 0
+    """스크래퍼 scrape() 결과로 기존 이벤트의 seats/is_closed만 갱신.
+    매칭: #evt=YYYYMMDDHHMM(URL 형식 달라도 동일) 우선, 없으면 source_url 전체(괜찮소 등)."""
+    # DB 이벤트 인덱스 (#evt 시각 / 전체 URL)
+    dbevs = sb.table('events').select('id,source_url').eq('company_id', cid).eq('is_active', True).execute().data
+    by_evt, by_url = {}, {}
+    for e in dbevs:
+        m = _EVT_RE.search(e['source_url'] or '')
+        if m:
+            by_evt[m.group(1)] = e['id']
+        by_url[e['source_url']] = e['id']
     try:
         evs = ScraperClass().scrape()
     except Exception as e:
         print(f'  스크래퍼 실행 실패: {str(e)[:60]}')
         return 0
+    updated = 0
     for ev in evs:
+        m = _EVT_RE.search(ev.source_url or '')
+        eid = (by_evt.get(m.group(1)) if m else None) or by_url.get(ev.source_url)
+        if not eid:
+            continue
         d = ev.model_dump() if hasattr(ev, 'model_dump') else ev.__dict__
         sm, sf = d.get('seats_left_male'), d.get('seats_left_female')
         ic = bool(d.get('is_closed')) or (sm is not None and sf is not None and sm <= 0 and sf <= 0)
-        upd = {'seats_left_male': sm, 'seats_left_female': sf, 'is_closed': ic}
-        r = sb.table('events').update(upd).eq('company_id', cid).eq('source_url', ev.source_url).execute()
-        if r.data:
-            updated += 1
+        sb.table('events').update({'seats_left_male': sm, 'seats_left_female': sf, 'is_closed': ic}).eq('id', eid).execute()
+        updated += 1
     return updated
 
 
