@@ -265,7 +265,24 @@ def _build_participant_stats(
     return stats, capacity_male, capacity_female, seats_left_male, seats_left_female
 
 
+def _munto_age_disp(mn: Optional[int], mx: Optional[int]) -> Optional[str]:
+    """age_range → 앱 성별 나이 표시 문자열(만나이). 문토는 이벤트 전체나이 → 남=여 동일."""
+    if mn is not None and mx is not None:
+        return f'{mn}~{mx}'
+    if mx is not None:
+        return f'~{mx}'
+    if mn is not None:
+        return f'{mn}~'
+    return None
+
+
 class MuntoScraper(BaseScraper):
+    # munto API에서 단일가격(남녀 동일)·정원-인원 좌석을 뽑음 → DB 기록
+    WRITES_PRICE = True
+    WRITES_SEATS = True
+    # 현재 API 목록에 없는 옛 socialing(가격 없던 구데이터) 정리
+    DELETE_STALE = True
+
     def __init__(self):
         super().__init__('munto')
 
@@ -418,6 +435,8 @@ class MuntoScraper(BaseScraper):
                             theme=['소개팅'],
                             age_range_min=age_range_min,
                             age_range_max=age_range_max,
+                            age_male=_munto_age_disp(age_range_min, age_range_max),
+                            age_female=_munto_age_disp(age_range_min, age_range_max),
                             format=fmt,
                             age_group_label=age_group_label,
                             participant_stats=participant_stats if participant_stats else None,
