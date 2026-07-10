@@ -24,6 +24,10 @@ class BaseScraper(ABC):
     # True면 좌석/정원도 크롤러가 채운다(품절·잔여석 표시용). 업체 공식소스에서 정확히 뽑는 경우만.
     WRITES_SEATS = False
 
+    # True면 성별 나이(age_male/female)의 정본이다 → None도 그대로 기록해 옛 값을 지운다.
+    # (기본 False: 나이 미설정 스크래퍼가 기존값 지우지 않도록 None은 upsert에서 제외)
+    WRITES_AGE = False
+
     def __init__(self, company_slug: str):
         self.company_slug = company_slug
         self.supabase = get_supabase()
@@ -102,9 +106,11 @@ class BaseScraper(ABC):
 
             # ⚠️ 크롤러가 값을 안 준(None) 성별 나이표시는 upsert에서 제외 → 기존값(스크래퍼/관리자 입력) 보존.
             #    (age_male/female를 세팅 안 하는 스크래퍼가 기존 나이를 None으로 덮어써 지우던 버그 방지)
-            for _k in ('age_male', 'age_female'):
-                if data.get(_k) is None:
-                    data.pop(_k, None)
+            #    단 WRITES_AGE(나이 정본) 업체는 None도 기록해 옛 잘못된 값을 지운다.
+            if not self.WRITES_AGE:
+                for _k in ('age_male', 'age_female'):
+                    if data.get(_k) is None:
+                        data.pop(_k, None)
 
             # 테마는 구분하지 않는다 — 전부 소개팅. 스크래퍼가 뭘 넣든 일괄 고정.
             data['theme'] = ['소개팅']

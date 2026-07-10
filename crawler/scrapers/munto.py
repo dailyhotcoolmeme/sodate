@@ -330,17 +330,17 @@ def _munto_inline_ages(text: str, gchar: str, cur_year: int) -> list[tuple[int, 
 
 
 def _munto_common_age(text: str, cur_year: int) -> Optional[tuple]:
-    """공통(남녀동일) 나이 기준 → ('range',lo,hi)/('lower',lo)/('upper',hi)/('unlimited',)/None."""
-    if re.search(r'나이\s*제한\s*[xX✕❌]|나이\s*제한\s*없음|나이제한❌', text):
-        return ('unlimited',)
-    m = re.search(r'(\d{2})\s*년\s*생?\s*이하', text)  # 'N년생 이하' → 만 하한(더 나이많음)
-    if m:
-        yy = int(m.group(1)); yr = (2000 + yy) if yy <= 15 else (1900 + yy)
-        return ('lower', cur_year - yr)
-    m = re.search(r'(\d{2})\s*년\s*생?\s*이상', text)  # 'N년생 이상' → 만 상한(더 어림)
+    """공통(남녀동일) 나이 기준 → ('range',lo,hi)/('lower',lo)/('upper',hi)/None.
+    ※ 'N년생 이하'는 오너 규칙상 상한('~N세')으로 표시(만나이로 변환). '이상'은 하한('N세~').
+       '나이제한❌' 같은 본문 주석은 무제한 처리하지 않는다(제목 나이로 fallback시킴)."""
+    m = re.search(r'(\d{2})\s*년\s*생?\s*이하', text)  # 'N년생 이하' → 만나이 상한 '~N세'
     if m:
         yy = int(m.group(1)); yr = (2000 + yy) if yy <= 15 else (1900 + yy)
         return ('upper', cur_year - yr)
+    m = re.search(r'(\d{2})\s*년\s*생?\s*이상', text)  # 'N년생 이상' → 만나이 하한 'N세~'
+    if m:
+        yy = int(m.group(1)); yr = (2000 + yy) if yy <= 15 else (1900 + yy)
+        return ('lower', cur_year - yr)
     kor = re.search(r'한국\s*나이\s*(\d{2})\s*[-~]\s*(\d{2})', text)  # 한국나이→만(-1)
     if kor:
         a, b = int(kor.group(1)) - 1, int(kor.group(2)) - 1
@@ -445,6 +445,8 @@ class MuntoScraper(BaseScraper):
     # munto API에서 단일가격(남녀 동일)·정원-인원 좌석을 뽑음 → DB 기록
     WRITES_PRICE = True
     WRITES_SEATS = True
+    # 나이 정본 — 근거 없으면 None으로 기록해 옛 잘못된 나이를 지운다(652320 등)
+    WRITES_AGE = True
     # 현재 API 목록에 없는 옛 socialing(가격 없던 구데이터) 정리
     DELETE_STALE = True
 
@@ -543,21 +545,10 @@ class MuntoScraper(BaseScraper):
 
                         # 나이 — 문토는 성별로 다름(남/여 각각 만나이). 라벨>인라인>공통>제목 순.
                         # 한쪽경계는 'N세~'(하한)/'~N세'(상한), 무제한은 '제한 없음'. 텍스트 없으면 공란.
+                        # 본문(성별/공통) → 제목 순. 근거 없으면 공란(None). API min/max는 신뢰 안 함(오너 확정).
                         introduce = detail.get('introduce', '') or ''
                         age_male_disp, age_female_disp, age_range_min, age_range_max, _agenote = \
                             _munto_resolve_ages(name, introduce, now_kst.year)
-                        # 본문·제목에 나이 근거가 전혀 없으면 API minAge/maxAge로 fallback(추측X, API값).
-                        if age_male_disp is None and age_female_disp is None:
-                            _mn, _mx = detail.get('minAge'), detail.get('maxAge')
-                            if _mn and _mx:
-                                age_male_disp = age_female_disp = f'{_mn}~{_mx}'
-                                age_range_min, age_range_max = _mn, _mx
-                            elif _mx:  # 상한만 → '~N세'
-                                age_male_disp = age_female_disp = f'~{_mx}세'
-                                age_range_max = _mx
-                            elif _mn:  # 하한만 → 'N세~'
-                                age_male_disp = age_female_disp = f'{_mn}세~'
-                                age_range_min = _mn
                         age_group_label = None
 
                         # 참가자 현황
