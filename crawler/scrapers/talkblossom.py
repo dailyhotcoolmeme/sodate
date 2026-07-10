@@ -19,6 +19,9 @@ from utils.region import resolve_region
 
 class TalkblossomScraper(BaseScraper):
     BASE_URL = 'https://talkblossom.co.kr'
+
+    # Cafe24 option_stock_data의 stock_number(성별 잔여석)를 DB 기록
+    WRITES_SEATS = True
     SCHEDULE_URL = (
         'https://talkblossom.co.kr/category/'
         '%EB%A1%9C%ED%85%8C%EC%9D%B4%EC%85%98-%EC%86%8C%EA%B0%9C%ED%8C%85/42/'
@@ -95,8 +98,11 @@ class TalkblossomScraper(BaseScraper):
                     user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
                 )
                 page = context.new_page()
-                page.goto(self.SCHEDULE_URL, timeout=15000)
-                page.wait_for_load_state('networkidle', timeout=10000)
+                page.goto(self.SCHEDULE_URL, timeout=20000, wait_until='domcontentloaded')
+                try:
+                    page.wait_for_load_state('networkidle', timeout=8000)
+                except Exception:
+                    pass
                 soup = BeautifulSoup(page.content(), 'html.parser')
                 links = self._extract_links_from_soup(soup)
                 browser.close()
@@ -332,9 +338,13 @@ class TalkblossomScraper(BaseScraper):
                     user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
                 )
                 page = context.new_page()
-                page.goto(url, timeout=20000)
-                page.wait_for_load_state('networkidle', timeout=10000)
-                time.sleep(1)
+                # Cafe24도 광고/추적으로 networkidle이 안 잡혀 타임아웃 → 무시하고 진행(stock_data는 이미 HTML/JS에 있음)
+                page.goto(url, timeout=20000, wait_until='domcontentloaded')
+                try:
+                    page.wait_for_load_state('networkidle', timeout=6000)
+                except Exception:
+                    pass
+                time.sleep(1.5)
 
                 # window['option_stock_data'] JS 전역 변수 직접 파싱
                 try:
