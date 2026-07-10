@@ -276,35 +276,169 @@ def _munto_age_disp(mn: Optional[int], mx: Optional[int]) -> Optional[str]:
     return None
 
 
-def _yy_to_age(yy: int) -> int:
+def _yy_to_age(yy: int, cur_year: int) -> int:
     """두자리 출생연도 → 만나이. yy<=15는 2000년대, 그외 1900년대."""
     year = (2000 + yy) if yy <= 15 else (1900 + yy)
-    return datetime.now(KST).year - year
+    return cur_year - year
 
 
-def _munto_gender_age(text: str, g: str) -> tuple[Optional[int], Optional[int], Optional[str]]:
-    """문토 텍스트에서 성별(g='남'/'여')별 만나이 범위 추출.
-    형태: '남29~36'(만나이), '남 00~96년생'(년생→만나이 변환). 성별로 다름.
-    반환: (age_min, age_max, '만나이표시') 또는 (None,None,None).
-    """
-    # 전각·물결 변형 물결표(～〜∼—–)를 ASCII 로 정규화
-    text = re.sub(r'[～〜∼]', '~', text).replace('–', '-').replace('—', '-')
-    # 성별 문자 뒤 가까운 'A~B' (년생 또는 만나이). '남/여'로 시작, '성/기준)' 등 허용.
-    m = re.search(g + r'\s*성?\s*기?준?\)?\s*[:：]?\s*(\d{2})\s*[~\-]\s*(\d{2})\s*세?\s*(\(?\d{0,2}\s*년생|년생)?', text)
-    if not m:
-        return None, None, None
-    a, b = int(m.group(1)), int(m.group(2))
-    # 값이 만나이 범위(17~60)면 만나이. 년생 범위(61+ 또는 16-)면 출생연도.
-    # ('남29~36(91년생)'의 뒤 (91년생)은 참고표기 — 29~36은 만나이임)
-    is_born = max(a, b) >= 61 or (a <= 16 and b <= 16)
+def _to_age_range(a: int, b: int, is_born: bool, cur_year: int) -> tuple[int, int]:
+    """(a,b) → 만나이 (lo,hi). is_born이면 년생→만나이 변환."""
     if is_born:
-        x, y = _yy_to_age(a), _yy_to_age(b)
-        lo, hi = min(x, y), max(x, y)
-    else:
+        x, y = _yy_to_age(a, cur_year), _yy_to_age(b, cur_year)
+        return (min(x, y), max(x, y))
+    return (a, b) if a <= b else (b, a)
+
+
+def _munto_label_age(text: str, sex_sym: str) -> Optional[tuple]:
+    """성별 마커(🙋‍♂️/♀ 등 ♂/♀) 기준 나이(가장 명시적).
+    (a) '♂ … 나이: 26-34세' / '나이제한x'.  (b) '♂남성\\n-25~36세'(나이: 없이 마커 뒤 범위).
+    날짜줄('7.11 (토) (23~36세)')은 성별마커가 없어 안 걸림. ('range',lo,hi)/('unlimited',)/None."""
+    def ok(a, b):
         lo, hi = (a, b) if a <= b else (b, a)
-    if not (17 <= lo <= 60 and 17 <= hi <= 60):
-        return None, None, None
-    return lo, hi, f'{lo}~{hi}'
+        return (lo, hi) if (17 <= lo <= 60 and 17 <= hi <= 60) else None
+    # (a) '나이:' 라벨
+    m = re.search(sex_sym + r'️?[^\n]{0,4}나이\s*[:：]\s*([^\n]{0,24})', text)
+    if m:
+        val = m.group(1)
+        if re.search(r'나이\s*제한\s*[xX✕❌]|제한\s*없음|제한\s*x', val):
+            return ('unlimited',)
+        r = re.search(r'(\d{2})\s*[~\-]\s*(\d{2})', val)
+        if r and ok(int(r.group(1)), int(r.group(2))):
+            lo, hi = ok(int(r.group(1)), int(r.group(2)))
+            return ('range', lo, hi)
+    # (b) 마커 뒤(같은/다음 줄) 곧바로 'NN~NN세'
+    m = re.search(sex_sym + r'️?[^\n]{0,6}\n?\s*[-~]?\s*(\d{2})\s*[~\-]\s*(\d{2})\s*세', text)
+    if m and ok(int(m.group(1)), int(m.group(2))):
+        lo, hi = ok(int(m.group(1)), int(m.group(2)))
+        return ('range', lo, hi)
+    return None
+
+
+def _munto_inline_ages(text: str, gchar: str, cur_year: int) -> list[tuple[int, int]]:
+    """'남29~36'·'남 00~92년생'·'남 : 95-02년생' 등 인라인 성별 범위.
+    '남성기준'(성이 뒤따름)·키('남178')·프로필('남 182')은 자동 제외(범위 ~/- 필수).
+    반환: 발견된 만나이범위 리스트(여러 조 존재 판정용)."""
+    out = []
+    for m in re.finditer(gchar + r'\s*[:：)]?\s*(\d{2})\s*[~\-]\s*(\d{2})\s*(년생?)?', text):
+        a, b = int(m.group(1)), int(m.group(2))
+        born = bool(m.group(3)) or (min(a, b) <= 16 or max(a, b) >= 55)
+        lo, hi = _to_age_range(a, b, born, cur_year)
+        if 17 <= lo <= 60 and 17 <= hi <= 60:
+            out.append((lo, hi))
+    return out
+
+
+def _munto_common_age(text: str, cur_year: int) -> Optional[tuple]:
+    """공통(남녀동일) 나이 기준 → ('range',lo,hi)/('lower',lo)/('upper',hi)/('unlimited',)/None."""
+    if re.search(r'나이\s*제한\s*[xX✕❌]|나이\s*제한\s*없음|나이제한❌', text):
+        return ('unlimited',)
+    m = re.search(r'(\d{2})\s*년\s*생?\s*이하', text)  # 'N년생 이하' → 만 하한(더 나이많음)
+    if m:
+        yy = int(m.group(1)); yr = (2000 + yy) if yy <= 15 else (1900 + yy)
+        return ('lower', cur_year - yr)
+    m = re.search(r'(\d{2})\s*년\s*생?\s*이상', text)  # 'N년생 이상' → 만 상한(더 어림)
+    if m:
+        yy = int(m.group(1)); yr = (2000 + yy) if yy <= 15 else (1900 + yy)
+        return ('upper', cur_year - yr)
+    kor = re.search(r'한국\s*나이\s*(\d{2})\s*[-~]\s*(\d{2})', text)  # 한국나이→만(-1)
+    if kor:
+        a, b = int(kor.group(1)) - 1, int(kor.group(2)) - 1
+        lo, hi = (a, b) if a <= b else (b, a)
+        return ('range', lo, hi)
+    m = re.search(r'모집\s*나이\s*[:：]?\s*(\d{2})\s*[-~]\s*(\d{2})\s*(년생?|세)?', text)
+    if m:
+        a, b, unit = int(m.group(1)), int(m.group(2)), m.group(3)
+        born = bool(unit and '년' in unit) or (min(a, b) <= 16 or max(a, b) >= 55)
+        lo, hi = _to_age_range(a, b, born, cur_year)
+        if 17 <= lo <= 60 and 17 <= hi <= 60:
+            return ('range', lo, hi)
+    return None
+
+
+def _munto_title_age(name: str, cur_year: int) -> Optional[tuple[int, int]]:
+    """제목의 명시 나이(마지막 fallback). '(89-96년생)'·'37-45세'·'28-37' → (lo,hi) 만나이."""
+    t = re.sub(r'[～〜∼]', '~', name)
+    m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년', t)  # 년생 표기 우선
+    if m:
+        lo, hi = _to_age_range(int(m.group(1)), int(m.group(2)), True, cur_year)
+        if 17 <= lo <= 60 and 17 <= hi <= 60:
+            return (lo, hi)
+    m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*세?', t)
+    if m:
+        a, b = int(m.group(1)), int(m.group(2))
+        lo, hi = (a, b) if a <= b else (b, a)
+        if 17 <= lo <= 60 and 17 <= hi <= 60:
+            return (lo, hi)
+    return None
+
+
+def _munto_resolve_ages(name: str, introduce: str, cur_year: int) -> tuple:
+    """문토 성별 나이 종합 해석.
+    우선순위: 🙋라벨 > 인라인 남/여범위 > (모호시 제목) > 공통 모집기준 > 제목 fallback.
+    반환: (age_male_disp, age_female_disp, range_min, range_max, note)."""
+    text = re.sub(r'[～〜∼]', '~', (name + '\n' + introduce)).replace('–', '-').replace('—', '-')
+    note = []
+
+    def gender_state(gchar, sym):
+        lab = _munto_label_age(text, sym)
+        if lab:
+            return ('unlimited', None, None) if lab[0] == 'unlimited' else ('range', lab[1], lab[2])
+        distinct = sorted(set(_munto_inline_ages(text, gchar, cur_year)))
+        if len(distinct) == 1:
+            return ('range', distinct[0][0], distinct[0][1])
+        if len(distinct) > 1:
+            return ('ambiguous', None, None)  # 여러 조 → 제목으로 확정
+        return (None, None, None)
+
+    male = gender_state('남', '♂')
+    female = gender_state('여', '♀')
+    undef = (None, 'ambiguous')
+
+    if male[0] in undef and female[0] in undef:
+        # per-gender 없음/모호 → 공통 기준(본문) 또는 제목
+        common = _munto_common_age(introduce, cur_year)
+        if common:
+            if common[0] == 'unlimited':
+                male = female = ('unlimited', None, None)
+            elif common[0] == 'range':
+                male = female = ('range', common[1], common[2])
+            elif common[0] == 'lower':
+                male = female = ('lower', common[1], None)
+            elif common[0] == 'upper':
+                male = female = ('upper', None, common[1])
+        else:
+            t = _munto_title_age(name, cur_year)
+            if t:
+                male = female = ('range', t[0], t[1]); note.append('제목fallback')
+    else:
+        # 한쪽만 없음/모호 → 다른 성별 값 복사(둘 다 표시되도록)
+        if male[0] in undef:
+            male = female
+        if female[0] in undef:
+            female = male
+
+    def disp(st):
+        k, lo, hi = st
+        return {'range': f'{lo}~{hi}', 'lower': f'{lo}세~', 'upper': f'~{hi}세',
+                'unlimited': '제한 없음'}.get(k)
+
+    def bounds(st):
+        k, lo, hi = st
+        if k == 'range': return (lo, hi)
+        if k == 'lower': return (lo, None)
+        if k == 'upper': return (None, hi)
+        if k == 'unlimited': return (None, None)
+        return None
+
+    age_male_disp, age_female_disp = disp(male), disp(female)
+    bs = [b for b in (bounds(male), bounds(female)) if b is not None]
+    if not bs:
+        return age_male_disp, age_female_disp, None, None, ';'.join(note)
+    los = [b[0] for b in bs]; his = [b[1] for b in bs]
+    range_min = None if any(x is None for x in los) else min(los)
+    range_max = None if any(x is None for x in his) else max(his)
+    return age_male_disp, age_female_disp, range_min, range_max, ';'.join(note)
 
 
 class MuntoScraper(BaseScraper):
@@ -407,30 +541,23 @@ class MuntoScraper(BaseScraper):
                             covers = [cover] if cover else []
                         thumbnails = [u for u in covers if u and not u.endswith('.svg')][:5]
 
-                        # 나이 범위 — 문토는 성별로 다름(남/여 각각 만나이). '남29~36 / 여26~34' 또는 년생.
+                        # 나이 — 문토는 성별로 다름(남/여 각각 만나이). 라벨>인라인>공통>제목 순.
+                        # 한쪽경계는 'N세~'(하한)/'~N세'(상한), 무제한은 '제한 없음'. 텍스트 없으면 공란.
                         introduce = detail.get('introduce', '') or ''
-                        _agetext = name + ' ' + introduce
-                        m_lo, m_hi, age_male_disp = _munto_gender_age(_agetext, '남')
-                        f_lo, f_hi, age_female_disp = _munto_gender_age(_agetext, '여')
-
-                        # 성별 추출 실패 시 전체 범위로 폴백(남=여)
+                        age_male_disp, age_female_disp, age_range_min, age_range_max, _agenote = \
+                            _munto_resolve_ages(name, introduce, now_kst.year)
+                        # 본문·제목에 나이 근거가 전혀 없으면 API minAge/maxAge로 fallback(추측X, API값).
                         if age_male_disp is None and age_female_disp is None:
-                            tmn, tmx, _lbl = _parse_age_range(name + ' ' + introduce[:200])
-                            if tmn is None:
-                                tmn, tmx = detail.get('minAge'), detail.get('maxAge')
-                            if tmn is not None and tmx is not None:
-                                m_lo, m_hi = f_lo, f_hi = tmn, tmx
-                                age_male_disp = age_female_disp = _munto_age_disp(tmn, tmx)
-                        elif age_male_disp is None:
-                            age_male_disp = age_female_disp
-                            m_lo, m_hi = f_lo, f_hi
-                        elif age_female_disp is None:
-                            age_female_disp = age_male_disp
-                            f_lo, f_hi = m_lo, m_hi
-
-                        _agenums = [x for x in (m_lo, m_hi, f_lo, f_hi) if x is not None]
-                        age_range_min = min(_agenums) if _agenums else None
-                        age_range_max = max(_agenums) if _agenums else None
+                            _mn, _mx = detail.get('minAge'), detail.get('maxAge')
+                            if _mn and _mx:
+                                age_male_disp = age_female_disp = f'{_mn}~{_mx}'
+                                age_range_min, age_range_max = _mn, _mx
+                            elif _mx:  # 상한만 → '~N세'
+                                age_male_disp = age_female_disp = f'~{_mx}세'
+                                age_range_max = _mx
+                            elif _mn:  # 하한만 → 'N세~'
+                                age_male_disp = age_female_disp = f'{_mn}세~'
+                                age_range_min = _mn
                         age_group_label = None
 
                         # 참가자 현황
