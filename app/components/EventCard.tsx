@@ -109,12 +109,12 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
       alignItems: 'center',
       gap: 6,
     },
+    // ⚠️ Fabric: numberOfLines + 명시적 lineHeight면 1줄 내용도 2줄 높이 예약 → lineHeight 미지정
     title: {
       flex: 1,
       fontSize: 16,
       color: colors.textPrimary,
       fontWeight: '700',
-      lineHeight: 22,
     },
     metaRow: { flexDirection: 'row', gap: 12 },
     meta: { fontSize: 13, color: colors.textSecondary },

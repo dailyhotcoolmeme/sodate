@@ -121,7 +121,9 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     // → 제목 1줄/2줄 상관없이 행 간격이 gap:2로 균일(늘어나며 분산되는 것 방지)
     info: { flex: 1, gap: 2, alignSelf: 'flex-start' },
     titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
-    title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 20 },
+    // ⚠️ Fabric(신아키텍처): numberOfLines + 명시적 lineHeight면 1줄 내용도 2줄 높이를 예약
+    //   → 1줄 제목 아래 빈 줄만큼 간격이 벌어짐. lineHeight 미지정(자연 높이)으로 예약 제거.
+    title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700' },
     meta: { fontSize: 12, color: colors.textSecondary },
     price: { fontSize: 12, color: colors.textSecondary },
     seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
