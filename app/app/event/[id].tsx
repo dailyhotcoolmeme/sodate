@@ -103,7 +103,8 @@ export default function EventDetailScreen() {
       gap: 16,
     },
     imageContainer: { position: 'relative' },
-    image: { width: '100%', aspectRatio: 4 / 3 },
+    // 목록 썸네일과 동일한 정사각(1:1) 크롭 — 같은 프레이밍으로 위아래 덜 잘리게
+    image: { width: '100%', aspectRatio: 1 },
     imagePlaceholder: {
       width: '100%',
       aspectRatio: 4 / 3,
@@ -410,7 +411,6 @@ export default function EventDetailScreen() {
           region={event.location_region}
           style={styles.image}
           size="detail"
-          naturalRatio
         />
         {daysLeft <= 3 && daysLeft >= 0 && (
           <DeadlineBadge daysLeft={daysLeft} />

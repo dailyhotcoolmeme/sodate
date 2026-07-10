@@ -65,37 +65,26 @@ export default function EventThumbnail({
   region,
   style,
   size = 'large',
-  naturalRatio = false,
 }: {
   url?: string | null
   companyName?: string | null
   region?: string | null
   style?: StyleProp<ViewStyle & ImageStyle>
   size?: 'large' | 'small' | 'detail'
-  naturalRatio?: boolean   // 상세 히어로: 원본 비율 그대로(크롭 없이 전체 표시)
 }) {
   const [thumbErr, setThumbErr] = useState(false)
   const [coverErr, setCoverErr] = useState(false)
-  const [ratio, setRatio] = useState<number | null>(null)
 
   const forceCover = !!companyName && ALWAYS_COVER.has(companyName)
 
   // 1) 실제 이벤트 사진 (로고전용 업체는 건너뜀)
   if (!forceCover && url && !thumbErr && !isBadThumb(url)) {
-    // 상세 히어로는 크롭 없이 원본 비율 그대로 — 세로 포스터 위/아래 안 잘림
-    const heroStyle = naturalRatio
-      ? [style, { aspectRatio: ratio ?? 4 / 3 }]
-      : (style as StyleProp<ImageStyle>)
     return (
       <Image
         source={{ uri: url }}
-        style={heroStyle as StyleProp<ImageStyle>}
-        contentFit={naturalRatio ? 'contain' : 'cover'}
+        style={style as StyleProp<ImageStyle>}
+        contentFit="cover"
         transition={200}
-        onLoad={naturalRatio ? (e) => {
-          const w = e?.source?.width, h = e?.source?.height
-          if (w && h) setRatio(w / h)
-        } : undefined}
         onError={() => setThumbErr(true)}
       />
     )
