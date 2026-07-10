@@ -122,6 +122,34 @@ export default function FilterSheet({ visible, onClose }: Props) {
       color: colors.primary,
       fontWeight: '700',
     },
+    applyBar: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      backgroundColor: colors.background,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    applyFab: {
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
+    },
+    applyFabText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '800',
+    },
     section: {
       paddingHorizontal: 20,
       paddingVertical: 16,
@@ -223,7 +251,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
           </TouchableOpacity>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }}>
           {/* 최근 필터 */}
           {recentFilters.length > 0 && (
             <Section title="최근 필터" styles={styles}>
@@ -419,6 +447,13 @@ export default function FilterSheet({ visible, onClose }: Props) {
 
           <View style={{ height: insets.bottom + 24 }} />
         </ScrollView>
+
+        {/* 하단 플로팅 적용 버튼 — 여러 필터 선택 후 스크롤해도 바로 누를 수 있게 */}
+        <View style={[styles.applyBar, { paddingBottom: insets.bottom + 10 }]}>
+          <TouchableOpacity style={styles.applyFab} onPress={handleApply} activeOpacity={0.85}>
+            <Text style={styles.applyFabText}>적용하기</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Modal>
   )
