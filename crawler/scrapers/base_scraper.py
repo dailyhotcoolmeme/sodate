@@ -84,6 +84,14 @@ class BaseScraper(ABC):
             # 정원/잔여석/가격은 기본적으로 크롤러가 쓰지 않는다(관리자 전용). upsert 데이터에서 제거 →
             # 신규 행은 NULL, 기존 행은 관리자 입력값이 덮이지 않는다.
             # 단, WRITES_PRICE 스크래퍼는 업체 공식소스에서 뽑은 가격을 유지한다.
+            # 남·여 모두 매진이면 이벤트 전체 마감(is_closed=True) → 앱 마감 오버레이 표시.
+            # WRITES_SEATS(좌석 신뢰) 업체만. 스크래퍼가 이미 True로 준 값은 유지.
+            if self.WRITES_SEATS:
+                _sm = data.get('seats_left_male')
+                _sf = data.get('seats_left_female')
+                _both_sold = (_sm is not None and _sf is not None and _sm <= 0 and _sf <= 0)
+                data['is_closed'] = bool(data.get('is_closed')) or _both_sold
+
             _strip = []
             if not self.WRITES_SEATS:
                 _strip += ['capacity_male', 'capacity_female', 'seats_left_male', 'seats_left_female']
