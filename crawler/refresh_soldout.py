@@ -58,6 +58,33 @@ VENDORS = {
 _IDX_RE = re.compile(r'idx=(\d+)')
 
 
+def _nonimweb_scrapers():
+    """비-imweb 업체: 스크래퍼의 좌석/마감 로직을 그대로 재사용(발굴 포함하지만 소규모라 빠름)."""
+    from scrapers.frip import FripScraper
+    from scrapers.talkblossom import TalkblossomScraper
+    from scrapers.yeongyul import YeongyulScraper
+    return {'frip': FripScraper, 'talkblossom': TalkblossomScraper, 'yeongyul': YeongyulScraper}
+
+
+def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
+    """스크래퍼 scrape() 결과로 기존 이벤트의 seats/is_closed만 갱신(source_url 매칭)."""
+    updated = 0
+    try:
+        evs = ScraperClass().scrape()
+    except Exception as e:
+        print(f'  스크래퍼 실행 실패: {str(e)[:60]}')
+        return 0
+    for ev in evs:
+        d = ev.model_dump() if hasattr(ev, 'model_dump') else ev.__dict__
+        sm, sf = d.get('seats_left_male'), d.get('seats_left_female')
+        ic = bool(d.get('is_closed')) or (sm is not None and sf is not None and sm <= 0 and sf <= 0)
+        upd = {'seats_left_male': sm, 'seats_left_female': sf, 'is_closed': ic}
+        r = sb.table('events').update(upd).eq('company_id', cid).eq('source_url', ev.source_url).execute()
+        if r.data:
+            updated += 1
+    return updated
+
+
 def refresh(slugs=None, days=None):
     """days 지정 시 앞으로 N일 내 이벤트만 갱신(임박 우선·빠름). None이면 전체 미래."""
     sb = get_supabase()
@@ -124,6 +151,18 @@ def refresh(slugs=None, days=None):
                         updated += 1
             print(f'[{slug}] 갱신 {updated}건 (상품 {len(by_idx)}개)')
         browser.close()
+
+    # 비-imweb 업체(프립·토크블라썸·괜찮소): 스크래퍼 좌석/마감 로직 재사용.
+    # 전체 갱신(days 미지정)에서만 — 15분 imweb-only는 빠르게 유지.
+    if not horizon:
+        for slug, Sc in _nonimweb_scrapers().items():
+            if slugs and slug not in slugs:
+                continue
+            cid = comps.get(slug)
+            if not cid:
+                continue
+            n = _refresh_via_scraper(sb, cid, Sc)
+            print(f'[{slug}] 갱신 {n}건 (스크래퍼 재사용)')
 
 
 if __name__ == '__main__':
