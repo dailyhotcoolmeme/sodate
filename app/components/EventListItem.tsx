@@ -97,7 +97,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     leftCol: { alignItems: 'center', width: THUMB },
     thumbWrap: { position: 'relative' },
     thumb: { width: THUMB, height: THUMB, borderRadius: 10 },
-    companyUnder: { fontSize: 11, color: colors.textTertiary, fontWeight: '600', marginTop: 4, width: THUMB, textAlign: 'center' },
+    companyUnder: { fontSize: 11, color: colors.textTertiary, fontWeight: '600', marginTop: 4, maxWidth: THUMB, textAlign: 'left', alignSelf: 'flex-start' },
     thumbPlaceholder: {
       width: THUMB,
       height: THUMB,
