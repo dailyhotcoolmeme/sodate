@@ -494,7 +494,7 @@ class EmotionalOrangeScraper(BaseScraper):
                 f'{self.BASE_URL}/shop_view/?idx={idx}'
                 f'#evt={event_date.strftime("%Y%m%d%H%M")}'
             )
-            title = sanitize_text(f'[감정오렌지] {title_line}', 80)
+            title = sanitize_text(f'[에모셔널오렌지] {title_line}', 80)
 
             try:
                 events.append(EventModel(
@@ -1028,7 +1028,7 @@ class EmotionalOrangeScraper(BaseScraper):
                 f'{self.BASE_URL}/shop_view/?idx={idx}'
                 f'#evt={event_date.strftime("%Y%m%d%H%M")}'
             )
-            title = sanitize_text(f'[감정오렌지] {title_line}', 80)
+            title = sanitize_text(f'[에모셔널오렌지] {title_line}', 80)
 
             try:
                 events.append(EventModel(
