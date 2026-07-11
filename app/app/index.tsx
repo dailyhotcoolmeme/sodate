@@ -414,12 +414,18 @@ export default function HomeScreen() {
       color: colors.primary,
       fontWeight: '700',
     },
-    // 마감제외 체크칩 — 정렬칩과 동일(테두리 없음). 체크박스가 앞에 붙어 넓어 보이지 않게 왼쪽 여백 축소.
+    // 마감제외 체크칩 — 비활성은 체크박스 때문에 넓어보이지 않게 왼쪽 여백 축소(2).
     excludeChip: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
       paddingLeft: 2,
+    },
+    // 활성(체크)일 때만 테두리가 생기므로 왼쪽 패딩을 오른쪽(10)과 동일하게 → 테두리가 체크박스에 붙지 않음
+    excludeChipActive: {
+      backgroundColor: '#FF6B9D18',
+      borderColor: colors.primary,
+      paddingLeft: 10,
     },
     checkbox: {
       width: 15,
@@ -677,7 +683,7 @@ export default function HomeScreen() {
           ))}
           {/* 마감제외 체크칩 — 가격높은순 옆. is_closed 이벤트 숨김 */}
           <TouchableOpacity
-            style={[styles.sortChip, styles.excludeChip, excludeClosed && styles.sortChipActive]}
+            style={[styles.sortChip, styles.excludeChip, excludeClosed && styles.excludeChipActive]}
             onPress={() => setExcludeClosed(!excludeClosed)}
           >
             <View style={[styles.checkbox, excludeClosed && styles.checkboxOn]}>
