@@ -415,13 +415,11 @@ export default function HomeScreen() {
       color: colors.primary,
       fontWeight: '700',
     },
-    // 마감제외 체크칩 — 정렬칩과 구분되게 앞에 얇은 세로 구분선 느낌의 왼쪽 여백 + 체크박스
+    // 마감제외 체크칩 — 정렬칩과 동일(테두리 없음). 체크박스+텍스트만.
     excludeChip: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
-      marginLeft: 2,
-      borderColor: colors.border,
     },
     checkbox: {
       width: 15,
