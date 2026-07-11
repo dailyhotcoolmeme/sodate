@@ -51,6 +51,8 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
     card: {
       backgroundColor: colors.surface,
       borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border, // 다크배경(#0F0F0F)에 카드(#1A1A1A)가 묻혀 안 보이던 문제 → 테두리로 경계
       marginHorizontal: 16,
       marginVertical: 8,
       overflow: 'hidden',
@@ -119,9 +121,9 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
       maxHeight: 42,
       overflow: 'hidden',
     },
-    metaRow: { flexDirection: 'row', gap: 12 },
+    metaRow: { flexDirection: 'row', alignItems: 'center' },
     meta: { fontSize: 13, color: colors.textSecondary },
-    metaDot: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 4 },
+    metaDot: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 5 },
     price: { fontSize: 13, color: colors.textSecondary },
     seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
     seatsLabel: { fontSize: 13, color: colors.textSecondary, marginRight: 6 },

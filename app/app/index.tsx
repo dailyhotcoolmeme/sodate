@@ -48,9 +48,12 @@ const SORT_OPTIONS: SortOption[] = [
 
 const QUICK_THEMES = ['프리미엄', '직장인', '야외', '취미', '액티비티']
 
-// 첫 광고는 3번째 피드 뒤(첫 화면 노출 = 광고수익), 이후는 AD_INTERVAL 간격
+// 리스트형: 첫 광고 3번째 뒤, 이후 AD_INTERVAL 간격
 const FIRST_AD_AFTER = 3
 const AD_INTERVAL = 8
+// 카드형: 카드 1개가 화면을 거의 다 채워 광고 노출이 적음 → 첫 카드 바로 뒤 + 더 촘촘하게
+const FIRST_AD_AFTER_CARD = 1
+const AD_INTERVAL_CARD = 3
 type ListRow =
   | { type: 'event'; event: import('@/lib/supabase').EventWithCompany }
   | { type: 'ad'; key: string }
@@ -558,22 +561,25 @@ export default function HomeScreen() {
   // 이벤트 사이사이에 광고 슬롯 삽입
   const listData = useMemo<ListRow[]>(() => {
     const rows: ListRow[] = []
-    const FIRST_IDX = FIRST_AD_AFTER - 1  // 첫 광고 = 3번째 피드(index 2) 뒤
+    // 뷰모드별 광고 간격(카드형은 첫 카드 바로 뒤 + 촘촘하게)
+    const firstAfter = viewMode === 'card' ? FIRST_AD_AFTER_CARD : FIRST_AD_AFTER
+    const interval = viewMode === 'card' ? AD_INTERVAL_CARD : AD_INTERVAL
+    const FIRST_IDX = firstAfter - 1
     events.forEach((ev, i) => {
       rows.push({ type: 'event', event: ev })
-      // 첫 광고는 3번째 뒤, 이후는 그로부터 AD_INTERVAL 간격. 마지막 항목 뒤에는 안 넣음.
-      const isAdSlot = i >= FIRST_IDX && (i - FIRST_IDX) % AD_INTERVAL === 0
+      // 첫 광고는 firstAfter번째 뒤, 이후는 그로부터 interval 간격. 마지막 항목 뒤에는 안 넣음.
+      const isAdSlot = i >= FIRST_IDX && (i - FIRST_IDX) % interval === 0
       if (isAdSlot && i < events.length - 1) {
         rows.push({ type: 'ad', key: `ad-${i}` })
       }
     })
-    // 필터 결과가 AD_INTERVAL보다 짧으면 위 로직이 광고를 하나도 못 넣음
+    // 필터 결과가 interval보다 짧으면 위 로직이 광고를 하나도 못 넣음
     // → 결과가 2개 이상인데 광고가 없으면 결과 끝에 광고 1개 보장(수익 누락 방지)
     if (events.length >= 2 && !rows.some((r) => r.type === 'ad')) {
       rows.push({ type: 'ad', key: 'ad-tail' })
     }
     return rows
-  }, [events])
+  }, [events, viewMode])
 
   return (
     <View style={styles.container}>
