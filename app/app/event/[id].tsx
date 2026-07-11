@@ -107,8 +107,8 @@ export default function EventDetailScreen() {
       gap: 16,
     },
     imageContainer: { position: 'relative' },
-    // 목록 썸네일과 동일한 정사각(1:1) 크롭 — 같은 프레이밍으로 위아래 덜 잘리게
-    image: { width: '100%', aspectRatio: 1 },
+    // 히어로 높이 축소(1:1→4:3) — 진입 시 광고배너가 바로 보이게. cover라 왜곡 없이 크롭만.
+    image: { width: '100%', aspectRatio: 4 / 3 },
     imagePlaceholder: {
       width: '100%',
       aspectRatio: 4 / 3,
