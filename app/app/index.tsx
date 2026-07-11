@@ -41,7 +41,6 @@ import { track } from '@/lib/analytics'
 type SortOption = { id: FilterState['sortBy']; label: string }
 const SORT_OPTIONS: SortOption[] = [
   { id: 'date', label: '날짜순' },
-  { id: 'deadline', label: '마감 임박' },
   { id: 'price_low', label: '가격 낮은순' },
   { id: 'price_high', label: '가격 높은순' },
 ]
