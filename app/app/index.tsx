@@ -75,25 +75,7 @@ export default function HomeScreen() {
   const companyOptions = useCompanies()
   const { sortBy, setSortBy } = useFilterStore()
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
-  const { myAge, myGender, setMyAge, setMyGender } = useProfileStore()
-  const [profileModalVisible, setProfileModalVisible] = useState(false)
-  // 프로필 모달: 키보드 높이만큼 시트를 올려 입력칸 가림 방지
-  const [profileKb, setProfileKb] = useState(0)
-  useEffect(() => {
-    if (!profileModalVisible) {
-      setProfileKb(0)
-      return
-    }
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const s = Keyboard.addListener(showEvt, (e) => setProfileKb(e.endCoordinates.height))
-    const h = Keyboard.addListener(hideEvt, () => setProfileKb(0))
-    return () => {
-      s.remove()
-      h.remove()
-    }
-  }, [profileModalVisible])
-  const [ageInput, setAgeInput] = useState(myAge ? String(myAge) : '')
+  // 내 정보(나이·성별) 시트는 전역(ProfileSheet, _layout)으로 이동 — 홈에서도 TopBar '내 정보'로 열림
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
   const [showFab, setShowFab] = useState(false)
   const flatListRef = useRef<FlatList>(null)
@@ -586,7 +568,6 @@ export default function HomeScreen() {
       {/* ── 공용 톱바 ── */}
       <TopBar
         onLogoPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
-        onProfilePress={() => { setAgeInput(myAge ? String(myAge) : ''); setProfileModalVisible(true) }}
         onFilterPress={() => setFilterVisible(true)}
         filterCount={activeFilterCount}
       />
@@ -732,124 +713,6 @@ export default function HomeScreen() {
 
       <FilterSheet visible={filterVisible} onClose={() => setFilterVisible(false)} />
 
-      {/* ── 내 나이/성별 설정 모달 ── */}
-      <Modal
-        visible={profileModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setProfileModalVisible(false)}
-      >
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-          activeOpacity={1}
-          onPress={() => setProfileModalVisible(false)}
-        >
-          <View
-            style={{
-              backgroundColor: colors.surface,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              padding: 24,
-              paddingBottom: insets.bottom + 24,
-              marginBottom: profileKb,
-              gap: 20,
-            }}
-            onStartShouldSetResponder={() => true}
-          >
-            {/* 핸들 */}
-            <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
-
-            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textPrimary }}>내 정보 설정</Text>
-            <Text style={{ fontSize: 13, color: colors.textSecondary, marginTop: -12 }}>
-              설정하면 나에게 맞는 이벤트만 보여드려요
-            </Text>
-
-            {/* 나이 입력 */}
-            <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>내 나이</Text>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                <TextInput
-                  style={{
-                    flex: 1,
-                    backgroundColor: colors.surfaceHigh,
-                    borderRadius: 10,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    fontSize: 16,
-                    color: colors.textPrimary,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  }}
-                  placeholder="나이 입력 (예: 28)"
-                  placeholderTextColor={colors.textTertiary}
-                  keyboardType="number-pad"
-                  value={ageInput}
-                  onChangeText={setAgeInput}
-                  maxLength={2}
-                />
-                {myAge !== null && (
-                  <TouchableOpacity
-                    onPress={() => { setAgeInput(''); setMyAge(null) }}
-                    style={{ paddingHorizontal: 12, paddingVertical: 8 }}
-                  >
-                    <Text style={{ fontSize: 13, color: colors.error }}>초기화</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            {/* 성별 선택 */}
-            <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>성별</Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {(['male', 'female'] as const).map((g) => (
-                  <TouchableOpacity
-                    key={g}
-                    onPress={() => setMyGender(myGender === g ? null : g)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      alignItems: 'center',
-                      borderWidth: 1.5,
-                      borderColor: myGender === g ? colors.primary : colors.border,
-                      backgroundColor: myGender === g ? colors.primary + '22' : colors.surfaceHigh,
-                    }}
-                  >
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: myGender === g ? colors.primary : colors.textSecondary }}>
-                      {g === 'male' ? '남성' : '여성'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* 저장 버튼 */}
-            <TouchableOpacity
-              style={{
-                backgroundColor: colors.primary,
-                borderRadius: 12,
-                paddingVertical: 14,
-                alignItems: 'center',
-              }}
-              onPress={() => {
-                const age = parseInt(ageInput, 10)
-                setMyAge(!isNaN(age) && age > 0 && age < 100 ? age : null)
-                setProfileModalVisible(false)
-              }}
-            >
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>저장</Text>
-            </TouchableOpacity>
-
-            {/* 적용 중 표시 */}
-            {(myAge !== null || myGender !== null) && (
-              <Text style={{ fontSize: 12, color: colors.secondary, textAlign: 'center', marginTop: -8 }}>
-                {[myAge !== null ? `${myAge}세` : '', myGender ? (myGender === 'male' ? '남성' : '여성') : ''].filter(Boolean).join(' · ')} 기준으로 필터링 중
-              </Text>
-            )}
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* ── 맨위로 FAB ── */}
       {showFab && (

@@ -122,8 +122,8 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
     info: { flex: 1, gap: 2, alignSelf: 'flex-start' },
     titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
     // 제목 박스가 1줄 내용에도 2줄 높이를 잡아 제목-해시태그 간격이 벌어지는 문제 →
-    // numberOfLines 대신 maxHeight(2줄)+overflow로 클램프. 1줄이면 딱 1줄 높이만 차지.
-    title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 19, maxHeight: 38, overflow: 'hidden' },
+    // iOS에서 maxHeight+overflow가 1줄로 클램프돼 numberOfLines={2}로 변경(2줄 표준)
+    title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 19 },
     meta: { fontSize: 12, color: colors.textSecondary },
     price: { fontSize: 12, color: colors.textSecondary },
     seatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
@@ -183,7 +183,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
       <View style={styles.info}>
         <View style={styles.titleRow}>
           <ThemeBadge theme={event.theme} />
-          <Text style={styles.title}>{cleanTitle(event.title)}</Text>
+          <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
         </View>
         {/* 해시태그 배지 (제목 바로 아래) */}
         <HashtagChips hashtags={event.hashtags} size="sm" max={3} tight />

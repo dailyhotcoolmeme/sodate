@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications'
 import mobileAds from 'react-native-google-mobile-ads'
 import { useThemeStore } from '@/stores/themeStore'
 import { usePushNotification } from '@/hooks/usePushNotification'
+import ProfileSheet from '@/components/ProfileSheet'
 
 const ONBOARDING_KEY = 'sodate-onboarding-done'
 
@@ -89,6 +90,9 @@ export default function RootLayout() {
           options={{ headerShown: false, gestureEnabled: false, contentStyle: { backgroundColor: colors.background } }}
         />
       </Stack>
+
+      {/* 내 정보(나이·성별) 시트 — 전역 마운트. 어느 화면에서든 TopBar '내 정보'로 그 자리에서 열림 */}
+      <ProfileSheet />
 
       {/* 스플래시 연장 게이트 — 온보딩 판정 전 첫 프레임(동그라미 인디케이터 등)을 덮음.
           네이티브 스플래시(splash-icon on #0F0F0F)와 동일하게 보여 이음새 없음. */}

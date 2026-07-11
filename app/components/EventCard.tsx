@@ -111,15 +111,13 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
       alignItems: 'center',
       gap: 6,
     },
-    // 1줄 제목도 2줄 높이를 잡던 문제 → numberOfLines 대신 maxHeight(2줄)+overflow 클램프
+    // iOS에선 maxHeight+overflow가 1줄로 클램프돼버림 → numberOfLines={2}로 2줄 표준 처리
     title: {
       flex: 1,
       fontSize: 16,
       color: colors.textPrimary,
       fontWeight: '700',
       lineHeight: 21,
-      maxHeight: 42,
-      overflow: 'hidden',
     },
     metaRow: { flexDirection: 'row', alignItems: 'center' },
     meta: { fontSize: 13, color: colors.textSecondary },
@@ -228,7 +226,7 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
         {/* 테마 배지 + 제목 (같은 줄) */}
         <View style={styles.titleRow}>
           <ThemeBadge theme={event.theme} />
-          <Text style={styles.title}>
+          <Text style={styles.title} numberOfLines={2}>
             {cleanTitle(event.title)}
           </Text>
         </View>

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useFilter } from '@/hooks/useFilter'
+import { useProfileSheetStore } from '@/stores/profileSheetStore'
 
 /**
  * 공용 상단 톱바 — 모든 화면 공통.
@@ -16,14 +17,12 @@ import { useFilter } from '@/hooks/useFilter'
 export default function TopBar({
   showBack = false,
   onLogoPress,
-  onProfilePress,
   onFilterPress,
   filterCount = 0,
   onBeforeNavigate,
 }: {
   showBack?: boolean
   onLogoPress?: () => void
-  onProfilePress?: () => void
   onFilterPress?: () => void
   filterCount?: number
   onBeforeNavigate?: () => void // 메뉴 이동 직전(예: 열린 모달 닫기)
@@ -76,7 +75,7 @@ export default function TopBar({
     { label: '후기 모음', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
     { label: '관심 모임', icon: 'heart-outline', action: () => router.push('/favorites') },
     { label: '알림 설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
-    { label: '내 정보', icon: 'person-outline', action: () => (onProfilePress ? onProfilePress() : router.replace('/')) },
+    { label: '내 정보', icon: 'person-outline', action: () => useProfileSheetStore.getState().openSheet() },
     { label: '설정', icon: 'settings-outline', action: () => router.push('/settings') },
   ]
 
