@@ -22,7 +22,7 @@ export default function TermsScreen() {
       <TopBar showBack />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
         <Text style={styles.title}>이용약관</Text>
-        <Text style={styles.date}>시행일: 2026년 3월 20일 | 최종 수정일: 2026년 3월 20일</Text>
+        <Text style={styles.date}>시행일: 2026년 7월 20일</Text>
 
         <Text style={styles.sectionTitle}>제1조 (목적)</Text>
         <Text style={styles.body}>
@@ -87,7 +87,7 @@ export default function TermsScreen() {
         <Text style={styles.sectionTitle}>제10조 (문의)</Text>
         <Text style={styles.body}>
           이용약관에 관한 문의사항은 아래로 연락 주세요.{'\n\n'}
-          이메일: ourmine0319@gmail.com
+          이메일: contact@ourmine.co.kr
         </Text>
       </ScrollView>
     </View>
