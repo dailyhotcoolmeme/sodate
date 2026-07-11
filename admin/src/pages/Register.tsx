@@ -41,6 +41,17 @@ type Row = {
   price_detail: PriceDetail | null // 가격 티어(에모셔널오렌지 자동). 읽기전용 표시.
   saved: boolean
   saving: boolean
+  // 탭(해야할것/완료) 분류를 로드 시점 상태로 '고정'. 입력 중 실시간 재분류로 행이 튀는 것 방지.
+  // 완료 표시(테두리·체크)는 live isRowDone로 하되, 탭 이동은 새로고침 때만.
+  wasDone?: boolean
+}
+
+// 완료 판정(순수): 가격(남|여) + 나이(남|여) 둘 다 있어야 완료. 나이 공란=미완료(오너 확인).
+function rowIsDone(r: Row): boolean {
+  return (
+    (r.price_male.trim() !== '' || r.price_female.trim() !== '') &&
+    (r.age_male.trim() !== '' || r.age_female.trim() !== '')
+  )
 }
 
 type GenderPrice = {
@@ -113,8 +124,8 @@ export default function Register() {
       return
     }
     const s = (v: number | null) => (v == null ? '' : String(v))
-    const evRows: Row[] = (data ?? []).map((e: any) =>
-      makeRow({
+    const evRows: Row[] = (data ?? []).map((e: any) => {
+      const r = makeRow({
         id: e.id,
         title: e.title ?? '',
         image_type_id: e.image_type_id ?? null,
@@ -131,8 +142,9 @@ export default function Register() {
         hashtags: e.hashtags ?? [],
         is_closed: e.is_closed ?? false,
         source: e.source === 'crawl' ? 'crawl' : 'manual', // crawl=미입력(흰), 그외=오너입력(노랑)
-      }),
-    )
+      })
+      return { ...r, wasDone: rowIsDone(r) } // 로드 시점 완료여부로 탭 고정
+    })
     // 아직 저장 안 한 수동 추가 행(빈 source_url)은 보존
     setRows((prev) => [...prev.filter((r) => !r.source_url), ...evRows])
     setLoading(false)
@@ -229,15 +241,12 @@ export default function Register() {
     }
   }
 
-  // ── 완료/해야할것 판정: 가격 + 나이 둘 다 있어야 "완료" ──
-  // 가격(남 또는 여)이 있고, 나이(남 또는 여)도 있어야 완료. 나이가 비었으면 = 크롤러가
-  // 나이를 확인 못한 것 → 오너가 직접 확인하도록 "해야할 것"으로 남긴다(전 업체 공통, 2026-07).
-  // '제한 없음'도 확인된 값이므로 완료. 진짜 공란만 미완료.
-  const isRowDone = (r: Row) =>
-    (r.price_male.trim() !== '' || r.price_female.trim() !== '') &&
-    (r.age_male.trim() !== '' || r.age_female.trim() !== '')
-  const todoRows = useMemo(() => visibleRows.filter((r) => !isRowDone(r)), [visibleRows])
-  const doneRows = useMemo(() => visibleRows.filter((r) => isRowDone(r)), [visibleRows])
+  // 완료 표시(테두리·체크)는 실시간. 나이 공란=미완료(오너 확인). '제한 없음'도 확인값이라 완료.
+  const isRowDone = (r: Row) => rowIsDone(r)
+  // ⚠️ 탭 분류는 로드 시점 상태(wasDone)로 '고정' — 입력 중 완료로 바뀌어도 행이 목록에서
+  //    사라지지 않게(포커스 튐 방지). 새로고침(재로드) 때 다시 분류된다.
+  const todoRows = useMemo(() => visibleRows.filter((r) => !r.wasDone), [visibleRows])
+  const doneRows = useMemo(() => visibleRows.filter((r) => r.wasDone), [visibleRows])
   const shownRows = statusTab === 'todo' ? todoRows : doneRows
 
   // ── 모바일 카드 한 장 렌더 ──
