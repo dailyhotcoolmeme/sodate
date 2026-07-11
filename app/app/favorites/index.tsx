@@ -21,7 +21,7 @@ export default function FavoritesScreen() {
   const { favoriteIds, toggle } = useFavorites()
 
   React.useEffect(() => { track('screen_view', { properties: { screen: 'favorites' } }) }, [])
-  const [viewMode, setViewMode] = useState<ViewMode>('card')
+  const [viewMode, setViewMode] = useState<ViewMode>('list') // 관심 소개팅 기본=리스트형
   const colors = useColors()
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
