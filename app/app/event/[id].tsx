@@ -48,6 +48,8 @@ function cleanText(text: string): string {
 // 나눠 캡처한 이미지가 한 장처럼 보이도록 위아래로 딱 붙임(간격 0).
 // 바깥 모서리만 라운드: 첫 장 위쪽, 마지막 장 아래쪽 (다른 카드와 동일한 12).
 const DESC_IMG_RADIUS = 12
+// 상세설명(이미지)이 너무 길어 강제로 접어두는 높이. 이 높이 넘으면 '더보기' 노출.
+const DESC_COLLAPSED_H = 460
 function DescImage({ uri, first, last }: { uri: string; first: boolean; last: boolean }) {
   const [ratio, setRatio] = useState<number | null>(null)
   return (
@@ -317,6 +319,9 @@ export default function EventDetailScreen() {
   const [editTarget, setEditTarget] = useState<ReviewSheetInitial | null>(null)
   const [myReviewIds, setMyReviewIds] = useState<string[]>([])
   const [reportTarget, setReportTarget] = useState<string | null>(null)
+  // 상세설명 접기/펼치기 (기본 접힘) + 실제 콘텐츠 높이(더보기 노출 판단)
+  const [descExpanded, setDescExpanded] = useState(false)
+  const [descContentH, setDescContentH] = useState(0)
 
   const loadMyReviewIds = useCallback(() => {
     getMyReviewIds().then(setMyReviewIds)
@@ -384,6 +389,24 @@ export default function EventDetailScreen() {
   }
 
   const daysLeft = daysUntil(event.event_date)
+
+  // 신청하기 버튼 — 상세설명 위/아래 두 곳에서 재사용 (마감 시 회색 비활성)
+  const renderCta = () =>
+    event.is_closed ? (
+      <View style={[styles.ctaBtn, styles.ctaBtnClosed]}>
+        <Text style={styles.ctaBtnClosedText}>신청 마감</Text>
+      </View>
+    ) : (
+      <TouchableOpacity
+        style={styles.ctaBtn}
+        onPress={() => {
+          track('event_apply_click', { eventId: event.id, companyId: event.company_id })
+          openOutlink(event.source_url)
+        }}
+      >
+        <Text style={styles.ctaBtnText}>신청하기 ›</Text>
+      </TouchableOpacity>
+    )
 
   return (
     <View style={styles.screen}>
@@ -491,15 +514,32 @@ export default function EventDetailScreen() {
           <View style={styles.descSection}>
             {/* 상세 이미지가 길어 하단 광고가 안 보일 수 있어 설명 시작 위에도 광고 노출 */}
             <AdBanner />
+            {/* 상세설명이 길어 하단 신청버튼을 찾기 어려워, 설명 위에도 신청 버튼 배치 */}
+            {renderCta()}
             <Text style={styles.sectionLabel}>상세 설명</Text>
-            {event.descImages.map((uri, i) => (
-              <DescImage
-                key={`${uri}-${i}`}
-                uri={uri}
-                first={i === 0}
-                last={i === event.descImages!.length - 1}
-              />
-            ))}
+            {/* 긴 상세이미지는 기본 접힘 → '더보기'로 펼침 */}
+            <View style={{ maxHeight: descExpanded ? undefined : DESC_COLLAPSED_H, overflow: 'hidden' }}>
+              <View onLayout={(e) => setDescContentH(e.nativeEvent.layout.height)}>
+                {event.descImages.map((uri, i) => (
+                  <DescImage
+                    key={`${uri}-${i}`}
+                    uri={uri}
+                    first={i === 0}
+                    last={i === event.descImages!.length - 1}
+                  />
+                ))}
+              </View>
+            </View>
+            {descContentH > DESC_COLLAPSED_H + 40 && (
+              <TouchableOpacity
+                style={styles.descMoreBtn}
+                onPress={() => setDescExpanded((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.descMoreText}>{descExpanded ? '접기' : '상세설명 더보기'}</Text>
+                <Ionicons name={descExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={colors.primary} />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -507,21 +547,7 @@ export default function EventDetailScreen() {
         <AdBanner />
 
         {/* 신청 버튼 (마감 시 회색 비활성) */}
-        {event.is_closed ? (
-          <View style={[styles.ctaBtn, styles.ctaBtnClosed]}>
-            <Text style={styles.ctaBtnClosedText}>신청 마감</Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.ctaBtn}
-            onPress={() => {
-              track('event_apply_click', { eventId: event.id, companyId: event.company_id })
-              openOutlink(event.source_url)
-            }}
-          >
-            <Text style={styles.ctaBtnText}>신청하기 ›</Text>
-          </TouchableOpacity>
-        )}
+        {renderCta()}
 
         {/* 업체 후기 섹션 */}
         <View style={styles.reviewsSection}>
