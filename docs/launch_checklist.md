@@ -10,6 +10,18 @@
 - **EAS**: production 환경변수(SUPABASE URL/ANON) 등록됨. production 채널=실광고. OTA 정상(런타임 핀 iOS 9e0a068/Android e0cb73f).
 - **알림**: expo-notifications 플러그인(아이콘·색) 설정. 디버그 잔재 거의 없음.
 
+## 🔒 보안 감사 (2026-07-11, Supabase RLS/권한)
+**수정 완료:**
+- **event_candidates RLS 활성화** — 이전엔 RLS OFF+anon 전체권한(SELECT/INSERT/UPDATE/DELETE/**TRUNCATE**)이라 앱 공개키로 admin 후보목록 조작 가능했음 → RLS ON(anon 차단, service_role 우회).
+- **pgmq_send/read/delete + 트리거 함수 anon 실행권한 회수** — 푸시 큐에 anon이 스팸 주입·큐 삭제 가능했음 → PUBLIC에서 revoke, service_role만 grant. anon 실행 가능은 알림 RPC 5개(자기 p_token용)만 남김.
+
+**정상(의도된 설계) 확인:**
+- events/companies: anon은 SELECT만(쓰기 정책 없음). reviews/push_tokens/alert_subscriptions 쓰기는 Edge Function(reviews·register-push-token·save-alert-subscription, service_role) 경유. INFO(RLS-no-policy)는 안전 상태.
+
+**남은 경고(비블로커, 무회원 모델 한계):**
+- `favorites_all` 정책이 anon 무제한(모든 favorites 읽기/삭제 가능) — 저사양 그리핑 위험(즐겨찾기 삭제). 무회원이라 근본 차단 불가. 남용 발생 시 Edge Function화 검토.
+- function search_path mutable / pg_net in public — 하드닝(비블로커).
+
 ## ⚠️ 출시 전 반드시 (스토어 제출 블로커)
 1. **개인정보처리방침 공개 URL** — App Store·Play 심사에 **호스팅된 개인정보 URL 필수**(앱 내 화면만으론 부족). 앱 privacy.tsx 내용을 웹(ourmine.co.kr 등)에 게시 필요.
 2. **production 프로파일 새 빌드 + 스토어 제출** — 실광고·실앱ID는 production 빌드에서만. `eas build --profile production`(iOS·Android) → `eas submit`. 현재 오너 설치본=preview(테스트광고).
