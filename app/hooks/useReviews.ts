@@ -23,6 +23,10 @@ export function useReviews(companyId: string | null, limit = 10) {
         if (err) setError(err.message)
         else setReviews((data ?? []) as ReviewRow[])
         setLoading(false)
+      }, (e: any) => {
+        // fetch 자체 실패(네트워크·타임아웃)로 스피너가 안 멈추던 것 방지
+        setError(e?.message ?? '후기를 불러오지 못했어요')
+        setLoading(false)
       })
   }, [companyId, limit])
 
@@ -47,7 +51,7 @@ export function useAllReviews(limit = 500) {
       .then(({ data }) => {
         setReviews((data ?? []) as any)
         setLoading(false)
-      })
+      }, () => setLoading(false))
   }, [limit])
 
   useEffect(() => {

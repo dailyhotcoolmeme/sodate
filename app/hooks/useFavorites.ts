@@ -26,16 +26,19 @@ export function useFavorites() {
 
   useEffect(() => {
     async function init() {
-      const id = await getDeviceId()
-      setDeviceId(id)
-
-      const { data } = await supabase
-        .from('favorites')
-        .select('event_id')
-        .eq('device_id', id)
-
-      setFavoriteIds(new Set((data ?? []).map((r: any) => r.event_id)))
-      setLoading(false)
+      try {
+        const id = await getDeviceId()
+        setDeviceId(id)
+        const { data } = await supabase
+          .from('favorites')
+          .select('event_id')
+          .eq('device_id', id)
+        setFavoriteIds(new Set((data ?? []).map((r: any) => r.event_id)))
+      } catch {
+        // 실패해도 스피너는 내린다(관심목록은 비어 보이되 앱은 정상)
+      } finally {
+        setLoading(false)
+      }
     }
     init()
   }, [])
@@ -52,16 +55,26 @@ export function useFavorites() {
       return next
     })
 
-    if (isFav) {
-      await supabase
-        .from('favorites')
-        .delete()
-        .eq('device_id', deviceId)
-        .eq('event_id', eventId)
-    } else {
-      await supabase
-        .from('favorites')
-        .insert({ device_id: deviceId, event_id: eventId } as any)
+    try {
+      if (isFav) {
+        await supabase
+          .from('favorites')
+          .delete()
+          .eq('device_id', deviceId)
+          .eq('event_id', eventId)
+      } else {
+        await supabase
+          .from('favorites')
+          .insert({ device_id: deviceId, event_id: eventId } as any)
+      }
+    } catch {
+      // 쓰기 실패 시 낙관적 업데이트 롤백(로컬-서버 desync 방지)
+      setFavoriteIds((prev) => {
+        const next = new Set(prev)
+        if (isFav) next.add(eventId)
+        else next.delete(eventId)
+        return next
+      })
     }
   }, [deviceId, favoriteIds])
 
@@ -84,7 +97,7 @@ export function useFavoriteEvents() {
       .then(({ data }) => {
         setEvents((data ?? []).map((r: any) => r.events).filter(Boolean))
         setLoading(false)
-      })
+      }, () => setLoading(false))
   }, [deviceId])
 
   return { events, loading }

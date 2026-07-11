@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { useFilterStore } from '@/stores/filterStore'
 
-export default function EmptyState() {
+export default function EmptyState({ error, onRetry }: { error?: string | null; onRetry?: () => void } = {}) {
   const resetFilters = useFilterStore((s) => s.resetFilters)
   const colors = useColors()
   const styles = useMemo(() => StyleSheet.create({
@@ -45,6 +45,22 @@ export default function EmptyState() {
       fontSize: 14,
     },
   }), [colors])
+
+  // 네트워크 실패 등 오류 — "빈 목록"과 구분해 재시도 제공
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Ionicons name="cloud-offline-outline" size={48} color={colors.textTertiary} style={{ marginBottom: 16 }} />
+        <Text style={styles.title}>불러오지 못했어요</Text>
+        <Text style={styles.subtitle}>네트워크 상태를 확인하고{'\n'}다시 시도해 주세요</Text>
+        {onRetry && (
+          <TouchableOpacity style={styles.btn} onPress={onRetry}>
+            <Text style={styles.btnText}>다시 시도</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    )
+  }
 
   return (
     <View style={styles.container}>
