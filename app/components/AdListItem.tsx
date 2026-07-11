@@ -50,6 +50,9 @@ export default function AdListItem() {
       marginVertical: 5,
       overflow: 'hidden',
     },
+    // iOS GADNativeAdView(네이티브뷰)에 flex를 직접 주면 자식이 우측하단으로 치우침 →
+    // NativeAdView는 폭만 채우고, 실제 레이아웃은 내부 RN View(row)가 담당.
+    nativeAdView: { width: '100%' },
     row: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -87,7 +90,8 @@ export default function AdListItem() {
 
   return (
     <View style={styles.card}>
-    <NativeAdView nativeAd={ad} style={styles.row}>
+    <NativeAdView nativeAd={ad} style={styles.nativeAdView}>
+      <View style={styles.row}>
       {/* 썸네일 (광고 미디어) + '광고' 배지 */}
       <View style={styles.thumbWrap}>
         {ad.mediaContent ? (
@@ -122,6 +126,7 @@ export default function AdListItem() {
             </View>
           </NativeAsset>
         )}
+      </View>
       </View>
     </NativeAdView>
     </View>

@@ -228,7 +228,7 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
         {/* 테마 배지 + 제목 (같은 줄) */}
         <View style={styles.titleRow}>
           <ThemeBadge theme={event.theme} />
-          <Text style={styles.title} ellipsizeMode="tail">
+          <Text style={styles.title}>
             {cleanTitle(event.title)}
           </Text>
         </View>

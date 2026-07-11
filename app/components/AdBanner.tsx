@@ -53,6 +53,8 @@ export default function AdBanner() {
       marginBottom: 16, // 신청 버튼과 간격 확보 (실수 클릭 방지)
       overflow: 'hidden',
     },
+    // iOS GADNativeAdView에 flex 직접 주면 자식이 우측하단 치우침 → 폭만 채우고 내부 View가 레이아웃
+    nativeAdView: { width: '100%' },
     inner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -94,7 +96,8 @@ export default function AdBanner() {
       <View style={styles.adBadge}>
         <Text style={styles.adBadgeText}>광고</Text>
       </View>
-      <NativeAdView nativeAd={ad} style={styles.inner}>
+      <NativeAdView nativeAd={ad} style={styles.nativeAdView}>
+        <View style={styles.inner}>
         {ad.icon?.url ? (
           <Image source={{ uri: ad.icon.url }} style={styles.icon} contentFit="cover" />
         ) : ad.mediaContent ? (
@@ -124,6 +127,7 @@ export default function AdBanner() {
             </View>
           </NativeAsset>
         )}
+        </View>
       </NativeAdView>
     </View>
   )

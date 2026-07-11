@@ -183,7 +183,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
       <View style={styles.info}>
         <View style={styles.titleRow}>
           <ThemeBadge theme={event.theme} />
-          <Text style={styles.title} ellipsizeMode="tail">{cleanTitle(event.title)}</Text>
+          <Text style={styles.title}>{cleanTitle(event.title)}</Text>
         </View>
         {/* 해시태그 배지 (제목 바로 아래) */}
         <HashtagChips hashtags={event.hashtags} size="sm" max={3} tight />
