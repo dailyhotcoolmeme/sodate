@@ -147,7 +147,7 @@ export default function EventDetailScreen() {
       backgroundColor: colors.surface,
       borderRadius: 12,
       padding: 16,
-      gap: 12,
+      gap: 2, // 일시·지역·남성·여성 줄간격 = 피드 리스트 내부 텍스트(info gap:2) 기준으로 통일
       marginBottom: 20,
     },
     infoRow: {
