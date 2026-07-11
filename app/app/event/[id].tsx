@@ -121,7 +121,7 @@ export default function EventDetailScreen() {
     titleRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 8,
+      marginBottom: 4, // 업체명→제목 간격 축소
     },
     company: {
       fontSize: 13,
@@ -141,7 +141,7 @@ export default function EventDetailScreen() {
       color: colors.textPrimary,
       fontWeight: '800',
       lineHeight: 30,
-      marginBottom: 20,
+      marginBottom: 14, // 제목→해시태그 간격 축소(해시태그 marginTop -14와 함께)
     },
     infoCard: {
       backgroundColor: colors.surface,
@@ -167,14 +167,14 @@ export default function EventDetailScreen() {
       color: colors.textPrimary,
       fontWeight: '500',
     },
-    hashtagRow: { marginTop: -14, marginBottom: 16 },
+    hashtagRow: { marginTop: -14, marginBottom: 8 }, // 해시태그→정보박스 간격 축소
     hashtagRowWithTheme: { marginTop: 0 },
     themeRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
       marginTop: -10,
-      marginBottom: 12,
+      marginBottom: 8,
     },
     themeNote: {
       flex: 1,
