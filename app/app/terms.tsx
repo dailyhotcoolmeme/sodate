@@ -37,7 +37,7 @@ export default function TermsScreen() {
         <Text style={styles.sectionTitle}>제3조 (서비스 이용)</Text>
         <Text style={styles.bullet}>
           • 본 서비스는 별도의 회원가입 없이 이용할 수 있습니다.{'\n'}
-          • 이용자는 만 14세 이상이어야 합니다.{'\n'}
+          • 이용자는 만 19세 이상이어야 합니다(청소년 이용불가). 각 소개팅의 실제 참가 연령 조건은 업체별로 다를 수 있습니다.{'\n'}
           • 서비스는 iOS 및 Android 기기에서 무료로 이용할 수 있습니다.{'\n'}
           • 일부 기능(푸시 알림)은 기기 알림 권한 허용 시 이용 가능합니다.
         </Text>
