@@ -23,6 +23,7 @@ interface FilterState {
   timeSlots: string[]     // 시간대 morning|afternoon|evening|night
   companies: string[]     // 업체 company_id
   sortBy: 'date' | 'deadline' | 'created' | 'price_low' | 'price_high'
+  excludeClosed: boolean   // 마감(is_closed) 이벤트 목록에서 제외
   recentFilters: FilterSnapshot[]
 
   toggleRegion: (id: string) => void
@@ -38,6 +39,7 @@ interface FilterState {
   toggleTimeSlot: (s: string) => void
   toggleCompany: (id: string) => void
   setSortBy: (sort: FilterState['sortBy']) => void
+  setExcludeClosed: (v: boolean) => void
   saveRecentFilter: () => void
   applyRecentFilter: (snapshot: FilterSnapshot) => void
   resetFilters: () => void
@@ -56,6 +58,7 @@ export const useFilterStore = create<FilterState>()(
       timeSlots: [],
       companies: [],
       sortBy: 'date',
+      excludeClosed: false,
       recentFilters: [],
 
       toggleRegion: (id) =>
@@ -110,6 +113,7 @@ export const useFilterStore = create<FilterState>()(
             : [...s.companies, id],
         })),
       setSortBy: (sortBy) => set({ sortBy }),
+      setExcludeClosed: (excludeClosed) => set({ excludeClosed }),
 
       saveRecentFilter: () => {
         const { regions, dateRange, maxPrice, themes, hashtags, recentFilters } = get()
@@ -147,6 +151,7 @@ export const useFilterStore = create<FilterState>()(
           timeSlots: [],
           companies: [],
           sortBy: 'date',
+          excludeClosed: false,
         }),
     }),
     {

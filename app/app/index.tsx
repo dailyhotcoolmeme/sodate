@@ -73,7 +73,7 @@ export default function HomeScreen() {
     return REGION_GROUP_ORDER.filter((g) => buckets[g.key]?.length).map((g) => ({ key: g.key, ids: buckets[g.key] }))
   }, [regionOptions])
   const companyOptions = useCompanies()
-  const { sortBy, setSortBy } = useFilterStore()
+  const { sortBy, setSortBy, excludeClosed, setExcludeClosed } = useFilterStore()
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
   // 내 정보(나이·성별) 시트는 전역(ProfileSheet, _layout)으로 이동 — 홈에서도 TopBar '내 정보'로 열림
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
@@ -415,6 +415,27 @@ export default function HomeScreen() {
       color: colors.primary,
       fontWeight: '700',
     },
+    // 마감제외 체크칩 — 정렬칩과 구분되게 앞에 얇은 세로 구분선 느낌의 왼쪽 여백 + 체크박스
+    excludeChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginLeft: 2,
+      borderColor: colors.border,
+    },
+    checkbox: {
+      width: 15,
+      height: 15,
+      borderRadius: 4,
+      borderWidth: 1.5,
+      borderColor: colors.textTertiary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxOn: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
     viewToggle: {
       flexDirection: 'row',
       gap: 2,
@@ -656,6 +677,18 @@ export default function HomeScreen() {
               </Text>
             </TouchableOpacity>
           ))}
+          {/* 마감제외 체크칩 — 가격높은순 옆. is_closed 이벤트 숨김 */}
+          <TouchableOpacity
+            style={[styles.sortChip, styles.excludeChip, excludeClosed && styles.sortChipActive]}
+            onPress={() => setExcludeClosed(!excludeClosed)}
+          >
+            <View style={[styles.checkbox, excludeClosed && styles.checkboxOn]}>
+              {excludeClosed && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}
+            </View>
+            <Text style={[styles.sortChipText, excludeClosed && styles.sortChipTextActive]}>
+              마감제외
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
         <View style={styles.viewToggle}>
           <TouchableOpacity

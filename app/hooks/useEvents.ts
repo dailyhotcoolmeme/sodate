@@ -10,7 +10,7 @@ export function useEvents() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const { regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy } = useFilterStore()
+  const { regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed } = useFilterStore()
   const { myAge, myGender } = useProfileStore()
 
   const fetchEvents = useCallback(async () => {
@@ -25,7 +25,7 @@ export function useEvents() {
         .select('*, companies!inner(id, name, slug)')
         .eq('is_active', true)
         .eq('companies.app_visible', true)
-        // 마감(is_closed) 이벤트도 목록엔 노출 — 카드에서 흐림+마감 배지 처리
+        // 마감(is_closed) 이벤트도 기본은 목록 노출(카드 흐림+마감배지). '마감제외' 켜면 숨김.
         .gte('event_date', new Date().toISOString())
         // 당일 ~ +1달 하드 상한: 1달 넘는 미래 이벤트는 항상 제외 (매일 자동 롤링)
         .lte('event_date', (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString() })())
@@ -38,6 +38,11 @@ export function useEvents() {
       // 업체 필터 (다중 선택)
       if (companies.length > 0) {
         query = query.in('company_id', companies)
+      }
+
+      // 마감 제외 — is_closed=true 인 이벤트 숨김 (null/false=미마감은 표시)
+      if (excludeClosed) {
+        query = query.or('is_closed.is.null,is_closed.eq.false')
       }
 
       // 날짜 필터
@@ -122,7 +127,7 @@ export function useEvents() {
     } finally {
       setLoading(false)
     }
-  }, [regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, myAge, myGender])
+  }, [regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, myGender])
 
   useEffect(() => {
     fetchEvents()
