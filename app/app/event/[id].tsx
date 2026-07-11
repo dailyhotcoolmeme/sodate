@@ -211,9 +211,6 @@ export default function EventDetailScreen() {
       gap: 3,
       marginTop: 8,
       paddingVertical: 9,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.border,
     },
     descMoreText: { fontSize: 13, fontWeight: '700', color: colors.primary },
     ctaBtn: {
