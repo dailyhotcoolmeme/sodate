@@ -21,8 +21,10 @@ export function useEvents() {
       let query = supabase
         .from('events')
         // 피드는 companies.name만 사용 → 조인 최소화(불필요한 description 등 미포함, 페이로드↓)
-        .select('*, companies(id, name, slug)')
+        // companies!inner + app_visible: 앱 숨김 처리한 업체(admin 토글)의 이벤트는 완전 제외
+        .select('*, companies!inner(id, name, slug)')
         .eq('is_active', true)
+        .eq('companies.app_visible', true)
         // 마감(is_closed) 이벤트도 목록엔 노출 — 카드에서 흐림+마감 배지 처리
         .gte('event_date', new Date().toISOString())
         // 당일 ~ +1달 하드 상한: 1달 넘는 미래 이벤트는 항상 제외 (매일 자동 롤링)

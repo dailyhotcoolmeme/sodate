@@ -24,10 +24,12 @@ export function useCompanies(): CompanyOption[] {
     })
     // 2) DB 최신 조회 → 갱신 + 캐시 저장
     ;(async () => {
+      // companies!inner + app_visible: 앱 숨김 업체는 필터 칩에도 안 나오게 제외
       const { data } = await supabase
         .from('events')
-        .select('company_id, companies(name)')
+        .select('company_id, companies!inner(name)')
         .eq('is_active', true)
+        .eq('companies.app_visible', true)
         .gte('event_date', new Date().toISOString())
       if (!alive || !data) return
       const counts: Record<string, { name: string; n: number }> = {}

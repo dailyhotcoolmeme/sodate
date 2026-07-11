@@ -7,6 +7,7 @@ interface Company {
   id: string; name: string; slug: string; base_url: string
   crawl_type: string; is_active: boolean; plan: string
   regions: string[]; created_at: string
+  app_visible: boolean // 앱 노출 여부(false=모임리스트·필터칩에서 완전 숨김)
 }
 
 const PLAN_LABELS: Record<string, string> = { free: '무료', basic: '베이직', pro: '프로' }
@@ -36,6 +37,12 @@ export default function Companies() {
   async function updatePlan(id: string, plan: string) {
     await supabase.from('companies').update({ plan }).eq('id', id)
     setCompanies((prev) => prev.map((c) => c.id === id ? { ...c, plan } : c))
+  }
+
+  // 앱 노출 토글 — off면 앱 모임리스트·필터칩에서 완전히 사라짐(크롤링과 무관)
+  async function toggleAppVisible(id: string, current: boolean) {
+    await supabase.from('companies').update({ app_visible: !current }).eq('id', id)
+    setCompanies((prev) => prev.map((c) => c.id === id ? { ...c, app_visible: !current } : c))
   }
 
   const expandedCompany = companies.find((c) => c.id === expanded) ?? null
@@ -69,6 +76,7 @@ export default function Companies() {
                   <th className="px-4 py-3 text-left font-medium">지역</th>
                   <th className="px-4 py-3 text-center font-medium">플랜</th>
                   <th className="px-4 py-3 text-center font-medium">크롤링</th>
+                  <th className="px-4 py-3 text-center font-medium">앱 노출</th>
                 </tr>
               </thead>
               <tbody>
@@ -102,6 +110,16 @@ export default function Companies() {
                     <td className="px-4 py-3 text-center">
                       <button onClick={() => toggleActive(c.id, c.is_active)}>
                         {c.is_active
+                          ? <ToggleRight size={22} className="text-green-500 mx-auto" />
+                          : <ToggleLeft size={22} className="text-gray-300 mx-auto" />}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => toggleAppVisible(c.id, c.app_visible)}
+                        title={c.app_visible ? '앱에 노출 중 — 끄면 모임리스트·필터에서 숨김' : '앱에서 숨김 — 켜면 노출'}
+                      >
+                        {c.app_visible
                           ? <ToggleRight size={22} className="text-green-500 mx-auto" />
                           : <ToggleLeft size={22} className="text-gray-300 mx-auto" />}
                       </button>
