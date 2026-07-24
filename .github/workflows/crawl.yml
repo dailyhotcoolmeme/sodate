@@ -70,6 +70,18 @@ jobs:
           python qa_validator.py
         continue-on-error: true   # WARN만 있을 때 전체 워크플로우 중단 방지
 
+      - name: QA — 가격 정확도 점검 (price_detail 유령필드 재발 방지)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODPARTY_ID: ${{ secrets.MODPARTY_ID }}
+          MODPARTY_PW: ${{ secrets.MODPARTY_PW }}
+        run: |
+          cd crawler
+          python price_accuracy_check.py
+        continue-on-error: true   # 불일치 있어도 크롤 자체는 막지 않음, Actions 로그에 가시화만
+        timeout-minutes: 8        # 스크래퍼 하나가 멈춰도 이 step만 취소되고 나머지 워크플로우는 계속
+
       - name: Process push queue (send notifications)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
