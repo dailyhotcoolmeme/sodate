@@ -309,17 +309,23 @@ class LovecastingScraper(BaseScraper):
 
     def _fetch_thumbnail(self, url: str) -> Optional[str]:
         """페이지에서 썸네일 이미지 URL 추출"""
-        thumb, _, _, _, _ = self._fetch_page_info(url)
+        thumb, _, _, _, _, _ = self._fetch_page_info(url)
         return thumb
 
     def _fetch_page_info(self, url: str) -> tuple:
-        """한 번의 fetch로 썸네일+가격+나이 추출.
-        반환: (thumbnail_url, price_male, price_female, age_range_min, age_range_max)."""
+        """한 번의 fetch로 썸네일+가격+나이+지역 추출.
+        반환: (thumbnail_url, price_male, price_female, age_range_min, age_range_max, region_phrase).
+
+        ⚠️(2026-07-25 발견) 상세페이지는 '장소'/'위치' 라벨과 값이 표 형태로 서로
+        다른 줄에 있어("장소" 다음줄 "[삼성역] 카페머머") resolve_region의 '같은 줄'
+        정규식이 못 잡음. 게다가 URL슬러그 폴백 경로는 title/slug만 넘겨 애초에
+        지역정보 자체가 없는 텍스트로 판단해 전부 '기타'로 떨어지고 있었음."""
         thumb: Optional[str] = None
         price_male: Optional[int] = None
         price_female: Optional[int] = None
         age_range_min: Optional[int] = None
         age_range_max: Optional[int] = None
+        region_phrase: Optional[str] = None
         try:
             resp = httpx.get(url, timeout=10, follow_redirects=True,
                              headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'})
@@ -371,9 +377,25 @@ class LovecastingScraper(BaseScraper):
                 if m_age_female:
                     age_range_min = int(m_age_female.group(1))
                     age_range_max = int(m_age_female.group(2))
+            # 지역 — '장소'/'위치' 라벨 다음 줄(표 레이아웃이라 같은 줄이 아님).
+            # '장소'엔 보통 '[역명] 상호'(역명만 지역으로 씀), '위치'엔 구/도로명주소.
+            lines = [ln.strip() for ln in text.split('\n') if ln.strip()]
+            for label in ('장소', '위치'):
+                try:
+                    i = lines.index(label)
+                except ValueError:
+                    continue
+                if i + 1 >= len(lines):
+                    continue
+                candidate = lines[i + 1]
+                if not candidate or candidate == '|':
+                    continue
+                bracket_m = re.search(r'\[([^\]]+)\]', candidate)
+                region_phrase = bracket_m.group(1) if bracket_m else candidate
+                break
         except Exception:
             pass
-        return thumb, price_male, price_female, age_range_min, age_range_max
+        return thumb, price_male, price_female, age_range_min, age_range_max, region_phrase
 
     def _event_from_url(self, title: str, url: str) -> Optional[EventModel]:
         """URL 슬러그에서 날짜 추출. 예: /26-03-21-커피/ → 2026-03-21"""
@@ -394,10 +416,9 @@ class LovecastingScraper(BaseScraper):
                     event_date = datetime(year, mo, d, hh, 0)
                     if event_date < datetime.now():
                         return None
-                    # 지역 (슬러그/제목에서 장소명 스캔)
-                    region = resolve_region(title=title, body=slug)
-                    # 썸네일 + 가격 + 나이 fetch
-                    thumbnail_url, price_male, price_female, age_range_min, age_range_max = self._fetch_page_info(url)
+                    # 썸네일 + 가격 + 나이 + 지역 fetch(장소/위치 라벨 최우선)
+                    thumbnail_url, price_male, price_female, age_range_min, age_range_max, region_phrase = self._fetch_page_info(url)
+                    region = resolve_region(title=title, body=slug, region_phrase=region_phrase)
                     age_disp = (
                         f'{age_range_min}~{age_range_max}'
                         if age_range_min is not None and age_range_max is not None else None
@@ -441,10 +462,8 @@ class LovecastingScraper(BaseScraper):
         except ValueError:
             return None
 
-        # 지역 (슬러그/제목에서 장소명 스캔)
-        region = resolve_region(title=title, body=slug)
-
-        thumbnail_url, price_male, price_female, age_range_min, age_range_max = self._fetch_page_info(url)
+        thumbnail_url, price_male, price_female, age_range_min, age_range_max, region_phrase = self._fetch_page_info(url)
+        region = resolve_region(title=title, body=slug, region_phrase=region_phrase)
         age_disp = (
             f'{age_range_min}~{age_range_max}'
             if age_range_min is not None and age_range_max is not None else None
