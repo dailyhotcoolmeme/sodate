@@ -195,6 +195,22 @@ def refresh(slugs=None, days=None):
                     sm = upd.get('seats_left_male', e['seats_left_male'])
                     sf = upd.get('seats_left_female', e['seats_left_female'])
                     upd['is_closed'] = bool(e['is_closed']) or (sm == 0 and sf == 0)
+                    # ⚠️ 앱(PriceTierValue)은 price_detail(정가/얼리버드 티어)이 있으면
+                    # price_male/female보다 그걸 우선 표시한다. price_detail은 원래
+                    # discover_candidates.py 전체크롤 때만 채워져 이 15분 경량갱신과
+                    # 따로 놀아 며칠씩 정가가 안 맞는 채로 화면에 나오던 근본원인이었음.
+                    # 매 위젯 조회 때 티어를 다시 뽑아 price_detail도 항상 같이 최신화한다
+                    # (더 이상 유효한 티어가 없으면 None으로 지워 price_male로 자연스럽게 폴백).
+                    mt, ft = gd.get('male_tiers'), gd.get('female_tiers')
+                    if mt or ft:
+                        detail = {}
+                        if mt:
+                            detail['male'] = mt
+                        if ft:
+                            detail['female'] = ft
+                        upd['price_detail'] = detail
+                    elif 'male_tiers' in gd or 'female_tiers' in gd:
+                        upd['price_detail'] = None
                     if upd:
                         sb.table('events').update(upd).eq('id', e['id']).execute()
                         updated += 1

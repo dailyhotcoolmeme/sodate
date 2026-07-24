@@ -65,6 +65,32 @@ def _is_base(label: str) -> bool:
     return not any(k in label for k in _PROMO)
 
 
+def _tier_detail(tickets: list) -> Optional[dict]:
+    """tickets=[(label, price, soldout)] → {'regular':P,'regular_soldout':B,
+    'earlybird':P,'earlybird_soldout':B}(얼리버드 없으면 그 키 생략) 또는 None.
+    앱 PriceTierValue가 price_male/female보다 이 값을 우선 표시하므로, 위젯을 다시
+    불러올 때마다 이것도 같이 최신화해야 앱에 실제 가격이 반영된다."""
+    tickets = [(l, p, s) for (l, p, s) in tickets if p is not None]
+    if not tickets:
+        return None
+    base = [(l, p, s) for (l, p, s) in tickets if _is_base(l)]
+    early = [(l, p, s) for (l, p, s) in tickets if '얼리버드' in l or '얼리 버드' in l]
+    out: dict = {}
+    if base:
+        avail = [p for l, p, s in base if not s]
+        if avail:
+            out['regular'] = min(avail); out['regular_soldout'] = False
+        else:
+            out['regular'] = min(p for l, p, s in base); out['regular_soldout'] = True
+    if early:
+        avail = [p for l, p, s in early if not s]
+        if avail:
+            out['earlybird'] = min(avail); out['earlybird_soldout'] = False
+        else:
+            out['earlybird'] = min(p for l, p, s in early); out['earlybird_soldout'] = True
+    return out or None
+
+
 def _aggregate_base(tickets: list) -> Optional[tuple]:
     """tickets=[(label, price, soldout)] → (price, soldout) 또는 None(옵션없음).
     표시가 = **일반가**(특가/선착순/할인/동반/얼리버드/패키지 제외) 우선.
@@ -198,7 +224,10 @@ def gender_soldout_by_label(page, idx: str, body_prefix: str = '',
                     male.append(rec)
                 elif '여성' in t:
                     female.append(rec)
-            entry = {'male': _aggregate_base(male), 'female': _aggregate_base(female)}
+            entry = {
+                'male': _aggregate_base(male), 'female': _aggregate_base(female),
+                'male_tiers': _tier_detail(male), 'female_tiers': _tier_detail(female),
+            }
             if entry['male'] or entry['female']:
                 out[lab1] = entry
         return out
