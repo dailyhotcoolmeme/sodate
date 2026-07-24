@@ -353,13 +353,26 @@ def _munto_common_age(text: str, cur_year: int) -> Optional[tuple]:
         lo, hi = _to_age_range(a, b, born, cur_year)
         if 17 <= lo <= 60 and 17 <= hi <= 60:
             return ('range', lo, hi)
+    # ⚠️(2026-07-25) '모집 나이:' 라벨 없이 "남성, 여성 : 90-99년생"처럼 그냥 년생
+    # 범위만 적힌 경우가 많아(213건 확대 후 다수 발견) 낮은 우선순위 폴백으로 추가.
+    m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년\s*생', text)
+    if m:
+        lo, hi = _to_age_range(int(m.group(1)), int(m.group(2)), True, cur_year)
+        if 17 <= lo <= 60 and 17 <= hi <= 60:
+            return ('range', lo, hi)
     return None
 
 
 def _munto_title_age(name: str, cur_year: int) -> Optional[tuple[int, int]]:
-    """제목의 명시 나이(마지막 fallback). '(89-96년생)'·'37-45세'·'28-37' → (lo,hi) 만나이."""
+    """제목의 명시 나이(마지막 fallback). '(89-96년생)'·'37-45세'·'28-37'·'[90-02]' → (lo,hi) 만나이."""
     t = re.sub(r'[～〜∼]', '~', name)
     m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년', t)  # 년생 표기 우선
+    if m:
+        lo, hi = _to_age_range(int(m.group(1)), int(m.group(2)), True, cur_year)
+        if 17 <= lo <= 60 and 17 <= hi <= 60:
+            return (lo, hi)
+    # 대괄호 안 'NN-NN'(예: '[90-02]')는 표기 관례상 년생 범위
+    m = re.search(r'\[\s*(\d{2})\s*[-~]\s*(\d{2})\s*\]', t)
     if m:
         lo, hi = _to_age_range(int(m.group(1)), int(m.group(2)), True, cur_year)
         if 17 <= lo <= 60 and 17 <= hi <= 60:

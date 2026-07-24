@@ -25,9 +25,14 @@ from models.event import EventModel
 from utils.security import sanitize_text
 from utils.date_filter import is_within_one_month
 from utils.region import resolve_region
+from utils.imweb_options import gender_soldout_loco
 
 
 class LovecommunityLoco(BaseScraper):
+    # 상품 본문에서 가격을 직접 뽑음 → DB 기록.
+    # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행)
+    WRITES_PRICE = True
+
     BASE_URL = 'https://lovecommunity.imweb.me'
     SHOP_LIST_URL = 'https://lovecommunity.imweb.me/party'
 
@@ -98,8 +103,17 @@ class LovecommunityLoco(BaseScraper):
                             page.wait_for_load_state('domcontentloaded', timeout=10000)
                             time.sleep(1.5)
 
+                        # 예약위젯(load_option.cm)에서 실제 가격 조회.
+                        # ⚠️(2026-07-25 발견) 정적페이지 텍스트엔 진짜 가격이 없어(JS위젯
+                        # 전용) price가 항상 None으로 저장돼 admin '해야할것'에 쌓이던 버그.
+                        try:
+                            widget = gender_soldout_loco(page, idx)
+                        except Exception as e:
+                            self.logger.warning(f'Loco idx={idx} 위젯 가격 조회 실패: {e}')
+                            widget = {}
+
                         soup = BeautifulSoup(page.content(), 'html.parser')
-                        new_events = self._parse_product_page(soup, idx)
+                        new_events = self._parse_product_page(soup, idx, widget)
                         events.extend(new_events)
                         self.logger.info(f'Loco idx={idx}: {len(new_events)}개 이벤트 파싱')
                     except Exception as e:
@@ -155,7 +169,7 @@ class LovecommunityLoco(BaseScraper):
 
         return idxs
 
-    def _parse_product_page(self, soup: BeautifulSoup, idx: str) -> list[EventModel]:
+    def _parse_product_page(self, soup: BeautifulSoup, idx: str, widget: Optional[dict] = None) -> list[EventModel]:
         """
         상세 페이지 파싱.
         본문 텍스트에서 날짜별 파티 현황(참가자 목록)을 추출합니다.
@@ -401,14 +415,23 @@ class LovecommunityLoco(BaseScraper):
                 )
                 title = sanitize_text(f'[로꼬] {title_line}', 80) or '[로꼬] 와인파티'
 
+                # 예약위젯 가격이 있으면 정본으로 override(정적텍스트엔 진짜가격 없음)
+                ev_price_male, ev_price_female = price_male, price_female
+                wgd = (widget or {}).get((mo, d))
+                if wgd:
+                    if wgd.get('male'):
+                        ev_price_male = wgd['male'][0]
+                    if wgd.get('female'):
+                        ev_price_female = wgd['female'][0]
+
                 try:
                     events.append(EventModel(
                         title=title,
                         event_date=event_date,
                         location_region=region,
                         location_detail=None,
-                        price_male=price_male,
-                        price_female=price_female,
+                        price_male=ev_price_male,
+                        price_female=ev_price_female,
                         gender_ratio=None,
                         source_url=source_url,
                         thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
@@ -416,6 +439,8 @@ class LovecommunityLoco(BaseScraper):
                         age_range_min=age_min,
                         age_range_max=age_max,
                         age_group_label=age_group_label,
+                        age_male=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
+                        age_female=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
                         seats_left_male=seats_left_male if seats_left_male > 0 else None,
                         seats_left_female=seats_left_female if seats_left_female > 0 else None,
                         participant_stats=participant_stats,
@@ -431,7 +456,7 @@ class LovecommunityLoco(BaseScraper):
             events = self._parse_product_page_fallback(
                 soup, idx, title_line, thumbnail_url, region,
                 age_min, age_max, age_group_label, price_male, price_female,
-                text, current_year, now,
+                text, current_year, now, widget,
             )
 
         return events
@@ -487,11 +512,13 @@ class LovecommunityLoco(BaseScraper):
         text: str,
         current_year: int,
         now: datetime,
+        widget: Optional[dict] = None,
     ) -> list[EventModel]:
         """
         날짜별 참가자 현황 블록이 없는 경우의 fallback 파싱.
         날짜 패턴만 찾아 기본 이벤트를 생성합니다.
         """
+        widget = widget or {}
         events: list[EventModel] = []
         seen_dates: set[str] = set()
 
@@ -550,14 +577,23 @@ class LovecommunityLoco(BaseScraper):
             )
             title = sanitize_text(f'[로꼬] {title_line}', 80) or '[로꼬] 와인파티'
 
+            # 예약위젯 가격이 있으면 정본으로 override(정적텍스트엔 진짜가격 없음)
+            ev_price_male, ev_price_female = price_male, price_female
+            wgd = (widget or {}).get((mo, d))
+            if wgd:
+                if wgd.get('male'):
+                    ev_price_male = wgd['male'][0]
+                if wgd.get('female'):
+                    ev_price_female = wgd['female'][0]
+
             try:
                 events.append(EventModel(
                     title=title,
                     event_date=event_date,
                     location_region=region,
                     location_detail=None,
-                    price_male=price_male,
-                    price_female=price_female,
+                    price_male=ev_price_male,
+                    price_female=ev_price_female,
                     gender_ratio=None,
                     source_url=source_url,
                     thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
@@ -565,6 +601,8 @@ class LovecommunityLoco(BaseScraper):
                     age_range_min=age_min,
                     age_range_max=age_max,
                     age_group_label=age_group_label,
+                    age_male=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
+                    age_female=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
                     seats_left_male=None,
                     seats_left_female=None,
                     participant_stats=None,

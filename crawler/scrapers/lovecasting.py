@@ -17,6 +17,10 @@ from utils.region import resolve_region
 
 
 class LovecastingScraper(BaseScraper):
+    # 상품 본문에서 가격을 직접 뽑음 → DB 기록.
+    # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행)
+    WRITES_PRICE = True
+
     BASE_URL = 'https://lovecasting.co.kr'
     SCHEDULE_URLS = [
         'https://lovecasting.co.kr/커피미팅/',
@@ -293,6 +297,8 @@ class LovecastingScraper(BaseScraper):
                     seats_left_female=None,
                     age_range_min=age_range_min,
                     age_range_max=age_range_max,
+                    age_male=(f'{age_range_min}~{age_range_max}' if age_range_min is not None and age_range_max is not None else None),
+                    age_female=(f'{age_range_min}~{age_range_max}' if age_range_min is not None and age_range_max is not None else None),
                     participant_stats={'total_applicants': total_applicants} if total_applicants else None,
                 ))
             except Exception:
@@ -302,14 +308,17 @@ class LovecastingScraper(BaseScraper):
 
     def _fetch_thumbnail(self, url: str) -> Optional[str]:
         """페이지에서 썸네일 이미지 URL 추출"""
-        thumb, _, _ = self._fetch_page_info(url)
+        thumb, _, _, _, _ = self._fetch_page_info(url)
         return thumb
 
     def _fetch_page_info(self, url: str) -> tuple:
-        """한 번의 fetch로 썸네일 + 가격 추출. 반환: (thumbnail_url, price_male, price_female)"""
+        """한 번의 fetch로 썸네일+가격+나이 추출.
+        반환: (thumbnail_url, price_male, price_female, age_range_min, age_range_max)."""
         thumb: Optional[str] = None
         price_male: Optional[int] = None
         price_female: Optional[int] = None
+        age_range_min: Optional[int] = None
+        age_range_max: Optional[int] = None
         try:
             resp = httpx.get(url, timeout=10, follow_redirects=True,
                              headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'})
@@ -350,9 +359,20 @@ class LovecastingScraper(BaseScraper):
                         elif price_female is None:
                             price_female = val
                             break
+            # 나이(같은 fetch 재사용 — 2026-07-25: URL슬러그 폴백 경로가 이 페이지를
+            # 이미 방문하고도 나이를 안 뽑아 admin '해야할것'에 쌓이던 것 수정)
+            m_age_male = self.AGE_RANGE_MALE_RE.search(text)
+            if m_age_male:
+                age_range_min = int(m_age_male.group(1))
+                age_range_max = int(m_age_male.group(2))
+            else:
+                m_age_female = self.AGE_RANGE_FEMALE_RE.search(text)
+                if m_age_female:
+                    age_range_min = int(m_age_female.group(1))
+                    age_range_max = int(m_age_female.group(2))
         except Exception:
             pass
-        return thumb, price_male, price_female
+        return thumb, price_male, price_female, age_range_min, age_range_max
 
     def _event_from_url(self, title: str, url: str) -> Optional[EventModel]:
         """URL 슬러그에서 날짜 추출. 예: /26-03-21-커피/ → 2026-03-21"""
@@ -375,8 +395,12 @@ class LovecastingScraper(BaseScraper):
                         return None
                     # 지역 (슬러그/제목에서 장소명 스캔)
                     region = resolve_region(title=title, body=slug)
-                    # 썸네일 + 가격 fetch
-                    thumbnail_url, price_male, price_female = self._fetch_page_info(url)
+                    # 썸네일 + 가격 + 나이 fetch
+                    thumbnail_url, price_male, price_female, age_range_min, age_range_max = self._fetch_page_info(url)
+                    age_disp = (
+                        f'{age_range_min}~{age_range_max}'
+                        if age_range_min is not None and age_range_max is not None else None
+                    )
                     ev_title = sanitize_text(f'[러브캐스팅] {title or slug}', 80)
                     return EventModel(
                         title=ev_title,
@@ -391,6 +415,10 @@ class LovecastingScraper(BaseScraper):
                         theme=['일반'],
                         seats_left_male=None,
                         seats_left_female=None,
+                        age_range_min=age_range_min,
+                        age_range_max=age_range_max,
+                        age_male=age_disp,
+                        age_female=age_disp,
                     )
                 except ValueError:
                     pass
@@ -415,7 +443,11 @@ class LovecastingScraper(BaseScraper):
         # 지역 (슬러그/제목에서 장소명 스캔)
         region = resolve_region(title=title, body=slug)
 
-        thumbnail_url, price_male, price_female = self._fetch_page_info(url)
+        thumbnail_url, price_male, price_female, age_range_min, age_range_max = self._fetch_page_info(url)
+        age_disp = (
+            f'{age_range_min}~{age_range_max}'
+            if age_range_min is not None and age_range_max is not None else None
+        )
         return EventModel(
             title=sanitize_text(f'[러브캐스팅] {title or slug}', 80),
             event_date=event_date,
@@ -429,6 +461,10 @@ class LovecastingScraper(BaseScraper):
             theme=['일반'],
             seats_left_male=None,
             seats_left_female=None,
+            age_range_min=age_range_min,
+            age_range_max=age_range_max,
+            age_male=age_disp,
+            age_female=age_disp,
         )
 
     def _collect_links_static(self, category_url: str) -> list[tuple[str, str]]:
@@ -649,6 +685,8 @@ class LovecastingScraper(BaseScraper):
                     seats_left_female=seats_left_female,
                     age_range_min=age_range_min,
                     age_range_max=age_range_max,
+                    age_male=(f'{age_range_min}~{age_range_max}' if age_range_min is not None and age_range_max is not None else None),
+                    age_female=(f'{age_range_min}~{age_range_max}' if age_range_min is not None and age_range_max is not None else None),
                 ))
             except (ValueError, IndexError):
                 continue

@@ -15,6 +15,11 @@ from utils.region import resolve_region
 
 
 class YeongyulScraper(BaseScraper):
+    # 업체 공식 게시글에서 가격·나이를 직접 뽑음 → DB 기록.
+    # (2026-07-25 발견: 이 플래그가 없어 scrape()가 가격을 정확히 뽑고도
+    #  base_scraper가 매번 upsert에서 벗겨내 admin에 전부 '해야할것'으로 뜸)
+    WRITES_PRICE = True
+
     BASE_URL = 'https://yeongyul.com'
     LIST_URL = 'https://yeongyul.com/ab-1131'
 
@@ -292,6 +297,13 @@ class YeongyulScraper(BaseScraper):
             if age_range_max is None:
                 age_range_max = listing_meta.get('age_range_max')
 
+        # 나이 표시 문자열(앱/admin이 age_range_min/max가 아니라 이걸 봄). 괜찮소는
+        # 남녀 공통 나이대만 있어 남=여 동일.
+        age_disp = (
+            f'{age_range_min}~{age_range_max}'
+            if age_range_min is not None and age_range_max is not None else None
+        )
+
         # 신청자 현황 테이블 파싱 → participant_stats
         participant_stats = self._parse_participant_stats(soup, full_text)
 
@@ -328,6 +340,8 @@ class YeongyulScraper(BaseScraper):
                 seats_left_female=None,
                 age_range_min=age_range_min,
                 age_range_max=age_range_max,
+                age_male=age_disp,
+                age_female=age_disp,
                 participant_stats=participant_stats,
             )
         except Exception:

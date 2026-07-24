@@ -181,6 +181,9 @@ query GetSchedules($productId: ID!, $yearMonth: String) {
 class FripScraper(BaseScraper):
     # frip API(GetSelectItems)가 성별 잔여석/오픈여부(0=마감) 제공 → DB 기록(마감 신선화)
     WRITES_SEATS = True
+    # GraphQL(GetSelectItems)에서 가격도 직접 뽑음 → DB 기록.
+    # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행 다수)
+    WRITES_PRICE = True
 
     def __init__(self):
         super().__init__('frip')

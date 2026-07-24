@@ -22,6 +22,9 @@ class TalkblossomScraper(BaseScraper):
 
     # Cafe24 option_stock_data의 stock_number(성별 잔여석)를 DB 기록
     WRITES_SEATS = True
+    # 상품페이지에서 가격을 직접 뽑음 → DB 기록.
+    # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행)
+    WRITES_PRICE = True
     SCHEDULE_URL = (
         'https://talkblossom.co.kr/category/'
         '%EB%A1%9C%ED%85%8C%EC%9D%B4%EC%85%98-%EC%86%8C%EA%B0%9C%ED%8C%85/42/'
@@ -553,6 +556,14 @@ class TalkblossomScraper(BaseScraper):
                         age_group_label=age_group_label,
                         age_range_min=age_range_min_opt,
                         age_range_max=age_range_max_opt,
+                        age_male=(
+                            f'{age_range_min_opt}~{age_range_max_opt}'
+                            if age_range_min_opt is not None and age_range_max_opt is not None else None
+                        ),
+                        age_female=(
+                            f'{age_range_min_opt}~{age_range_max_opt}'
+                            if age_range_min_opt is not None and age_range_max_opt is not None else None
+                        ),
                         participant_stats=participant_stats,
                     ))
                 except Exception:
@@ -593,11 +604,21 @@ class TalkblossomScraper(BaseScraper):
                     body=content,
                 )
 
-                # 나이대 라벨: "99-86년생(25-38세)" 패턴
+                # 나이대 라벨: "99-86년생(25-38세)" 패턴. 괄호 안 만나이가 있으면
+                # age_male/female(admin·앱 표시용)도 같이 채움.
                 age_group_label = None
-                age_m = re.search(r'(\d{2}-\d{2}년생(?:\(\d{2}-\d{2}세\))?)', title_text + content[:500])
+                age_range_min_fb = None
+                age_range_max_fb = None
+                age_m = re.search(r'(\d{2}-\d{2}년생(?:\((\d{2})-(\d{2})세\))?)', title_text + content[:500])
                 if age_m:
                     age_group_label = age_m.group(1)
+                    if age_m.group(2) and age_m.group(3):
+                        a, b = int(age_m.group(2)), int(age_m.group(3))
+                        age_range_min_fb, age_range_max_fb = min(a, b), max(a, b)
+                age_disp_fb = (
+                    f'{age_range_min_fb}~{age_range_max_fb}'
+                    if age_range_min_fb is not None and age_range_max_fb is not None else None
+                )
 
                 unique_url = f"{source_url}#evt={event_date.strftime('%Y%m%d%H%M')}"
                 events.append(EventModel(
@@ -615,6 +636,10 @@ class TalkblossomScraper(BaseScraper):
                     seats_left_male=None,
                     seats_left_female=None,
                     age_group_label=age_group_label,
+                    age_range_min=age_range_min_fb,
+                    age_range_max=age_range_max_fb,
+                    age_male=age_disp_fb,
+                    age_female=age_disp_fb,
                 ))
             except (ValueError, IndexError):
                 continue
