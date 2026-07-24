@@ -378,10 +378,14 @@ def _munto_title_age(name: str, cur_year: int) -> Optional[tuple[int, int]]:
         lo, hi = _to_age_range(int(m.group(1)), int(m.group(2)), True, cur_year)
         if 17 <= lo <= 60 and 17 <= hi <= 60:
             return (lo, hi)
-    m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*세?', t)
+    m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*(세)?', t)
     if m:
         a, b = int(m.group(1)), int(m.group(2))
-        lo, hi = (a, b) if a <= b else (b, a)
+        # '세' 없이 두 수 다 55↑/16↓면 나이가 아니라 년생 표기(예: '❤️86-98❤️') → 만나이로 환산.
+        if not m.group(3) and (min(a, b) <= 16 or max(a, b) >= 55):
+            lo, hi = _to_age_range(a, b, True, cur_year)
+        else:
+            lo, hi = (a, b) if a <= b else (b, a)
         if 17 <= lo <= 60 and 17 <= hi <= 60:
             return (lo, hi)
     return None
@@ -539,8 +543,9 @@ class MuntoScraper(BaseScraper):
                             continue
 
                         # 가격 (단일 가격 — 남녀 구분 없음)
+                        # price=0(무료)도 유효값 — falsy 체크로 걸러지면 무료행사가 '가격없음'으로 잘못 표시됨.
                         price = detail.get('price')
-                        price_male = int(price) if price else None
+                        price_male = int(price) if price is not None else None
                         price_female = price_male  # 문토는 남녀 동일가격
 
                         # 지역
@@ -560,11 +565,15 @@ class MuntoScraper(BaseScraper):
                         thumbnails = [u for u in covers if u and not u.endswith('.svg')][:5]
 
                         # 나이 — 문토는 성별로 다름(남/여 각각 만나이). 라벨>인라인>공통>제목 순.
-                        # 한쪽경계는 'N세~'(하한)/'~N세'(상한), 무제한은 '제한 없음'. 텍스트 없으면 공란.
-                        # 본문(성별/공통) → 제목 순. 근거 없으면 공란(None). API min/max는 신뢰 안 함(오너 확정).
+                        # 한쪽경계는 'N세~'(하한)/'~N세'(상한), 무제한은 '제한 없음'. 본문(성별/공통) → 제목 순.
+                        # API min/max는 신뢰 안 함(오너 확정). 그래도 못 찾으면(사이트에 나이 표기 자체가
+                        # 없는 경우) '2030' 표시(오너 확정 2026-07-25: 문토 로테이션소개팅은 나이 미표기시
+                        # 2030세대가 주 대상이라 안내용으로 채움 — 필터용 age_range_min/max는 건드리지 않음).
                         introduce = detail.get('introduce', '') or ''
                         age_male_disp, age_female_disp, age_range_min, age_range_max, _agenote = \
                             _munto_resolve_ages(name, introduce, now_kst.year)
+                        if age_male_disp is None and age_female_disp is None:
+                            age_male_disp = age_female_disp = '2030'
                         age_group_label = None
 
                         # 참가자 현황
