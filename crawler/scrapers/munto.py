@@ -201,7 +201,8 @@ def _extract_region(text: str, location_field: str = '') -> str:
     for r in REGION_KW:
         if r in combined:
             return r
-    return location_field.split()[0] if location_field else '서울'
+    # location_field 자체가 비어 있으면 지역 정보가 없는 것 — '서울'로 추측하지 말고 '기타'.
+    return location_field.split()[0] if location_field else '기타'
 
 
 def _build_participant_stats(

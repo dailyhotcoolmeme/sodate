@@ -557,8 +557,12 @@ class ModpartyScraper(BaseScraper):
                 continue
 
             scan = ' '.join([title_line, text, desc])
-            # 지역: 제목의 지명 우선(모드파티 제목엔 지역 확실). 없으면 공용 해석기(본문 노이즈 배제 위해 제목만)
-            region = self._region_from_title(title_line) or resolve_region(title=title_line)
+            # 지역: 제목의 지명 우선(모드파티 제목엔 지역 확실). 없으면 상세페이지 "📍 장소"(location_detail)
+            # 나 본문에서 공용 해석기로 재시도(2026-07-25: idx=354처럼 제목엔 지역이 없어도
+            # 예약 캘린더 섹션의 "📍 강남역 알베르"엔 있는 케이스가 있어 '기타'로 새던 것 수정).
+            region = self._region_from_title(title_line) or resolve_region(
+                title=title_line, location_detail=data.get('location_detail'), body=detail_text,
+            )
 
             # 나이: 메인 이미지 OCR(남/여 년생) → 만나이 문자열로 저장(출생년도는 앱/admin이 역산 표시).
             _, _, band_label = self._parse_age_group(scan)
