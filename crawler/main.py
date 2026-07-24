@@ -49,13 +49,12 @@ SCRAPERS = [
     LovecommunityLoco,
 ]
 
-# discover_candidates.py가 가격/시간/나이/해시태그를 정확히 채우는 업체.
-# 옛 스크래퍼(main.py)가 이들을 건드리면 시간/가격을 잘못된 값으로 되돌리므로(revert) 스킵한다.
-# → 이 업체들은 discover_candidates.py가 전담(크론 연결 예정).
-DISCOVER_MANAGED = {
-    'emotional-orange', 'yeongyul', 'lovecasting', 'lovecommunity-loco', 'yeonin', 'talkblossom',
-    'frip',
-}
+# ⚠️(2026-07-24 오너 지적으로 폐기) discover_candidates.py 전담 방침이 있었으나
+# 그 스크립트는 어떤 워크플로우에도 스케줄된 적이 없어(1회성 수동 실행뿐) 여기 있던
+# 7개 업체가 17일 넘게 정기 크롤에서 완전히 빠진 채 방치됨(price_detail 유령필드와
+# 동일 패턴). 정규 스크래퍼(main.py)는 정상 동작 확인됨 — base_scraper.py가 None
+# 나이/가격을 upsert에서 걸러내 기존 값을 지우지 않으므로 되돌림 걱정 없이 재활성화.
+DISCOVER_MANAGED: set[str] = set()
 
 
 def run_all() -> int:

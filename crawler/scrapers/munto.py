@@ -458,11 +458,13 @@ class MuntoScraper(BaseScraper):
 
         try:
             with httpx.Client(headers=API_HEADERS, follow_redirects=True) as client:
-                # 연애·사랑 카테고리 소셜링 목록 (최대 30개)
+                # 연애·사랑 카테고리 소셜링 목록. ⚠️예전 limit=30은 인위적 상한이라
+                # 실제 활성 리스팅(235건 확인, 2026-07-24)의 앞 30개만 가져오고 나머지
+                # (및 거기 딸린 더 먼 미래 날짜)를 통째로 놓치고 있었음. 여유있게 상향.
                 list_data = _get(
                     client,
                     f'{MUNTO_API_BASE}/socialing/section',
-                    params={'type': 'default', 'categoryId': DATING_CATEGORY_ID, 'limit': 30}
+                    params={'type': 'default', 'categoryId': DATING_CATEGORY_ID, 'limit': 300}
                 )
                 if not list_data:
                     self.logger.error('문토 목록 API 응답 없음')
