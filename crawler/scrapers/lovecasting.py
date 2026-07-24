@@ -34,9 +34,10 @@ class LovecastingScraper(BaseScraper):
     # 남 35세~45세 55,000원 / 남자 55,000원 / 여 30세~40세 33,000원
     PRICE_MALE_RE = re.compile(r'남\s*[\d~\-세]*\s*(\d{2,3},\d{3})원|남자\s*(\d{2,3},\d{3})원')
     PRICE_FEMALE_RE = re.compile(r'여\s*[\d~\-세]*\s*(\d{2,3},\d{3})원|여자\s*(\d{2,3},\d{3})원')
-    # 나이대: "남 35세~45세" 또는 "남 35~45세" → min=35, max=45
-    AGE_RANGE_MALE_RE = re.compile(r'남\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
-    AGE_RANGE_FEMALE_RE = re.compile(r'여\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
+    # 나이대: "남 35세~45세"/"남 35~45세" 또는 실제 페이지에 흔한 기호 "♂ 35~45세"
+    # → min=35, max=45. (2026-07-25: ♂/♀ 기호 미대응으로 나이 매번 못 찾던 버그 수정)
+    AGE_RANGE_MALE_RE = re.compile(r'[남♂]\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
+    AGE_RANGE_FEMALE_RE = re.compile(r'[여♀]\s*(\d{2,3})\s*세?\s*[~\-～]\s*(\d{2,3})\s*세')
     # 신청자 수: "남성 현재 N명 신청 접수중"
     APPLICANTS_MALE_RE = re.compile(r'남성\s*현재\s*(\d+)\s*명\s*신청')
     APPLICANTS_FEMALE_RE = re.compile(r'여성\s*현재\s*(\d+)\s*명\s*신청')
