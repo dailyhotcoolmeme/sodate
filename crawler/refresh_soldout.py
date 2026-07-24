@@ -77,13 +77,19 @@ _EVT_RE = re.compile(r'#evt=(\d{12})')
 def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
     """스크래퍼 scrape() 결과로 기존 이벤트의 seats/is_closed만 갱신.
     매칭: #evt=YYYYMMDDHHMM(URL 형식 달라도 동일) 우선, 없으면 source_url 전체(괜찮소 등)."""
-    # DB 이벤트 인덱스 (#evt 시각 / 전체 URL)
+    # DB 이벤트 인덱스: 전체 URL(정확·우선) / #evt 시각(폴백, 상품ID 없어 여러 상품이
+    # 같은 날짜시간에 세션을 두면 충돌 — 충돌나면 모호하므로 evt단독매칭에서 제외해
+    # 엉뚱한 상품 행에 업데이트가 새는 것을 막는다(프립처럼 상품이 많으면 흔함).
     dbevs = sb.table('events').select('id,source_url').eq('company_id', cid).eq('is_active', True).execute().data
     by_evt, by_url = {}, {}
     for e in dbevs:
         m = _EVT_RE.search(e['source_url'] or '')
         if m:
-            by_evt[m.group(1)] = e['id']
+            key = m.group(1)
+            if key in by_evt and by_evt[key] != e['id']:
+                by_evt[key] = None  # 충돌 → 무효화
+            elif key not in by_evt:
+                by_evt[key] = e['id']
         by_url[e['source_url']] = e['id']
     try:
         evs = ScraperClass().scrape()
@@ -92,8 +98,10 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
         return 0
     updated = 0
     for ev in evs:
-        m = _EVT_RE.search(ev.source_url or '')
-        eid = (by_evt.get(m.group(1)) if m else None) or by_url.get(ev.source_url)
+        eid = by_url.get(ev.source_url)
+        if not eid:
+            m = _EVT_RE.search(ev.source_url or '')
+            eid = by_evt.get(m.group(1)) if m else None
         if not eid:
             continue
         d = ev.model_dump() if hasattr(ev, 'model_dump') else ev.__dict__

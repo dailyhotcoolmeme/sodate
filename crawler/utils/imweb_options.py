@@ -114,6 +114,11 @@ def gender_soldout_yeonin(page, idx: str, body_prefix: str = '') -> dict:
                     hh = int(dm.group(4)); mm = int(dm.group(5)) if dm.group(5) else 0
                     if dm.group(3) in ('오후', '저녁', '밤') and hh < 12:
                         hh += 12
+                    elif dm.group(3) is None and 1 <= hh <= 11:
+                        # 연인어때는 '4시30분'처럼 오전/오후 표기가 아예 없는 라벨이 있음.
+                        # 실측상 연인어때 세션은 전부 오후~밤(오전 세션 없음) → 오후로 간주.
+                        # (미변환 시 4시=새벽4시로 오인돼 refresh_soldout 매칭이 영구 실패)
+                        hh += 12
                     key = (mo, d, hh, mm)
                     out.setdefault(key, {'male': None, 'female': None})
                     out[key][gk] = (_price(t), '품절' in t or '마감' in t)
