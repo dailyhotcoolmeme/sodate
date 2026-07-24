@@ -10,6 +10,7 @@
 """
 import json
 import re
+import time
 from typing import Optional
 
 _FETCH_JS = """async (body) => {
@@ -24,18 +25,30 @@ _OC_RE = re.compile(r"changeCartSelectRequireOption\(\d+,'(O[0-9a-fA-F]+)','(O[0
 _PRICE_RE = re.compile(r'([1-9][\d,]{2,})\s*원')
 
 
-def _load_option(page, idx: str, sels: list, body_prefix: str = '') -> str:
+def _load_option(page, idx: str, sels: list, body_prefix: str = '', retries: int = 2) -> str:
+    """load_option.cm 호출. CI 환경에서 간헐적으로 fetch가 타임아웃·빈 응답을 주는 경우가
+    있어(예외 없이 빈 문자열만 나옴 → 호출부가 '옵션 없음=품절'로 오인해 며칠씩 가격이
+    안 갱신되는 문제 발생) 짧게 재시도한다."""
     body = f'{body_prefix}prod_idx={idx}'
     for i, (oc, vc, vn) in enumerate(sels):
         body += (f'&selected_require_options[{i}][value_type]=SELECT'
                  f'&selected_require_options[{i}][option_code]={oc}'
                  f'&selected_require_options[{i}][value_code]={vc}'
                  f'&selected_require_options[{i}][value_name]={vn}')
-    r = page.evaluate(_FETCH_JS, body)
-    try:
-        return json.loads(r).get('option_html', '') or ''
-    except Exception:
-        return r or ''
+    for attempt in range(retries + 1):
+        try:
+            r = page.evaluate(_FETCH_JS, body)
+        except Exception:
+            r = ''
+        try:
+            html = json.loads(r).get('option_html', '') or ''
+        except Exception:
+            html = r or ''
+        # 정상 응답은 보통 수백~수천자. 너무 짧으면 WAF/타임아웃성 빈 응답일 가능성 → 재시도.
+        if len(html) > 80 or attempt == retries:
+            return html
+        time.sleep(0.8)
+    return ''
 
 
 def _price(text: str) -> Optional[int]:

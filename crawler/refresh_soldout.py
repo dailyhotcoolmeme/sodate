@@ -152,6 +152,22 @@ def refresh(slugs=None, days=None):
                     print(f'[{slug}] idx={idx} 위젯 실패: {str(e)[:60]}')
                     continue
                 if not norm:
+                    # 옵션이 비어있는 두 경우: ①상품 자체가 완전 품절/비활성(정상) ②CI환경
+                    # 일시적 fetch 실패(재시도로도 못 건짐). ①이면 방치하지 말고 마감 처리해
+                    # 옛 가격이 며칠씩 그대로 남는 것 방지. ②면 로그만 남기고 다음 주기에 재시도.
+                    try:
+                        soldout_page = pg.evaluate(
+                            "() => /품절된\\s*상품입니다/.test(document.body.innerText)"
+                        )
+                    except Exception:
+                        soldout_page = False
+                    if soldout_page:
+                        for e in evs:
+                            if not e.get('is_closed'):
+                                sb.table('events').update({'is_closed': True}).eq('id', e['id']).execute()
+                                updated += 1
+                    else:
+                        print(f'[{slug}] idx={idx} 위젯 응답 비어있음(일시적 실패로 추정, 스킵)')
                     continue
                 for e in evs:
                     d = datetime.fromisoformat(e['event_date'].replace('Z', '+00:00'))
