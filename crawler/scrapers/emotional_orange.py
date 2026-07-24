@@ -375,8 +375,14 @@ class EmotionalOrangeScraper(BaseScraper):
                 except Exception as e:
                     self.logger.warning(f'감정오렌지 블로그 파싱 실패(idx={idx}): {e}')
 
-        # 옵션 목록에서 날짜+나이코드 추출
-        option_items = self._extract_option_items(soup)
+        # 옵션 목록에서 날짜+나이코드 추출.
+        # ⚠️ 정적 페이지(soup)의 옵션 드롭다운은 imweb이 일부만 미리 렌더링해 최대
+        # 며칠~열흘 뒤까지만 잡힘(실제 사이트는 최대 +1개월까지 예약 오픈돼 있는데
+        # 크롤러가 그 절반도 못 찾던 근본원인, 2026-07-24 오너 지적으로 발견).
+        # 예약위젯(load_option.cm) 응답은 항상 전체 날짜(최대 40여개, +1개월)를 담고
+        # 라벨 포맷도 동일("8월 30일 일요일 저녁 7시 (나이C)")하므로 이걸 우선 쓴다.
+        widget_labels = list((listing_data.get('widget') or {}).keys())
+        option_items = widget_labels or self._extract_option_items(soup)
 
         # 예약위젯 매진·가격을 (월,일,시)로 정규화해 매칭 준비
         widget_by_dt: dict = {}
