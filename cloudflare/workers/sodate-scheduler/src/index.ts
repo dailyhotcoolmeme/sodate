@@ -9,6 +9,8 @@ const REPO = 'dailyhotcoolmeme/sodate';
 const CRON_TARGETS: Record<string, string> = {
   '*/15 * * * *': 'refresh-soldout.yml',
   '*/20 * * * *': 'watchdog.yml',
+  '0 23 * * *': 'crawl.yml',  // 08:00 KST — crawl.yml 자체 스케줄과 동일 시각(백업용, concurrency로 중복실행 방지)
+  '0 11 * * *': 'crawl.yml',  // 20:00 KST
 };
 
 async function dispatch(workflow: string, ghPat: string): Promise<void> {

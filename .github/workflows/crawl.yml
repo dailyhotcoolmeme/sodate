@@ -6,6 +6,13 @@ on:
     - cron: '0 11 * * *'   # 매일 오후 20:00 KST (UTC 11:00)
   workflow_dispatch:         # 수동 실행
 
+# GH 자체 schedule이 원인불명으로 몇시간씩 안 도는 사고(2026-07-25, refresh-soldout/watchdog에서
+# 확인) 대응으로 Cloudflare Worker(sodate-scheduler)가 같은 시각에 workflow_dispatch로도 깨움 —
+# 둘 다 겹쳐 발화해도 여기서 큐잉만 되고 동시 실행은 안 되게 방지.
+concurrency:
+  group: crawl
+  cancel-in-progress: false
+
 jobs:
   crawl:
     runs-on: ubuntu-22.04
