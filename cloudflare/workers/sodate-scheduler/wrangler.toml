@@ -1,0 +1,17 @@
+name = "sodate-scheduler"
+main = "src/index.ts"
+compatibility_date = "2026-07-25"
+account_id = "4c0f5d706177b84ade4d424a08ec46e8"
+
+# GitHub Actions의 schedule(cron) 트리거가 GH 쪽에서 원인불명으로 몇 시간씩 안 도는
+# 사고가 2026-07-25에 있었음(YAML/권한/계정 상태 전부 정상 — GitHub 공식 문서도
+# "고부하시 지연·드롭될 수 있음"을 요금제 무관하게 명시). GitHub 자체 스케줄러에
+# 의존하지 않고, 이 Worker가 외부에서 GitHub API(workflow_dispatch)를 직접 호출해
+# refresh-soldout.yml/watchdog.yml을 깨운다.
+#
+# 환경 변수는 secret으로 설정(절대 여기 값 입력 금지):
+#   wrangler secret put GH_PAT
+#   (GitHub Fine-grained PAT, dailyhotcoolmeme/sodate repo 전용, Actions: Read and write)
+
+[triggers]
+crons = ["*/15 * * * *", "*/20 * * * *"]
