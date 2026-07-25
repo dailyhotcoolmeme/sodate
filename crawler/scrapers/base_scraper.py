@@ -93,6 +93,12 @@ class BaseScraper(ABC):
             if self.WRITES_SEATS:
                 _sm = data.get('seats_left_male')
                 _sf = data.get('seats_left_female')
+                # 원본 사이트 오버부킹 등으로 음수가 나올 수 있음 — DB check constraint(>=0)
+                # 위반으로 이 행만 조용히 저장 실패하던 것 방지(2026-07-25, 프립에서 발견).
+                if _sm is not None and _sm < 0:
+                    _sm = data['seats_left_male'] = 0
+                if _sf is not None and _sf < 0:
+                    _sf = data['seats_left_female'] = 0
                 _both_sold = (_sm is not None and _sf is not None and _sm <= 0 and _sf <= 0)
                 data['is_closed'] = bool(data.get('is_closed')) or _both_sold
 

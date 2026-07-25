@@ -464,10 +464,13 @@ class EmotionalOrangeScraper(BaseScraper):
                 participant_stats = blog_ev.get('participant_stats')
                 seats_left_male = blog_ev.get('seats_left_male')
                 seats_left_female = blog_ev.get('seats_left_female')
-                # 블로그에서 나이 범위를 가져올 수 있으면 우선 적용
-                if blog_ev.get('age_range_min') is not None:
+                # ⚠️(2026-07-25) 옵션라벨의 (나이X)코드→AGE_CODE_MAP이 이미 있으면 그게
+                # 정본(사이트 표기 그대로, 충돌 위험 없음) — 블로그는 그게 없을 때만 보충.
+                # 예전엔 블로그가 무조건 덮어써서, blog_key(월일시, 연도없음)가 다른 회차
+                # 글과 충돌하면 (나이D)=32~37세인 회차가 엉뚱한 29~34세로 바뀌는 사고 발생.
+                if age_range_min is None and blog_ev.get('age_range_min') is not None:
                     age_range_min = blog_ev['age_range_min']
-                if blog_ev.get('age_range_max') is not None:
+                if age_range_max is None and blog_ev.get('age_range_max') is not None:
                     age_range_max = blog_ev['age_range_max']
                 if blog_ev.get('age_group_label') and not age_group_label:
                     age_group_label = blog_ev['age_group_label']
@@ -1012,9 +1015,11 @@ class EmotionalOrangeScraper(BaseScraper):
                 participant_stats = blog_ev.get('participant_stats')
                 seats_left_male = blog_ev.get('seats_left_male')
                 seats_left_female = blog_ev.get('seats_left_female')
-                if blog_ev.get('age_range_min') is not None:
+                # (나이X)코드가 이미 있으면 정본 — 블로그는 없을 때만 보충(collision 위험 있는
+                # blog_key(월일시,연도없음)가 정본을 덮어쓰던 사고 방지, 2026-07-25).
+                if age_range_min is None and blog_ev.get('age_range_min') is not None:
                     age_range_min = blog_ev['age_range_min']
-                if blog_ev.get('age_range_max') is not None:
+                if age_range_max is None and blog_ev.get('age_range_max') is not None:
                     age_range_max = blog_ev['age_range_max']
                 if blog_ev.get('age_group_label') and not age_group_label:
                     age_group_label = blog_ev['age_group_label']

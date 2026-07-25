@@ -106,6 +106,13 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
             continue
         d = ev.model_dump() if hasattr(ev, 'model_dump') else ev.__dict__
         sm, sf = d.get('seats_left_male'), d.get('seats_left_female')
+        # ⚠️(2026-07-25) 원본 사이트가 정원 초과(오버부킹) 등으로 음수를 낼 때가 있어
+        # DB check constraint(>=0)에 걸림 → 예외처리 없이 그대로 execute()해서 프립 이후
+        # 남은 전체 업체가 통째로 못 돌던 사고 발생. 0으로 clamp해 마감으로 처리.
+        if sm is not None and sm < 0:
+            sm = 0
+        if sf is not None and sf < 0:
+            sf = 0
         ic = bool(d.get('is_closed')) or (sm is not None and sf is not None and sm <= 0 and sf <= 0)
         upd = {'seats_left_male': sm, 'seats_left_female': sf, 'is_closed': ic}
         # 가격은 값이 있을 때만 갱신(None으로 기존값 덮지 않음)
@@ -113,8 +120,12 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
             upd['price_male'] = d['price_male']
         if d.get('price_female') is not None:
             upd['price_female'] = d['price_female']
-        sb.table('events').update(upd).eq('id', eid).execute()
-        updated += 1
+        try:
+            sb.table('events').update(upd).eq('id', eid).execute()
+            updated += 1
+        except Exception as e:
+            # 이 행 하나 실패로 나머지 업체 전체가 못 도는 것 방지 — 로그만 남기고 계속.
+            print(f'  이벤트 갱신 실패(스킵): {eid} - {str(e)[:120]}')
     return updated
 
 
