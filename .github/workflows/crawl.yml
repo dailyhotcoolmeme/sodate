@@ -20,7 +20,9 @@ concurrency:
 jobs:
   crawl:
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    # ⚠️(2026-07-25) 후기수집 분리 후에도 실측 29분46초로 30분 한도를 간신히 통과 —
+    # 여유 없이 안전마진 0에 가까워 조금만 느려져도 다시 타임아웃 재발. 45분으로 확대.
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
