@@ -35,18 +35,41 @@ HEARTBEATS = {
 }
 
 
-def _gh_get(path: str) -> dict:
+def _gh_headers() -> dict:
     token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
     headers = {'Accept': 'application/vnd.github+json'}
     if token:
         headers['Authorization'] = f'Bearer {token}'
-    r = httpx.get(f'{GH_API}/{path}', headers=headers, timeout=15)
+    return headers
+
+
+def _gh_get(path: str) -> dict:
+    r = httpx.get(f'{GH_API}/{path}', headers=_gh_headers(), timeout=15)
     r.raise_for_status()
     return r.json()
 
 
+def _gh_dispatch(fname: str) -> bool:
+    """워크플로를 API로 수동 발화(workflow_dispatch)한다.
+    2026-07-25: refresh-soldout.yml의 schedule 트리거가 GH 쪽에서 3시간+ 안 도는 사고가
+    있었고, 워크플로 파일 touch·disable/enable 재등록 둘 다 효과 없었음. 근본원인을
+    못 밝혀도(GH 플랫폼 이슈로 추정) 사업적으로는 "가격이 최신인가"가 중요하므로,
+    워치독이 갭을 발견하면 알림만 보내지 말고 직접 재발화까지 시켜 스스로 복구한다."""
+    try:
+        r = httpx.post(
+            f'{GH_API}/{fname}/dispatches',
+            headers=_gh_headers(),
+            json={'ref': 'main'},
+            timeout=15,
+        )
+        return r.status_code == 204
+    except Exception:
+        return False
+
+
 def check_heartbeats() -> list[dict]:
-    """워크플로별 마지막 성공 실행이 예상 주기 안인지 확인(트리거 종류 무관 — 수동실행도 정상 신호)."""
+    """워크플로별 마지막 성공 실행이 예상 주기 안인지 확인(트리거 종류 무관 — 수동실행도 정상 신호).
+    갭 발견 시 알림뿐 아니라 workflow_dispatch로 즉시 재발화까지 시도(자가복구)."""
     issues = []
     now = datetime.now(timezone.utc)
     for fname, (label, max_gap_min) in HEARTBEATS.items():
@@ -67,10 +90,11 @@ def check_heartbeats() -> list[dict]:
             continue
         gap_min = (now - finished_dt).total_seconds() / 60
         if gap_min > max_gap_min:
+            dispatched = _gh_dispatch(fname)
             issues.append({
                 'level': 'ERROR',
                 'msg': f'{label}: 마지막 성공 실행이 {gap_min:.0f}분 전(허용 {max_gap_min}분) — '
-                       f'스케줄이 멈췄을 가능성',
+                       f'스케줄이 멈췄을 가능성. ' + ('지금 자동 재발화함' if dispatched else '자동 재발화 실패'),
             })
     return issues
 

@@ -15,6 +15,9 @@ concurrency:
   group: watchdog
   cancel-in-progress: true
 
+permissions:
+  actions: write   # 하트비트 갭 발견 시 workflow_dispatch로 자가복구 재발화하는 데 필요
+
 jobs:
   watch:
     runs-on: ubuntu-22.04
