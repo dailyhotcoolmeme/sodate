@@ -17,6 +17,12 @@ from utils.date_filter import is_within_one_month
 from utils.region import resolve_region
 
 
+def _dedup_key(ev) -> str:
+    """날짜+시간+나이+가격 조합 — 가격까지 같아야 진짜 중복(2026-07-25, 프립 사고 예방)."""
+    return (f"{ev.event_date.strftime('%Y%m%d%H%M')}|{ev.age_group_label}"
+            f"|{ev.price_male}|{ev.price_female}")
+
+
 class TalkblossomScraper(BaseScraper):
     BASE_URL = 'https://talkblossom.co.kr'
 
@@ -49,14 +55,17 @@ class TalkblossomScraper(BaseScraper):
 
         self.logger.info(f'토크블라썸 게시물 {len(post_links)}개 발견')
 
-        # 전역 중복 제거 (날짜+시간+나이 조합 기준)
+        # 전역 중복 제거 (날짜+시간+나이+가격 조합 기준)
+        # ⚠️(2026-07-25) 프립에서 날짜+시간만으로 dedup하다가 가격 다른 별개 이벤트를
+        # 서로 지워버리던 사고 발견(중복점검 결과 여기도 같은 구조적 위험 있음, 지금은
+        # post_links[:6]로 범위가 좁아 안 걸렸지만 예방적으로 가격도 키에 포함).
         global_seen: set[str] = set()
 
         for title, url in post_links[:6]:
             try:
                 parsed = self._fetch_and_parse(title, url)
                 for ev in parsed:
-                    dedup_key = f"{ev.event_date.strftime('%Y%m%d%H%M')}|{ev.age_group_label}"
+                    dedup_key = _dedup_key(ev)
                     if dedup_key not in global_seen:
                         global_seen.add(dedup_key)
                         events.append(ev)

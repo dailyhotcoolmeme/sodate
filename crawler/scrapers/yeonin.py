@@ -66,17 +66,31 @@ class YeoninScraper(BaseScraper):
                 page = context.new_page()
 
                 # 1단계: 일정 목록 페이지에서 최신 월별 게시물 링크 수집
-                page.goto(self.SCHEDULE_URL, timeout=30000)
-                page.wait_for_load_state('domcontentloaded', timeout=15000)
-
-                soup = BeautifulSoup(page.content(), 'html.parser')
+                # ⚠️(2026-07-25) 예전엔 1페이지만 읽어서 게시판 특성상 오래된(그래도 아직
+                # 유효한) 게시물이 다음 페이지로 밀려나면 재발견 자체가 안 됐음(DB 대비
+                # 91% 고스트 발견·오너 지시로 전수점검). 새 글이 없는 페이지가 나올 때까지
+                # 페이지네이션(최대 8페이지, 안전장치)해서 전부 수집.
                 post_links = []
-                for a in soup.select('a[href*="bmode=view"]'):
-                    href = a.get('href', '')
-                    title = a.get_text(strip=True)
-                    if title and ('소개팅' in title or '일정' in title or '로테이션' in title):
+                seen_urls: set = set()
+                for pg_num in range(1, 9):
+                    url = self.SCHEDULE_URL if pg_num == 1 else f'{self.SCHEDULE_URL}/?page={pg_num}'
+                    page.goto(url, timeout=30000)
+                    page.wait_for_load_state('domcontentloaded', timeout=15000)
+                    soup = BeautifulSoup(page.content(), 'html.parser')
+                    page_new = 0
+                    for a in soup.select('a[href*="bmode=view"]'):
+                        href = a.get('href', '')
+                        title = a.get_text(strip=True)
+                        if not title or not ('소개팅' in title or '일정' in title or '로테이션' in title):
+                            continue
                         full_url = href if href.startswith('http') else self.BASE_URL + href
+                        if full_url in seen_urls:
+                            continue
+                        seen_urls.add(full_url)
                         post_links.append((title, full_url))
+                        page_new += 1
+                    if page_new == 0:
+                        break  # 새 글 없는 페이지 나오면 끝(더 뒤져도 중복만 나옴)
 
                 self.logger.info(f'일정 게시물 {len(post_links)}개 발견')
 

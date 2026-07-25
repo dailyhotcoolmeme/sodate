@@ -96,6 +96,20 @@ class TestLovecastingAgeSymbols:
 # 공용 지역 해석기: region_phrase 최우선 + location_detail의 '[역명] 상호' 추출
 # ──────────────────────────────────────────────
 
+class TestTalkblossomDedupByPrice:
+    """전체 업체 안정성 점검(2026-07-25)에서 talkblossom도 프립과 같은 dedup 취약점
+    (날짜+시간+나이만 보고 가격 다른 별개 이벤트를 지울 위험)이 있는 걸 발견해 예방적 수정."""
+
+    def test_dedup_key_includes_price(self):
+        from scrapers.talkblossom import _dedup_key
+        from datetime import datetime
+        ev_a = MagicMock(event_date=datetime(2026, 8, 1, 19, 0), age_group_label='2030',
+                          price_male=39000, price_female=29000)
+        ev_b = MagicMock(event_date=datetime(2026, 8, 1, 19, 0), age_group_label='2030',
+                          price_male=45000, price_female=35000)
+        assert _dedup_key(ev_a) != _dedup_key(ev_b)  # 가격 다르면 다른 키(별개 이벤트로 보존)
+
+
 class TestFripDedupByPrice:
     """프립 중복제거가 지역+시간만 보면, 강남·홍대처럼 넓은 지역+인기시간대(토 18시 등)에
     서로 다른 업체의 완전히 별개 이벤트가 우연히 겹쳐 하나가 조용히 사라지던 사고
