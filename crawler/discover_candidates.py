@@ -260,7 +260,10 @@ def refresh_company(cid, rows):
         })
     if ev_rows:
         # ignore_duplicates: 오너가 이미 채운(verified) 같은 source_url 은 덮어쓰지 않음
-        sb.table('events').upsert(ev_rows, on_conflict='source_url', ignore_duplicates=True).execute()
+        try:
+            sb.table('events').upsert(ev_rows, on_conflict='source_url', ignore_duplicates=True).execute()
+        except Exception as e:
+            print(f'이벤트 upsert 실패(스킵): {str(e)[:120]}')
 
 
 def discover_imweb(slug, list_urls, page):
@@ -362,8 +365,11 @@ def discover_emotional_orange(slug, list_urls, page):
                 fields['is_closed'] = True
 
             if su in existing:
-                sb.table('events').update(fields).eq('id', existing[su]).execute()
-                updated += 1
+                try:
+                    sb.table('events').update(fields).eq('id', existing[su]).execute()
+                    updated += 1
+                except Exception as e:
+                    print(f'이벤트 갱신 실패(스킵): {str(e)[:120]}')
             else:
                 inserts.append({
                     'company_id': cid,
@@ -674,8 +680,11 @@ def discover_lovecasting(slug='lovecasting'):
         img = lc_image(pth)                            # noname.png → 실제 이벤트 이미지로 교체
         if img:
             fields['thumbnail_urls'] = [img]
-        sb.table('events').update(fields).eq('id', dbmap[pth]).execute()
-        updated += 1
+        try:
+            sb.table('events').update(fields).eq('id', dbmap[pth]).execute()
+            updated += 1
+        except Exception as e:
+            print(f'이벤트 갱신 실패(스킵): {str(e)[:120]}')
     return updated
 
 
@@ -1059,8 +1068,11 @@ def discover_platform_enriched(slug, ScraperClass):
             'age_female': age_text,
         }
         if su in existing:
-            sb.table('events').update(fields).eq('id', existing[su]).execute()
-            updated += 1
+            try:
+                sb.table('events').update(fields).eq('id', existing[su]).execute()
+                updated += 1
+            except Exception as e:
+                print(f'이벤트 갱신 실패(스킵): {str(e)[:120]}')
         else:
             inserts.append({
                 'company_id': cid,

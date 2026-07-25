@@ -69,8 +69,11 @@ def backfill_thumbs():
     for row in rows:
         url = fetch_and_store_thumb(supabase, row['source_url'])
         if url:
-            supabase.table('reviews').update({'thumbnail_url': url}).eq('id', row['id']).execute()
-            done += 1
+            try:
+                supabase.table('reviews').update({'thumbnail_url': url}).eq('id', row['id']).execute()
+                done += 1
+            except Exception as e:
+                logger.warning(f'썸네일 저장 실패(스킵) {row["id"]}: {e}')
         time.sleep(1.2)
     logger.info(f'인스타 썸네일 백필 완료: {done}/{len(rows)}건')
 

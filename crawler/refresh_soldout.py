@@ -183,8 +183,11 @@ def refresh(slugs=None, days=None):
                     if soldout_page:
                         for e in evs:
                             if not e.get('is_closed'):
-                                sb.table('events').update({'is_closed': True}).eq('id', e['id']).execute()
-                                updated += 1
+                                try:
+                                    sb.table('events').update({'is_closed': True}).eq('id', e['id']).execute()
+                                    updated += 1
+                                except Exception as ex:
+                                    print(f'[{slug}] idx={idx} 마감처리 실패(스킵): {str(ex)[:100]}')
                     else:
                         print(f'[{slug}] idx={idx} 위젯 응답 비어있음(일시적 실패로 추정, 스킵)')
                     continue
@@ -223,8 +226,13 @@ def refresh(slugs=None, days=None):
                     elif 'male_tiers' in gd or 'female_tiers' in gd:
                         upd['price_detail'] = None
                     if upd:
-                        sb.table('events').update(upd).eq('id', e['id']).execute()
-                        updated += 1
+                        try:
+                            sb.table('events').update(upd).eq('id', e['id']).execute()
+                            updated += 1
+                        except Exception as ex:
+                            # 이 이벤트 하나 실패로 나머지 idx·업체 전체가 못 도는 것 방지
+                            # (2026-07-25 프립 음수좌석 크래시와 동일 패턴 — 여기가 더 앞단이라 더 치명적).
+                            print(f'[{slug}] idx={idx} 갱신 실패(스킵): {str(ex)[:100]}')
             print(f'[{slug}] 갱신 {updated}건 (상품 {len(by_idx)}개)')
         browser.close()
 
