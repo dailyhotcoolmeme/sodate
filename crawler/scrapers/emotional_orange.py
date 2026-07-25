@@ -27,7 +27,8 @@ SEAT_WORDS = {'한자리': 1, '두자리': 2, '세자리': 3, '네자리': 4, '�
 
 
 def _eo_age_disp(mn: Optional[int], mx: Optional[int]) -> Optional[str]:
-    """age_range → 앱 성별 나이 표시 문자열(만나이). 감정오렌지는 이벤트 전체나이 → 남=여 동일."""
+    """age_range → 앱 나이 표시 문자열(만나이). 감정오렌지 그룹연령(A~G)은 남성 전용 기준
+    (여성은 전 라인 공통 '제한 없음' — 이 함수는 age_male 표시에만 쓴다, 2026-07-25 확정)."""
     if mn is not None and mx is not None:
         return f'{mn}~{mx}'
     if mx is not None:
@@ -98,7 +99,7 @@ class EmotionalOrangeScraper(BaseScraper):
     AGE_RANGE_RE = re.compile(r'만\s*(\d+)[~\-](\d+)세')
 
     # 티키타카 소개팅 나이 코드 → (min_age, max_age) 매핑 (만 나이 기준)
-    AGE_CODE_MAP: dict[str, tuple[int, int]] = {
+    AGE_CODE_MAP: dict[str, tuple[Optional[int], Optional[int]]] = {
         'A': (23, 28),
         'B': (26, 31),
         'C': (29, 34),
@@ -107,9 +108,36 @@ class EmotionalOrangeScraper(BaseScraper):
         'F': (38, 43),
         'G': (41, 49),
     }
+    # 블랙라운지 소개팅(블랙멤버 전용) — 티키타카와 그룹별 연령이 다름(2026-07-25 오너 스샷으로 확인).
+    AGE_CODE_MAP_BLACKLOUNGE: dict[str, tuple[Optional[int], Optional[int]]] = {
+        'A': (23, 29),
+        'B': (27, 33),
+        'C': (31, 37),
+        'D': (35, 41),
+        'E': (39, 46),
+    }
+    # 돌싱 티키타카 소개팅(돌싱만남 전용). D/E는 '무자녀 돌싱 전용' 한쪽경계만(이하/이상).
+    AGE_CODE_MAP_DOLSING: dict[str, tuple[Optional[int], Optional[int]]] = {
+        'A': (25, 35),
+        'B': (33, 43),
+        'C': (41, 51),
+        'D': (None, 37),
+        'E': (35, None),
+    }
 
     def __init__(self):
         super().__init__('emotional-orange')
+
+    def _age_code_map_for(self, title_line: str) -> dict:
+        """상품 제목으로 어느 상세정보 나이표(티키타카/블랙라운지/돌싱) 소속인지 판별.
+        하나의 AGE_CODE_MAP을 전 상품에 그대로 쓰면 블랙라운지·돌싱 상품엔 틀린
+        나이가 매핑됨(그룹당 연령이 라인마다 다름, 2026-07-25 오너 스샷으로 확인)."""
+        t = title_line or ''
+        if '돌싱' in t:
+            return self.AGE_CODE_MAP_DOLSING
+        if '블랙' in t:
+            return self.AGE_CODE_MAP_BLACKLOUNGE
+        return self.AGE_CODE_MAP
 
     # ------------------------------------------------------------------ #
     # 공개 진입점
@@ -446,8 +474,9 @@ class EmotionalOrangeScraper(BaseScraper):
             if age_code_m:
                 code = age_code_m.group(1)
                 age_group_label = f'나이{code}'
-                if code in self.AGE_CODE_MAP:
-                    age_range_min, age_range_max = self.AGE_CODE_MAP[code]
+                age_map = self._age_code_map_for(title_line)
+                if code in age_map:
+                    age_range_min, age_range_max = age_map[code]
 
             # 블로그 이벤트 매핑: 날짜+시간으로 lookup
             blog_key = f'{mo:02d}{d:02d}{hour:02d}'
@@ -522,8 +551,11 @@ class EmotionalOrangeScraper(BaseScraper):
                     age_range_min=age_range_min,
                     age_range_max=age_range_max,
                     age_group_label=age_group_label,
+                    # 2026-07-25 오너 스샷 확인: "모든 소개팅 여성 연령 제한 없음"(상세정보
+                    # 안내 이미지, 전 라인 공통 정책) — 그룹연령(A~G)은 남성 전용 기준이라
+                    # 여성에 그대로 적용하면 안 됨.
                     age_male=_eo_age_disp(age_range_min, age_range_max),
-                    age_female=_eo_age_disp(age_range_min, age_range_max),
+                    age_female='제한 없음',
                     participant_stats=participant_stats,
                     description=description,
                 ))
@@ -1001,8 +1033,9 @@ class EmotionalOrangeScraper(BaseScraper):
             if age_code_m:
                 code = age_code_m.group(1)
                 age_group_label = f'나이{code}'
-                if code in self.AGE_CODE_MAP:
-                    age_range_min, age_range_max = self.AGE_CODE_MAP[code]
+                age_map = self._age_code_map_for(title_line)
+                if code in age_map:
+                    age_range_min, age_range_max = age_map[code]
 
             # 블로그 매핑
             blog_key = f'{mo:02d}{d:02d}{hour:02d}'
@@ -1058,8 +1091,11 @@ class EmotionalOrangeScraper(BaseScraper):
                     age_range_min=age_range_min,
                     age_range_max=age_range_max,
                     age_group_label=age_group_label,
+                    # 2026-07-25 오너 스샷 확인: "모든 소개팅 여성 연령 제한 없음"(상세정보
+                    # 안내 이미지, 전 라인 공통 정책) — 그룹연령(A~G)은 남성 전용 기준이라
+                    # 여성에 그대로 적용하면 안 됨.
                     age_male=_eo_age_disp(age_range_min, age_range_max),
-                    age_female=_eo_age_disp(age_range_min, age_range_max),
+                    age_female='제한 없음',
                     participant_stats=participant_stats,
                     description=description,
                 ))
