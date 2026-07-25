@@ -96,6 +96,28 @@ class TestLovecastingAgeSymbols:
 # 공용 지역 해석기: region_phrase 최우선 + location_detail의 '[역명] 상호' 추출
 # ──────────────────────────────────────────────
 
+class TestFripWeekdayWeekendVenue:
+    """프립 '[평일-을지로][주말-역삼]' — 옵션이름엔 장소가 없어(VENUE_KW 분리 대상 아님)
+    예전엔 상품 전체가 하나의 areaName(종로·중구)으로 뭉개져 주말 일정도 을지로로 잘못
+    나오던 것(2026-07-25 오너 지적). 제목패턴+요일로 그날 실제 장소를 고른다."""
+
+    def test_weekend_uses_weekend_venue(self):
+        from scrapers.frip import _weekday_weekend_venue
+        title = '[평일-을지로][주말-역삼]💜15대15 로테이션 커피 소개팅😘'
+        saturday = datetime(2026, 7, 25, 16, 0)  # 2026-07-25는 토요일
+        assert _weekday_weekend_venue(title, saturday) == '역삼'
+
+    def test_weekday_uses_weekday_venue(self):
+        from scrapers.frip import _weekday_weekend_venue
+        title = '[평일-을지로][주말-역삼]💜15대15 로테이션 커피 소개팅😘'
+        thursday = datetime(2026, 7, 30, 19, 30)  # 2026-07-30은 목요일
+        assert _weekday_weekend_venue(title, thursday) == '을지로'
+
+    def test_no_pattern_returns_none(self):
+        from scrapers.frip import _weekday_weekend_venue
+        assert _weekday_weekend_venue('그냥 평범한 소개팅 제목', datetime(2026, 7, 25)) is None
+
+
 class TestResolveRegionPriority:
     def test_region_phrase_wins_over_everything(self):
         from utils.region import resolve_region

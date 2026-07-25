@@ -48,6 +48,23 @@ _CANON_REGION = {
     '서초': '강남', '강남·서초': '강남', '신논현': '강남', '청담': '강남', '압구정': '강남', '역삼': '강남',
 }
 
+# 제목에 "[평일-을지로][주말-역삼]"처럼 요일별로 다른 장소가 박힌 상품 — 옵션이름엔
+# 장소 정보가 아예 없어(VENUE_KW 분리 대상 아님) 예전엔 상품 전체가 하나의 areaName으로
+# 뭉개져, 주말 일정도 평일 장소(또는 그 반대)로 잘못 표시되던 것(2026-07-25 오너 지적:
+# "평일-을지로 주말-역삼인데 위치가 종로중구로 나온다. 주말이면 확인 필요").
+_WEEKDAY_WEEKEND_VENUE_RE = re.compile(
+    r'평일[\-:\s]*([^\[\]/／·,\s]+).{0,20}?주말[\-:\s]*([^\[\]/／·,\s]+)'
+)
+
+
+def _weekday_weekend_venue(title: str, kst_dt: datetime) -> Optional[str]:
+    """제목의 '평일-A/주말-B' 패턴 + KST 날짜의 요일로 그날 실제 장소를 고른다."""
+    m = _WEEKDAY_WEEKEND_VENUE_RE.search(title or '')
+    if not m:
+        return None
+    weekday_venue, weekend_venue = m.group(1), m.group(2)
+    return weekend_venue if kst_dt.weekday() >= 5 else weekday_venue  # 5=토, 6=일
+
 
 def _canon_region(r):
     return _CANON_REGION.get(r, r)
@@ -766,7 +783,14 @@ class FripScraper(BaseScraper):
                             (mmin, mmax), (fmin, fmax) = g
                             male_disp, female_disp = f'{mmin}~{mmax}', f'{fmin}~{fmax}'
                             amin, amax = min(mmin, fmin), max(mmax, fmax)
-                    sched_region = resolve_region(region_phrase=v, title=title, body=None) if v else region
+                    if v:
+                        sched_region = resolve_region(region_phrase=v, title=title, body=None)
+                    else:
+                        ww_venue = _weekday_weekend_venue(title, kst)
+                        sched_region = (
+                            resolve_region(region_phrase=ww_venue, title=title, body=None)
+                            if ww_venue else region
+                        )
                     if sc.get('remains') == 0:
                         if sm is None:
                             sm = 0
