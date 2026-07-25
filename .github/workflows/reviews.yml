@@ -1,0 +1,59 @@
+name: Crawl Reviews
+
+# ⚠️(2026-07-25) 원래 crawl.yml 안의 한 스텝이었는데, "workflow_dispatch면 매번 실행"
+# 조건이 CF Worker/워치독의 반복 재시도(전부 workflow_dispatch)마다 이 느린 후기수집
+# 스텝을 계속 다시 돌게 만들어 30분 타임아웃 무한 재발 사고를 일으켰음. 후기는 비핵심
+# (장식용) 정보라 가격·나이 등 핵심 크롤(crawl.yml)의 타임아웃 예산을 갉아먹으면 안
+# 됨 — 완전히 분리된 워크플로로 뺐다. 여기가 타임아웃 나도 crawl.yml엔 영향 없음.
+on:
+  schedule:
+    - cron: '0 23 * * *'   # 매일 08:00 KST 1회
+  workflow_dispatch:
+
+concurrency:
+  group: reviews
+  cancel-in-progress: false
+
+jobs:
+  reviews:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('crawler/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('crawler/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install dependencies
+        run: |
+          cd crawler
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Run review crawlers
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          python reviews_main.py

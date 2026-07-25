@@ -4,7 +4,11 @@ on:
   schedule:
     - cron: '0 23 * * *'   # 매일 오전 08:00 KST (UTC 23:00 전날)
     - cron: '0 11 * * *'   # 매일 오후 20:00 KST (UTC 11:00)
-  workflow_dispatch:         # 수동 실행
+  workflow_dispatch:         # 수동 실행 / CF Worker 백업트리거 / 워치독 자가복구
+    inputs:
+      slot:
+        description: "정기 슬롯 재현용(evening=20시 마감알림 포함). 비우면 마감알림 스킵(워치독 임시 재시도용)"
+        required: false
 
 # GH 자체 schedule이 원인불명으로 몇시간씩 안 도는 사고(2026-07-25, refresh-soldout/watchdog에서
 # 확인) 대응으로 Cloudflare Worker(sodate-scheduler)가 같은 시각에 workflow_dispatch로도 깨움 —
@@ -59,15 +63,6 @@ jobs:
           cd crawler
           python main.py
 
-      - name: Run review crawlers (once a day, 23:00 UTC run only)
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.schedule, '0 23')
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          cd crawler
-          python reviews_main.py
-
       - name: QA — 크롤링 결과 검증
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -104,7 +99,11 @@ jobs:
           done
 
       - name: Check deadline reminders
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.schedule, '0 11')
+        # ⚠️(2026-07-25) 예전엔 workflow_dispatch면 무조건 실행이라, 워치독이 타임아웃 재시도로
+        # 반복 재발화할 때마다 같은 D-1 마감알림이 오너 폰에 중복 발송될 뻔했음(실제 재발화
+        # 여러 번 겹친 걸 오늘 확인). CF Worker의 20시 슬롯 트리거만 slot=evening을 넘기고,
+        # 워치독의 임시 재시도는 입력 없이 부르므로 이 스텝을 자동 스킵.
+        if: contains(github.event.schedule, '0 11') || github.event.inputs.slot == 'evening'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
