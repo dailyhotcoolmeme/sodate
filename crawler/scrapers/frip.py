@@ -66,6 +66,23 @@ def _weekday_weekend_venue(title: str, kst_dt: datetime) -> Optional[str]:
     return weekend_venue if kst_dt.weekday() >= 5 else weekday_venue  # 5=토, 6=일
 
 
+def _dedup_events(events: list) -> list:
+    """(지역+정확한 일시+가격)로 중복 제거 — 통합상품(건대잠실합정)과 지점상품이 같은
+    지점·날짜·시간·가격 이벤트를 각각 내므로 겹침. 나이 있는 쪽을 우선 보존.
+    ⚠️(2026-07-25) 가격 없이 지역+시간만으로 묶었더니, 강남·홍대처럼 넓은 지역+인기
+    시간대(토 18시 등)에 서로 다른 업체의 완전히 별개 이벤트가 우연히 겹쳐 하나가
+    조용히 사라지던 사고 발견(전수조사: 35건 충돌 중 24건이 가격까지 다른 별개
+    이벤트, 진짜 중복은 11건뿐이었음). 가격까지 같아야 진짜 같은 이벤트로 간주."""
+    best: dict = {}
+    for ev in events:
+        key = (_canon_region(ev.location_region), int(ev.event_date.timestamp()),
+               ev.price_male, ev.price_female)
+        cur = best.get(key)
+        if cur is None or (ev.age_range_min and not cur.age_range_min):
+            best[key] = ev
+    return list(best.values())
+
+
 def _canon_region(r):
     return _CANON_REGION.get(r, r)
 
@@ -217,15 +234,7 @@ class FripScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f'프립 크롤링 실패: {e}')
 
-        # (지역+정확한 일시)로 중복 제거 — 통합상품(건대잠실합정)과 지점상품이 같은
-        # 지점·날짜·시간 이벤트를 각각 내므로 겹침. 나이 있는 쪽을 우선 보존.
-        best: dict = {}
-        for ev in events:
-            key = (_canon_region(ev.location_region), int(ev.event_date.timestamp()))
-            cur = best.get(key)
-            if cur is None or (ev.age_range_min and not cur.age_range_min):
-                best[key] = ev
-        unique = list(best.values())
+        unique = _dedup_events(events)
         filtered = []
         for ev in unique:
             if is_within_one_month(ev.event_date):

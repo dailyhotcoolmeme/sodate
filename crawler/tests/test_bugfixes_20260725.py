@@ -96,6 +96,41 @@ class TestLovecastingAgeSymbols:
 # 공용 지역 해석기: region_phrase 최우선 + location_detail의 '[역명] 상호' 추출
 # ──────────────────────────────────────────────
 
+class TestFripDedupByPrice:
+    """프립 중복제거가 지역+시간만 보면, 강남·홍대처럼 넓은 지역+인기시간대(토 18시 등)에
+    서로 다른 업체의 완전히 별개 이벤트가 우연히 겹쳐 하나가 조용히 사라지던 사고
+    (2026-07-25, 오너가 프립 42건 '고스트' 이벤트로 발견)."""
+
+    def _ev(self, region, ts, price_m, price_f, age_min=None):
+        from datetime import datetime, timezone
+        m = MagicMock()
+        m.location_region = region
+        m.event_date = datetime.fromtimestamp(ts, tz=timezone.utc)
+        m.price_male = price_m
+        m.price_female = price_f
+        m.age_range_min = age_min
+        return m
+
+    def test_same_region_time_different_price_both_kept(self):
+        """지역+시간은 같아도 가격이 다르면 별개 이벤트 — 둘 다 보존해야 한다."""
+        from scrapers.frip import _dedup_events
+        ts = 1785574800
+        a = self._ev('강남·서초', ts, 69000, 55000)
+        b = self._ev('강남·서초', ts, 70000, 60000)
+        result = _dedup_events([a, b])
+        assert len(result) == 2
+
+    def test_same_region_time_price_merges_prefers_age(self):
+        """지역+시간+가격 전부 같으면 진짜 중복(통합상품/지점상품) — 나이 있는 쪽만 남긴다."""
+        from scrapers.frip import _dedup_events
+        ts = 1785058380
+        no_age = self._ev('잠실', ts, 55000, 35000, age_min=None)
+        with_age = self._ev('잠실', ts, 55000, 35000, age_min=34)
+        result = _dedup_events([no_age, with_age])
+        assert len(result) == 1
+        assert result[0].age_range_min == 34
+
+
 class TestFripWeekdayWeekendVenue:
     """프립 '[평일-을지로][주말-역삼]' — 옵션이름엔 장소가 없어(VENUE_KW 분리 대상 아님)
     예전엔 상품 전체가 하나의 areaName(종로·중구)으로 뭉개져 주말 일정도 을지로로 잘못
