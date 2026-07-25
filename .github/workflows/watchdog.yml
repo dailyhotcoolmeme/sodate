@@ -1,0 +1,55 @@
+name: Watchdog (독립 감시자 — 카카오 알림)
+
+# 2026-07-25 신설. crawl.yml/refresh-soldout.yml과 완전히 분리된 별도 워크플로다.
+# 존재 이유: 그날 price_accuracy_check.py가 crawl.yml *안의* 한 스텝이라, crawl.yml
+# 자체가 타임아웃되거나 refresh-soldout.yml이 크래시하면 안전장치도 같이 안 돌고 있었음.
+# 이 워치독은 Playwright 브라우저 설치 없이(가볍게) 돌고, 문제 있으면 로그가 아니라
+# 카카오톡으로 오너에게 직접 알린다. 감시자는 단순해야 안 죽는다 — 무거운 라이브
+# 재검증은 일부러 안 하고 하트비트+완성도+정합성만 본다(crawl.yml이 라이브 검증 담당).
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: watchdog
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('crawler/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies (브라우저 설치 없이 — 워치독은 라이브 재검증 안 함)
+        run: |
+          cd crawler
+          pip install -r requirements.txt
+
+      - name: Run watchdog
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          cd crawler
+          python watchdog.py
