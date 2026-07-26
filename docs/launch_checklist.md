@@ -6,7 +6,7 @@
 - **멈춤 방어**: `lib/supabase.ts` 전역 fetch 20초 타임아웃(PostgREST hang → UI 굳음 차단).
 - **google-services.json**: 유효(project=sodate-173b5, package=com.sodate.app 일치).
 - **식별자**: iOS bundleId=Android package=`com.sodate.app`. `ITSAppUsesNonExemptEncryption=false`(수출규정 프롬프트 회피).
-- **약관/개인정보**: 이메일 `contact@ourmine.co.kr` 통일, 시행일 2026-07-20, 최종수정일 삭제(2026-07-11 완료).
+- **약관/개인정보**: 이메일 `admin@ourmine.co.kr` 통일, 시행일 2026-07-20, 최종수정일 삭제(2026-07-11 완료).
 - **EAS**: production 환경변수(SUPABASE URL/ANON) 등록됨. production 채널=실광고. OTA 정상(런타임 핀 iOS 9e0a068/Android e0cb73f).
 - **알림**: expo-notifications 플러그인(아이콘·색) 설정. 디버그 잔재 거의 없음.
 

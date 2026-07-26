@@ -82,7 +82,7 @@ export default function PrivacyScreen() {
         <Text style={styles.sectionTitle}>8. 개인정보 보호책임자</Text>
         <Text style={styles.body}>
           개인정보 처리에 관한 불만·문의는 아래로 연락 주세요.{'\n\n'}
-          이메일: contact@ourmine.co.kr{'\n'}
+          이메일: admin@ourmine.co.kr{'\n'}
           처리 기간: 접수 후 7일 이내
         </Text>
 

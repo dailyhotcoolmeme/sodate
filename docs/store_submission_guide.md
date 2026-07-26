@@ -17,7 +17,7 @@
 - 앱 이름: **소개팅모아** / 부제(App Store subtitle): 예) "전국 로테이션 소개팅 일정 모아보기"
 - 카테고리: **라이프스타일** 또는 소셜(데이팅 카테고리는 정책 엄격 → 라이프스타일 권장)
 - 개인정보처리방침 URL: **https://ourmine.co.kr/sodate/privacy**
-- 지원/문의: contact@ourmine.co.kr (또는 지원 URL)
+- 지원/문의: admin@ourmine.co.kr (또는 지원 URL)
 - **개발자 웹사이트: https://ourmine.co.kr** ← app-ads.txt(`/app-ads.txt`)를 구글이 찾으려면 필수
 - 스크린샷: iPhone 6.7"/6.5", iPad(미지원이면 불필요), Android 폰. 5~8장(피드·상세·필터·후기 등).
 - 설명/키워드: 정보 중개(각 업체 신청은 아웃링크) 성격 명시.

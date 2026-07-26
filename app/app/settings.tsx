@@ -61,7 +61,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets()
 
   const handleContact = () =>
-    Linking.openURL('mailto:contact@ourmine.co.kr').catch(() =>
+    Linking.openURL('mailto:admin@ourmine.co.kr').catch(() =>
       Alert.alert('오류', '메일 앱을 열 수 없습니다')
     )
 
@@ -110,7 +110,7 @@ export default function SettingsScreen() {
         <SettingRow
           iconName="mail-outline"
           label="문의하기"
-          value="contact@ourmine.co.kr"
+          value="admin@ourmine.co.kr"
           onPress={handleContact}
         />
       </View>
