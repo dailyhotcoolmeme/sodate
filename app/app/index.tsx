@@ -753,7 +753,7 @@ export default function HomeScreen() {
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
         />
       )}
 
