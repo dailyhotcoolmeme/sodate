@@ -90,6 +90,11 @@ export default function HomeScreen() {
   }, [openFilter, router])
   const colors = useColors()
   const isDark = useThemeStore((s) => s.isDark)
+  // 안드로이드는 네이티브 스크롤바 색상을 RN에서 직접 못 바꿔서(테마 리소스는 네이티브
+  // 빌드에서만 적용) 다크모드에서 안 보이는 문제를 JS로 그린 커스텀 막대로 대신 표시
+  const [androidScrollY, setAndroidScrollY] = useState(0)
+  const [androidContentHeight, setAndroidContentHeight] = useState(0)
+  const [androidListHeight, setAndroidListHeight] = useState(0)
 
   // 앱 오픈 트래킹
   useEffect(() => { track('app_open') }, [])
@@ -465,6 +470,19 @@ export default function HomeScreen() {
     viewBtnTextActive: {
       color: colors.textPrimary,
     },
+    androidScrollTrack: {
+      position: 'absolute',
+      right: 2,
+      top: 0,
+      bottom: 0,
+      width: 4,
+    },
+    androidScrollThumb: {
+      position: 'absolute',
+      right: 0,
+      width: 4,
+      borderRadius: 2,
+    },
     fab: {
       position: 'absolute',
       right: 20,
@@ -494,6 +512,7 @@ export default function HomeScreen() {
 
   const onScroll = useCallback((e: any) => {
     setShowFab(e.nativeEvent.contentOffset.y > 300)
+    if (Platform.OS === 'android') setAndroidScrollY(e.nativeEvent.contentOffset.y)
   }, [])
 
   const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
@@ -718,9 +737,12 @@ export default function HomeScreen() {
           <AppSpinner />
         </View>
       ) : (
+        <View style={{ flex: 1 }}>
         <FlatList
           ref={flatListRef}
           onScroll={onScroll}
+          onContentSizeChange={(_w, h) => { if (Platform.OS === 'android') setAndroidContentHeight(h) }}
+          onLayout={(e) => { if (Platform.OS === 'android') setAndroidListHeight(e.nativeEvent.layout.height) }}
           scrollEventThrottle={100}
           data={listData}
           renderItem={({ item }) => {
@@ -758,6 +780,24 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={true}
           indicatorStyle={isDark ? 'white' : 'black'}
         />
+        {Platform.OS === 'android' && androidContentHeight > androidListHeight && androidListHeight > 0 && (
+          <View pointerEvents="none" style={styles.androidScrollTrack}>
+            <View
+              style={[
+                styles.androidScrollThumb,
+                {
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)',
+                  height: Math.max(30, (androidListHeight / androidContentHeight) * androidListHeight),
+                  top:
+                    (Math.min(androidScrollY, androidContentHeight - androidListHeight) /
+                      (androidContentHeight - androidListHeight)) *
+                    (androidListHeight - Math.max(30, (androidListHeight / androidContentHeight) * androidListHeight)),
+                },
+              ]}
+            />
+          </View>
+        )}
+        </View>
       )}
 
       <FilterSheet visible={filterVisible} onClose={() => setFilterVisible(false)} />
