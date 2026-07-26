@@ -59,7 +59,7 @@ type ListRow =
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets()
-  const { events, loading, error, refetch } = useEvents()
+  const { events, loading, loadingMore, error, refetch, loadMore } = useEvents()
   const [filterVisible, setFilterVisible] = useState(false)
   const { regions, themes, maxPrice, dateRange, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, setRegionsBulk, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
   const regionOptions = useRegions()
@@ -743,6 +743,15 @@ export default function HomeScreen() {
             <RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />
           }
           ListEmptyComponent={<EmptyState error={error} onRetry={refetch} />}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ paddingVertical: 24 }}>
+                <AppSpinner size={28} />
+              </View>
+            ) : null
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
           contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
           showsVerticalScrollIndicator={false}
         />
