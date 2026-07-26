@@ -27,6 +27,7 @@ import { useEvents } from '@/hooks/useEvents'
 import { useFilter } from '@/hooks/useFilter'
 import { useFavorites } from '@/hooks/useFavorites'
 import { useColors } from '@/hooks/useColors'
+import { useThemeStore } from '@/stores/themeStore'
 import { useRegions } from '@/hooks/useRegions'
 import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
 import { THEMES } from '@/constants/themes'
@@ -88,6 +89,7 @@ export default function HomeScreen() {
     }
   }, [openFilter, router])
   const colors = useColors()
+  const isDark = useThemeStore((s) => s.isDark)
 
   // 앱 오픈 트래킹
   useEffect(() => { track('app_open') }, [])
@@ -754,6 +756,7 @@ export default function HomeScreen() {
           onEndReachedThreshold={0.5}
           contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
           showsVerticalScrollIndicator={true}
+          indicatorStyle={isDark ? 'white' : 'black'}
         />
       )}
 
