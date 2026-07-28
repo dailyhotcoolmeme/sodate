@@ -21,7 +21,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundColor": "#FFF0F5"
+        "backgroundColor": "#EA6491"
       },
       "package": "com.sodate.app",
       "googleServicesFile": "./google-services.json"

@@ -49,9 +49,10 @@ export default function TopBar({
     },
     left: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0, flexShrink: 1 },
     backBtn: { paddingRight: 2 },
-    logoBtn: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-    logoIcon: { width: 26, height: 26, borderRadius: 8 },
-    logo: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.3 },
+    logoBtn: { flexDirection: 'row', alignItems: 'center' },
+    // 하트+"소개팅모아"가 한 이미지로 된 워드마크(원본 1042x231 = 4.51:1).
+    // 라이트·다크 양쪽에서 보이는 핑크 버전만 사용(검정/흰색은 한쪽에서 사라짐).
+    logoWordmark: { width: 122, height: 27 },
     right: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     iconBtn: { padding: 6, borderRadius: 8 },
     filterBadge: {
@@ -90,8 +91,12 @@ export default function TopBar({
           )}
           <TouchableOpacity style={styles.logoBtn} activeOpacity={0.7}
             onPress={onLogoPress ?? (() => router.replace('/'))}>
-            <Image source={require('../assets/logo-icon.png')} style={styles.logoIcon} contentFit="cover" />
-            <Text style={styles.logo}>소개팅모아</Text>
+            <Image
+              source={require('../assets/logo-wordmark.png')}
+              style={styles.logoWordmark}
+              contentFit="contain"
+              accessibilityLabel="소개팅모아"
+            />
           </TouchableOpacity>
         </View>
 

@@ -95,13 +95,15 @@ export default function RootLayout() {
       <ProfileSheet />
 
       {/* 스플래시 연장 게이트 — 온보딩 판정 전 첫 프레임(동그라미 인디케이터 등)을 덮음.
-          logo-icon(app.json 미참조, fingerprint 영향 없음)을 사용 — splash-icon.png는
+          logo-stack(app.json 미참조, fingerprint 영향 없음)을 사용 — splash-icon.png는
           네이티브 빌드에 실제 반영되기 전까지 OTA 되돌림 대상이라 여기서 쓰면 안 됨
-          (2026-07-26: 되돌림 여파로 옛 플레이스홀더가 노출된 사고 재발 방지). */}
+          (2026-07-26: 되돌림 여파로 옛 플레이스홀더가 노출된 사고 재발 방지).
+          크기는 네이티브 스플래시와 이음새 없게 맞춤 — splash-icon.png는 1024 캔버스에
+          그림이 62%라 화면폭의 62%로 그려지므로, 여백 없는 logo-stack도 62%로 맞춘다. */}
       {!gateOff && (
         <View style={styles.splashGate} pointerEvents="none">
           <Image
-            source={require('../assets/logo-icon.png')}
+            source={require('../assets/logo-stack.png')}
             style={styles.splashLogo}
             resizeMode="contain"
           />
@@ -119,5 +121,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 999,
   },
-  splashLogo: { width: '55%', height: '55%' },
+  splashLogo: { width: '62%', aspectRatio: 821 / 644 },
 })

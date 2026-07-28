@@ -1,4 +1,5 @@
 import TopBar from '@/components/TopBar'
+import { Image } from 'expo-image'
 import React, { useMemo } from 'react'
 import {
   View,
@@ -71,7 +72,12 @@ export default function SettingsScreen() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
       {/* 앱 정보 */}
       <View style={styles.appInfo}>
-        <Text style={styles.appName}>소개팅모아</Text>
+        <Image
+          source={require('../assets/logo-stack.png')}
+          style={styles.appLogo}
+          contentFit="contain"
+          accessibilityLabel="소개팅모아"
+        />
         <Text style={styles.appDesc}>
           전국 소개팅 일정을 한눈에
         </Text>
@@ -153,11 +159,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderBottomWidth: 1,
       borderBottomColor: colors.divider,
     },
-    appName: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: colors.primary,
-      marginBottom: 4,
+    // 세로형 로고(하트 위 · 글자 아래). 원본 821x644 비율 유지.
+    appLogo: {
+      width: 118,
+      height: 118 * (644 / 821),
+      marginBottom: 10,
     },
     appDesc: {
       fontSize: 13,
