@@ -224,6 +224,11 @@ class FripScraper(BaseScraper):
     # GraphQL(GetSelectItems)에서 가격도 직접 뽑음 → DB 기록.
     # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행 다수)
     WRITES_PRICE = True
+    # 나이의 정본은 예약옵션(GetSelectItems)이다 → None도 기록해 옛 잘못된 값을 지운다.
+    # (2026-07-28: 설명 하단 타상품 홍보문구에서 '3045'를 잘못 뽑았던 값이, 파싱을
+    #  고친 뒤에도 None이 upsert에서 제외돼 DB에 그대로 남아 있었음. admin 입력값은
+    #  verified 행이라 애초에 크롤러가 건드리지 않는다.)
+    WRITES_AGE = True
     # 목록(3개 카테고리) + DB에 남은 상품ID까지 매번 전수 재확인하므로 스테일 정리 가능.
     # (2026-07-28: 호스트 제목 변경/카테고리 이탈로 살아있는 상품이 빠져 옛 회차가
     #  212건 쌓여 있었음 → 원인 수정 후 활성화)
@@ -512,8 +517,9 @@ class FripScraper(BaseScraper):
         m = re.search(r'만?\s*(\d{2})\s*세\s*이상', text)
         if m:
             return (max(18, int(m.group(1))), 49, None)
-        if re.search(r'(?<!\d)3045(?!\d)', text):   # '3045커피/3045와인' 브랜드형 밴드
-            return (30, 45, '3045')
+        # ⚠️ '3045'는 본문/제목에서 뽑지 않는다. 같은 호스트가 설명 하단에 "3045 모두의
+        #    와인도 오픈" 식으로 타 상품을 홍보해, 나이 제한이 없는 시그니쳐커피 상품까지
+        #    3045로 오염됐다(2026-07-28 오너 지적). 예약옵션 이름에서만 인정한다.
         if re.search(r'20\s*30(?!\d)', text):
             return (20, 39, '2030')
         if re.search(r'30\s*40(?!\d)', text):
