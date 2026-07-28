@@ -109,3 +109,44 @@
    플레이 등록은 `com.ourmine.sodate`이므로 연결 시 새 패키지로 맞춰야 함.
    불일치하면 광고가 게재되지 않음.
 3. 연결 전에도 광고는 노출되나 게재 제한 상태라 충전율·단가가 낮음.
+
+---
+
+## 안드로이드 업로드 키스토어 (분실 주의)
+
+플레이 업로드 키. **분실하면 이 앱을 다시 업데이트할 수 없다**(구글 지원팀에 키 재설정을
+요청해야 하고, 그동안 업데이트 배포 불가). 저장소에는 커밋하지 않으므로(.gitignore)
+별도 백업 필수.
+
+| 항목 | 값 |
+|---|---|
+| 파일 | `app/certs/sodate-upload.keystore` |
+| alias | `sodate-upload` |
+| store/key password | `sodate2026upload` |
+| SHA-256 | `49:9A:A6:9D:95:07:39:EE:2A:28:E8:9B:71:81:F4:15:93:B9:60:4E:3F:28:9B:2F:F0:4F:CE:6C:9F:DD:30:BB` |
+
+실제 배포 서명은 Play 앱 서명(Google이 재서명)이라, 위 키는 "업로드 키"로만 쓰인다.
+
+## 안드로이드 스토어 빌드 절차
+
+```bash
+cd app
+npx eas env:pull --environment production      # EXPO_PUBLIC_* 를 .env.local 로
+./scripts/patch-android-release.sh             # ⚠️ prebuild 후 매번 필수
+cd android && ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew bundleRelease
+# → app/build/outputs/bundle/release/app-release.aab
+```
+
+`patch-android-release.sh` 가 하는 일 두 가지 — 둘 다 빠지면 사고가 난다.
+
+1. **production 채널 주입**: 로컬 gradle 빌드에는 EAS가 넣어주는 채널 헤더가 없어
+   `Updates.channel` 이 undefined → `lib/ads.ts` 의 `isProductionBuild()` 가 false →
+   **스토어 빌드에 구글 테스트 광고가 실려 수익이 0**이 된다. iOS도 같은 이유로
+   `ios/app/Supporting/Expo.plist` 에 `EXUpdatesRequestHeaders` 를 넣는다.
+2. **업로드 키 서명**: RN 템플릿 기본값이 `debug.keystore` 라 그대로 두면 Play가 거부한다.
+
+검증(업로드 전 반드시):
+```bash
+keytool -printcert -jarfile .../app-release.aab | grep 소유자     # CN=ourmine 이어야 함
+unzip -p .../app-release.aab base/manifest/AndroidManifest.xml | strings | grep expo-channel-name
+```

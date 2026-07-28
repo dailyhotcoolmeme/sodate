@@ -23,3 +23,6 @@ Thumbs.db
 
 # Wrangler cache
 .wrangler/
+
+# 애플 API 키·안드로이드 업로드 키스토어 (절대 커밋 금지)
+app/certs/
