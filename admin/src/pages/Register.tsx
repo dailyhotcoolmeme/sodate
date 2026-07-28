@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase'
 import { Trash2, ExternalLink, Loader2, Check, Search, X } from 'lucide-react'
 import DateTimePicker from '../components/DateTimePicker'
 import HashtagEditor from '../components/HashtagEditor'
-import { matchTypeByName } from '../lib/matchImageType'
 
 /**
  * 직접 등록 페이지 — 크롤링 정확도 무시. 오너 입력값이 정답(source of truth).
@@ -71,15 +70,7 @@ export default function Register() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<string | null>(null)
-  // 업체별 상세 이미지 유형 (company_id → [{id,name}]). 슬롯에서 유형 선택용.
-  const [typesByCompany, setTypesByCompany] = useState<Record<string, { id: string; name: string; is_default: boolean }[]>>({})
 
-  async function updateImageType(row: Row, imageTypeId: string) {
-    if (!row.id) return
-    const value = imageTypeId || null
-    await supabase.from('events').update({ image_type_id: value }).eq('id', row.id)
-    setRows((prev) => prev.map((r) => r.key === row.key ? { ...r, image_type_id: value } : r))
-  }
 
   // 자동저장 시 최신 row 참조용 + 디바운스 타이머 + 저장중/추가편집 추적
   const rowsRef = useRef<Row[]>([])
@@ -94,15 +85,6 @@ export default function Register() {
       .select('id, name')
       .order('name')
       .then(({ data }) => setCompanies(data ?? []))
-    supabase
-      .from('company_image_types')
-      .select('id, company_id, name, is_default')
-      .order('sort_order')
-      .then(({ data }) => {
-        const map: Record<string, { id: string; name: string; is_default: boolean }[]> = {}
-        for (const t of (data as any[]) ?? []) (map[t.company_id] ??= []).push(t)
-        setTypesByCompany(map)
-      })
     loadCandidates()
   }, [])
 
@@ -293,7 +275,6 @@ export default function Register() {
       {r.title && <p className="text-sm font-medium text-gray-800 mb-2.5 break-words">{r.title}</p>}
 
       {/* 상세페이지 상세설명 이미지 유형 (업체에 등록된 유형 있을 때만) */}
-      <ImageTypeSelect row={r} opts={typesByCompany[r.company_id]} onChange={(v) => updateImageType(r, v)} />
 
       {/* 링크 없을 때(수동 추가)만 URL 입력 */}
       {!r.source_url && (
@@ -398,7 +379,6 @@ export default function Register() {
         </div>
       </td>
       <td className="px-3 py-2">
-        <ImageTypeSelect row={r} opts={typesByCompany[r.company_id]} onChange={(v) => updateImageType(r, v)} compact />
       </td>
       <td className="px-3 py-2 text-center">
         <input type="checkbox" checked={r.is_closed}
@@ -612,32 +592,6 @@ function bornHint(slug: string, age: string): string | null {
   return `${p(yr - parseInt(m[2]))}-${p(yr - parseInt(m[1]))}년생`  // 나이많은쪽(이른출생)-나이적은쪽
 }
 
-// 슬롯별 상세페이지 상세설명 이미지 유형 선택 (업체에 유형 등록돼 있고, 저장된 이벤트일 때만).
-function ImageTypeSelect({ row, opts, onChange, compact }: {
-  row: Row
-  opts?: { id: string; name: string; is_default: boolean }[]
-  onChange: (v: string) => void
-  compact?: boolean
-}) {
-  if (!row.id || !opts || opts.length === 0) return compact ? <span className="text-gray-300 text-xs">-</span> : null
-  // 선택 안 함 = 모임명에 유형 이름이 들어있으면 그 유형이 자동으로 붙는다(앱과 동일 규칙).
-  // 예전엔 여기에 "기본 (○○)"이라고 떴는데, 기본 유형 폴백을 없앴으므로 틀린 안내가 된다.
-  const auto = matchTypeByName(row.title, opts)
-  const sel = (
-    <select value={row.image_type_id ?? ''} onChange={(e) => onChange(e.target.value)}
-      className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white max-w-40">
-      <option value="">{auto ? `자동: ${auto.name}` : '자동: 없음(안 나옴)'}</option>
-      {opts.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-    </select>
-  )
-  if (compact) return sel
-  return (
-    <div className="mb-3">
-      <p className="text-xs text-gray-400 mb-1">상세 이미지 유형</p>
-      {sel}
-    </div>
-  )
-}
 
 // 자동 크롤 가격/품절 참고표시 (읽기용 — 입력란은 별도로 편집 가능)
 function PriceDetailReadout({ detail }: { detail: PriceDetail }) {

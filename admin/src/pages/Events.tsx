@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { Plus, Search, Pencil, Trash2, Eye, EyeOff, Star, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import HashtagEditor from '../components/HashtagEditor'
+import { matchTypeByName } from '../lib/matchImageType'
 
 interface Event {
   id: string; title: string; company_id: string
@@ -18,7 +19,7 @@ interface Event {
   companies: { name: string } | null
 }
 
-interface ImageType { id: string; company_id: string; name: string; is_default: boolean; sort_order: number }
+interface ImageType { id: string; company_id: string; name: string; match_keywords: string[] | null; sort_order: number }
 
 type SortKey = 'date_asc' | 'date_desc' | 'company_asc'
 
@@ -41,7 +42,7 @@ export default function Events() {
   async function loadImageTypes() {
     const { data } = await supabase
       .from('company_image_types')
-      .select('id, company_id, name, is_default, sort_order')
+      .select('id, company_id, name, match_keywords, sort_order')
       .order('sort_order')
     const map: Record<string, ImageType[]> = {}
     for (const t of (data as ImageType[]) ?? []) {
@@ -212,17 +213,19 @@ export default function Events() {
       <td className="px-4 py-3 text-center">
         {(() => {
           const opts = typesByCompany[event.company_id] ?? []
-          const defName = opts.find((t) => t.is_default)?.name
           if (opts.length === 0) return <span className="text-gray-300 text-xs">유형 없음</span>
+          // 선택 안 함 = 업체 관리에 등록한 검색어로 자동 매칭. 그 결과를 그대로 보여준다
+          // (예전엔 '기본 (○○)' 이라고 떴는데 기본 유형 개념이 사라져 틀린 안내가 됐다).
+          const auto = matchTypeByName(event.title, opts)
           return (
             <select
               value={event.image_type_id ?? ''}
               onChange={(e) => updateImageType(event.id, e.target.value)}
               className="px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-pink-500 bg-white max-w-40"
             >
-              <option value="">기본{defName ? ` (${defName})` : ''}</option>
+              <option value="">{auto ? `자동: ${auto.name}` : '자동: 없음(안 나옴)'}</option>
               {opts.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' (기본)' : ''}</option>
+                <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
           )
