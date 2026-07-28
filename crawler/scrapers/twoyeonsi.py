@@ -36,6 +36,16 @@ class TwoYeonsiScraper(BaseScraper):
     LIST_URL = 'https://2yeonsi.com/?idx=c66d7a938c66fb'
     BASE_URL = 'https://2yeonsi.com'
 
+    # 본문에 "남 : 7만원 , 여 : 4만원"으로 정가가 명시돼 있어 그대로 기록한다.
+    # 재도전가·여성 28세이하 특가는 적지 않는다 — 표준가만 보여주고 나머지는
+    # 신청자가 사이트에서 확인한다(오너 확정). 플래그가 없어 저장 단계에서
+    # 가격이 통째로 벗겨지고 있었다(2026-07-28 오너 지적).
+    WRITES_PRICE = True
+    # 나이의 정본도 이 페이지(기수별 년생)다 → None도 기록해 옛 값을 지운다.
+    WRITES_AGE = True
+    # 매 크롤마다 전체 기수를 전수 확인하므로 사라진 회차 정리 가능.
+    DELETE_STALE = True
+
     def __init__(self):
         super().__init__('twoyeonsi')
 
@@ -180,6 +190,13 @@ class TwoYeonsiScraper(BaseScraper):
                     if is_female_closed:
                         seats_left_female = 0
 
+                    # 앱에는 년생을 절대 표시하지 않는다(오너 규칙) → 만나이 범위로 환산해 표기
+                    age_display = (
+                        f'{age_range_min}~{age_range_max}'
+                        if age_range_min is not None and age_range_max is not None
+                        else None
+                    )
+
                     title = sanitize_text(f'[이연시] 광주 7:7 소개팅 {subtitle}', 80)
                     source_url = f'{self.BASE_URL}/?idx=c66d7a938c66fb#evt={date_key}'
 
@@ -200,6 +217,12 @@ class TwoYeonsiScraper(BaseScraper):
                             age_group_label=age_group_label,
                             age_range_min=age_range_min,
                             age_range_max=age_range_max,
+                            # 사이트는 년생으로만 쓰고(예 '91-98년생') 만나이/한국나이를
+                            # 밝히지 않는다. 표준 환산(올해 − 년생)을 남녀 동일하게 적는다.
+                            # 여성 '기준보다 어려도 신청 가능' 예외는 표기하지 않는다 —
+                            # 표준만 적고 나머지는 신청자가 사이트에서 확인한다(오너 확정).
+                            age_male=age_display,
+                            age_female=age_display,
                             participant_stats=participant_stats,
                         ))
                     except Exception:
