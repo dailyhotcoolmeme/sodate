@@ -179,3 +179,35 @@ cd app && npx eas update --branch production --message "설명"
 **네이티브가 바뀔 때만** (새 expo 모듈 추가, SDK 업그레이드, 권한 추가 등)
 `runtimeVersion` 을 `1.0.1` 처럼 올리고 스토어 새 빌드를 올린다. 올리지 않으면
 구버전 바이너리가 새 네이티브를 요구하는 JS를 받아 크래시한다.
+
+---
+
+## admin 상세 이미지 — 업로드 규칙
+
+`admin/src/lib/resizeImage.ts` 가 업로드 직전 브라우저에서 리사이즈·재인코딩한다.
+
+- 폭 1080 상한(원본이 이미 1080 이하면 그대로), WebP q0.82
+- 세로로 아주 긴 캡처 방어: 한 변 16000px 넘으면 비율만 줄임
+- GIF는 건드리지 않음(캔버스로 구우면 첫 프레임만 남음)
+- 실패하거나 원본보다 커지면 원본을 그대로 올림 — 리사이즈 때문에 업로드가 막히지 않게
+
+실측(2026-07-28, 기존 15장): **17.8MB → 3.3MB (82% 감소)**.
+최악 케이스 1079×8689 JPEG 3.18MB → WebP 0.29MB(91%). 1:1 확대 대조에서 글자 열화 없음.
+앱은 `expo-image`라 WebP를 iOS·안드로이드 모두 지원한다.
+
+### 업로드 URL 도메인 고정 (PUBLIC_MEDIA_BASE)
+
+`/api/upload` 가 만드는 **절대 URL이 DB에 영구 저장**되고 앱이 그대로 렌더한다.
+예전엔 요청 origin을 썼는데, 로컬 `wrangler pages dev`에서 한 장만 올려도
+`http://localhost:8791/...` 이 DB에 박혀 앱에서 영구히 깨졌다 — 2026-07-28 검증 중
+실제로 재현됐다(해당 행은 정리함).
+
+지금은 `wrangler.toml` 의 `[vars] PUBLIC_MEDIA_BASE` 를 우선 사용해, 로컬·프리뷰
+어디서 올리든 항상 `https://sodate-admin.pages.dev` 로 저장된다.
+**admin 도메인을 바꾸면 이 값도 같이 바꾸고, 기존 DB URL도 일괄 치환해야 한다.**
+
+### 업체별 상세 이미지 노출 스위치
+
+`companies.detail_images_visible` (기본 true). 끄면 이미지가 등록돼 있어도 앱 상세화면의
+"상세 설명" 섹션이 통째로 숨는다(`app/hooks/useEventDetail.ts`). 이미지를 지우지 않고
+잠시 내릴 때 쓴다 — 지우면 재업로드해야 하므로.

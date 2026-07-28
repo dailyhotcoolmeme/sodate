@@ -2,6 +2,12 @@ name = "sodate-admin"
 compatibility_date = "2026-01-01"
 pages_build_output_dir = "dist"
 
+[vars]
+# 업로드된 이미지 URL이 DB에 절대경로로 영구 저장되므로 도메인을 고정한다.
+# 예전엔 요청 origin을 그대로 썼는데, 로컬 dev나 프리뷰 배포에서 한 장만 올려도
+# 그 URL이 DB에 박혀 앱에서 영구히 깨졌다(2026-07-28 실제 재현).
+PUBLIC_MEDIA_BASE = "https://sodate-admin.pages.dev"
+
 # 상세 이미지 저장용 R2 (이그레스 무료). 업로드=/api/upload, 공개서빙=/media/*
 [[r2_buckets]]
 binding = "MEDIA"

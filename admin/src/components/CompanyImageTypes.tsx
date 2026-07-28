@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, uploadDetailImage, deleteDetailImage } from '../lib/supabase'
+import { resizeForUpload } from '../lib/resizeImage'
 import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Check, Pencil } from 'lucide-react'
 
 interface ImageType {
@@ -69,13 +70,19 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
     setBusy(t.id)
     try {
       const urls: string[] = []
+      const failed: string[] = []
       for (let i = 0; i < files.length; i++) {
         try {
-          urls.push(await uploadDetailImage(files[i], slug, t.id))
+          // 원본 그대로 올리면 앱이 매번 수 MB짜리를 내려받는다 — 폭 1080 WebP로 굽는다
+          const resized = await resizeForUpload(files[i])
+          urls.push(await uploadDetailImage(resized, slug, t.id))
         } catch (e) {
-          alert(`업로드 실패: ${(e as Error).message}`)
+          // 예전엔 파일마다 alert을 띄워서 10장 실패하면 10번 떴고, 어느 파일이
+          // 실패했는지도 알 수 없었다. 모아서 한 번만 알린다.
+          failed.push(`${files[i].name} — ${(e as Error).message}`)
         }
       }
+      if (failed.length) alert(`업로드 실패 ${failed.length}건\n\n${failed.join('\n')}`)
       if (urls.length) {
         const next = [...t.images, ...urls]
         await supabase.from('company_image_types').update({ images: next, updated_at: new Date().toISOString() }).eq('id', t.id)
