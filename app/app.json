@@ -23,7 +23,7 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#EA6491"
       },
-      "package": "com.sodate.app",
+      "package": "com.ourmine.sodate",
       "googleServicesFile": "./google-services.json",
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
