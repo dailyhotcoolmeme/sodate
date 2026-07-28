@@ -3,6 +3,7 @@
     "name": "소개팅모아",
     "slug": "sodate",
     "version": "1.0.0",
+    "platforms": ["ios", "android"],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
