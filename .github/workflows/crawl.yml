@@ -109,6 +109,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PUSH_WEBHOOK_SECRET: ${{ secrets.PUSH_WEBHOOK_SECRET }}
         run: |
           python3 -c "
           import os, httpx, json
@@ -139,7 +140,13 @@ jobs:
               edge_resp = httpx.post(
                   f'{url}/functions/v1/match-subscriptions',
                   json={'record': {**event, '_notification_type': 'deadline_reminder'}},
-                  headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
+                  headers={
+                      'Authorization': f'Bearer {key}',
+                      'Content-Type': 'application/json',
+                      # 앱 공개키만으로 가짜 푸시를 큐잉시킬 수 있던 문제(2026-07-28) 대응 —
+                      # 내부 호출자만 아는 시크릿을 함께 보낸다.
+                      'x-webhook-secret': os.environ.get('PUSH_WEBHOOK_SECRET', ''),
+                  },
                   timeout=15
               )
               print(f'마감 알림 큐: {edge_resp.status_code}')

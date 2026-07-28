@@ -2,6 +2,14 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 serve(async (req) => {
+  // ⚠️ verify_jwt는 "유효한 JWT 아무거나"만 요구한다. 앱에 내장된 anon 키도 유효한 JWT라
+  // 사실상 인증이 안 되는 상태였고, 공개키만으로 임의의 record를 넣어 전 구독자에게 가짜
+  // 푸시를 큐잉시킬 수 있었다(2026-07-28 점검). 내부 호출자만 아는 시크릿으로 게이팅한다.
+  const expected = Deno.env.get('WEBHOOK_SECRET')
+  if (!expected || req.headers.get('x-webhook-secret') !== expected) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
+  }
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
