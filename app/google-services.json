@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:1019614683723:android:6ae1c4cdbb37896d07a3ce",
+        "android_client_info": {
+          "package_name": "com.ourmine.sodate"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMtA2ds-RkyCcFoMflIDJ8vcJlLoU75zI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:1019614683723:android:35088426ede8d08007a3ce",
         "android_client_info": {
           "package_name": "com.sodate.app"
