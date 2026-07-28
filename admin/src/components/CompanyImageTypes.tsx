@@ -35,7 +35,13 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
     const [t, ev] = await Promise.all([
       supabase.from('company_image_types').select('*').eq('company_id', companyId)
         .order('sort_order').order('created_at'),
-      supabase.from('events').select('title, source_url').eq('company_id', companyId).eq('is_active', true).limit(2000),
+      // 앞으로 열릴 일정만. 카드의 '일정' 숫자(company_admin_stats.upcoming_events)와
+      // 기준이 같아야 한다 — 예전엔 여기만 지난 일정까지 세서, 같은 화면에 270과 653이
+      // 같이 뜨는 상태였다(2026-07-28 오너 지적).
+      supabase.from('events').select('title, source_url')
+        .eq('company_id', companyId).eq('is_active', true)
+        .gte('event_date', new Date().toISOString())
+        .limit(2000),
     ])
     setTypes((t.data as ImageType[]) ?? [])
     // 건수는 실제 모임 수 그대로. 목록에 보여줄 때만 제목 기준으로 중복을 접는다
