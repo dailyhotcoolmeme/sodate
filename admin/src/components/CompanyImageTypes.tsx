@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, uploadDetailImage, deleteDetailImage } from '../lib/supabase'
 import { resizeForUpload } from '../lib/resizeImage'
+import MatchKeywordEditor from './MatchKeywordEditor'
+import { matchTypeByName } from '../lib/matchImageType'
 import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Check, Pencil } from 'lucide-react'
 
 interface ImageType {
@@ -10,10 +12,12 @@ interface ImageType {
   images: string[]
   is_default: boolean
   sort_order: number
+  match_keywords: string[] | null
 }
 
 export default function CompanyImageTypes({ companyId, slug }: { companyId: string; slug: string }) {
   const [types, setTypes] = useState<ImageType[]>([])
+  const [titles, setTitles] = useState<string[]>([]) // 이 업체 모임 제목 — 검색어가 몇 건 걸리는지 보여주려고
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null) // 업로드 중인 type id
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -22,14 +26,27 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase
-      .from('company_image_types')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('sort_order')
-      .order('created_at')
-    setTypes((data as ImageType[]) ?? [])
+    const [t, ev] = await Promise.all([
+      supabase.from('company_image_types').select('*').eq('company_id', companyId)
+        .order('sort_order').order('created_at'),
+      supabase.from('events').select('title').eq('company_id', companyId).eq('is_active', true).limit(2000),
+    ])
+    setTypes((t.data as ImageType[]) ?? [])
+    setTitles(((ev.data as any[]) ?? []).map((e) => e.title ?? '').filter(Boolean))
     setLoading(false)
+  }
+
+  // 검색어 저장 — 실패를 조용히 넘기지 않는다(예전엔 error 를 안 봐서 안 눌린 것처럼 보였다)
+  async function saveKeywords(t: ImageType, next: string[]) {
+    setTypes((prev) => prev.map((x) => x.id === t.id ? { ...x, match_keywords: next } : x))
+    const { error } = await supabase
+      .from('company_image_types')
+      .update({ match_keywords: next, updated_at: new Date().toISOString() })
+      .eq('id', t.id)
+    if (error) {
+      setTypes((prev) => prev.map((x) => x.id === t.id ? { ...x, match_keywords: t.match_keywords } : x))
+      alert(`검색어 저장 실패: ${error.message}`)
+    }
   }
 
   async function addType() {
@@ -140,6 +157,14 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
             </button>
           </div>
 
+          <MatchKeywordEditor
+            typeName={t.name}
+            keywords={t.match_keywords ?? []}
+            titles={titles}
+            otherTypes={types.filter((x) => x.id !== t.id)}
+            onChange={(next) => saveKeywords(t, next)}
+          />
+
           {t.images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {t.images.map((url, idx) => (
@@ -176,6 +201,33 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
       <button onClick={addType} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-sm hover:bg-gray-800">
         <Plus size={14} /> 이미지 유형 추가
       </button>
+
+      {/* 어느 유형에도 안 걸리는 모임 — 이게 곧 "상세 설명이 안 나오는 모임"이다.
+          빠진 검색어를 찾으라고 제목을 그대로 보여준다. */}
+      {titles.length > 0 && (() => {
+        const missed = titles.filter((t) => !matchTypeByName(t, types.filter((x) => x.images.length > 0)))
+        const uniq = Array.from(new Set(missed))
+        if (!uniq.length) {
+          return (
+            <p className="mt-3 text-xs text-green-700">
+              이 업체 모임 {titles.length}건 전부 어느 유형엔가 걸립니다.
+            </p>
+          )
+        }
+        return (
+          <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50 p-3">
+            <p className="text-xs font-semibold text-orange-800 mb-1.5">
+              상세 설명이 안 나오는 모임 {missed.length}건 ({uniq.length}종)
+            </p>
+            <ul className="space-y-0.5">
+              {uniq.slice(0, 8).map((t) => (
+                <li key={t} className="text-[11px] text-orange-700 truncate">· {t}</li>
+              ))}
+              {uniq.length > 8 && <li className="text-[11px] text-orange-500">· 외 {uniq.length - 8}종</li>}
+            </ul>
+          </div>
+        )
+      })()}
     </div>
   )
 }

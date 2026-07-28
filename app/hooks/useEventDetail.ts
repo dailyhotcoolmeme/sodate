@@ -24,18 +24,24 @@ export function resolveDescImages(ev: any): string[] {
   // 1) 수동 지정 우선
   if (ev?.image_type?.images?.length) return ev.image_type.images
 
-  // 2) 이름 매칭
+  // 2) 검색어 매칭 — 유형마다 등록해 둔 검색어(match_keywords) 중 하나라도 제목에 있으면 그 유형.
+  //    검색어가 비어 있으면 유형 이름을 검색어로 쓴다(예전 방식, 하위호환).
+  //    여러 유형이 걸리면 걸린 검색어가 가장 긴 쪽(= 더 구체적인 쪽)이 이긴다.
   const title: string = (ev?.title ?? '').toLowerCase()
   if (!title) return []
   const types: any[] = ev?.companies?.company_image_types ?? []
-  const matched = types
-    .filter((t) => {
-      const n = String(t?.name ?? '').trim().toLowerCase()
-      return n.length > 0 && t?.images?.length && title.includes(n)
-    })
-    .sort((a, b) => String(b.name).trim().length - String(a.name).trim().length)
 
-  return matched[0]?.images ?? []
+  let best: { images: string[]; len: number } | null = null
+  for (const t of types) {
+    if (!t?.images?.length) continue
+    const raw: string[] = (t.match_keywords ?? []).map((k: any) => String(k).trim()).filter(Boolean)
+    const keywords = raw.length ? raw : [String(t?.name ?? '').trim()].filter(Boolean)
+    const hit = keywords
+      .filter((k) => title.includes(k.toLowerCase()))
+      .sort((a, b) => b.length - a.length)[0]
+    if (hit && (!best || hit.length > best.len)) best = { images: t.images, len: hit.length }
+  }
+  return best?.images ?? []
 }
 
 export function useEventDetail(id: string) {
@@ -50,7 +56,7 @@ export function useEventDetail(id: string) {
       try {
         const { data, error: err } = await supabase
           .from('events')
-          .select('*, companies(id, name, logo_url, slug, base_url, description, is_active, detail_images_visible, crawl_url, crawl_type, regions, instagram_url, created_at, updated_at, company_image_types(id, name, images, is_default, sort_order)), image_type:company_image_types!image_type_id(id, images)')
+          .select('*, companies(id, name, logo_url, slug, base_url, description, is_active, detail_images_visible, crawl_url, crawl_type, regions, instagram_url, created_at, updated_at, company_image_types(id, name, match_keywords, images, is_default, sort_order)), image_type:company_image_types!image_type_id(id, images)')
           .eq('id', id)
           .single()
 
