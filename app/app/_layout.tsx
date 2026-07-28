@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { View, Image, StyleSheet } from 'react-native'
+import { View, Image, StyleSheet, Dimensions } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
 import mobileAds from 'react-native-google-mobile-ads'
@@ -113,6 +113,10 @@ export default function RootLayout() {
   )
 }
 
+// 네이티브 스플래시(splash-icon.png는 1024 캔버스에 그림이 62%)와 크기를 맞추기 위해
+// 화면폭의 62%로 고정. logo-stack.png는 여백이 없는 원본(821x644)이라 비율만 곱한다.
+const SPLASH_LOGO_W = Dimensions.get('window').width * 0.62
+
 const styles = StyleSheet.create({
   splashGate: {
     ...StyleSheet.absoluteFillObject,
@@ -121,5 +125,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 999,
   },
-  splashLogo: { width: '62%', aspectRatio: 821 / 644 },
+  // ⚠️ width:'%' + aspectRatio 조합은 퍼센트가 안 풀려 이미지가 원본 크기(821dp,
+  // 화면폭의 2배 이상)로 터져나옴 — 2026-07-28 실제 사고. 화면폭에서 직접 계산할 것.
+  splashLogo: { width: SPLASH_LOGO_W, height: SPLASH_LOGO_W * (644 / 821) },
 })
