@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { View, Image, StyleSheet, Dimensions } from 'react-native'
+import { View, Text, Image, StyleSheet, Dimensions } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
 import mobileAds from 'react-native-google-mobile-ads'
 import { useThemeStore } from '@/stores/themeStore'
 import { usePushNotification } from '@/hooks/usePushNotification'
+import { isSupabaseConfigured } from '@/lib/supabase'
 import ProfileSheet from '@/components/ProfileSheet'
 
 const ONBOARDING_KEY = 'sodate-onboarding-done'
@@ -54,6 +55,25 @@ export default function RootLayout() {
       }
     })
   }, [])
+
+  // 빌드에 Supabase 환경변수가 안 실린 경우. 예전엔 여기서 앱이 그냥 죽어(첫 화면도 못 그림)
+  // 사용자가 할 수 있는 게 없었다. 최소한 무슨 상황인지 알리고 문의 경로를 준다.
+  if (!isSupabaseConfigured) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <View style={styles.configErrorWrap}>
+          <Image source={require('../assets/logo-stack.png')} style={styles.splashLogo} resizeMode="contain" />
+          <Text style={styles.configErrorTitle}>서비스에 연결할 수 없습니다</Text>
+          <Text style={styles.configErrorBody}>
+            앱 설정에 문제가 있어 일정을 불러올 수 없습니다.{'\n'}
+            잠시 후 다시 실행해 주세요.
+          </Text>
+          <Text style={styles.configErrorContact}>문의: admin@ourmine.co.kr</Text>
+        </View>
+      </SafeAreaProvider>
+    )
+  }
 
   return (
     <SafeAreaProvider>
@@ -128,4 +148,29 @@ const styles = StyleSheet.create({
   // ⚠️ width:'%' + aspectRatio 조합은 퍼센트가 안 풀려 이미지가 원본 크기(821dp,
   // 화면폭의 2배 이상)로 터져나옴 — 2026-07-28 실제 사고. 화면폭에서 직접 계산할 것.
   splashLogo: { width: SPLASH_LOGO_W, height: SPLASH_LOGO_W * (644 / 821) },
+  configErrorWrap: {
+    flex: 1,
+    backgroundColor: '#0F0F0F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  configErrorTitle: {
+    marginTop: 28,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  configErrorBody: {
+    marginTop: 10,
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#9A9AA2',
+    textAlign: 'center',
+  },
+  configErrorContact: {
+    marginTop: 20,
+    fontSize: 13,
+    color: '#FF6B9D',
+  },
 })
