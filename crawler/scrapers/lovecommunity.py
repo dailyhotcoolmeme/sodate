@@ -459,7 +459,62 @@ class LovecommunityLoco(BaseScraper):
                 text, current_year, now, widget,
             )
 
+        # ⚠️ 본문(참가자 현황)에는 모집이 시작된 회차만 실린다. 실제 신청 가능한 회차는
+        #    예약위젯 옵션에 전부 들어 있는데(2026-07-28 실측: 옵션 6개 vs 본문 2개),
+        #    본문만 보다 보니 8/7·8/8·8/15·8/16 이 앱에 아예 안 나왔다.
+        #    옵션에만 있는 날짜를 여기서 보충한다.
+        events.extend(self._events_from_widget_only(
+            widget, {e.event_date for e in events}, idx, title_line, thumbnail_url,
+            region, age_min, age_max, age_group_label, now,
+        ))
+
         return events
+
+    # 본문에 시각이 "7월 31일(금) 19:30~22:00" 처럼 적혀 있고 요일별로 고정이다.
+    # 위젯 날짜 라벨('07/31(금)')엔 시각이 없어, 요일로 시각을 결정한다.
+    WEEKDAY_HOUR = {4: (19, 30), 5: (18, 30), 6: (18, 30)}  # 금 / 토 / 일
+
+    def _events_from_widget_only(self, widget, existing_dates, idx, title_line,
+                                 thumbnail_url, region, age_min, age_max,
+                                 age_group_label, now) -> list[EventModel]:
+        """예약위젯 옵션에만 있고 본문엔 없는 회차를 이벤트로 만든다."""
+        out: list[EventModel] = []
+        if not widget:
+            return out
+        year = now.year
+        for (mo, d), wgd in (widget or {}).items():
+            try:
+                # 연말·연초 경계: 지난 달로 나오면 내년으로 본다
+                y = year + 1 if mo < now.month else year
+                base = datetime(y, mo, d)
+                hh, mm = self.WEEKDAY_HOUR.get(base.weekday(), (19, 30))
+                dt = datetime(y, mo, d, hh, mm)
+            except ValueError:
+                continue
+            if dt < now or any(abs((dt - e).total_seconds()) < 3600 * 6 for e in existing_dates):
+                continue  # 지났거나 본문에서 이미 만든 회차(시각이 조금 달라도 같은 날)
+            male, female = wgd.get('male'), wgd.get('female')
+            if not male and not female:
+                continue
+            out.append(EventModel(
+                title=sanitize_text(f'[로꼬] {title_line}', 80) or '[로꼬] 와인파티',
+                event_date=dt,
+                location_region=region,
+                location_detail=None,
+                price_male=male[0] if male else None,
+                price_female=female[0] if female else None,
+                gender_ratio=None,
+                source_url=f'{self.BASE_URL}/party/?idx={idx}#evt={dt.strftime("%Y%m%d%H%M")}',
+                thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
+                theme=['커피'] if '커피' in title_line else ['와인'],
+                age_range_min=age_min,
+                age_range_max=age_max,
+                age_group_label=age_group_label,
+                age_male=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
+                age_female=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
+                is_closed=bool(male and male[1] and female and female[1]),
+            ))
+        return out
 
     def _parse_participant(self, raw: str) -> Optional[dict]:
         """

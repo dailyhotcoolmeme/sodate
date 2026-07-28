@@ -181,9 +181,14 @@ def gender_soldout_loco(page, idx: str, body_prefix: str = '') -> dict:
             for ggc, gvc, glab in genders:
                 gk = 'male' if '남' in glab else 'female'
                 h3 = _load_option(page, idx, [(dgc, dvc, dlab), (ggc, gvc, glab)], body_prefix)
+                # ⚠️ dropdown-item 하나에서 a 와 span.blocked 를 둘 다 잡으면 같은 티켓이
+                #    "후기작성 특가 49,000원" + "49,000원" 두 번 들어온다. 뒤엣것은 라벨이
+                #    없어 특가 판정이 안 돼 일반가로 오인되고, 최저가로 뽑히면서 정가 대신
+                #    할인가가 저장됐다(2026-07-28 로꼬: 정가 59,000인데 49,000으로 표시).
+                #    dropdown-item 단위로 한 번만 읽는다.
                 tickets = []  # (label, price, soldout)
-                for a in BeautifulSoup(h3, 'html.parser').select('.dropdown-item a, .dropdown-item span.blocked'):
-                    t = re.sub(r'\s+', ' ', a.get_text(' ', strip=True))
+                for item in BeautifulSoup(h3, 'html.parser').select('.dropdown-item'):
+                    t = re.sub(r'\s+', ' ', item.get_text(' ', strip=True))
                     pr = _price(t)
                     if pr is not None:
                         tickets.append((t, pr, '품절' in t or '마감' in t))
