@@ -24,7 +24,10 @@
         "backgroundColor": "#EA6491"
       },
       "package": "com.sodate.app",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "plugins": [
       "expo-router",
