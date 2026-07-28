@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Trash2, ExternalLink, Loader2, Check } from 'lucide-react'
+import { Trash2, ExternalLink, Loader2, Check, Search, X } from 'lucide-react'
 import DateTimePicker from '../components/DateTimePicker'
 import HashtagEditor from '../components/HashtagEditor'
 
@@ -65,6 +65,7 @@ type PriceDetail = { male?: GenderPrice; female?: GenderPrice }
 export default function Register() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [filterCompany, setFilterCompany] = useState('')
+  const [search, setSearch] = useState('')
   const [statusTab, setStatusTab] = useState<'todo' | 'done'>('todo') // 해야할 것 / 입력 완료
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
@@ -150,17 +151,30 @@ export default function Register() {
     setLoading(false)
   }
 
+  // 모임명 키워드 검색 — 공백으로 나눠 전부 포함하는 행만(순서 무관).
+  // 제목이 "[업체] [지역] 모임명" 구조라 "티키타카 수원" 처럼 조합해 찾을 수 있다.
+  const searchedRows = useMemo(() => {
+    const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (!terms.length) return rows
+    return rows.filter((r) => {
+      const company = companies.find((c) => c.id === r.company_id)?.name ?? ''
+      const hay = `${r.title ?? ''} ${company}`.toLowerCase()
+      return terms.every((t) => hay.includes(t))
+    })
+  }, [rows, search, companies])
+
   const visibleRows = useMemo(
-    () => (filterCompany ? rows.filter((r) => r.company_id === filterCompany) : rows),
-    [rows, filterCompany],
+    () => (filterCompany ? searchedRows.filter((r) => r.company_id === filterCompany) : searchedRows),
+    [searchedRows, filterCompany],
   )
 
-  // 업체별 건수 (탭 배지용)
+  // 업체별 건수 (탭 배지용) — 검색 중이면 검색 결과 기준이어야 한다.
+  // 안 그러면 "265건 찾음"인데 탭엔 839가 떠서 화면이 어긋나 보인다.
   const companyCounts = useMemo(() => {
     const m: Record<string, number> = {}
-    for (const r of rows) m[r.company_id] = (m[r.company_id] ?? 0) + 1
+    for (const r of searchedRows) m[r.company_id] = (m[r.company_id] ?? 0) + 1
     return m
-  }, [rows])
+  }, [searchedRows])
 
   function patch(key: string, field: keyof Row, value: string | boolean) {
     setRows((rs) => {
@@ -419,13 +433,40 @@ export default function Register() {
         </p>
       </div>
 
+      {/* 모임명 검색 — 일정이 많아 탭만으로는 원하는 모임을 찾기 어렵다 */}
+      <div className="mb-4">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="모임명 검색 (예: 티키타카, 와인)"
+            className="w-full pl-9 pr-9 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-pink-400"
+          />
+          {!!search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+              aria-label="검색어 지우기"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+        {!!search.trim() && (
+          <p className="text-xs text-gray-500 mt-1.5">
+            {visibleRows.length}건 찾음
+          </p>
+        )}
+      </div>
+
       {/* 업체별 탭 — 담당자별로 자기 업체 탭만 보고 입력하도록 구분 */}
       <div className="flex flex-wrap gap-2 mb-4">
         <button
           onClick={() => setFilterCompany('')}
           className={tabClass(filterCompany === '')}
         >
-          전체 <span className="opacity-60">{rows.length}</span>
+          전체 <span className="opacity-60">{searchedRows.length}</span>
         </button>
         {companies
           .filter((c) => (companyCounts[c.id] ?? 0) > 0)
