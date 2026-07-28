@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useFavoriteStore } from '@/stores/favoriteStore'
 
@@ -25,11 +25,14 @@ export function useFavoriteEvents() {
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const loadedOnce = useRef(false)
   const { deviceId, favoriteIds } = useFavorites()
 
   const fetchFavorites = useCallback(async () => {
     if (!deviceId) return
-    setLoading(true)
+    // 첫 로드에서만 스피너를 띄운다. 찜을 껐다 켤 때마다 스피너가 뜨면 목록이 통째로
+    // 사라졌다 다시 그려져 "느리다"고 느껴진다(2026-07-28 오너 지적).
+    if (!loadedOnce.current) setLoading(true)
     setError(null)
     try {
       // 이벤트+업체를 조인해 jsonb 배열로 돌려주는 스코핑 RPC(테이블 직접 접근은 차단됨).
@@ -43,12 +46,25 @@ export function useFavoriteEvents() {
       // 사라진 줄 알았다. 에러를 분리해 화면에서 재시도를 띄운다.
       setError(e instanceof Error ? e.message : '불러오지 못했어요')
     } finally {
+      loadedOnce.current = true
       setLoading(false)
     }
   }, [deviceId])
 
-  // 다른 화면에서 찜을 켜고 끄면 목록도 따라 갱신된다(size 로 변화 감지).
-  useEffect(() => { fetchFavorites() }, [fetchFavorites, favoriteIds.size])
+  useEffect(() => { fetchFavorites() }, [fetchFavorites])
 
-  return { events, loading, error, refetch: fetchFavorites }
+  // 찜이 "늘어났을 때만" 서버를 다시 본다(다른 화면에서 새로 담은 항목을 받아오려고).
+  // 해제는 아래 화면단 필터로 즉시 반영되므로 네트워크를 탈 필요가 없다.
+  const knownIds = events.length
+  useEffect(() => {
+    if (loadedOnce.current && favoriteIds.size > knownIds) fetchFavorites()
+  }, [favoriteIds.size, knownIds, fetchFavorites])
+
+  // 해제는 서버 응답을 기다리지 않고 그 자리에서 목록에서 빠진다.
+  const visible = useMemo(
+    () => events.filter((e) => favoriteIds.has(e.id)),
+    [events, favoriteIds],
+  )
+
+  return { events: visible, loading, error, refetch: fetchFavorites }
 }
