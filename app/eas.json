@@ -20,6 +20,18 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "K72Z59MZU3",
+        "ascAppId": "6795389152",
+        "ascApiKeyPath": "./certs/AuthKey_9URM5MR2DL.p8",
+        "ascApiKeyId": "9URM5MR2DL",
+        "ascApiKeyIssuerId": "e65cf392-198b-437d-a5a4-d6d697692559",
+        "bundleIdentifier": "com.sodate.app",
+        "language": "ko",
+        "companyName": "ourmine Co., Ltd.",
+        "sku": "sodate"
+      }
+    }
   }
 }
