@@ -53,3 +53,13 @@ fi
 
 grep -n 'expo-channel-name' "$MANIFEST"
 grep -n 'signingConfigs.release' "$GRADLE"
+
+# 최종 검증 — 여기서 실패하면 빌드하지 말 것.
+# 2026-07-28 실제 사고: prebuild 를 다시 돌린 뒤 이 스크립트를 안 돌려서 채널이 빠진
+# AAB 를 만들었다. 값이 매니페스트 어딘가에 있는지가 아니라 "키 이름이 정확한지"를 본다
+# (예전에 EXPO_ 접두사가 하나 더 붙어 있었는데 strings 검사로는 통과한 것처럼 보였다).
+grep -q 'android:name="expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY"' "$MANIFEST" \
+  || { echo "✗ 채널 메타데이터 키가 없거나 이름이 다르다 — 빌드 중단"; exit 1; }
+grep -q 'signingConfig signingConfigs.release' "$GRADLE" \
+  || { echo "✗ 릴리스 서명 설정이 없다 — 빌드 중단"; exit 1; }
+echo "✓ 검증 통과 (채널 키·서명)"

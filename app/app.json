@@ -33,7 +33,7 @@
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
       ],
-      "versionCode": 2
+      "versionCode": 3
     },
     "plugins": [
       "expo-router",

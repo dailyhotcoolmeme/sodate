@@ -211,3 +211,50 @@ cd app && npx eas update --branch production --message "설명"
 `companies.detail_images_visible` (기본 true). 끄면 이미지가 등록돼 있어도 앱 상세화면의
 "상세 설명" 섹션이 통째로 숨는다(`app/hooks/useEventDetail.ts`). 이미지를 지우지 않고
 잠시 내릴 때 쓴다 — 지우면 재업로드해야 하므로.
+
+---
+
+## 스토어 빌드 전 필수 점검 (2026-07-28 사고 3건에서 나온 목록)
+
+`prebuild` 를 돌릴 때마다 `ios/` `android/` 가 새로 생성되면서 아래가 전부 날아간다.
+**prebuild 후에는 반드시 패치 스크립트를 다시 돌릴 것.** 실제로 이걸 빠뜨려서
+채널이 빠진 AAB 를 만들었다.
+
+```bash
+cd app
+./scripts/patch-ios-release.sh       # 검증까지 같이 함
+./scripts/patch-android-release.sh   # 실패하면 exit 1 로 빌드를 막음
+```
+
+### 사고 1 — 안드로이드 채널 메타데이터 키 오타 (테스트 광고 출고 직전)
+
+넣던 키가 `expo.modules.updates.EXPO_UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY`,
+expo-updates 가 읽는 키는 `expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY`.
+`EXPO_` 접두사가 하나 더 붙어 조용히 무시됐다 → `Updates.channel` 빈 값 →
+`isProductionBuild()` false → **구글 테스트 광고가 스토어 빌드에 실림(수익 0)**.
+
+`strings` 로 매니페스트를 훑으면 값(`{"expo-channel-name":"production"}`)이 잡혀서
+**있는 것처럼 보인다.** 반드시 키 이름까지 확인할 것:
+
+```bash
+AAPT=$(ls $ANDROID_HOME/build-tools/*/aapt2 | tail -1)
+$AAPT dump xmltree --file AndroidManifest.xml <apk> | grep -B1 expo-channel-name
+```
+
+### 사고 2 — 업로드 이미지 URL 에 로컬 도메인이 박힘
+`PUBLIC_MEDIA_BASE` 로 해결. 위 "업로드 URL 도메인 고정" 항목 참고.
+
+### 사고 3 — 시스템 권한 팝업이 영어 + 앱 켜자마자
+- iOS 는 번들에 실제 `.lproj` 폴더가 있어야 그 언어 지원으로 인정한다.
+  `CFBundleLocalizations` 선언만으로는 부족해 제목·버튼이 영어로 뜬다.
+  `app.json` 의 `expo.locales` 가 `.lproj` 를 만들고 Xcode 프로젝트에 등록한다.
+  ⚠️ locales 파일 **내용**은 안드로이드 문자열 리소스로도 복사돼, iOS 전용 키를 넣으면
+  안드로이드 lint(`ExtraTranslation`)가 릴리스 빌드를 막는다 → locales 는 비워 두고
+  문구는 `patch-ios-release.sh` 가 `ko.lproj/InfoPlist.strings` 에 쓴다.
+- 권한 팝업은 온보딩 이후에 띄운다(`app/lib/initAds.ts` → `runPostOnboardingSetup`,
+  알림 → 추적 순서). 앱 켜자마자 물으면 대부분 거부하고, 알림 거부는 이 앱의 핵심인
+  새 일정·마감 알림을 영영 막는다.
+
+### 실기기 확인 없이 넘기지 말 것
+위 3건 중 2건은 **오너가 실기기에서 발견**했다(테스트 광고, 영어 팝업).
+빌드 산출물 검사만으로는 안 잡힌다.
