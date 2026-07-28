@@ -22,6 +22,9 @@ class SecretSalonScraper(BaseScraper):
     # 예약위젯(load_option.cm) 실결제가·매진을 정확히 추출 → DB에 기록(모드파티와 동일 정책)
     WRITES_PRICE = True
     WRITES_SEATS = True
+    # 매 크롤마다 전체 일정을 전수 확인(크롤↔DB 100% 일치 검증, 2026-07-28) →
+    # 업체가 시간·회차를 바꿨을 때 옛 회차가 유령으로 남지 않게 정리한다.
+    DELETE_STALE = True
 
     # "2026. 04.02 (THU) 19:30" 또는 "2026.04.02 (THU) 19:30"
     DATE_RE_FULL = re.compile(

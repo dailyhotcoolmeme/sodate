@@ -417,8 +417,9 @@ class InssumPartyScraper(BaseScraper):
                 yr1_full = (2000 + yr1) if yr1 <= 30 else (1900 + yr1)
                 yr2_full = (2000 + yr2) if yr2 <= 30 else (1900 + yr2)
                 cur_year = datetime.now().year
-                age1 = cur_year - yr1_full + 1
-                age2 = cur_year - yr2_full + 1
+                # 만나이 기준(+1 한국나이 금지) — 앱 나이필터가 만나이라 어긋난다
+                age1 = cur_year - yr1_full
+                age2 = cur_year - yr2_full
                 age_range_min = min(age1, age2)
                 age_range_max = max(age1, age2)
 

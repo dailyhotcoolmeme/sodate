@@ -20,6 +20,9 @@ class LovecastingScraper(BaseScraper):
     # 상품 본문에서 가격을 직접 뽑음 → DB 기록.
     # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행)
     WRITES_PRICE = True
+    # 매 크롤마다 전체 일정을 전수 확인(크롤↔DB 100% 일치 검증, 2026-07-28) →
+    # 업체가 시간·회차를 바꿨을 때 옛 회차가 유령으로 남지 않게 정리한다.
+    DELETE_STALE = True
 
     BASE_URL = 'https://lovecasting.co.kr'
     SCHEDULE_URLS = [

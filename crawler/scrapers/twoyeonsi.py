@@ -57,9 +57,15 @@ class TwoYeonsiScraper(BaseScraper):
                 page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
                 time.sleep(2)
 
-                soup = BeautifulSoup(page.content(), 'html.parser')
-                text = soup.get_text(separator='\n', strip=True)
+                # ⚠️ BeautifulSoup get_text(separator='\n')는 "7/30(목)"과 "20:00 2F（…）"를
+                #    별도 엘리먼트라 다른 줄로 쪼개버려 날짜+시각 정규식이 한 줄도 못 맞춘다
+                #    (2026-07-28: 이 때문에 이연시가 21일 넘게 0건이었음).
+                #    inner_text는 브라우저 렌더링 기준이라 한 줄로 붙어 나온다.
+                text = page.inner_text('body')
                 lines = [l.strip() for l in text.split('\n') if l.strip()]
+                if not any(DATE_RE.search(l) for l in lines):   # 렌더 실패 시 예전 방식으로 폴백
+                    soup = BeautifulSoup(page.content(), 'html.parser')
+                    lines = [l.strip() for l in soup.get_text(separator='\n', strip=True).split('\n') if l.strip()]
 
                 now = datetime.now()
                 current_year = now.year
@@ -134,9 +140,11 @@ class TwoYeonsiScraper(BaseScraper):
                                 y1 = (2000 + y1) if y1 <= 25 else (1900 + y1)
                             if y2 < 100:
                                 y2 = (2000 + y2) if y2 <= 25 else (1900 + y2)
-                            # 더 어린 년도(큰 숫자)가 더 낮은 나이(min)
-                            age_range_min = current_year - max(y1, y2) + 1
-                            age_range_max = current_year - min(y1, y2) + 1
+                            # 더 어린 년도(큰 숫자)가 더 낮은 나이(min).
+                            # ⚠️ +1(한국나이) 금지 — 앱의 '내 나이' 필터는 만나이 기준이라
+                            #    +1이면 97년생 가능한 행사가 만29세에게 안 걸린다(2026-07-28).
+                            age_range_min = current_year - max(y1, y2)
+                            age_range_max = current_year - min(y1, y2)
 
                     # 이벤트별 참가자 현황 파싱 (해당 기수 컨텍스트 블록에서)
                     # 이연시 구조: 날짜 줄 다음에 남/여 각 7명의 생년+직업이 나열됨

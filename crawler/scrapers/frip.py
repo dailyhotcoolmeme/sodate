@@ -29,6 +29,12 @@ FRIP_BASE = 'https://frip.co.kr'
 # 술19금(2392)은 순수 음주 클래스 노이즈 우려로 제외. source_url로 중복 제거됨.
 CATEGORY_IDS = [2841, 2834, 2844]
 
+# 미팅 카테고리 — 이 카테고리 상품은 제목 키워드 필터를 면제한다(카테고리 자체가 소개팅).
+MEETING_CATEGORY_ID = 2834
+
+# 제목으로 소개팅 여부를 판별하는 키워드(소셜/파티 카테고리에는 북토킹·타로 등 잡음이 섞임)
+TITLE_KEYWORDS = ['소개팅', '미팅', '로테이션', '파티', '번개', '썸', '솔로']
+
 PRICE_RE = re.compile(r'[\d.]+')
 REGION_KW = ['강남', '서초', '홍대', '신촌', '잠실', '건대', '성수', '이태원', '합정', '여의도',
              '마포', '종로', '용산', '동작', '관악', '수원', '인천', '부산', '대구', '대전']
@@ -218,6 +224,10 @@ class FripScraper(BaseScraper):
     # GraphQL(GetSelectItems)에서 가격도 직접 뽑음 → DB 기록.
     # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행 다수)
     WRITES_PRICE = True
+    # 목록(3개 카테고리) + DB에 남은 상품ID까지 매번 전수 재확인하므로 스테일 정리 가능.
+    # (2026-07-28: 호스트 제목 변경/카테고리 이탈로 살아있는 상품이 빠져 옛 회차가
+    #  212건 쌓여 있었음 → 원인 수정 후 활성화)
+    DELETE_STALE = True
 
     def __init__(self):
         super().__init__('frip')
@@ -226,7 +236,13 @@ class FripScraper(BaseScraper):
         events = []
         try:
             nodes = self._fetch_all_products()
-            self.logger.info(f'프립 상품 {len(nodes)}개 수집')
+            listed_ids = {str(n.get('id')) for n in nodes}
+            # 목록에서 빠졌지만 DB에 앞으로 일정이 남아있는 상품도 다시 확인
+            extra = [pid for pid in self._known_product_ids() if pid not in listed_ids]
+            for pid in extra:
+                nodes.append({'id': pid, 'title': '', 'areaName': '',
+                              'headerContents': [], '_category': MEETING_CATEGORY_ID})
+            self.logger.info(f'프립 상품 {len(nodes)}개 수집(목록 {len(listed_ids)} + 기존 {len(extra)})')
 
             with httpx.Client(timeout=20) as client:
                 for node in nodes:
@@ -247,28 +263,63 @@ class FripScraper(BaseScraper):
     # ─── 목록 수집 ─────────────────────────────────────────────────────────────
 
     def _fetch_all_products(self) -> list[dict]:
-        nodes: list[dict] = []
-        page = 1
+        """카테고리별로 따로 조회해 노드에 _category를 달아준다.
+        미팅(2834)은 카테고리 자체가 소개팅이라 제목 키워드 필터를 면제한다
+        (호스트가 마케팅용으로 제목을 자주 바꿔 '소개팅/로테이션'이 사라지면
+         멀쩡히 살아있는 상품이 크롤에서 통째로 빠지던 문제 — 2026-07-28)."""
+        by_id: dict[str, dict] = {}
         with httpx.Client(timeout=20) as client:
-            while True:
-                variables = {
-                    'filter': {'categoryIds': CATEGORY_IDS, 'orderType': 'LATEST'},
-                    'size': 24,
-                    'page': page,
-                }
-                resp = client.post(
-                    FRIP_GQL,
-                    json={'operationName': 'ProductContainer', 'query': GQL_LIST_QUERY, 'variables': variables},
-                    headers=GQL_HEADERS,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                lp = data['data']['product']['listingProductsV4']
-                nodes.extend(e['node'] for e in lp['edges'])
-                if not lp['pageInfo']['hasNextPage']:
-                    break
-                page += 1
-        return nodes
+            for cat in CATEGORY_IDS:
+                page = 1
+                while True:
+                    variables = {
+                        'filter': {'categoryIds': [cat], 'orderType': 'LATEST'},
+                        'size': 24,
+                        'page': page,
+                    }
+                    resp = client.post(
+                        FRIP_GQL,
+                        json={'operationName': 'ProductContainer', 'query': GQL_LIST_QUERY, 'variables': variables},
+                        headers=GQL_HEADERS,
+                    )
+                    resp.raise_for_status()
+                    lp = resp.json()['data']['product']['listingProductsV4']
+                    for e in lp['edges']:
+                        node = e['node']
+                        pid = str(node.get('id'))
+                        node.setdefault('_category', cat)
+                        by_id.setdefault(pid, node)
+                        # 미팅 카테고리에도 속하면 그 사실을 남긴다(필터 면제 판단용)
+                        if cat == MEETING_CATEGORY_ID:
+                            by_id[pid]['_category'] = cat
+                    if not lp['pageInfo']['hasNextPage']:
+                        break
+                    page += 1
+        return list(by_id.values())
+
+    def _known_product_ids(self) -> list[str]:
+        """DB에 이미 있는(앞으로 일정) 프립 상품 ID. 목록 API에서 빠져도(카테고리 이동·
+        노출중단) 상품 자체는 살아있는 경우가 있어 항상 다시 확인한다. 진짜 종료된
+        상품은 일정이 안 나오므로 스테일 정리로 자연히 사라진다."""
+        try:
+            company_id = self.get_company_id()
+            now = datetime.now(timezone.utc).isoformat()
+            rows = (
+                self.supabase.table('events')
+                .select('source_url')
+                .eq('company_id', company_id)
+                .gte('event_date', now)
+                .execute()
+            ).data or []
+            ids = set()
+            for r in rows:
+                m = re.search(r'/products/(\d+)', r.get('source_url') or '')
+                if m:
+                    ids.add(m.group(1))
+            return sorted(ids)
+        except Exception as e:
+            self.logger.warning(f'기존 상품ID 조회 실패(목록 API만 사용): {e}')
+            return []
 
     # ─── 스케줄 + selectItems 조회 ──────────────────────────────────────────────
 
@@ -410,7 +461,9 @@ class FripScraper(BaseScraper):
                 b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
                 los.append(yr - max(b1, b2)); his.append(yr - min(b1, b2)); continue
             if band is None:  # 밴드 토큰(옵션에 '3040' 등) — 명시 범위 없을 때만 사용
-                if re.search(r'20\s*30(?!\d)', name):
+                if re.search(r'(?<!\d)3045(?!\d)', name):
+                    band = (30, 45, '3045')
+                elif re.search(r'20\s*30(?!\d)', name):
                     band = (20, 39, '2030')
                 elif re.search(r'30\s*40(?!\d)', name):
                     band = (30, 49, '3040')
@@ -459,6 +512,8 @@ class FripScraper(BaseScraper):
         m = re.search(r'만?\s*(\d{2})\s*세\s*이상', text)
         if m:
             return (max(18, int(m.group(1))), 49, None)
+        if re.search(r'(?<!\d)3045(?!\d)', text):   # '3045커피/3045와인' 브랜드형 밴드
+            return (30, 45, '3045')
         if re.search(r'20\s*30(?!\d)', text):
             return (20, 39, '2030')
         if re.search(r'30\s*40(?!\d)', text):
@@ -716,9 +771,12 @@ class FripScraper(BaseScraper):
         일정별 selectItems로 나이/성별가격/잔여석을 뽑아 각각 이벤트 생성."""
         try:
             title = node.get('title') or ''
-            if not any(kw in title for kw in ['소개팅', '미팅', '로테이션', '파티', '번개', '썸', '솔로']):
-                return []
             product_id = str(node.get('id'))
+            # 미팅(2834) 카테고리는 카테고리 자체가 소개팅 → 제목 키워드 필터 면제.
+            # 소셜/파티 카테고리에는 북토킹·타로 등 비소개팅이 섞여 제목으로 걸러야 한다.
+            exempt = node.get('_category') == MEETING_CATEGORY_ID
+            if not exempt and not any(kw in title for kw in TITLE_KEYWORDS):
+                return []
             area = node.get('areaName') or ''
 
             # ── 상품 상세(설명·recommendedAge) 1회 ──
@@ -726,6 +784,8 @@ class FripScraper(BaseScraper):
             description_text = ''
             recommended_age: Optional[int] = None
             if detail:
+                if not title:
+                    title = detail.get('title') or ''
                 contents = detail.get('contents') or []
                 html_parts = [c.get('content', '') for c in contents if c.get('content')]
                 full_html = ' '.join(html_parts)

@@ -51,6 +51,10 @@ class EmotionalOrangeScraper(BaseScraper):
     # 예약위젯(load_option.cm)에서 성별 가격·매진을 정확히 추출 → DB 기록
     WRITES_PRICE = True
     WRITES_SEATS = True
+    # 매 크롤마다 전 상품의 예약위젯 일시를 전수 확인 → 사라진 회차 정리 가능.
+    # (2026-07-28: 사케시그널 시간이 19:00→18:00으로 바뀌었는데 옛 19:00 회차가
+    #  남아 앱에 틀린 시간이 노출되고 있었음)
+    DELETE_STALE = True
 
     # 제목 대괄호의 동네 키워드 → 지역 라벨. 앞에서부터 매칭(첫 매칭 우선)하므로
     # 더 구체적인 키워드를 앞에 둔다.

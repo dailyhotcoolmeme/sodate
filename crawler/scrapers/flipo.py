@@ -587,7 +587,7 @@ class FlipoScraper(BaseScraper):
             if age_birth_m:
                 yr = int(age_birth_m.group(1))
                 yr_full = (2000 + yr) if yr <= 30 else (1900 + yr)
-                age_range_max = current_year - yr_full + 1
+                age_range_max = current_year - yr_full   # 만나이(+1 한국나이 금지)
                 age_group_label = f'{yr}년생이하'
 
         return age_range_min, age_range_max, age_group_label

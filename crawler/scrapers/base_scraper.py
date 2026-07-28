@@ -118,6 +118,11 @@ class BaseScraper(ABC):
                     if data.get(_k) is None:
                         data.pop(_k, None)
 
+            # 썸네일이 비었으면 upsert에서 제외 → 기존 썸네일을 빈 배열로 지우지 않는다.
+            # (목록 API에서 빠진 상품을 ID로만 재조회할 때 썸네일이 안 딸려오는 경우 대비)
+            if not data.get('thumbnail_urls'):
+                data.pop('thumbnail_urls', None)
+
             # 테마는 구분하지 않는다 — 전부 소개팅. 스크래퍼가 뭘 넣든 일괄 고정.
             data['theme'] = ['소개팅']
 
@@ -185,6 +190,23 @@ class BaseScraper(ABC):
                     f"age_range_max={data.get('age_range_max')})"
                 )
                 # 해당 이벤트만 스킵하고 계속 진행
+
+        # 지난 일정 정리 — 앱에 안 보이는데 DB에만 쌓여 스테일 판정(아래)의 분모를 왜곡한다.
+        # 하루 여유를 둬서 당일 밤 일정이 시간대 오차로 지워지는 걸 막는다. verified는 보존.
+        try:
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+            past = (
+                self.supabase.table('events')
+                .delete()
+                .eq('company_id', company_id)
+                .eq('verified', False)
+                .lt('event_date', cutoff)
+                .execute()
+            )
+            if past.data:
+                self.logger.info(f"[{self.company_slug}] 지난 일정 {len(past.data)}개 정리")
+        except Exception as e:
+            self.logger.warning(f"[{self.company_slug}] 지난 일정 정리 실패(계속): {e}")
 
         # 이번 크롤에 없는 미검증 이벤트 정리(매진·삭제·시간변경된 옛 회차). verified는 절대 안 건드림.
         deleted = 0

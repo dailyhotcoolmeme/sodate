@@ -19,6 +19,9 @@ class YeongyulScraper(BaseScraper):
     # (2026-07-25 발견: 이 플래그가 없어 scrape()가 가격을 정확히 뽑고도
     #  base_scraper가 매번 upsert에서 벗겨내 admin에 전부 '해야할것'으로 뜸)
     WRITES_PRICE = True
+    # 매 크롤마다 전체 일정을 전수 확인(크롤↔DB 100% 일치 검증, 2026-07-28) →
+    # 업체가 시간·회차를 바꿨을 때 옛 회차가 유령으로 남지 않게 정리한다.
+    DELETE_STALE = True
 
     BASE_URL = 'https://yeongyul.com'
     LIST_URL = 'https://yeongyul.com/ab-1131'
