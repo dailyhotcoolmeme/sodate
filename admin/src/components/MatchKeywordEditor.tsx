@@ -12,9 +12,8 @@ import { keywordsOf } from '../lib/matchImageType'
  * 넣는 즉시 "몇 건이 걸리는지 + 실제 제목"을 보여준다. 앱을 열어보지 않고 확인하려고.
  */
 export default function MatchKeywordEditor({
-  typeName, keywords, titles, otherTypes, onChange,
+  keywords, titles, otherTypes, onChange,
 }: {
-  typeName: string
   keywords: string[]
   /** 이 업체의 모임 제목 전체 */
   titles: string[]
@@ -24,9 +23,7 @@ export default function MatchKeywordEditor({
 }) {
   const [input, setInput] = useState('')
 
-  // 검색어를 안 넣으면 유형 이름으로 매칭된다(하위호환) — 화면에도 그렇게 보여준다
-  const effective = keywords.length ? keywords : [typeName].filter(Boolean)
-  const usingName = keywords.length === 0
+  const effective = keywords
 
   const { hits, stolen } = useMemo(() => {
     const hit: string[] = []
@@ -70,11 +67,6 @@ export default function MatchKeywordEditor({
             </button>
           </span>
         ))}
-        {usingName && (
-          <span className="inline-flex items-center px-2 py-1 rounded-full bg-white border border-dashed border-gray-300 text-xs text-gray-500">
-            유형 이름 사용 중: {typeName}
-          </span>
-        )}
         <span className="inline-flex items-center gap-1">
           <input
             value={input}
@@ -91,7 +83,7 @@ export default function MatchKeywordEditor({
       </div>
 
       <p className={`text-xs font-medium ${hits.length ? 'text-green-700' : 'text-orange-600'}`}>
-        {hits.length ? `이 유형이 붙는 모임 ${hits.length}건` : '걸리는 모임이 없습니다'}
+        {hits.length ? `이 유형이 붙는 모임 ${hits.length}건` : (keywords.length ? "걸리는 모임이 없습니다" : "찾을 말을 넣어야 이 이미지가 붙습니다")}
       </p>
       {hits.length > 0 && (
         <ul className="mt-1 space-y-0.5">

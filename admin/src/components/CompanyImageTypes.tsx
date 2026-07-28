@@ -3,7 +3,7 @@ import { supabase, uploadDetailImage, deleteDetailImage } from '../lib/supabase'
 import { resizeForUpload } from '../lib/resizeImage'
 import MatchKeywordEditor from './MatchKeywordEditor'
 import { matchTypeByName } from '../lib/matchImageType'
-import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Check, Pencil } from 'lucide-react'
+import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Pencil } from 'lucide-react'
 
 interface ImageType {
   id: string
@@ -55,7 +55,6 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
     await supabase.from('company_image_types').insert({
       company_id: companyId,
       name,
-      is_default: types.length === 0, // 첫 유형은 자동 기본
       sort_order: types.length,
     })
     await load()
@@ -68,15 +67,9 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
     await load()
   }
 
-  async function setDefault(t: ImageType) {
-    if (t.is_default) return
-    await supabase.from('company_image_types').update({ is_default: false }).eq('company_id', companyId)
-    await supabase.from('company_image_types').update({ is_default: true }).eq('id', t.id)
-    await load()
-  }
 
   async function deleteType(t: ImageType) {
-    if (!window.confirm(`'${t.name}' 유형을 삭제할까요? 이 유형을 쓰던 일정은 기본 유형으로 표시됩니다.`)) return
+    if (!window.confirm(`'${t.name}' 유형을 삭제할까요? 이 유형이 붙던 모임은 상세 설명이 나오지 않게 됩니다.`)) return
     // R2 파일 정리(실패해도 진행)
     for (const url of t.images) { try { await deleteDetailImage(url) } catch { /* noop */ } }
     await supabase.from('company_image_types').delete().eq('id', t.id)
@@ -142,15 +135,6 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
               <button onClick={() => renameType(t)} title="이름 수정" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-gray-500 bg-gray-100 hover:bg-gray-200 shrink-0">
                 <Pencil size={11} /> 이름
               </button>
-              {t.is_default ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium shrink-0">
-                  <Check size={12} /> 기본
-                </span>
-              ) : (
-                <button onClick={() => setDefault(t)} className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium hover:bg-gray-200 shrink-0">
-                  기본으로
-                </button>
-              )}
             </div>
             <button onClick={() => deleteType(t)} className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-600 shrink-0">
               <Trash2 size={14} /> 유형 삭제
@@ -158,7 +142,6 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
           </div>
 
           <MatchKeywordEditor
-            typeName={t.name}
             keywords={t.match_keywords ?? []}
             titles={titles}
             otherTypes={types.filter((x) => x.id !== t.id)}

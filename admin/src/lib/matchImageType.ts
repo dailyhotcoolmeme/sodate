@@ -5,23 +5,24 @@
 //    오너가 잘못 판단하게 된다.
 //
 // 규칙
-//   · 유형마다 검색어(match_keywords)를 여러 개 둘 수 있다. 모임 제목에 그중 하나라도
+//   · 유형마다 검색어(match_keywords)를 여러 개 둔다. 모임 제목에 그중 하나라도
 //     들어있으면 그 유형.
-//   · 검색어가 하나도 없으면 유형 이름으로 매칭한다(예전 방식, 하위호환).
 //   · 여러 유형이 걸리면 걸린 검색어가 가장 긴 쪽(= 더 구체적인 쪽)이 이긴다.
+//   · 검색어가 없으면 아무 모임에도 안 붙는다.
 //   · 아무것도 안 걸리면 null → 앱에서 상세 설명 섹션이 통째로 안 나온다.
+//
+// 예전엔 검색어가 비면 "유형 이름"으로 매칭하는 폴백이 있었다. 이름을 매칭 사정에
+// 맞춰 지어야 하는 문제가 있어 검색어로 일원화했고, 기존 유형들은 이름을 검색어로
+// 옮긴 뒤(2026-07-28) 폴백을 걷어냈다 — 옮기기 전후 매칭 결과가 동일한 걸 확인함.
 
 export interface MatchableType {
   name: string
   match_keywords?: string[] | null
 }
 
-/** 이 유형이 쓰는 검색어들(비어 있으면 이름을 검색어로). */
+/** 이 유형이 쓰는 검색어들. */
 export function keywordsOf(t: MatchableType): string[] {
-  const ks = (t.match_keywords ?? []).map((k) => String(k).trim()).filter(Boolean)
-  if (ks.length) return ks
-  const n = String(t.name ?? '').trim()
-  return n ? [n] : []
+  return (t.match_keywords ?? []).map((k) => String(k).trim()).filter(Boolean)
 }
 
 /** 제목이 이 유형에 걸리면, 걸린 검색어 중 가장 긴 것을 돌려준다. 안 걸리면 null. */
