@@ -52,6 +52,13 @@ def _parse_age_range_from_label(age_group_label: str) -> tuple[Optional[int], Op
 
 
 class YeoninScraper(BaseScraper):
+    # 상품 옵션(load_option.cm)에서 성별 가격·품절을 그대로 읽으므로 가격 정본이다.
+    # 옛 게시판 본문 파싱 시절엔 가격이 부정확해 꺼져 있었고, 그 탓에 새로 들어온
+    # 이벤트가 전부 가격 없이 저장됐다(2026-07-28 확인 — base_scraper 가 저장 직전에 버림).
+    WRITES_PRICE = True
+    # 성별 나이도 옵션 라벨(남: 95-02)에서 나온다 → 정본. None 이면 옛 값을 지운다.
+    WRITES_AGE = True
+
     BASE_URL = 'https://yeonin.co.kr'
     SCHEDULE_URL = 'https://yeonin.co.kr/schedule'
     LIST_URL = 'https://yeonin.co.kr/list'
@@ -230,6 +237,10 @@ class YeoninScraper(BaseScraper):
                         thumbnail_urls=[],
                         theme=['일반'],
                         age_group_label=f'{age[0]}~{age[1]}세' if age else None,
+                        # 앱 카드·상세가 실제로 보여주는 건 age_male/age_female 이다.
+                        # 연인어때는 옵션 라벨에 남성 연령만 있고 여성은 '제한 ❌'.
+                        age_male=f'{age[0]}~{age[1]}' if age else None,
+                        age_female='나이 무관',
                         age_range_min=age[0] if age else None,
                         age_range_max=age[1] if age else None,
                         price_detail=detail or None,

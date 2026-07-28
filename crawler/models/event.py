@@ -27,6 +27,9 @@ class EventModel(BaseModel):
     format: Optional[str] = None
     age_group_label: Optional[str] = None      # 나이대 그룹 라벨
     participant_stats: Optional[dict] = None    # 참가자 현황 JSON
+    # 성별·티어별 가격 상세 {'male': {'regular': 48000, 'regular_soldout': True}, ...}
+    # 앱이 품절 항목에 취소선을 긋는 데 쓴다. 옵션에서 정확히 뽑는 스크래퍼만 채운다.
+    price_detail: Optional[dict] = None
     source_url: str
     is_closed: bool = False
 
