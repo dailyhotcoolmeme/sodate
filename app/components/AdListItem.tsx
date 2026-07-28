@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet, Platform } from 'react-native'
 import {
   NativeAd,
   NativeAdView,
@@ -10,6 +10,7 @@ import {
 import { Image } from 'expo-image'
 import { useColors } from '@/hooks/useColors'
 import { FEED_NATIVE_AD_UNIT_ID } from '@/lib/ads'
+import { track } from '@/lib/analytics'
 
 const THUMB = 88
 
@@ -31,9 +32,19 @@ export default function AdListItem() {
         } else {
           nativeAd.destroy()
         }
+        track('ad_load_success', { properties: { slot: 'feed', platform: Platform.OS } })
       })
-      .catch(() => {
-        // 광고 로드 실패 시 슬롯을 비워둔다 (앱 동작엔 영향 없음)
+      .catch((e) => {
+        // 슬롯은 비워두고 앱은 그대로 돌아간다. 다만 예전처럼 조용히 삼키지는 않는다 —
+        // 실패 사실과 사유를 남겨야 출시 후에 "광고가 왜 안 나오는지"를 알 수 있다.
+        track('ad_load_fail', {
+          properties: {
+            slot: 'feed',
+            platform: Platform.OS,
+            code: e?.code ?? null,
+            message: String(e?.message ?? e).slice(0, 200),
+          },
+        })
       })
     return () => {
       mounted = false

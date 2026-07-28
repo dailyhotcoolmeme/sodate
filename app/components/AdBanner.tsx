@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet, Platform } from 'react-native'
 import {
   NativeAd,
   NativeAdView,
@@ -10,6 +10,7 @@ import {
 import { Image } from 'expo-image'
 import { useColors } from '@/hooks/useColors'
 import { DETAIL_NATIVE_AD_UNIT_ID } from '@/lib/ads'
+import { track } from '@/lib/analytics'
 
 const ICON = 44
 
@@ -35,8 +36,19 @@ export default function AdBanner() {
         } else {
           nativeAd.destroy()
         }
+        track('ad_load_success', { properties: { slot: 'detail', platform: Platform.OS } })
       })
-      .catch(() => {})
+      .catch((e) => {
+        // 조용히 삼키면 출시 후 광고가 안 나와도 알 수가 없다 — 사유를 남긴다
+        track('ad_load_fail', {
+          properties: {
+            slot: 'detail',
+            platform: Platform.OS,
+            code: e?.code ?? null,
+            message: String(e?.message ?? e).slice(0, 200),
+          },
+        })
+      })
     return () => {
       mounted = false
       loaded?.destroy()

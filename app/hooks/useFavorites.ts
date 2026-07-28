@@ -1,74 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
-import * as Application from 'expo-application'
+import { useFavoriteStore } from '@/stores/favoriteStore'
 
-const DEVICE_ID_KEY = 'sodate-device-id'
-
-async function getDeviceId(): Promise<string> {
-  const stored = await AsyncStorage.getItem(DEVICE_ID_KEY)
-  if (stored) return stored
-
-  let id: string
-  try {
-    id = Application.getAndroidId()
-  } catch {
-    id = `device-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  }
-  await AsyncStorage.setItem(DEVICE_ID_KEY, id)
-  return id
-}
-
+/**
+ * 관심(찜) 상태. 실제 상태는 전역 스토어(stores/favoriteStore)에 있고 여기선 꺼내 쓰기만 한다.
+ *
+ * 예전엔 이 훅이 화면마다 자기 useState 를 들고 있어서 화면끼리 값이 어긋났다
+ * (상세에서 찜해도 이미 떠 있던 피드에는 반영 안 됨 — 2026-07-28 실기기 확인).
+ * 호출부는 그대로 두려고 반환 모양은 유지한다.
+ */
 export function useFavorites() {
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
-  const [deviceId, setDeviceId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const favoriteIds = useFavoriteStore((s) => s.favoriteIds)
+  const toggle = useFavoriteStore((s) => s.toggle)
+  const loading = useFavoriteStore((s) => s.loading)
+  const deviceId = useFavoriteStore((s) => s.deviceId)
+  const init = useFavoriteStore((s) => s.init)
 
-  useEffect(() => {
-    async function init() {
-      try {
-        const id = await getDeviceId()
-        setDeviceId(id)
-        // favorites 테이블은 anon 직접 접근이 막혀 있다(예전엔 정책이 USING(true)라
-        // 누구나 전체 조회·삭제가 가능했음 — 2026-07-28 실증). device_id로 스코핑된 RPC만 사용.
-        const { data } = await supabase.rpc('get_my_favorite_ids' as any, { p_device_id: id } as any)
-        setFavoriteIds(new Set((data ?? []) as string[]))
-      } catch {
-        // 실패해도 스피너는 내린다(관심목록은 비어 보이되 앱은 정상)
-      } finally {
-        setLoading(false)
-      }
-    }
-    init()
-  }, [])
-
-  const toggle = useCallback(async (eventId: string) => {
-    if (!deviceId) return
-    const isFav = favoriteIds.has(eventId)
-
-    // 낙관적 업데이트
-    setFavoriteIds((prev) => {
-      const next = new Set(prev)
-      if (isFav) next.delete(eventId)
-      else next.add(eventId)
-      return next
-    })
-
-    try {
-      const { error } = await supabase.rpc('set_favorite' as any, {
-        p_device_id: deviceId, p_event_id: eventId, p_on: !isFav,
-      } as any)
-      if (error) throw error
-    } catch {
-      // 쓰기 실패 시 낙관적 업데이트 롤백(로컬-서버 desync 방지)
-      setFavoriteIds((prev) => {
-        const next = new Set(prev)
-        if (isFav) next.add(eventId)
-        else next.delete(eventId)
-        return next
-      })
-    }
-  }, [deviceId, favoriteIds])
+  useEffect(() => { init() }, [init])
 
   return { favoriteIds, toggle, loading, deviceId }
 }
@@ -77,7 +25,7 @@ export function useFavoriteEvents() {
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { deviceId } = useFavorites()
+  const { deviceId, favoriteIds } = useFavorites()
 
   const fetchFavorites = useCallback(async () => {
     if (!deviceId) return
@@ -99,7 +47,8 @@ export function useFavoriteEvents() {
     }
   }, [deviceId])
 
-  useEffect(() => { fetchFavorites() }, [fetchFavorites])
+  // 다른 화면에서 찜을 켜고 끄면 목록도 따라 갱신된다(size 로 변화 감지).
+  useEffect(() => { fetchFavorites() }, [fetchFavorites, favoriteIds.size])
 
   return { events, loading, error, refetch: fetchFavorites }
 }

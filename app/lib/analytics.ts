@@ -33,6 +33,11 @@ export type AnalyticsEventType =
   | 'review_view'
   | 'review_click'
   | 'participant_stats_view'
+  // 광고 결과 계측 — 예전엔 로드 실패를 catch{} 로 삼켜서, 광고가 안 나와도
+  // 안 나온다는 사실조차 알 수 없었다(2026-07-28 iOS에서 실제로 겪음).
+  // 출시 후 플랫폼별 충전율·오류를 DB에서 바로 볼 수 있게 남긴다.
+  | 'ad_load_success'
+  | 'ad_load_fail'
 
 interface AnalyticsPayload {
   event_type: AnalyticsEventType
