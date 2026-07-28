@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase, uploadDetailImage, deleteDetailImage } from '../lib/supabase'
 import { resizeForUpload } from '../lib/resizeImage'
 import MatchKeywordEditor, { TitleLink, dedupeTitles } from './MatchKeywordEditor'
+import DetailImagePreview from './DetailImagePreview'
 import { matchTypeByName } from '../lib/matchImageType'
-import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Pencil } from 'lucide-react'
+import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Pencil, Maximize2 } from 'lucide-react'
 
 interface ImageType {
   id: string
@@ -23,6 +24,8 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
   const [titles, setTitles] = useState<{ title: string; url: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null) // 업로드 중인 type id
+  // 확대보기 — 썸네일이 잘려 보여서 제대로 올렸는지 확인이 안 됨
+  const [preview, setPreview] = useState<{ name: string; images: string[]; index: number } | null>(null)
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => { load() }, [companyId])
@@ -130,6 +133,15 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
 
   return (
     <div className="space-y-4">
+      {preview && (
+        <DetailImagePreview
+          typeName={preview.name}
+          images={preview.images}
+          startIndex={preview.index}
+          onClose={() => setPreview(null)}
+        />
+      )}
+
       {types.length === 0 && (
         <p className="text-sm text-gray-400">등록된 상세 이미지 유형이 없습니다. 유형을 추가하고 이미지를 올려주세요.</p>
       )}
@@ -159,7 +171,15 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
             <div className="flex flex-wrap gap-2 mb-3">
               {t.images.map((url, idx) => (
                 <div key={url} className="relative w-28">
-                  <img src={url} alt="" className="w-28 h-36 object-cover rounded-t border border-gray-200" />
+                  {/* 썸네일은 잘려 보이므로(세로로 아주 긴 캡처) 눌러서 원본 비율로 확인 */}
+                  <button
+                    type="button"
+                    onClick={() => setPreview({ name: t.name, images: t.images, index: idx })}
+                    className="block w-28 rounded-t border border-gray-200 overflow-hidden"
+                    title="크게 보기"
+                  >
+                    <img src={url} alt="" className="w-28 h-36 object-cover" />
+                  </button>
                   {/* 컨트롤 항상 표시(모바일엔 hover 없음) */}
                   <div className="flex justify-between border border-t-0 border-gray-200 rounded-b bg-gray-50">
                     <button onClick={() => moveImage(t, idx, -1)} disabled={idx === 0} title="위로" className="p-1.5 text-gray-600 disabled:opacity-25 active:bg-gray-200"><ArrowUp size={15} /></button>
@@ -185,6 +205,15 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
             {busy === t.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
             이미지 추가 (여러 장 가능)
           </button>
+          {t.images.length > 0 && (
+            <button
+              onClick={() => setPreview({ name: t.name, images: t.images, index: 0 })}
+              className="ml-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <Maximize2 size={14} />
+              앱에서 보이는 대로 보기
+            </button>
+          )}
         </div>
       ))}
 
