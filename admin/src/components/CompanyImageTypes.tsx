@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, uploadDetailImage, deleteDetailImage } from '../lib/supabase'
 import { resizeForUpload } from '../lib/resizeImage'
-import MatchKeywordEditor from './MatchKeywordEditor'
+import MatchKeywordEditor, { TitleLink, dedupeTitles } from './MatchKeywordEditor'
 import { matchTypeByName } from '../lib/matchImageType'
 import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Pencil } from 'lucide-react'
 
@@ -17,7 +17,10 @@ interface ImageType {
 
 export default function CompanyImageTypes({ companyId, slug }: { companyId: string; slug: string }) {
   const [types, setTypes] = useState<ImageType[]>([])
-  const [titles, setTitles] = useState<string[]>([]) // 이 업체 모임 제목 — 검색어가 몇 건 걸리는지 보여주려고
+  // 이 업체 모임 제목 + 실제 페이지 링크.
+  // 오너가 제목만 보고는 어떤 이미지를 붙일지 못 정한다 → 그 모임 페이지를 열어
+  // 상세 이미지를 보면서 결정할 수 있게 링크까지 같이 들고 있는다.
+  const [titles, setTitles] = useState<{ title: string; url: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null) // 업로드 중인 type id
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -29,10 +32,14 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
     const [t, ev] = await Promise.all([
       supabase.from('company_image_types').select('*').eq('company_id', companyId)
         .order('sort_order').order('created_at'),
-      supabase.from('events').select('title').eq('company_id', companyId).eq('is_active', true).limit(2000),
+      supabase.from('events').select('title, source_url').eq('company_id', companyId).eq('is_active', true).limit(2000),
     ])
     setTypes((t.data as ImageType[]) ?? [])
-    setTitles(((ev.data as any[]) ?? []).map((e) => e.title ?? '').filter(Boolean))
+    // 건수는 실제 모임 수 그대로. 목록에 보여줄 때만 제목 기준으로 중복을 접는다
+    // (같은 제목이 지역·날짜만 달리해 수십 건씩 있다).
+    setTitles(((ev.data as any[]) ?? [])
+      .map((e) => ({ title: (e.title ?? '').trim(), url: e.source_url ?? '' }))
+      .filter((e) => e.title))
     setLoading(false)
   }
 
@@ -188,8 +195,9 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
       {/* 어느 유형에도 안 걸리는 모임 — 이게 곧 "상세 설명이 안 나오는 모임"이다.
           빠진 검색어를 찾으라고 제목을 그대로 보여준다. */}
       {titles.length > 0 && (() => {
-        const missed = titles.filter((t) => !matchTypeByName(t, types.filter((x) => x.images.length > 0)))
-        const uniq = Array.from(new Set(missed))
+        const withImages = types.filter((x) => x.images.length > 0)
+        const missed = titles.filter((r) => !matchTypeByName(r.title, withImages))
+        const uniq = dedupeTitles(missed)
         if (!uniq.length) {
           return (
             <p className="mt-3 text-xs text-green-700">
@@ -202,11 +210,12 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
             <p className="text-xs font-semibold text-orange-800 mb-1.5">
               상세 설명이 안 나오는 모임 {missed.length}건 ({uniq.length}종)
             </p>
-            <ul className="space-y-0.5">
-              {uniq.slice(0, 8).map((t) => (
-                <li key={t} className="text-[11px] text-orange-700 truncate">· {t}</li>
+            {/* 전체를 다 보여준다 — 오너가 하나씩 열어보며 어떤 이미지를 붙일지 정한다.
+                프립처럼 종류가 많으면 길어지므로 이 목록만 따로 스크롤한다. */}
+            <ul className="space-y-0.5 max-h-72 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {uniq.map((r) => (
+                <li key={r.title} className="min-w-0"><TitleLink row={r} /></li>
               ))}
-              {uniq.length > 8 && <li className="text-[11px] text-orange-500">· 외 {uniq.length - 8}종</li>}
             </ul>
           </div>
         )

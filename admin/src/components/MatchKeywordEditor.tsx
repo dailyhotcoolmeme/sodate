@@ -1,6 +1,31 @@
 import { useMemo, useState } from 'react'
-import { X, Plus, AlertTriangle } from 'lucide-react'
+import { X, Plus, AlertTriangle, ExternalLink } from 'lucide-react'
 import { keywordsOf } from '../lib/matchImageType'
+
+export type TitleRow = { title: string; url: string }
+
+/** 같은 제목이 지역·날짜만 달리해 수십 건씩 있으므로 목록에선 한 번만 보여준다. */
+export function dedupeTitles(rows: TitleRow[]): TitleRow[] {
+  const seen = new Map<string, TitleRow>()
+  for (const r of rows) if (!seen.has(r.title)) seen.set(r.title, r)
+  return [...seen.values()]
+}
+
+/**
+ * 모임 제목 — 실제 페이지로 가는 링크.
+ * 제목만 봐선 어떤 이미지를 붙일지 못 정한다. 그 모임 페이지를 열어 상세 이미지를
+ * 직접 보면서 결정하라고 링크로 건다.
+ */
+export function TitleLink({ row }: { row: TitleRow }) {
+  if (!row.url) return <span className="text-[11px] text-gray-500">· {row.title}</span>
+  return (
+    <a href={row.url} target="_blank" rel="noreferrer"
+      className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:underline">
+      <span className="truncate">· {row.title}</span>
+      <ExternalLink size={10} className="shrink-0" />
+    </a>
+  )
+}
 
 /**
  * "이 유형이 붙을 모임을 찾는 말" 편집기.
@@ -15,22 +40,20 @@ export default function MatchKeywordEditor({
   keywords, titles, otherTypes, onChange,
 }: {
   keywords: string[]
-  /** 이 업체의 모임 제목 전체 */
-  titles: string[]
+  /** 이 업체의 모임 전체(중복 포함 — 건수는 실제 모임 수여야 하므로) */
+  titles: TitleRow[]
   /** 같은 업체의 다른 유형들 — 어느 쪽이 이기는지 판정용 */
   otherTypes: { name: string; match_keywords?: string[] | null }[]
   onChange: (next: string[]) => void
 }) {
   const [input, setInput] = useState('')
 
-  const effective = keywords
-
   const { hits, stolen } = useMemo(() => {
-    const hit: string[] = []
+    const hit: TitleRow[] = []
     const steal: { title: string; by: string }[] = []
-    for (const title of titles) {
-      const hay = (title ?? '').toLowerCase()
-      const mine = effective
+    for (const row of titles) {
+      const hay = row.title.toLowerCase()
+      const mine = keywords
         .filter((k) => hay.includes(k.toLowerCase()))
         .sort((a, b) => b.length - a.length)[0]
       if (!mine) continue
@@ -40,11 +63,13 @@ export default function MatchKeywordEditor({
         const k = keywordsOf(o).filter((x) => hay.includes(x.toLowerCase())).sort((a, b) => b.length - a.length)[0]
         if (k && k.length > mine.length && (!winner || k.length > winner.len)) winner = { name: o.name, len: k.length }
       }
-      if (winner) steal.push({ title, by: winner.name })
-      else hit.push(title)
+      if (winner) steal.push({ title: row.title, by: winner.name })
+      else hit.push(row)
     }
     return { hits: hit, stolen: steal }
-  }, [titles, effective, otherTypes])
+  }, [titles, keywords, otherTypes])
+
+  const hitList = dedupeTitles(hits)
 
   const add = (raw: string) => {
     const k = raw.trim()
@@ -83,14 +108,16 @@ export default function MatchKeywordEditor({
       </div>
 
       <p className={`text-xs font-medium ${hits.length ? 'text-green-700' : 'text-orange-600'}`}>
-        {hits.length ? `이 유형이 붙는 모임 ${hits.length}건` : (keywords.length ? "걸리는 모임이 없습니다" : "찾을 말을 넣어야 이 이미지가 붙습니다")}
+        {hits.length
+          ? `이 유형이 붙는 모임 ${hits.length}건 (${hitList.length}종)`
+          : (keywords.length ? '걸리는 모임이 없습니다' : '찾을 말을 넣어야 이 이미지가 붙습니다')}
       </p>
-      {hits.length > 0 && (
+      {hitList.length > 0 && (
         <ul className="mt-1 space-y-0.5">
-          {hits.slice(0, 3).map((t) => (
-            <li key={t} className="text-[11px] text-gray-500 truncate">· {t}</li>
+          {hitList.slice(0, 3).map((r) => (
+            <li key={r.title} className="min-w-0"><TitleLink row={r} /></li>
           ))}
-          {hits.length > 3 && <li className="text-[11px] text-gray-400">· 외 {hits.length - 3}건</li>}
+          {hitList.length > 3 && <li className="text-[11px] text-gray-400">· 외 {hitList.length - 3}종</li>}
         </ul>
       )}
 
