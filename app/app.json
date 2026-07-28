@@ -15,7 +15,12 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.sodate.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDevelopmentRegion": "ko",
+        "CFBundleLocalizations": [
+          "ko",
+          "en"
+        ]
       }
     },
     "android": {
@@ -61,6 +66,10 @@
     "updates": {
       "url": "https://u.expo.dev/1b634f2b-480e-4108-b994-c92c3a0dc4b4",
       "fallbackToCacheTimeout": 8000
+    },
+    "locales": {
+      "ko": "./locales/ko.json",
+      "en": "./locales/en.json"
     }
   }
 }

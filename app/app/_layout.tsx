@@ -5,7 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { View, Text, Image, StyleSheet, Dimensions } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
-import mobileAds from 'react-native-google-mobile-ads'
+import { runPostOnboardingSetup } from '@/lib/initAds'
 import { useThemeStore } from '@/stores/themeStore'
 import { usePushNotification } from '@/hooks/usePushNotification'
 import { isSupabaseConfigured } from '@/lib/supabase'
@@ -22,31 +22,18 @@ export default function RootLayout() {
   // 스플래시와 동일한 화면으로 덮는다. 판정 끝나면 해제.
   const [gateOff, setGateOff] = useState(false)
 
-  // AdMob SDK 초기화 (1회)
-  // iOS는 ATT 동의를 받아야 IDFA가 열려 맞춤 광고가 나간다. 동의 없이 초기화하면
-  // 비맞춤 광고만 나가 단가가 크게 떨어진다. 그래서 권한 요청을 먼저 await 한다.
-  // (거부해도 광고 자체는 나간다 — 비맞춤으로 내려갈 뿐이라 실패를 삼켜도 된다.)
-  // Info.plist의 NSUserTrackingUsageDescription만 있고 실제 요청 코드가 없으면
-  // App Store 개인정보 라벨의 "추적 사용" 선언과 바이너리가 어긋나 심사에서 문제가 된다.
-  useEffect(() => {
-    async function initAds() {
-      try {
-        const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency')
-        await requestTrackingPermissionsAsync()
-      } catch {
-        // 안드로이드·구버전 등 ATT가 없는 환경은 그냥 통과
-      }
-      mobileAds().initialize().catch(() => {})
-    }
-    initAds()
-  }, [])
-
   useEffect(() => {
     let alive = true
     async function checkOnboarding() {
       try {
         const done = await AsyncStorage.getItem(ONBOARDING_KEY)
-        if (!done) router.replace('/onboarding')
+        if (!done) {
+          router.replace('/onboarding')
+          // 처음 켠 사용자의 ATT 동의창은 온보딩 마지막에서 띄운다(app/onboarding.tsx).
+          // 여기서 띄우면 앱이 뭔지 보기도 전에 물어 대부분 거부한다.
+        } else if (alive) {
+          runPostOnboardingSetup()
+        }
       } finally {
         if (alive) setGateOff(true)
       }

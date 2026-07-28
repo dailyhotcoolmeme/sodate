@@ -14,14 +14,14 @@ cd "$(dirname "$0")/.."
 MANIFEST=android/app/src/main/AndroidManifest.xml
 GRADLE=android/app/build.gradle
 
-if ! grep -q 'EXPO_UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY' "$MANIFEST"; then
+if ! grep -q 'UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY' "$MANIFEST"; then
   python3 - "$MANIFEST" <<'PY'
 import sys, re
 p = sys.argv[1]
 s = open(p, encoding='utf-8').read()
 anchor = '<meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL"'
 inject = ('<meta-data android:name="expo.modules.updates.'
-          'EXPO_UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY" '
+          'UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY" '
           'android:value="{&quot;expo-channel-name&quot;:&quot;production&quot;}"/>\n    ')
 s = s.replace(anchor, inject + anchor, 1)
 open(p, 'w', encoding='utf-8').write(s)
