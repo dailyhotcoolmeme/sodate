@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { Trash2, ExternalLink, Loader2, Check, Search, X } from 'lucide-react'
 import DateTimePicker from '../components/DateTimePicker'
 import HashtagEditor from '../components/HashtagEditor'
+import { matchTypeByName } from '../lib/matchImageType'
 
 /**
  * 직접 등록 페이지 — 크롤링 정확도 무시. 오너 입력값이 정답(source of truth).
@@ -619,12 +620,14 @@ function ImageTypeSelect({ row, opts, onChange, compact }: {
   compact?: boolean
 }) {
   if (!row.id || !opts || opts.length === 0) return compact ? <span className="text-gray-300 text-xs">-</span> : null
-  const defName = opts.find((t) => t.is_default)?.name
+  // 선택 안 함 = 모임명에 유형 이름이 들어있으면 그 유형이 자동으로 붙는다(앱과 동일 규칙).
+  // 예전엔 여기에 "기본 (○○)"이라고 떴는데, 기본 유형 폴백을 없앴으므로 틀린 안내가 된다.
+  const auto = matchTypeByName(row.title, opts)
   const sel = (
     <select value={row.image_type_id ?? ''} onChange={(e) => onChange(e.target.value)}
       className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white max-w-40">
-      <option value="">기본{defName ? ` (${defName})` : ''}</option>
-      {opts.map((t) => <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' (기본)' : ''}</option>)}
+      <option value="">{auto ? `자동: ${auto.name}` : '자동: 없음(안 나옴)'}</option>
+      {opts.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
     </select>
   )
   if (compact) return sel
