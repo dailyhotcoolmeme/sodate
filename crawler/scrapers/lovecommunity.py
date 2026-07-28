@@ -232,8 +232,8 @@ class LovecommunityLoco(BaseScraper):
                         y1, y2 = int(m.group(1)), int(m.group(2))
                         b1 = (2000 + y1) if y1 <= 25 else (1900 + y1)
                         b2 = (2000 + y2) if y2 <= 25 else (1900 + y2)
-                        age_min = current_year - max(b1, b2) + 1
-                        age_max = current_year - min(b1, b2) + 1
+                        age_min = current_year - max(b1, b2)
+                        age_max = current_year - min(b1, b2)
                         age_group_label = f'{m.group(1)}~{m.group(2)}년생'
                         break
             except Exception:
@@ -250,8 +250,8 @@ class LovecommunityLoco(BaseScraper):
                 y2 = int(age_m.group(2))
                 b1 = (2000 + y1) if y1 <= 25 else (1900 + y1)
                 b2 = (2000 + y2) if y2 <= 25 else (1900 + y2)
-                age_min = current_year - max(b1, b2) + 1
-                age_max = current_year - min(b1, b2) + 1
+                age_min = current_year - max(b1, b2)
+                age_max = current_year - min(b1, b2)
                 age_group_label = f'{age_m.group(1)}~{age_m.group(2)}년생'
 
         # fallback2: "90년생~02년생" 텍스트
@@ -264,8 +264,8 @@ class LovecommunityLoco(BaseScraper):
                 y1, y2 = int(age_m.group(1)), int(age_m.group(2))
                 b1 = (2000 + y1) if y1 <= 25 else (1900 + y1)
                 b2 = (2000 + y2) if y2 <= 25 else (1900 + y2)
-                age_min = current_year - max(b1, b2) + 1
-                age_max = current_year - min(b1, b2) + 1
+                age_min = current_year - max(b1, b2)
+                age_max = current_year - min(b1, b2)
                 age_group_label = f'{age_m.group(1)}~{age_m.group(2)}년생'
 
         # fallback3: "N세~N세" 직접 나이 표시

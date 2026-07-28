@@ -262,8 +262,8 @@ class TalkblossomScraper(BaseScraper):
                     current_year = datetime.now().year
                     full_y1 = (2000 + y1) if y1 <= 25 else (1900 + y1)
                     full_y2 = (2000 + y2) if y2 <= 25 else (1900 + y2)
-                    age1 = current_year - full_y1 + 1
-                    age2 = current_year - full_y2 + 1
+                    age1 = current_year - full_y1
+                    age2 = current_year - full_y2
                     entry['age_range'] = age_str
                     entry['age_range_min'] = min(age1, age2)
                     entry['age_range_max'] = max(age1, age2)
@@ -442,8 +442,8 @@ class TalkblossomScraper(BaseScraper):
                 # 두 자리 년도 → 4자리 변환 (25 이하면 2000년대, 26 이상이면 1900년대)
                 full_y1 = (2000 + y1) if y1 <= 25 else (1900 + y1)
                 full_y2 = (2000 + y2) if y2 <= 25 else (1900 + y2)
-                age1 = current_year - full_y1 + 1
-                age2 = current_year - full_y2 + 1
+                age1 = current_year - full_y1
+                age2 = current_year - full_y2
                 entry['age_range_min'] = min(age1, age2)
                 entry['age_range_max'] = max(age1, age2)
                 entry['age_group_label'] = f'{yr_m.group(1)}-{yr_m.group(2)}년생'
