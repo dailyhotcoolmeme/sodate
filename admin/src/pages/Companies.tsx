@@ -16,6 +16,9 @@ interface Company {
 interface Stats {
   company_id: string
   upcoming_events: number
+  /** 앞으로 열릴 일정 중 상세 이미지가 붙는 것 / 안 붙는 것 */
+  events_with_images: number
+  events_without_images: number
   image_type_count: number
   image_count: number
   last_success_at: string | null
@@ -86,6 +89,8 @@ export default function Companies() {
     }
   }
 
+  const totalTodo = companies.reduce((sum, c) => sum + (stats[c.id]?.events_without_images ?? 0), 0)
+
   const stale = companies.filter((c) => {
     if (!c.is_active) return false
     const { hours } = sinceLabel(stats[c.id]?.last_success_at ?? null)
@@ -94,9 +99,15 @@ export default function Companies() {
 
   return (
     <div className="p-4 md:p-8 space-y-4">
-      <div className="flex items-baseline gap-2">
+      <div className="flex items-baseline gap-2 flex-wrap">
         <h1 className="text-xl font-bold text-gray-900">업체 관리</h1>
         <span className="text-sm text-gray-400">{companies.length}곳</span>
+        {/* 남은 작업량을 맨 위에서 바로 보이게 — 카드를 다 훑지 않아도 되도록 */}
+        {totalTodo > 0 && (
+          <span className="text-sm text-orange-600">
+            · 상세 이미지 없는 일정 <b className="tabular-nums">{totalTodo}</b>건
+          </span>
+        )}
       </div>
 
       {err && (
@@ -128,6 +139,7 @@ export default function Companies() {
             const since = sinceLabel(s?.last_success_at ?? null)
             const isStale = c.is_active && (since.hours === null || since.hours > STALE_HOURS)
             const isOpen = expanded === c.id
+            const todo = s?.events_without_images ?? 0 // 아직 상세 설명이 안 나오는 일정
             return (
               <div key={c.id} className="contents">
                 <div
@@ -143,11 +155,15 @@ export default function Companies() {
                       <p className="text-base font-bold text-gray-900 tabular-nums">{s?.upcoming_events ?? 0}</p>
                       <p className="text-xs text-gray-400">일정</p>
                     </div>
-                    <div className={`rounded-lg py-2 ${s?.image_count ? 'bg-gray-50' : 'bg-orange-50'}`}>
-                      <p className={`text-base font-bold tabular-nums ${s?.image_count ? 'text-gray-900' : 'text-orange-600'}`}>
-                        {s?.image_count ?? 0}
+                    {/* 올린 파일 수가 아니라 "아직 상세 설명이 안 나오는 일정 수".
+                        그게 곧 남은 할 일이라 바로 눈에 띄어야 한다. */}
+                    <div className={`rounded-lg py-2 ${todo ? 'bg-orange-50' : 'bg-gray-50'}`}>
+                      <p className={`text-base font-bold tabular-nums ${todo ? 'text-orange-600' : 'text-gray-900'}`}>
+                        {todo || '완료'}
                       </p>
-                      <p className={`text-xs ${s?.image_count ? 'text-gray-400' : 'text-orange-500'}`}>상세 이미지</p>
+                      <p className={`text-xs ${todo ? 'text-orange-500' : 'text-gray-400'}`}>
+                        {todo ? '이미지 없음' : '상세 이미지'}
+                      </p>
                     </div>
                     <div className={`rounded-lg py-2 ${isStale ? 'bg-amber-50' : 'bg-gray-50'}`}>
                       <p className={`text-sm font-bold ${isStale ? 'text-amber-700' : 'text-gray-900'}`}>{since.text}</p>
