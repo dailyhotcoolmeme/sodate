@@ -17,7 +17,7 @@ type ViewMode = 'card' | 'list'
 export default function FavoritesScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { events, loading } = useFavoriteEvents()
+  const { events, loading, error, refetch } = useFavoriteEvents()
   const { favoriteIds, toggle } = useFavorites()
 
   React.useEffect(() => { track('screen_view', { properties: { screen: 'favorites' } }) }, [])
@@ -52,6 +52,14 @@ export default function FavoritesScreen() {
     emptyIcon: { fontSize: 48, color: colors.primary },
     emptyText: { fontSize: 16, color: colors.textSecondary, fontWeight: '600' },
     emptySubText: { fontSize: 13, color: colors.textTertiary },
+    retryBtn: {
+      marginTop: 4,
+      paddingHorizontal: 18,
+      paddingVertical: 9,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+    },
+    retryText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   }), [colors])
 
   return (
@@ -83,6 +91,16 @@ export default function FavoritesScreen() {
       {loading ? (
         <View style={styles.center}>
           <AppSpinner />
+        </View>
+      ) : error ? (
+        // 예전엔 실패해도 빈 목록으로 보여서 저장한 찜이 사라진 것처럼 느껴졌다.
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textTertiary} />
+          <Text style={styles.emptyText}>관심 목록을 불러오지 못했어요</Text>
+          <Text style={styles.emptySubText}>저장한 목록은 그대로 있습니다</Text>
+          <TouchableOpacity onPress={refetch} style={styles.retryBtn} activeOpacity={0.85}>
+            <Text style={styles.retryText}>다시 시도</Text>
+          </TouchableOpacity>
         </View>
       ) : events.length === 0 ? (
         <View style={styles.center}>
