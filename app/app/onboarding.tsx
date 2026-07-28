@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   Dimensions,
@@ -16,11 +17,13 @@ import { useColors } from '@/hooks/useColors'
 const { width } = Dimensions.get('window')
 const ONBOARDING_KEY = 'sodate-onboarding-done'
 
-const SLIDES: { icon: keyof typeof Ionicons.glyphMap; color: string; title: string; subtitle: string }[] = [
+// 첫 슬라이드는 아이콘+제목 대신 브랜드 워드마크 이미지(하트+글자)를 쓴다.
+const SLIDES: { icon: keyof typeof Ionicons.glyphMap; color: string; title: string; subtitle: string; logo?: boolean }[] = [
   {
     icon: 'heart',
     color: '#FF6B9D',
     title: '소개팅모아',
+    logo: true,
     subtitle: '전국 로테이션 소개팅 일정을\n한곳에서 모아보세요',
   },
   {
@@ -69,6 +72,11 @@ export default function OnboardingScreen() {
       alignItems: 'center',
       flex: 1,
       justifyContent: 'center',
+    },
+    brandLogo: {
+      width: 200,
+      height: 200 * (644 / 821),
+      marginBottom: 32,
     },
     iconCircle: {
       width: 120,
@@ -151,10 +159,21 @@ export default function OnboardingScreen() {
 
       {/* 슬라이드 내용 */}
       <View style={styles.slideContent}>
-        <View style={[styles.iconCircle, { backgroundColor: slide.color + '22' }]}>
-          <Ionicons name={slide.icon} size={60} color={slide.color} />
-        </View>
-        <Text style={styles.title}>{slide.title}</Text>
+        {slide.logo ? (
+          <Image
+            source={require('../assets/logo-stack.png')}
+            style={styles.brandLogo}
+            resizeMode="contain"
+            accessibilityLabel={slide.title}
+          />
+        ) : (
+          <>
+            <View style={[styles.iconCircle, { backgroundColor: slide.color + '22' }]}>
+              <Ionicons name={slide.icon} size={60} color={slide.color} />
+            </View>
+            <Text style={styles.title}>{slide.title}</Text>
+          </>
+        )}
         <Text style={styles.subtitle}>{slide.subtitle}</Text>
       </View>
 
