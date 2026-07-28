@@ -23,10 +23,22 @@ export default function RootLayout() {
   const [gateOff, setGateOff] = useState(false)
 
   // AdMob SDK 초기화 (1회)
-  // ⚠️ ATT(expo-tracking-transparency)는 네이티브 모듈이라 runtimeVersion(fingerprint)을 바꿔
-  //    기존 OTA 빌드가 업데이트를 못 받게 됨 → 출시 리빌드 시점에 함께 추가할 것.
+  // iOS는 ATT 동의를 받아야 IDFA가 열려 맞춤 광고가 나간다. 동의 없이 초기화하면
+  // 비맞춤 광고만 나가 단가가 크게 떨어진다. 그래서 권한 요청을 먼저 await 한다.
+  // (거부해도 광고 자체는 나간다 — 비맞춤으로 내려갈 뿐이라 실패를 삼켜도 된다.)
+  // Info.plist의 NSUserTrackingUsageDescription만 있고 실제 요청 코드가 없으면
+  // App Store 개인정보 라벨의 "추적 사용" 선언과 바이너리가 어긋나 심사에서 문제가 된다.
   useEffect(() => {
-    mobileAds().initialize().catch(() => {})
+    async function initAds() {
+      try {
+        const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency')
+        await requestTrackingPermissionsAsync()
+      } catch {
+        // 안드로이드·구버전 등 ATT가 없는 환경은 그냥 통과
+      }
+      mobileAds().initialize().catch(() => {})
+    }
+    initAds()
   }, [])
 
   useEffect(() => {

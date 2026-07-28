@@ -27,7 +27,8 @@
       "googleServicesFile": "./google-services.json",
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
-      ]
+      ],
+      "versionCode": 2
     },
     "plugins": [
       "expo-router",
@@ -45,7 +46,8 @@
           "iosAppId": "ca-app-pub-2792582436871752~7698724284",
           "userTrackingUsageDescription": "회원님께 더 관련성 높은 광고를 제공하기 위해 사용됩니다."
         }
-      ]
+      ],
+      "expo-tracking-transparency"
     ],
     "scheme": "sodate",
     "extra": {
@@ -55,9 +57,7 @@
       }
     },
     "owner": "dailyhotcoolmeme",
-    "runtimeVersion": {
-      "policy": "fingerprint"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/1b634f2b-480e-4108-b994-c92c3a0dc4b4",
       "fallbackToCacheTimeout": 8000

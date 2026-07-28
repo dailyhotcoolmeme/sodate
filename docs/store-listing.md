@@ -150,3 +150,32 @@ cd android && ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew bundleRelease
 keytool -printcert -jarfile .../app-release.aab | grep 소유자     # CN=ourmine 이어야 함
 unzip -p .../app-release.aab base/manifest/AndroidManifest.xml | strings | grep expo-channel-name
 ```
+
+---
+
+## runtimeVersion = "1.0.0" 고정 (OTA 안정성)
+
+출시 직전(2026-07-28) `{policy:"fingerprint"}` 에서 **고정 문자열로 전환**했다.
+
+fingerprint 정책은 app.json 내용까지 해시에 넣는다. 실측으로 확인한 사례 —
+`android.versionCode` 한 줄을 넣었다 빼는 것만으로 **iOS 지문까지** 바뀌었다.
+
+| app.json 상태 | iOS 지문 |
+|---|---|
+| `android.versionCode` 있음 | `6177f638…` |
+| `android.versionCode` 없음 | `c116efbf…` |
+
+즉 출시 후 app.json을 조금이라도 건드리면 스토어 바이너리가 OTA를 못 받는다.
+그래서 지금까지 "지문 맞추려고 app.json + 아이콘 4개를 옛 커밋으로 되돌렸다가
+eas update 하고 다시 되돌리는" 위험한 절차를 써야 했고, 그 과정에서 실제로
+스플래시 로고가 옛 플레이스홀더로 되돌아가는 사고가 났다.
+
+**지금은 그 절차가 필요 없다.** JS/에셋만 바뀌는 변경은 그냥:
+
+```bash
+cd app && npx eas update --branch production --message "설명"
+```
+
+**네이티브가 바뀔 때만** (새 expo 모듈 추가, SDK 업그레이드, 권한 추가 등)
+`runtimeVersion` 을 `1.0.1` 처럼 올리고 스토어 새 빌드를 올린다. 올리지 않으면
+구버전 바이너리가 새 네이티브를 요구하는 JS를 받아 크래시한다.
