@@ -2,7 +2,9 @@
 import re
 import time
 import asyncio
+import json
 import httpx
+from html import unescape
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import Optional
@@ -57,130 +59,187 @@ class YeoninScraper(BaseScraper):
     def __init__(self):
         super().__init__('yeonin')
 
+    # ── 상품 옵션(지역→성별→일시) 파싱용 ────────────────────────────────
+    # imweb 상품의 옵션은 load_option.cm 이 단계별로 내려준다.
+    # 1단계: 지역 / 2단계: 성별 / 3단계: 일시(라벨에 날짜·시간·남성 출생연도, 가격·품절 포함)
+    _OPT_RE = re.compile(
+        r"selectRequireOption\('prod',\s*\d+,\s*'([^']+)',\s*'([^']+)',\s*'([^']+)'")
+    _SLOT_DATE_RE = re.compile(r'(\d{1,2})/(\d{1,2})')
+    _SLOT_TIME_RE = re.compile(r'(오전|오후)?\s*(\d{1,2})\s*시\s*(?:(\d{1,2})\s*분)?')
+    _SLOT_AGE_RE = re.compile(r'남[:\s]*(\d{2})[-~](\d{2})')
+
+    def _load_option(self, idx: str, extra: str = '') -> str:
+        """상품 옵션 HTML 조회(load_option.cm). 단계별 선택값을 extra 로 넘긴다."""
+        try:
+            r = httpx.post(
+                f'{self.BASE_URL}/shop/load_option.cm',
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Referer': f'{self.BASE_URL}/shop_view/?idx={idx}',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                content=f'type=prod&prod_idx={idx}{extra}&__=1',
+                timeout=20, verify=False, follow_redirects=True)
+            body = r.text
+            try:
+                body = json.loads(body).get('option_html', body)
+            except Exception:
+                pass
+            return unescape(body)
+        except Exception as e:
+            self.logger.warning(f'옵션 조회 실패 (idx={idx}): {e}')
+            return ''
+
+    @staticmethod
+    def _sel_param(pairs) -> str:
+        return ''.join(
+            f'&selected_require_options%5B{i}%5D%5Bvalue_type%5D=SELECT'
+            f'&selected_require_options%5B{i}%5D%5Boption_code%5D={gh}'
+            f'&selected_require_options%5B{i}%5D%5Bvalue_code%5D={vh}'
+            for i, (gh, vh) in enumerate(pairs))
+
+    def _parse_slots(self, html: str) -> dict:
+        """3단계(일시) 옵션 → {datetime: {price, soldout, age}}"""
+        out = {}
+        for item in re.findall(r'<div class="dropdown-item.*?</a>', html, re.S):
+            lb = re.search(r'margin-bottom-lg">([^<]+)<', item)
+            pr = re.search(r'<strong>\s*₩?\s*([\d,]+)', item)
+            if not lb or not pr:
+                continue
+            label = lb.group(1)
+            dm = self._SLOT_DATE_RE.search(label)
+            tm = self._SLOT_TIME_RE.search(label)
+            if not dm or not tm:
+                continue
+            mo, da = int(dm.group(1)), int(dm.group(2))
+            period, hh, mm = tm.group(1), int(tm.group(2)), int(tm.group(3) or 0)
+            if period == '오후' and hh < 12:
+                hh += 12
+            elif not period and 1 <= hh <= 9:
+                hh += 12  # "4시30분" 처럼 오전/오후 없는 표기는 오후로 본다
+            now = datetime.now()
+            year = now.year + 1 if mo < now.month else now.year
+            try:
+                dt = datetime(year, mo, da, hh, mm)
+            except ValueError:
+                continue
+            am = self._SLOT_AGE_RE.search(label)
+            age = (_year2age(am.group(2)), _year2age(am.group(1))) if am else None
+            out[dt] = {
+                'price': int(pr.group(1).replace(',', '')),
+                'soldout': '품절' in item,
+                'age': age,
+            }
+        return out
+
     def scrape(self) -> list[EventModel]:
-        events = []
+        """월 일정 게시글에 걸린 '지역 상품'들을 돌며 (지역×일시) 슬롯마다 1이벤트 생성.
+
+        ⚠️ 예전엔 월 일정 게시글의 '본문 텍스트'를 줄 단위로 훑어 날짜 패턴이 걸릴 때마다
+           이벤트를 만들었다. 표를 텍스트로 펼치면 줄이 어긋나 제목이 뒤죽박죽이 되고
+           ('로테이션 소개팅 A 8.8(토) 오후 4시 로테이션 소개팅 B ...'), '고객 만족도
+           4.94점' 같은 줄까지 날짜로 걸려(한 게시글에서 101줄) 신청도 못 하는 이벤트가
+           양산됐다. 링크도 게시글 하나를 공유해 실제 신청 페이지로 가지 못했다.
+           (2026-07-24 이후 생성분에서 오너가 발견 — 2026-07-28 교체)
+
+           지금은 상품 옵션 API(load_option.cm)를 쓴다. 날짜·시간·남성 연령·가격·품절이
+           옵션 라벨에 그대로 들어 있어 추측할 필요가 없고, 링크도 상품별 신청 페이지다.
+        """
+        events: list[EventModel] = []
+        products: dict[str, str] = {}   # idx → 지역
+        names: dict[str, str] = {}      # idx → 상품명(이벤트 제목)
+
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
-                context = browser.new_context(ignore_https_errors=True, user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36')
+                context = browser.new_context(
+                    ignore_https_errors=True, locale='ko-KR',
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36')
                 page = context.new_page()
 
-                # 1단계: 일정 목록 페이지에서 최신 월별 게시물 링크 수집
-                # ⚠️(2026-07-25) 예전엔 1페이지만 읽어서 게시판 특성상 오래된(그래도 아직
-                # 유효한) 게시물이 다음 페이지로 밀려나면 재발견 자체가 안 됐음(DB 대비
-                # 91% 고스트 발견·오너 지시로 전수점검). 새 글이 없는 페이지가 나올 때까지
-                # 페이지네이션(최대 8페이지, 안전장치)해서 전부 수집.
-                post_links = []
-                seen_urls: set = set()
-                for pg_num in range(1, 9):
-                    url = self.SCHEDULE_URL if pg_num == 1 else f'{self.SCHEDULE_URL}/?page={pg_num}'
-                    page.goto(url, timeout=30000)
-                    page.wait_for_load_state('domcontentloaded', timeout=15000)
-                    soup = BeautifulSoup(page.content(), 'html.parser')
-                    page_new = 0
-                    for a in soup.select('a[href*="bmode=view"]'):
-                        href = a.get('href', '')
-                        title = a.get_text(strip=True)
-                        if not title or not ('소개팅' in title or '일정' in title or '로테이션' in title):
-                            continue
-                        full_url = href if href.startswith('http') else self.BASE_URL + href
-                        if full_url in seen_urls:
-                            continue
-                        seen_urls.add(full_url)
-                        post_links.append((title, full_url))
-                        page_new += 1
-                    if page_new == 0:
-                        break  # 새 글 없는 페이지 나오면 끝(더 뒤져도 중복만 나옴)
+                # 최신 월 일정 게시글 → 거기 걸린 지역 상품 링크 수집
+                page.goto(self.SCHEDULE_URL, timeout=30000, wait_until='domcontentloaded')
+                page.wait_for_timeout(2500)
+                links = page.eval_on_selector_all(
+                    'a[href*="idx="]', 'els=>els.map(e=>({h:e.href,t:e.innerText.trim()}))')
+                summary = next((x for x in links if '로테이션 소개팅 일정' in x['t']), None)
+                if not summary:
+                    self.logger.warning('월 일정 게시글을 찾지 못함')
+                    browser.close()
+                    return []
 
-                self.logger.info(f'일정 게시물 {len(post_links)}개 발견')
-
-                # 2단계: /list 페이지에서 참가자 명단 게시글 목록 수집
-                participant_data: dict[str, dict] = {}
-                try:
-                    page.goto(self.LIST_URL, timeout=30000)
-                    page.wait_for_load_state('domcontentloaded', timeout=15000)
-                    list_soup = BeautifulSoup(page.content(), 'html.parser')
-                    # 게시글 링크 추출 후 각 게시글의 og:description 파싱
-                    list_post_links = []
-                    for a in list_soup.select('a[href*="bmode=view"]'):
-                        href = a.get('href', '')
-                        full_url = href if href.startswith('http') else self.BASE_URL + href
-                        if full_url not in list_post_links:
-                            list_post_links.append(full_url)
-
-                    self.logger.info(f'/list 게시글 링크 {len(list_post_links)}개 발견')
-
-                    # 최신 30개 게시글에서 참가자 명단 파싱
-                    for list_url in list_post_links[:30]:
-                        try:
-                            page.goto(list_url, timeout=20000)
-                            page.wait_for_load_state('domcontentloaded', timeout=10000)
-                            list_detail_soup = BeautifulSoup(page.content(), 'html.parser')
-
-                            # og:description 메타 태그에 참가자 데이터가 있음
-                            og_desc = list_detail_soup.find('meta', property='og:description')
-                            og_title = list_detail_soup.find('meta', property='og:title')
-                            if og_desc and og_title:
-                                title_content = og_title.get('content', '')
-                                desc_content = og_desc.get('content', '')
-                                parsed = self._parse_participant_from_og(title_content, desc_content)
-                                if parsed:
-                                    date_key, data = parsed
-                                    participant_data[date_key] = data
-                            time.sleep(0.5)
-                        except Exception as e:
-                            self.logger.warning(f'/list 게시글 파싱 실패 {list_url}: {e}')
-
-                    self.logger.info(f'참가자 현황 {len(participant_data)}건 수집')
-                except Exception as e:
-                    self.logger.warning(f'/list 페이지 수집 실패: {e}')
-
-                # 3단계: 최신 게시물 최대 3개만 파싱
-                for title, url in post_links[:3]:
-                    try:
-                        page.goto(url, timeout=20000)
-                        page.wait_for_load_state('domcontentloaded', timeout=10000)
-                        detail_soup = BeautifulSoup(page.content(), 'html.parser')
-
-                        thumbnail_url = None
-                        imgs = page.eval_on_selector_all('img[src*="cdn.imweb"]', 'els => els.map(e => e.src)')
-                        if imgs:
-                            thumbnail_url = imgs[0]
-
-                        # og:description 에서 그룹 정보 추출 (가장 신뢰도 높음)
-                        og_desc_meta = detail_soup.find('meta', property='og:description')
-                        age_groups_from_og = []
-                        if og_desc_meta:
-                            age_groups_from_og = self._parse_age_groups_from_og(og_desc_meta.get('content', ''))
-
-                        # 테이블 파싱 방식으로 그룹 정보 추출 (fallback)
-                        age_groups_from_table = self._parse_age_groups_from_table(detail_soup)
-
-                        # og에서 추출된 것이 있으면 우선, 없으면 테이블 사용
-                        age_groups = age_groups_from_og if age_groups_from_og else age_groups_from_table
-
-                        content_text = page.inner_text('body')
-
-                        # 본문 설명 추출 (해시태그 키워드 확보용)
-                        description = self._extract_description(detail_soup, og_desc_meta)
-
-                        parsed = self._parse_post(title, content_text, url, thumbnail_url, age_groups, participant_data, description)
-                        events.extend(parsed)
-                        time.sleep(1)
-                    except Exception as e:
-                        self.logger.warning(f'게시물 파싱 실패 {url}: {e}')
+                url = summary['h'] if 'bmode' in summary['h'] else summary['h'] + '&bmode=view'
+                page.goto(url, timeout=30000, wait_until='domcontentloaded')
+                page.wait_for_timeout(3000)
+                for it in page.eval_on_selector_all(
+                        'a[href*="shop_view"]', 'els=>els.map(e=>({h:e.href,t:e.innerText.trim()}))'):
+                    m = re.search(r'idx=(\d+)', it['h'])
+                    reg = re.search(r'\[([^\]]+)\]', it['t'] or '')
+                    if m and reg and m.group(1) not in products:
+                        products[m.group(1)] = reg.group(1).strip()
+                        names[m.group(1)] = (it['t'] or '').split('\n')[0].strip() or reg.group(1).strip()
 
                 browser.close()
         except Exception as e:
-            self.logger.error(f'크롤링 실패: {e}')
+            self.logger.error(f'상품 목록 수집 실패: {e}')
             raise
 
-        filtered = []
-        for ev in events:
-            if is_within_one_month(ev.event_date):
-                filtered.append(ev)
-            else:
-                self.logger.debug(f"날짜 범위 초과 스킵 ({ev.event_date}): {ev.source_url}")
+        if not products:
+            # 상품을 못 찾았는데 빈 배열을 돌려주면 base_scraper 가 기존 이벤트를
+            # stale 로 보고 지울 수 있다. 예외로 올려 크롤 실패로 남긴다.
+            raise RuntimeError('연인어때 지역 상품 0개 — 사이트 구조 변경 의심')
+        self.logger.info(f'지역 상품 {len(products)}개 발견')
+
+        for idx, region in products.items():
+            try:
+                base = self._load_option(idx)
+                regions = self._OPT_RE.findall(base)
+                if not regions:
+                    self.logger.warning(f'[{region}] 1단계(지역) 옵션 없음 — 스킵')
+                    continue
+                r0 = regions[0]
+                step2 = self._load_option(idx, self._sel_param([(r0[0], r0[1])]))
+                gmap = {o[2]: (o[0], o[1]) for o in self._OPT_RE.findall(step2)
+                        if o[2] in ('남성', '여성')}
+                male = self._parse_slots(self._load_option(
+                    idx, self._sel_param([(r0[0], r0[1]), gmap['남성']]))) if '남성' in gmap else {}
+                female = self._parse_slots(self._load_option(
+                    idx, self._sel_param([(r0[0], r0[1]), gmap['여성']]))) if '여성' in gmap else {}
+
+                for dt in sorted(set(male) | set(female)):
+                    m, f = male.get(dt), female.get(dt)
+                    age = (m or f).get('age')
+                    detail = {}
+                    if m:
+                        detail['male'] = {'regular': m['price'],
+                                          **({'regular_soldout': True} if m['soldout'] else {})}
+                    if f:
+                        detail['female'] = {'regular': f['price'],
+                                            **({'regular_soldout': True} if f['soldout'] else {})}
+                    events.append(EventModel(
+                        title=sanitize_text(names.get(idx) or region, 80),
+                        description=None,
+                        event_date=dt,
+                        location_region=resolve_region(region_phrase=region, title=names.get(idx, ''), body=''),
+                        location_detail=None,
+                        price_male=m['price'] if m else None,
+                        price_female=f['price'] if f else None,
+                        gender_ratio=None,
+                        source_url=f'{self.BASE_URL}/shop_view?idx={idx}#evt={dt.strftime("%Y%m%d%H%M")}',
+                        thumbnail_urls=[],
+                        theme=['일반'],
+                        age_group_label=f'{age[0]}~{age[1]}세' if age else None,
+                        age_range_min=age[0] if age else None,
+                        age_range_max=age[1] if age else None,
+                        price_detail=detail or None,
+                        is_closed=bool(m and m['soldout'] and f and f['soldout']),
+                    ))
+                time.sleep(0.4)
+            except Exception as e:
+                self.logger.warning(f'[{region}] 상품 파싱 실패(idx={idx}): {e}')
+
+        filtered = [ev for ev in events if is_within_one_month(ev.event_date)]
         self.logger.info(f'연인어때 총 {len(filtered)}개 이벤트 (필터 전: {len(events)}개)')
         return filtered
 
