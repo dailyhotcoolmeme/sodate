@@ -33,6 +33,12 @@ class LovecommunityLoco(BaseScraper):
     # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행)
     WRITES_PRICE = True
 
+    # 사이트에서 내려간 회차를 자동 정리한다. 전체 일정을 예약위젯 옵션에서
+    # 안정적으로 뽑으므로 켜도 안전하다(부분 실패는 base_scraper 가 50% 룰로 막는다).
+    # 껐을 땐 지난 회차·시각이 바뀐 중복이 계속 쌓여 같은 모임이 두 번 보였다
+    # (2026-07-28: 연인어때 15건·로꼬 25건을 손으로 지움).
+    DELETE_STALE = True
+
     BASE_URL = 'https://lovecommunity.imweb.me'
     SHOP_LIST_URL = 'https://lovecommunity.imweb.me/party'
 

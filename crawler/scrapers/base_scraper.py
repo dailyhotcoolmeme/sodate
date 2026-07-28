@@ -197,7 +197,21 @@ class BaseScraper(ABC):
                     .eq('verified', False)
                     .execute()
                 )
-                stale_ids = [r['id'] for r in (existing.data or []) if r['source_url'] not in current_urls]
+                rows = existing.data or []
+                stale_ids = [r['id'] for r in rows if r['source_url'] not in current_urls]
+
+                # ⚠️ 부분 실패 방어. 사이트가 잠깐 죽거나 상품 목록을 절반만 긁어온 크롤에서
+                #    그대로 지우면 멀쩡한 일정이 통째로 날아간다. 이번 크롤이 기존 대비
+                #    너무 적게 가져왔으면 삭제를 건너뛴다(다음 정상 크롤에서 정리됨).
+                #    '빈 배열이면 스킵'만으로는 9개 중 3개만 긁힌 경우를 못 막는다.
+                keep = len(rows) - len(stale_ids)          # 이번에도 확인된 기존 이벤트
+                if rows and keep < len(rows) * 0.5:
+                    self.logger.warning(
+                        f"[{self.company_slug}] 스테일 정리 건너뜀 — 기존 {len(rows)}건 중 "
+                        f"{keep}건만 재확인됨(부분 실패 의심). 삭제 후보 {len(stale_ids)}건 보존"
+                    )
+                    stale_ids = []
+
                 for i in range(0, len(stale_ids), 50):
                     self.supabase.table('events').delete().in_('id', stale_ids[i:i + 50]).execute()
                 deleted = len(stale_ids)
