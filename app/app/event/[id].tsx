@@ -473,7 +473,7 @@ export default function EventDetailScreen() {
 
         {/* 해시태그 배지 (제목 바로 아래) — title 하단 여백을 끌어올려 붙임 */}
         <View style={[styles.hashtagRow, getThemeBadge(event.theme) && styles.hashtagRowWithTheme]}>
-          <HashtagChips hashtags={event.hashtags} size="md" max={4} />
+          <HashtagChips hashtags={event.hashtags} size="md" />
         </View>
 
         {/* 기본 정보 */}

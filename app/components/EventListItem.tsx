@@ -186,7 +186,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
           <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
         </View>
         {/* 해시태그 배지 (제목 바로 아래) */}
-        <HashtagChips hashtags={event.hashtags} size="sm" max={3} tight />
+        <HashtagChips hashtags={event.hashtags} size="sm" tight />
         <Text style={styles.meta}>{formatDate(event.event_date)} · {event.location_region}</Text>
         {(() => {
           const hasM = event.price_male != null || !!event.price_detail?.male || !!event.age_male

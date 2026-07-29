@@ -15,15 +15,13 @@ interface Props {
   hashtags?: string[] | null
   // 카드/리스트=작게, 상세=조금 크게
   size?: 'sm' | 'md'
-  // 한 줄에 노출할 최대 개수 (넘치면 가로 스크롤)
-  max?: number
   // 리스트에서 줄간격 균일하게: 자체 상하 마진 제거
   tight?: boolean
 }
 
 // 소개팅 제목 바로 아래에 표시하는 해시태그 배지.
 // 누르면 해당 태그로 필터를 적용하고 목록(홈)으로 이동한다.
-export default function HashtagChips({ hashtags, size = 'sm', max = 3, tight = false }: Props) {
+export default function HashtagChips({ hashtags, size = 'sm', tight = false }: Props) {
   const colors = useColors()
   const router = useRouter()
 
@@ -56,7 +54,10 @@ export default function HashtagChips({ hashtags, size = 'sm', max = 3, tight = f
 
   if (tags.length === 0) return null
 
-  const shown = tags.slice(0, max)
+  // ⚠️ 개수 제한 없이 전부 담는다(오너 확정 2026-07-29). 예전엔 피드 3개·상세 4개로
+  //    잘라서 뒤쪽 태그(#30대 등)가 아예 안 보였다. 폭은 부모(모임명 컬럼)에 맞고,
+  //    넘치면 가로 스크롤(스크롤바 미노출)로 밀어 본다. 높이는 한 줄 고정 그대로.
+  const shown = tags
 
   const handlePress = (e: GestureResponderEvent, tag: string) => {
     e.stopPropagation?.()
