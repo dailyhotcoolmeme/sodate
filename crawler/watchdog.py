@@ -359,4 +359,16 @@ def run() -> int:
 
 
 if __name__ == '__main__':
-    sys.exit(1 if run() > 0 else 0)
+    # ⚠️ 문제를 '발견'한 것은 워치독이 제대로 돈 것이다 → 종료코드 0.
+    #    예전엔 발견 시 1로 끝나서 GitHub이 "workflow failed" 메일을 따로 보냈고,
+    #    내용도 없이 'failed'만 떠 워치독 자체가 고장난 것처럼 보였다(2026-07-29 오너
+    #    지적: 하루 43회 중 7회가 failed로 표시). 실제 알림은 카카오·이메일로 이미 간다.
+    #    실패(1)는 워치독이 죽었을 때만 — 그래야 'failed'가 진짜 신호가 된다.
+    try:
+        n = run()
+        if n:
+            print(f'문제 {n}건 발견 — 알림 발송 완료(워치독 자체는 정상 동작)')
+        sys.exit(0)
+    except Exception as e:
+        print(f'워치독 실행 실패: {e}')
+        sys.exit(1)
