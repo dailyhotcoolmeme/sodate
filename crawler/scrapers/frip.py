@@ -94,6 +94,25 @@ def _canon_region(r):
 
 # 나이대 패턴
 AGE_RANGE_RE = re.compile(r'(\d{2})[~\-～](\d{2})년생')
+
+# 년생 범위 표기가 호스트마다 다르다. 셋 다 잡는다(2026-07-29 프립 전수조사):
+#   '97-02년생'            (뒤에만 '년생')
+#   '06년생-97년생'        (양쪽에 '년생')  ← 옵션명에 자주 쓰임
+#   '96년생 부터 91년생까지' (부터~까지)     ← 본문에 자주 쓰임
+_BIRTH_RANGE_PATTERNS = [
+    re.compile(r'(\d{2})\s*년생\s*(?:부터)?\s*[-~～]?\s*(\d{2})\s*년생'),
+    re.compile(r'(\d{2})\s*[-~～]\s*(\d{2})\s*년생'),
+]
+
+
+def _birth_range(text: str):
+    """텍스트에서 년생 범위 → (연도1, 연도2) 두 자리 그대로. 못 찾으면 None."""
+    for pat in _BIRTH_RANGE_PATTERNS:
+        m = pat.search(text)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+    return None
+
 # 나이 단독 패턴 (예: "30대", "20~30대")
 AGE_DECADE_RE = re.compile(r'(\d{2})대')
 
@@ -459,9 +478,9 @@ class FripScraper(BaseScraper):
             if m:
                 a, b = int(m.group(1)), int(m.group(2))
                 los.append(min(a, b)); his.append(max(a, b)); continue
-            m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년생', name)
-            if m:
-                y1, y2 = int(m.group(1)), int(m.group(2))
+            br = _birth_range(name)
+            if br:
+                y1, y2 = br
                 b1 = (1900 + y1) if y1 >= 50 else (2000 + y1)
                 b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
                 los.append(yr - max(b1, b2)); his.append(yr - min(b1, b2)); continue
@@ -501,10 +520,9 @@ class FripScraper(BaseScraper):
         → (allow_decade면) N0대. label은 밴드('3040')/N0대('30대')일 때만, 년생·세는 None."""
         text = text or ''
         yr = datetime.now().year
-        m = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*년생', text) \
-            or re.search(r'(\d{2})\s*년생\s*[-~]\s*(\d{2})\s*년생', text)
-        if m:
-            y1, y2 = int(m.group(1)), int(m.group(2))
+        br = _birth_range(text)
+        if br:
+            y1, y2 = br
             b1 = (1900 + y1) if y1 >= 50 else (2000 + y1)
             b2 = (1900 + y2) if y2 >= 50 else (2000 + y2)
             lo, hi = yr - max(b1, b2), yr - min(b1, b2)
@@ -567,6 +585,32 @@ class FripScraper(BaseScraper):
         if r[0]:
             return r
         return self._age_from_text(title, recommended_age, allow_decade=True)      # 3순위: 제목
+
+    def _parse_age_by_gender(self, select_items: list[dict]) -> tuple:
+        """옵션 이름에 성별이 박힌 경우 성별별 나이 범위를 따로 뽑는다.
+
+        ⚠️ 왜 필요한가(2026-07-29 오너 지적으로 발견): 어떤 상품은 남성 옵션에만 연령대가
+           나뉘어 있고 여성 옵션엔 나이 표기가 없다. 예:
+             [수원]시그니쳐와인 06년생-97년생 남_후기⭕️
+             [수원]시그니쳐와인 96년생-92년생 남_후기⭕️
+             [수원]시그니쳐와인 여_후기⭕️            ← 나이 없음
+           예전엔 전체 옵션을 뭉쳐 한 범위(20~39)를 만들고 남·여에 똑같이 넣어서,
+           사이트에 근거가 없는 여성 나이를 만들어냈다. 성별별로 나눠 뽑고,
+           표기가 없는 성별은 비워 둔다(업체가 안 밝힌 건 앱에도 안 띄운다).
+
+        반환: ((남min, 남max, 남label), (여min, 여max, 여label)). 성별 구분이 없으면 (None, None).
+        """
+        male_items = [i for i in select_items if '남' in (i.get('name') or '')]
+        female_items = [i for i in select_items if '여' in (i.get('name') or '')]
+        # 성별 표기가 아예 없거나 한쪽만 있으면 성별 분리 판단을 하지 않는다.
+        if not male_items or not female_items:
+            return (None, None)
+        m = self._parse_age_from_items(male_items)
+        f = self._parse_age_from_items(female_items)
+        # 둘 다 못 뽑았으면 분리할 의미가 없다(기존 통합 로직에 맡김)
+        if m[0] is None and f[0] is None:
+            return (None, None)
+        return (m, f)
 
     def _parse_gender_items(self, select_items: list[dict]) -> tuple:
         """
@@ -851,8 +895,22 @@ class FripScraper(BaseScraper):
                                                              recommended_age)
                     # 기본 표시(남/여 동일): disp('2030' 등) 또는 'min~max'
                     male_disp = female_disp = disp or (f'{amin}~{amax}' if (amin and amax) else None)
+                    # ⚠️ 옵션 자체가 성별로 나뉘고 한쪽에만 나이가 있으면 그대로 반영한다.
+                    #    예전엔 전체 옵션을 뭉쳐 한 범위를 만들고 남·여에 똑같이 넣어,
+                    #    사이트에 근거가 없는 성별 나이를 만들어냈다(2026-07-29 오너 지적).
+                    gm, gf = self._parse_age_by_gender(v_items)
+                    if gm is not None or gf is not None:
+                        mmin, mmax, mlab = gm or (None, None, None)
+                        fmin, fmax, flab = gf or (None, None, None)
+                        male_disp = mlab or (f'{mmin}~{mmax}' if (mmin and mmax) else None)
+                        female_disp = flab or (f'{fmin}~{fmax}' if (fmin and fmax) else None)
+                        # 필터용 숫자 범위는 있는 쪽들의 합집합
+                        lows = [x for x in (mmin, fmin) if x]
+                        highs = [x for x in (mmax, fmax) if x]
+                        if lows and highs:
+                            amin, amax = min(lows), max(highs)
                     # 옵션에 나이 없고 본문에 성별 구분(남:/여:)이 있으면 남/여 각각 + 필터는 union
-                    if amin and not self._parse_age_from_items(v_items)[0]:
+                    elif amin and not self._parse_age_from_items(v_items)[0]:
                         g = self._gender_age_from_text(description_text)
                         if g:
                             (mmin, mmax), (fmin, fmax) = g
