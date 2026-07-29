@@ -1,0 +1,30 @@
+name: Apply DB Migration (수동)
+
+# DDL은 service_role(PostgREST)로 불가능해서 Supabase 관리 API로 실행한다.
+# 로컬에는 DB 비밀번호가 없고 SUPABASE_ACCESS_TOKEN은 GH 시크릿에만 있으므로
+# 이 워크플로가 유일한 마이그레이션 경로다. workflow_dispatch 전용.
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: 'supabase/migrations/ 안의 SQL 파일명'
+        required: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run SQL via Supabase Management API
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          SQL=$(cat "supabase/migrations/${{ github.event.inputs.file }}")
+          jq -n --arg q "$SQL" '{query: $q}' > /tmp/body.json
+          code=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -X POST "https://api.supabase.com/v1/projects/xgcldcnqfqcugkcifyae/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/body.json)
+          echo "HTTP $code"; cat /tmp/resp.json
+          [ "$code" = "200" ] || [ "$code" = "201" ]
