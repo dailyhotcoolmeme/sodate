@@ -11,6 +11,7 @@ import { Image } from 'expo-image'
 import { useColors } from '@/hooks/useColors'
 import { FEED_NATIVE_AD_UNIT_ID } from '@/lib/ads'
 import { track } from '@/lib/analytics'
+import { waitForAdsReady } from '@/lib/initAds'
 
 const THUMB = 88
 
@@ -24,7 +25,9 @@ export default function AdListItem() {
   useEffect(() => {
     let mounted = true
     let loaded: NativeAd | null = null
-    NativeAd.createForAdRequest(AD_UNIT_ID)
+    // ⚠️ SDK 초기화 전에 요청하면 프라미스가 성공도 실패도 없이 매달린다 → 반드시 기다린다
+    waitForAdsReady()
+      .then(() => NativeAd.createForAdRequest(AD_UNIT_ID))
       .then((nativeAd) => {
         if (mounted) {
           loaded = nativeAd

@@ -44,15 +44,50 @@ export async function runPostOnboardingSetup(): Promise<void> {
     15000,
   )
 
+  await ensureAdsInitialized()
+}
+
+// ⚠️ SDK 초기화 전에 광고를 요청하면 그 요청은 성공도 실패도 하지 않고 그대로 매달린다
+//    (2026-07-29 안드로이드에서 실제로 발생 — ad_sdk_init은 앱 실행 3초 뒤에 찍히는데
+//     홈 목록은 즉시 그려져 광고 요청이 먼저 나갔고, ad_load_success/fail이 0건이었다).
+//    광고 컴포넌트는 반드시 이 프라미스를 기다린 뒤 요청한다.
+let initPromise: Promise<void> | null = null
+
+export function ensureAdsInitialized(): Promise<void> {
+  if (initPromise) return initPromise
   const t0 = Date.now()
-  mobileAds()
+  initPromise = mobileAds()
     .initialize()
-    .then(() => track('ad_sdk_init', { properties: { ok: true, ms: Date.now() - t0 } }))
-    .catch((e) =>
+    .then(() => {
+      track('ad_sdk_init', { properties: { ok: true, ms: Date.now() - t0 } })
+    })
+    .catch((e) => {
       track('ad_sdk_init', {
         properties: { ok: false, ms: Date.now() - t0, message: String(e?.message ?? e).slice(0, 200) },
-      }),
-    )
+      })
+    })
+  return initPromise
+}
+
+/**
+ * 광고 요청 직전에 호출한다. 정상 흐름에서는 runPostOnboardingSetup이 ATT까지 마친 뒤
+ * 초기화하므로(iOS IDFA 보존) 그 결과를 그대로 쓰고, 온보딩 중이거나 그 흐름이 지연되면
+ * 최대 대기 후 직접 초기화한다 — 권한 흐름 때문에 광고가 영영 안 나가는 일은 없어야 한다.
+ */
+export function waitForAdsReady(maxWaitMs = 12000): Promise<void> {
+  if (initPromise) return initPromise
+  return new Promise<void>((resolve) => {
+    const t = setInterval(() => {
+      if (initPromise) {
+        clearInterval(t)
+        initPromise.then(resolve)
+      }
+    }, 200)
+    setTimeout(() => {
+      clearInterval(t)
+      ensureAdsInitialized().then(resolve)
+    }, maxWaitMs)
+  })
 }
 
 /** @deprecated 이름만 남긴 하위호환. runPostOnboardingSetup을 쓸 것. */
