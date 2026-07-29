@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Trash2, ExternalLink, Loader2, Check, Search, X, ChevronRight, ChevronDown } from 'lucide-react'
+import { Trash2, ExternalLink, Loader2, Check, Search, X, ChevronDown, ChevronUp } from 'lucide-react'
 import DateTimePicker from '../components/DateTimePicker'
 import HashtagEditor from '../components/HashtagEditor'
 
@@ -367,7 +367,7 @@ export default function Register() {
           완료 판정(rowIsDone)에도 안 들어간다 → 펼쳤을 때만 보여준다. */}
       <button onClick={() => toggleExpand(r.key)}
         className="mt-2.5 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800">
-        {expanded.has(r.key) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {expanded.has(r.key) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         해시태그{r.hashtags.length > 0 && ` ${r.hashtags.length}`} · 정원 · 삭제
       </button>
       {expanded.has(r.key) && (
@@ -445,7 +445,7 @@ export default function Register() {
       <td className="px-2 py-1.5 text-right">
         <button onClick={() => toggleExpand(r.key)} title="자세히"
           className="inline-flex items-center justify-center w-7 h-7 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100">
-          {expanded.has(r.key) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          {expanded.has(r.key) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
       </td>
     </tr>
