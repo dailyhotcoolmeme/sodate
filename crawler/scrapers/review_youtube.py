@@ -5,7 +5,7 @@ import re
 import time
 import json
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from utils.logger import get_logger
@@ -57,21 +57,42 @@ def _title(t: Optional[dict]) -> Optional[str]:
     return t.get('simpleText')
 
 
+# 유튜브는 절대 날짜를 안 주고 "1년 전 / 7개월 전 / 3주 전" 상대 표기만 준다
+# (publishedTimeText). 게시일이 비면 후기 목록에서 언제 글인지 알 수 없어(오너 지적
+# 2026-07-30) 상대 표기를 절대 날짜로 환산해 저장한다. 일 단위 근사치다.
+_REL_RE = re.compile(r'(\d+)\s*(초|분|시간|일|주|개월|년)\s*전')
+_REL_DAYS = {'초': 0, '분': 0, '시간': 0, '일': 1, '주': 7, '개월': 30, '년': 365}
+
+
+def _published_at_from_relative(text: str | None):
+    """'7개월 전' → ISO 날짜 문자열. 못 읽으면 None."""
+    if not text:
+        return None
+    m = _REL_RE.search(text)
+    if not m:
+        return None
+    n, unit = int(m.group(1)), m.group(2)
+    days = n * _REL_DAYS.get(unit, 0)
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+
 def _walk(o, items: list):
     """ytInitialData 를 순회하며 (kind, videoId, title) 수집."""
     if isinstance(o, dict):
         if 'videoRenderer' in o:
             v = o['videoRenderer']
-            items.append(('video', v.get('videoId'), _title(v.get('title'))))
+            items.append(('video', v.get('videoId'), _title(v.get('title')),
+                          (v.get('publishedTimeText') or {}).get('simpleText')))
         if 'shortsLockupViewModel' in o:  # 신형 쇼츠
             v = o['shortsLockupViewModel']
             vid = (v.get('onTap', {}).get('innertubeCommand', {})
                    .get('reelWatchEndpoint', {}) or {}).get('videoId')
             title = (v.get('overlayMetadata', {}).get('primaryText', {}) or {}).get('content')
-            items.append(('short', vid, title))
+            # 쇼츠는 게시일 표기가 없는 경우가 많다
+            items.append(('short', vid, title, None))
         if 'reelItemRenderer' in o:  # 구형 쇼츠 폴백
             v = o['reelItemRenderer']
-            items.append(('short', v.get('videoId'), _title(v.get('headline'))))
+            items.append(('short', v.get('videoId'), _title(v.get('headline')), None))
         for val in o.values():
             _walk(val, items)
     elif isinstance(o, list):
@@ -99,7 +120,7 @@ def fetch_youtube_results(keyword: str, aliases: list[str]) -> list[dict]:
         _walk(data, items)
 
         seen: set = set()
-        for kind, vid, title in items:
+        for kind, vid, title, pub_text in items:
             if not vid or not title or vid in seen:
                 continue
             # 상호 + 소개팅/로테이션 둘 다 있어야 채택(오검출 방지)
@@ -115,7 +136,7 @@ def fetch_youtube_results(keyword: str, aliases: list[str]) -> list[dict]:
                 'content': title[:1000],
                 'source_url': url,
                 'thumbnail_url': f'https://i.ytimg.com/vi/{vid}/hqdefault.jpg',
-                'published_at': None,
+                'published_at': _published_at_from_relative(pub_text),
                 'author_name': None,
             })
             if len(results) >= MAX_PER_KEYWORD:
