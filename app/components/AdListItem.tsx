@@ -9,13 +9,13 @@ import {
 } from 'react-native-google-mobile-ads'
 import { Image } from 'expo-image'
 import { useColors } from '@/hooks/useColors'
-import { FEED_NATIVE_AD_UNIT_ID } from '@/lib/ads'
+import { getFeedNativeAdUnitId } from '@/lib/ads'
 import { track } from '@/lib/analytics'
 
 const THUMB = 88
 
 // 광고 단위 ID는 @/lib/ads 에서 중앙 관리 (미설정 시 자동 테스트 광고 폴백)
-const AD_UNIT_ID = FEED_NATIVE_AD_UNIT_ID
+// 요청 시점에 계산 — 모듈 로드 시점엔 Updates.channel이 아직 없을 수 있다
 
 export default function AdListItem() {
   const colors = useColors()
@@ -24,7 +24,9 @@ export default function AdListItem() {
   useEffect(() => {
     let mounted = true
     let loaded: NativeAd | null = null
-    NativeAd.createForAdRequest(AD_UNIT_ID)
+    // 어떤 광고 단위로 나갔는지 남긴다 — 테스트 ID로 새는 실행을 구분하기 위함
+    const unitId = getFeedNativeAdUnitId()
+    NativeAd.createForAdRequest(unitId)
       .then((nativeAd) => {
         if (mounted) {
           loaded = nativeAd
@@ -32,7 +34,7 @@ export default function AdListItem() {
         } else {
           nativeAd.destroy()
         }
-        track('ad_load_success', { properties: { slot: 'feed', platform: Platform.OS } })
+        track('ad_load_success', { properties: { slot: 'feed', platform: Platform.OS, unit: unitId } })
       })
       .catch((e) => {
         // 슬롯은 비워두고 앱은 그대로 돌아간다. 다만 예전처럼 조용히 삼키지는 않는다 —
@@ -41,6 +43,7 @@ export default function AdListItem() {
           properties: {
             slot: 'feed',
             platform: Platform.OS,
+            unit: unitId,
             code: e?.code ?? null,
             message: String(e?.message ?? e).slice(0, 200),
           },

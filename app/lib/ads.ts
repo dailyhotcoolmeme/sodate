@@ -54,7 +54,12 @@ function resolve(real: { ios: string; android: string }, test: string): string {
   return id || test
 }
 
+// ⚠️ 광고 ID는 반드시 "요청하는 시점"에 계산한다. 예전엔 모듈 로드 시점에 상수로 굳혔는데,
+//    그때는 Updates.channel이 아직 준비되지 않은 경우가 있어 테스트 광고 ID로 고정돼 버렸다.
+//    실행할 때마다 타이밍이 갈려 어떤 실행은 테스트 광고, 어떤 실행은 실광고가 나갔고,
+//    테스트 광고가 나간 실행은 수익이 0이다(2026-07-29 안드로이드에서 실제 관측:
+//    같은 빌드인데 실행마다 테스트 광고가 보였다 안 보였다 함).
 /** 피드 목록 사이 네이티브 광고 단위 ID */
-export const FEED_NATIVE_AD_UNIT_ID = resolve(REAL.feedNative, TestIds.NATIVE)
+export const getFeedNativeAdUnitId = () => resolve(REAL.feedNative, TestIds.NATIVE)
 /** 이벤트 상세 신청 버튼 위 네이티브 광고 단위 ID */
-export const DETAIL_NATIVE_AD_UNIT_ID = resolve(REAL.detailNative, TestIds.NATIVE)
+export const getDetailNativeAdUnitId = () => resolve(REAL.detailNative, TestIds.NATIVE)
