@@ -1,0 +1,56 @@
+name: Refresh Nonimweb (프립·토크블라썸·괜찮소 마감)
+
+# 2026-07-29 분리 신설. 이 세 업체는 imweb 예약위젯이 없어 스크래퍼를 통째로 재사용하는데,
+# all-or-nothing이라 days 필터가 안 먹고 매번 전체를 돈다. 프립이 418건까지 커지면서
+# 이 작업만으로 실행이 길어졌고, 같은 워크플로에 묶여 있던 imweb 15분 갱신까지 밀렸다.
+# 별도 concurrency group으로 떼어내 서로 큐를 막지 않게 한다.
+on:
+  schedule:
+    - cron: '13,43 * * * *'   # 30분마다(다른 워크플로와 시각 분산)
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-nonimweb
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('crawler/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('crawler/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install dependencies
+        run: |
+          cd crawler
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Refresh nonimweb soldout
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          python refresh_soldout.py --part nonimweb

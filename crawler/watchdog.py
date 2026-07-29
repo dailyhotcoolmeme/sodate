@@ -35,8 +35,9 @@ GH_API = f'https://api.github.com/repos/{REPO}/actions/workflows'
 #    워치독이 또 재발화하는 악순환이 된다(2026-07-29 실측: 성공 실행 18~29분).
 #    그래서 자가복구 재발화는 '임박 2일'만 도는 가벼운 분기로 명시해서 띄운다.
 HEARTBEATS = {
-    'crawl.yml': ('메인 크롤(하루 2회)', 16 * 60, {}),        # 12h 주기 + 여유
-    'refresh-soldout.yml': ('15분 가격갱신', 75, {'days': '2'}),  # 30분 주기 + 여유
+    'crawl.yml': ('메인 크롤(하루 2회)', 16 * 60, {}),           # 12h 주기 + 여유
+    'refresh-soldout.yml': ('15분 imweb 갱신', 45, {'days': '2'}),   # 15분 주기 + 여유
+    'refresh-nonimweb.yml': ('30분 프립·토크·괜찮소 갱신', 75, {}),  # 30분 주기 + 여유
 }
 
 

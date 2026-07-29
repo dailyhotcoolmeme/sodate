@@ -129,13 +129,40 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
     return updated
 
 
-def refresh(slugs=None, days=None):
-    """days 지정 시 앞으로 N일 내 이벤트만 갱신(임박 우선·빠름). None이면 전체 미래."""
+def _refresh_nonimweb(sb, comps, slugs=None) -> None:
+    """비-imweb 업체(프립·토크블라썸·괜찮소) 좌석/마감 갱신 — 스크래퍼 로직 재사용.
+
+    스크래퍼가 all-or-nothing이라 days 필터가 안 먹고 매번 전체를 돈다. 프립이 커지면서
+    이 부분이 실행 시간을 지배하게 돼(2026-07-29) imweb 경량 갱신과 분리했다.
+    """
+    for slug, Sc in _nonimweb_scrapers().items():
+        if slugs and slug not in slugs:
+            continue
+        cid = comps.get(slug)
+        if not cid:
+            continue
+        n = _refresh_via_scraper(sb, cid, Sc)
+        print(f'[{slug}] 갱신 {n}건 (스크래퍼 재사용)')
+
+
+def refresh(slugs=None, days=None, part='all'):
+    """days 지정 시 앞으로 N일 내 이벤트만 갱신(임박 우선·빠름). None이면 전체 미래.
+
+    part: 'all' | 'imweb' | 'nonimweb'
+      ⚠️ 예전엔 한 실행이 imweb 위젯 갱신과 비-imweb 전체 크롤(프립·토크블라썸·괜찮소)을
+         모두 했다. 비-imweb은 days 필터가 안 먹어 매번 전체를 도는데, 프립이 418건까지
+         커지면서(2026-07-29) 이 부분만으로도 실행이 길어졌고, 같은 큐를 쓰는 imweb
+         경량 갱신까지 통째로 밀렸다. 그래서 둘을 분리해 각자 주기로 돌린다.
+    """
     sb = get_supabase()
     now = datetime.now(timezone.utc)
     horizon = (now + timedelta(days=days)).isoformat() if days else None
     comps = {c['slug']: c['id'] for c in sb.table('companies').select('id,slug').execute().data}
     targets = slugs or list(VENDORS.keys())
+
+    if part == 'nonimweb':
+        _refresh_nonimweb(sb, comps, slugs)
+        return
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -236,26 +263,21 @@ def refresh(slugs=None, days=None):
             print(f'[{slug}] 갱신 {updated}건 (상품 {len(by_idx)}개)')
         browser.close()
 
-    # 비-imweb 업체(프립·토크블라썸·괜찮소): 스크래퍼 좌석/마감 로직 재사용 — 매 실행(15분)마다.
-    # 스크래퍼가 all-or-nothing이라 days 필터는 무시하고 항상 전체 갱신(소규모라 빠름).
-    for slug, Sc in _nonimweb_scrapers().items():
-        if slugs and slug not in slugs:
-            continue
-        cid = comps.get(slug)
-        if not cid:
-            continue
-        n = _refresh_via_scraper(sb, cid, Sc)
-        print(f'[{slug}] 갱신 {n}건 (스크래퍼 재사용)')
+    if part != 'imweb':
+        _refresh_nonimweb(sb, comps, slugs)
 
 
 if __name__ == '__main__':
     args = sys.argv[1:]
     days = None
+    part = 'all'
     slugs = []
     i = 0
     while i < len(args):
         if args[i] == '--days' and i + 1 < len(args):
             days = int(args[i + 1]); i += 2
+        elif args[i] == '--part' and i + 1 < len(args):
+            part = args[i + 1]; i += 2
         else:
             slugs.append(args[i]); i += 1
-    refresh(slugs=slugs or None, days=days)
+    refresh(slugs=slugs or None, days=days, part=part)
