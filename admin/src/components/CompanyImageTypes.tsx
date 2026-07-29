@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase, uploadDetailImage, deleteDetailImage } from '../lib/supabase'
 import { resizeForUpload } from '../lib/resizeImage'
 import MatchKeywordEditor, { TitleLink, dedupeTitles } from './MatchKeywordEditor'
+import HashtagEditor from './HashtagEditor'
 import DetailImagePreview from './DetailImagePreview'
 import { matchTypeByName } from '../lib/matchImageType'
 import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Pencil, Maximize2 } from 'lucide-react'
@@ -14,6 +15,7 @@ interface ImageType {
   is_default: boolean
   sort_order: number
   match_keywords: string[] | null
+  hashtags: string[] | null
 }
 
 export default function CompanyImageTypes({ companyId, slug }: { companyId: string; slug: string }) {
@@ -63,6 +65,35 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
       setTypes((prev) => prev.map((x) => x.id === t.id ? { ...x, match_keywords: t.match_keywords } : x))
       alert(`검색어 저장 실패: ${error.message}`)
     }
+  }
+
+
+  // 유형 해시태그 저장 + 이 유형에 매칭되는 앞으로 일정에 즉시 반영(오너 요청 2026-07-29).
+  // 유형 태그가 비어 있으면 아무것도 덮지 않는다 — 크롤러 자동 태그 유지.
+  async function saveTypeHashtags(t: ImageType, next: string[]) {
+    setTypes((prev) => prev.map((x) => x.id === t.id ? { ...x, hashtags: next } : x))
+    const { error } = await supabase
+      .from('company_image_types')
+      .update({ hashtags: next, updated_at: new Date().toISOString() })
+      .eq('id', t.id)
+    if (error) {
+      setTypes((prev) => prev.map((x) => x.id === t.id ? { ...x, hashtags: t.hashtags } : x))
+      alert(`해시태그 저장 실패: ${error.message}`)
+      return
+    }
+    if (next.length === 0) return
+    // 이 업체의 앞으로 일정 중, "가장 긴 키워드 매칭"이 이 유형으로 떨어지는 것만 갱신
+    const { data: evs } = await supabase.from('events')
+      .select('id, title')
+      .eq('company_id', companyId)
+      .gte('event_date', new Date().toISOString())
+      .limit(2000)
+    const allTypes = types.map((x) => x.id === t.id ? { ...x, hashtags: next } : x)
+    const targets = (evs ?? []).filter((e) => matchTypeByName(e.title ?? '', allTypes)?.id === t.id)
+    for (const e of targets) {
+      await supabase.from('events').update({ hashtags: next }).eq('id', e.id)
+    }
+    if (targets.length) alert(`해시태그를 매칭 일정 ${targets.length}건에 적용했습니다.`)
   }
 
   async function addType() {
@@ -172,6 +203,15 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
             otherTypes={types.filter((x) => x.id !== t.id)}
             onChange={(next) => saveKeywords(t, next)}
           />
+
+          {/* 유형 해시태그 — 이 유형에 매칭되는 모임은 자동 태그 대신 이 태그를 단다.
+              비워 두면 크롤러 자동 태그 그대로(오너 확정). */}
+          <div className="mb-3">
+            <p className="text-xs text-gray-500 mb-1">
+              해시태그 <span className="text-gray-400">(입력하면 이 유형에 매칭된 모임에 적용 · 비우면 자동 태그 유지)</span>
+            </p>
+            <HashtagEditor value={t.hashtags ?? []} onChange={(next) => saveTypeHashtags(t, next)} />
+          </div>
 
           {t.images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">

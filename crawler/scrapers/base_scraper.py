@@ -52,9 +52,39 @@ class BaseScraper(ABC):
         """업체 사이트에서 이벤트 목록을 스크래핑하여 반환"""
         pass
 
+    def _load_type_hashtags(self, company_id: str) -> list[dict]:
+        """이 업체의 상세 이미지 유형 중 해시태그가 등록된 것들.
+        매칭 규칙은 admin(matchImageType.ts)·앱(resolveDescImages)과 동일해야 한다:
+        제목에 검색어가 들어가면 그 유형, 여러 개면 걸린 검색어가 가장 긴 쪽이 이긴다."""
+        try:
+            rows = (
+                self.supabase.table('company_image_types')
+                .select('match_keywords,hashtags')
+                .eq('company_id', company_id)
+                .execute()
+            ).data or []
+            return [r for r in rows if r.get('hashtags')]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _type_hashtags_for(title: str, typed: list[dict]) -> Optional[list]:
+        hay = (title or '').lower()
+        best = None  # (len, hashtags)
+        for t in typed:
+            for k in (t.get('match_keywords') or []):
+                k = str(k).strip()
+                if k and k.lower() in hay:
+                    if best is None or len(k) > best[0]:
+                        best = (len(k), t['hashtags'])
+        return best[1] if best else None
+
     def save_events(self, events: list[EventModel]) -> dict:
         """이벤트를 Supabase에 upsert 저장"""
         company_id = self.get_company_id()
+        # 오너가 상세 이미지 유형에 등록한 해시태그(2026-07-29). 매칭되는 모임은
+        # 자동 생성 태그 대신 이걸 단다. 없으면 기존대로.
+        typed_hashtags = self._load_type_hashtags(company_id)
         new_count = 0
         updated_count = 0
         current_urls = {e.source_url for e in events}
@@ -136,7 +166,11 @@ class BaseScraper(ABC):
                 age_max=data.get('age_range_max'),
                 extra=data.get('format'),
             )
-            if derived_hashtags:
+            # 유형 해시태그가 매칭되면 그것이 우선(오너 큐레이션). 자동 태그는 그다음.
+            type_tags = self._type_hashtags_for(data.get('title') or '', typed_hashtags)
+            if type_tags:
+                data['hashtags'] = type_tags
+            elif derived_hashtags:
                 data['hashtags'] = derived_hashtags
             else:
                 data.pop('hashtags', None)
