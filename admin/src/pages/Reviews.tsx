@@ -153,52 +153,7 @@ export default function Reviews() {
       {loading ? (
         <p className="text-gray-400 text-sm">불러오는 중...</p>
       ) : (
-        // 모바일=카드, 데스크탑=표. 표를 모바일에서 가로 스크롤로 보면 액션 버튼이
-        // 좁아 2줄로 깨졌다(2026-07-30 오너 지적).
-        <>
-        <div className="md:hidden space-y-2">
-          {filtered.map((review) => {
-            const reportCount = review.report_count ?? 0
-            return (
-              <div key={review.id}
-                className={`rounded-xl border bg-white p-3 ${reportCount > 0 ? 'border-red-300' : 'border-gray-200'}`}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  {review.rating != null && (
-                    <span className="flex items-center gap-0.5 text-yellow-500 text-xs shrink-0">
-                      <Star size={12} className="fill-yellow-400 text-yellow-400" />{review.rating}
-                    </span>
-                  )}
-                  <span className="text-xs font-medium text-gray-700 truncate min-w-0">{review.companies?.name ?? '-'}</span>
-                  <div className="flex-1" />
-                  {reportCount > 0 && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-[11px] font-semibold shrink-0">
-                      <Flag size={10} />{reportCount}
-                    </span>
-                  )}
-                  <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${review.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
-                    {review.is_active ? '노출' : '숨김'}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-800 line-clamp-2 break-words mb-1.5">{review.content ?? '-'}</p>
-                <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                  <span className="truncate min-w-0">{review.author_name ?? '익명'}</span>
-                  <span className="shrink-0">{review.published_at ? new Date(review.published_at).toLocaleDateString('ko-KR') : '-'}</span>
-                  <div className="flex-1" />
-                  <button onClick={() => toggleActive(review.id, review.is_active)}
-                    className={`px-2.5 py-1 rounded-lg border text-xs font-medium shrink-0 ${review.is_active ? 'border-gray-200 text-gray-600' : 'border-green-200 text-green-600'}`}>
-                    {review.is_active ? '블라인드' : '복구'}
-                  </button>
-                  <button onClick={() => deleteReview(review.id)}
-                    className="px-2.5 py-1 rounded-lg border border-red-200 text-xs font-medium text-red-500 shrink-0">
-                    삭제
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           <table className="w-full min-w-[1060px] table-fixed text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
@@ -218,7 +173,7 @@ export default function Reviews() {
                 const isExpanded = expanded === review.id
                 return (
                   <Fragment key={review.id}>
-                    <tr className="border-t border-gray-100 hover:bg-gray-50 align-middle">
+                    <tr className="border-t border-gray-100 hover:bg-gray-50 align-middle [&>td]:whitespace-nowrap">
                       <td className="px-3 py-3 text-gray-500 text-xs"><span className="block truncate" title={review.companies?.name ?? ''}>{review.companies?.name ?? '-'}</span></td>
                       <td className="px-3 py-3 text-gray-700 text-xs truncate">
                         <span className="block truncate" title={review.author_name ?? ''}>{review.author_name ?? '익명'}</span>
@@ -250,21 +205,27 @@ export default function Reviews() {
                         )}
                       </td>
                       <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap">
-                        {review.published_at ? new Date(review.published_at).toLocaleDateString('ko-KR') : '-'}
+                        {/* 인스타·유튜브는 크롤러가 게시일(published_at)을 못 채운다(전건 없음).
+                            그 경우 수집일(created_at)이라도 보여준다 — 전부 '-'로 비어 보이던 문제. */}
+                        {review.published_at
+                          ? new Date(review.published_at).toLocaleDateString('ko-KR')
+                          : review.created_at
+                            ? `${new Date(review.created_at).toLocaleDateString('ko-KR')} 수집`
+                            : '-'}
                       </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center justify-center gap-1">
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1 whitespace-nowrap">
                           {review.is_active ? (
                             <button
                               onClick={() => toggleActive(review.id, review.is_active)}
-                              className="px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                              className="px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100 shrink-0 whitespace-nowrap"
                             >
                               블라인드
                             </button>
                           ) : (
                             <button
                               onClick={() => toggleActive(review.id, review.is_active)}
-                              className="px-2.5 py-1 rounded-lg border border-green-200 text-xs font-medium text-green-600 hover:bg-green-50"
+                              className="px-2.5 py-1 rounded-lg border border-green-200 text-xs font-medium text-green-600 hover:bg-green-50 shrink-0 whitespace-nowrap"
                             >
                               복구
                             </button>
@@ -279,7 +240,7 @@ export default function Reviews() {
                           )}
                           <button
                             onClick={() => deleteReview(review.id)}
-                            className="px-2.5 py-1 rounded-lg border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50"
+                            className="px-2.5 py-1 rounded-lg border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50 shrink-0 whitespace-nowrap"
                           >
                             삭제
                           </button>
@@ -323,7 +284,6 @@ export default function Reviews() {
             </tbody>
           </table>
         </div>
-        </>
       )}
     </div>
   )
