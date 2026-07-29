@@ -156,6 +156,14 @@ def fetch_instagram_results(keyword: str) -> list[dict]:
                 'content': content[:1000],
                 'source_url': url,
                 'thumbnail_url': None,
+                # 게시일은 취득 불가. 2026-07-30 전부 실측 확인:
+                #   게시물 HTML / 임베드 HTML / 임베드 브라우저 렌더링 /
+                #   렌더링 중 네트워크 응답 전수 스캔 → taken_at 계열 0건
+                #   공식 oEmbed 302(토큰 필요), GraphQL require_login,
+                #   shortcode 디코딩은 2040년 등 불가능한 값
+                # 로그인 크롤링은 프로젝트 금지 사항이라 대안이 없다. 수집일로 대체하거나
+                # "1년 전"류를 환산하면 실제 게시일과 어긋나므로 추정하지 않고 비워 둔다.
+                # 앱/admin은 이 경우 '확인 불가'로 표기한다.
                 'published_at': None,
                 'author_name': None,
             })

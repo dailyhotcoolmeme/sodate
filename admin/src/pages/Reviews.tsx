@@ -205,13 +205,13 @@ export default function Reviews() {
                         )}
                       </td>
                       <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap">
-                        {/* 인스타·유튜브는 크롤러가 게시일(published_at)을 못 채운다(전건 없음).
-                            그 경우 수집일(created_at)이라도 보여준다 — 전부 '-'로 비어 보이던 문제. */}
+                        {/* 인스타그램은 로그인 세션 없이 게시일을 전혀 주지 않는다(2026-07-30 실측:
+                            게시물/임베드 HTML·렌더링·네트워크 응답 모두 타임스탬프 0건).
+                            수집일로 대체하거나 "1년 전"류를 날짜로 환산하면 실제 게시일과
+                            어긋나므로, 추정하지 않고 '확인 불가'로 명시한다. */}
                         {review.published_at
                           ? new Date(review.published_at).toLocaleDateString('ko-KR')
-                          : review.created_at
-                            ? `${new Date(review.created_at).toLocaleDateString('ko-KR')} 수집`
-                            : '-'}
+                          : '확인 불가'}
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1 whitespace-nowrap">

@@ -26,7 +26,9 @@ interface Props {
 }
 
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return ''
+  // 인스타그램 후기는 로그인 없이 게시일을 얻을 수 없다(2026-07-30 확인).
+  // 수집일로 대체하거나 상대표기를 환산하면 실제 게시일과 어긋나므로 추정하지 않는다.
+  if (!dateStr) return '게시일 확인 불가'
   const d = new Date(dateStr)
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
@@ -82,8 +84,8 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
       lineHeight: 21,
     },
     footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-    author: { fontSize: 12, color: colors.textTertiary },
-    date: { fontSize: 12, color: colors.textTertiary },
+    author: { fontSize: 12, color: colors.textTertiary, flexShrink: 1, marginRight: 8 },
+    date: { fontSize: 12, color: colors.textTertiary, flexShrink: 0 },
     actionsWrap: { paddingHorizontal: 14, paddingBottom: 12 },
     actionsRow: {
       flexDirection: 'row',
@@ -149,9 +151,11 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
         <Text style={styles.content} numberOfLines={pressable ? 4 : undefined}>{cleanText(review.content ?? '')}</Text>
         <View style={styles.footer}>
           {review.author_name && (
-            <Text style={styles.author}>{review.author_name}</Text>
+            <Text style={styles.author} numberOfLines={1}>{review.author_name}</Text>
           )}
-          <Text style={styles.date}>{formatDate(review.published_at)}</Text>
+          {/* '게시일 확인 불가'는 날짜보다 길어서, 작성자명이 길 때 줄바꿈되지 않도록
+              날짜는 줄이지 않고 작성자명 쪽을 줄인다. */}
+          <Text style={styles.date} numberOfLines={1}>{formatDate(review.published_at)}</Text>
         </View>
       </View>
       </CardWrap>
