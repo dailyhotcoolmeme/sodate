@@ -161,6 +161,9 @@ export default function Register() {
     [searchedRows, filterCompany],
   )
 
+  // 자동완성 후보 — 지금 화면의 모든 행에 붙어 있는 태그(중복 제거).
+  const allUsedTags = useMemo(() => [...new Set(rows.flatMap((r) => r.hashtags))], [rows])
+
   // 업체별 건수 (탭 배지용) — 검색 중이면 검색 결과 기준이어야 한다.
   // 안 그러면 "265건 찾음"인데 탭엔 839가 떠서 화면이 어긋나 보인다.
   const companyCounts = useMemo(() => {
@@ -372,7 +375,7 @@ export default function Register() {
       </button>
       {expanded.has(r.key) && (
         <div className="mt-2 pt-2.5 border-t border-gray-100 space-y-3">
-          <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
+          <HashtagEditor extraSuggestions={allUsedTags} value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
           <div className="flex items-center gap-3 text-xs text-gray-500">
             <span>정원 남 {r.capacity_male || '-'} · 여 {r.capacity_female || '-'}</span>
             <div className="flex-1" />
@@ -471,7 +474,7 @@ export default function Register() {
             <div className="flex items-start gap-2">
               <span className="text-xs text-gray-400 shrink-0 pt-1.5 w-14">해시태그</span>
               <div className="min-w-0 flex-1">
-                <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
+                <HashtagEditor extraSuggestions={allUsedTags} value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
               </div>
             </div>
             <div className="flex items-center gap-4 text-xs text-gray-500">

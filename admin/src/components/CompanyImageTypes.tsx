@@ -33,6 +33,7 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
   // [저장] 버튼 한 번으로 유형 저장 + 매칭 일정 일괄 반영.
   const [tagDraft, setTagDraft] = useState<Record<string, string[]>>({})
   const [tagStatus, setTagStatus] = useState<Record<string, string>>({})
+  const [usedTags, setUsedTags] = useState<string[]>([])
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => { load() }, [companyId])
@@ -45,7 +46,7 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
       // 앞으로 열릴 일정만. 카드의 '일정' 숫자(company_admin_stats.upcoming_events)와
       // 기준이 같아야 한다 — 예전엔 여기만 지난 일정까지 세서, 같은 화면에 270과 653이
       // 같이 뜨는 상태였다(2026-07-28 오너 지적).
-      supabase.from('events').select('title, source_url')
+      supabase.from('events').select('title, source_url, hashtags')
         .eq('company_id', companyId).eq('is_active', true)
         .gte('event_date', new Date().toISOString())
         .limit(2000),
@@ -56,6 +57,8 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
     setTitles(((ev.data as any[]) ?? [])
       .map((e) => ({ title: (e.title ?? '').trim(), url: e.source_url ?? '' }))
       .filter((e) => e.title))
+    // 자동완성 후보: 일정에 실제 붙어 있는 태그(유형 태그는 types 상태에서 합침)
+    setUsedTags([...new Set(((ev.data as any[]) ?? []).flatMap((e) => e.hashtags ?? []))])
     setLoading(false)
   }
 
@@ -227,6 +230,7 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
               해시태그 <span className="text-gray-400">(입력 후 [저장]을 눌러야 매칭된 모임에 반영됩니다 · 비우고 저장하면 자동 태그로 복귀)</span>
             </p>
             <HashtagEditor
+              extraSuggestions={[...usedTags, ...types.flatMap((x) => x.hashtags ?? [])]}
               value={tagDraft[t.id] ?? t.hashtags ?? []}
               onChange={(next) => {
                 setTagDraft((p) => ({ ...p, [t.id]: next }))

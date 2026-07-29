@@ -24,12 +24,16 @@ export function normalizeHashtag(raw: string): string {
   return `#${t}`
 }
 
-export default function HashtagEditor({ value, onChange, showInput = true, showSuggestions = true, compact = false }: {
+export default function HashtagEditor({ value, onChange, showInput = true, showSuggestions = true, compact = false, extraSuggestions = [] }: {
   value: string[]
   onChange: (next: string[]) => void
   showInput?: boolean       // false면 선택칩+입력창을 렌더하지 않음 (추천만)
   showSuggestions?: boolean  // false면 추천 태그를 렌더하지 않음 (입력만)
   compact?: boolean          // true면 다른 표 입력칸과 높이를 맞춤(py-1)
+  // 사전 외에 '이미 쓰이고 있는 태그'(유형·일정에 등록된 것)를 후보에 합친다.
+  // #직장인/#직장검증처럼 표기가 갈라지면 태그 필터가 안 묶이므로, 입력 중에
+  // 기존 표기를 보여줘 같은 걸 고르게 한다(2026-07-30 오너 요청).
+  extraSuggestions?: string[]
 }) {
   const [input, setInput] = useState('')
 
@@ -48,9 +52,16 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
 
   const removeTag = (tag: string) => onChange(value.filter((t) => t !== tag))
 
-  const remaining = HASHTAG_SUGGESTIONS.filter(
+  // 후보 풀 = 기본 사전 + 실사용 태그(중복 제거, 사전 순서 우선)
+  const pool = [...HASHTAG_SUGGESTIONS, ...extraSuggestions].filter(
+    (tag, i, arr) => arr.findIndex((x) => x.toLowerCase() === tag.toLowerCase()) === i
+  )
+  const notSelected = pool.filter(
     (s) => !value.some((t) => t.toLowerCase() === s.toLowerCase())
   )
+  // 입력 중이면 입력값이 들어간 후보만(자동완성). 입력이 비면 전체 후보.
+  const q = input.trim().replace(/^#+/, '').toLowerCase()
+  const remaining = q ? notSelected.filter((s) => s.toLowerCase().includes(q)) : notSelected
 
   return (
     <div>
@@ -95,7 +106,7 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
             <button
               key={s}
               type="button"
-              onClick={() => addTag(s)}
+              onClick={() => { addTag(s); setInput('') }}
               className="px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 text-xs hover:border-pink-300 hover:text-pink-500"
             >
               {s}
