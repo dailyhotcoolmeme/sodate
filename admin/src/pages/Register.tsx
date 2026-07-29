@@ -491,7 +491,7 @@ export default function Register() {
   )
 
   return (
-    <div className="p-4 md:p-8 max-w-[1500px]">
+    <div className="p-4 md:p-8 max-w-[1500px] min-w-0">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">일정 관리</h1>
         <p className="text-sm text-gray-500 mt-1">
@@ -592,7 +592,7 @@ export default function Register() {
         {/* ⚠️ overflow-hidden 으로 뒀더니 폭이 모자랄 때 오른쪽 열(연령·토글·펼치기)이
             잘린 채 스크롤도 안 됐다(2026-07-29 오너 지적). 가로 스크롤을 되살리고,
             table-fixed + 열별 고정폭으로 제목이 남는 폭을 다 먹지 않게 한다. */}
-        <div className="hidden md:block bg-white border border-gray-200 rounded-xl overflow-x-auto">
+        <div className="hidden md:block w-full max-w-full bg-white border border-gray-200 rounded-xl overflow-x-auto overflow-y-visible">
           <table className="w-full min-w-[1180px] table-fixed text-sm whitespace-nowrap">
             <thead className="bg-gray-50 text-gray-500 text-xs">
               <tr>
