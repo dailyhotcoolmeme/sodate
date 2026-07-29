@@ -61,7 +61,10 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
   )
   // 입력 중이면 입력값이 들어간 후보만(자동완성). 입력이 비면 전체 후보.
   const q = input.trim().replace(/^#+/, '').toLowerCase()
-  const remaining = q ? notSelected.filter((s) => s.toLowerCase().includes(q)) : notSelected
+  // ⚠️ 입력이 비어 있으면 후보를 안 깔아둔다(오너 확정 2026-07-30). 예전엔 30여 개
+  //    회색 칩이 상시 깔려 화면을 먹었다. 자동완성이 생긴 뒤로는 글자를 치면
+  //    관련된 것만 뜨므로 상시 노출은 불필요.
+  const remaining = q ? notSelected.filter((s) => s.toLowerCase().includes(q)) : []
 
   return (
     <div>
