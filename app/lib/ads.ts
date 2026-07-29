@@ -35,21 +35,31 @@ const REAL = {
   },
 } as const
 
-// 실제 광고는 "production(스토어) 채널" 빌드에서만 사용한다.
-// - 개발(__DEV__)·preview(테스트) 빌드는 항상 구글 테스트 광고.
-//   (preview 빌드는 __DEV__=false라, 실광고ID를 그대로 쓰면 테스트 앱ID 바이너리에서
-//    실광고가 안 떠 배너가 통째로 사라짐. 또 테스트 중 실광고 클릭=AdMob 계정 정지 위험)
-// - Updates.channel 은 스토어 프로덕션 빌드에서만 'production'.
-function isProductionBuild(): boolean {
+// 테스트 광고를 쓸지 판정한다.
+//
+// ⚠️ 예전엔 "Updates.channel === 'production' 일 때만 실광고"였다. 그런데 이 값은
+//    앱 시작 직후 비어 있을 수 있어(네이티브 updates 설정을 아직 못 읽은 상태),
+//    스토어 빌드인데도 테스트 광고로 떨어지는 실행이 생겼다 — 그 실행은 수익이 0이다.
+//    같은 빌드에서 실행마다 테스트 광고가 보였다 안 보였다 한 원인(2026-07-29 오너 관측).
+//    그래서 판정을 뒤집는다: "테스트 채널일 때만 테스트 광고", 모르면 실광고.
+//
+// 내부 테스트 중 실광고를 눌러 계정이 정지되는 건 AdMob '테스트 기기 등록'으로 막는다
+// (등록된 기기는 실광고 단위로 요청해도 테스트 광고가 내려온다). 광고 단위를 바꿔치기해
+// 막는 방식은 이번처럼 실수로 프로덕션까지 새기 때문에 쓰지 않는다.
+const TEST_CHANNELS = new Set(['development', 'preview'])
+
+function useTestAds(): boolean {
+  if (__DEV__) return true
   try {
-    return Updates.channel === 'production'
+    const ch = Updates.channel
+    return !!ch && TEST_CHANNELS.has(ch)
   } catch {
     return false
   }
 }
 
 function resolve(real: { ios: string; android: string }, test: string): string {
-  if (__DEV__ || !isProductionBuild()) return test
+  if (useTestAds()) return test
   const id = Platform.OS === 'ios' ? real.ios : real.android
   return id || test
 }
