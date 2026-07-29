@@ -26,10 +26,8 @@ COMPANY_ALIASES = {
     'lovecasting':       ['러브캐스팅'],
     'talkblossom':       ['토크블라썸'],
     'yeongyul':          ['괜찮소'],
-    'inssumparty':       ['인썸파티'],
     'secretsalon':       ['시크릿살롱'],
     'twoyeonsi':         ['이연시'],
-    'flipo':             ['플리포'],
     'lovecommunity-loco': ['로꼬'],
 }
 
@@ -77,22 +75,24 @@ def fetch_upload_date(video_id: str) -> Optional[str]:
 
 
 def _walk(o, items: list):
-    """ytInitialData 를 순회하며 (kind, videoId, title) 수집."""
+    """ytInitialData 를 순회하며 (kind, videoId, title) 수집.
+
+    게시일은 여기서 안 받는다. 검색 결과에는 상대 표기("1년 전")만 있어서
+    영상 페이지의 uploadDate(fetch_upload_date)로 따로 조회한다.
+    """
     if isinstance(o, dict):
         if 'videoRenderer' in o:
             v = o['videoRenderer']
-            items.append(('video', v.get('videoId'), _title(v.get('title')),
-                          (v.get('publishedTimeText') or {}).get('simpleText')))
+            items.append(('video', v.get('videoId'), _title(v.get('title'))))
         if 'shortsLockupViewModel' in o:  # 신형 쇼츠
             v = o['shortsLockupViewModel']
             vid = (v.get('onTap', {}).get('innertubeCommand', {})
                    .get('reelWatchEndpoint', {}) or {}).get('videoId')
             title = (v.get('overlayMetadata', {}).get('primaryText', {}) or {}).get('content')
-            # 쇼츠는 게시일 표기가 없는 경우가 많다
-            items.append(('short', vid, title, None))
+            items.append(('short', vid, title))
         if 'reelItemRenderer' in o:  # 구형 쇼츠 폴백
             v = o['reelItemRenderer']
-            items.append(('short', v.get('videoId'), _title(v.get('headline')), None))
+            items.append(('short', v.get('videoId'), _title(v.get('headline'))))
         for val in o.values():
             _walk(val, items)
     elif isinstance(o, list):
@@ -120,7 +120,7 @@ def fetch_youtube_results(keyword: str, aliases: list[str]) -> list[dict]:
         _walk(data, items)
 
         seen: set = set()
-        for kind, vid, title, pub_text in items:
+        for kind, vid, title in items:
             if not vid or not title or vid in seen:
                 continue
             # 상호 + 소개팅/로테이션 둘 다 있어야 채택(오검출 방지)
