@@ -18,7 +18,7 @@ crawl.yml 자체가 타임아웃/실패하면 같이 못 돈다(실제로 그날
 """
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import httpx
 
@@ -29,9 +29,14 @@ REPO = 'dailyhotcoolmeme/sodate'
 GH_API = f'https://api.github.com/repos/{REPO}/actions/workflows'
 
 # workflow 파일명 → (사람이 읽는 이름, 최대 허용 공백(분))
+# workflow 파일명 → (사람이 읽는 이름, 최대 허용 공백(분), 재발화 시 넘길 inputs)
+# ⚠️ 재발화 inputs가 없으면 refresh-soldout.yml이 '전체 갱신'(20~30분) 분기로 떨어진다.
+#    15분 주기에 30분짜리를 계속 띄우면 큐가 밀려 절반이 취소되고, 성공 간격이 벌어져
+#    워치독이 또 재발화하는 악순환이 된다(2026-07-29 실측: 성공 실행 18~29분).
+#    그래서 자가복구 재발화는 '임박 2일'만 도는 가벼운 분기로 명시해서 띄운다.
 HEARTBEATS = {
-    'crawl.yml': ('메인 크롤(하루 2회)', 16 * 60),          # 12h 주기 + 여유
-    'refresh-soldout.yml': ('15분 가격갱신', 45),           # 15분 주기 + 여유
+    'crawl.yml': ('메인 크롤(하루 2회)', 16 * 60, {}),        # 12h 주기 + 여유
+    'refresh-soldout.yml': ('15분 가격갱신', 75, {'days': '2'}),  # 30분 주기 + 여유
 }
 
 
@@ -49,17 +54,20 @@ def _gh_get(path: str) -> dict:
     return r.json()
 
 
-def _gh_dispatch(fname: str) -> bool:
+def _gh_dispatch(fname: str, inputs: dict | None = None) -> bool:
     """워크플로를 API로 수동 발화(workflow_dispatch)한다.
     2026-07-25: refresh-soldout.yml의 schedule 트리거가 GH 쪽에서 3시간+ 안 도는 사고가
     있었고, 워크플로 파일 touch·disable/enable 재등록 둘 다 효과 없었음. 근본원인을
     못 밝혀도(GH 플랫폼 이슈로 추정) 사업적으로는 "가격이 최신인가"가 중요하므로,
     워치독이 갭을 발견하면 알림만 보내지 말고 직접 재발화까지 시켜 스스로 복구한다."""
     try:
+        body: dict = {'ref': 'main'}
+        if inputs:
+            body['inputs'] = inputs
         r = httpx.post(
             f'{GH_API}/{fname}/dispatches',
             headers=_gh_headers(),
-            json={'ref': 'main'},
+            json=body,
             timeout=15,
         )
         return r.status_code == 204
@@ -67,12 +75,24 @@ def _gh_dispatch(fname: str) -> bool:
         return False
 
 
+def _has_active_run(fname: str) -> bool:
+    """해당 워크플로가 지금 대기·실행 중인지. 중복 재발화로 큐를 밀어내지 않기 위함."""
+    for st in ('queued', 'in_progress'):
+        try:
+            d = _gh_get(f'{fname}/runs?status={st}&per_page=1')
+            if (d.get('workflow_runs') or []):
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def check_heartbeats() -> list[dict]:
     """워크플로별 마지막 성공 실행이 예상 주기 안인지 확인(트리거 종류 무관 — 수동실행도 정상 신호).
     갭 발견 시 알림뿐 아니라 workflow_dispatch로 즉시 재발화까지 시도(자가복구)."""
     issues = []
     now = datetime.now(timezone.utc)
-    for fname, (label, max_gap_min) in HEARTBEATS.items():
+    for fname, (label, max_gap_min, dispatch_inputs) in HEARTBEATS.items():
         try:
             data = _gh_get(f'{fname}/runs?status=success&per_page=1')
             runs = data.get('workflow_runs') or []
@@ -90,7 +110,15 @@ def check_heartbeats() -> list[dict]:
             continue
         gap_min = (now - finished_dt).total_seconds() / 60
         if gap_min > max_gap_min:
-            dispatched = _gh_dispatch(fname)
+            # ⚠️ 이미 돌고 있으면 재발화하지 않는다. 예전엔 무조건 띄워서, 오래 걸리는
+            #    실행이 끝나기 전에 계속 큐를 채웠고 GH가 대기분을 취소해 버렸다.
+            if _has_active_run(fname):
+                issues.append({
+                    'level': 'WARN',
+                    'msg': f'{label}: 마지막 성공이 {gap_min:.0f}분 전이지만 지금 실행 중 — 재발화 안 함',
+                })
+                continue
+            dispatched = _gh_dispatch(fname, dispatch_inputs)
             issues.append({
                 'level': 'ERROR',
                 'msg': f'{label}: 마지막 성공 실행이 {gap_min:.0f}분 전(허용 {max_gap_min}분) — '
@@ -172,17 +200,54 @@ def send_email(text: str) -> None:
     print(f'이메일 전송 결과: {r.status_code} {r.text[:200]}')
 
 
+def check_empty_crawls(sb) -> list[dict]:
+    """결과가 0건인데 success로 기록된 크롤을 잡는다.
+
+    ⚠️ 사이트가 잠깐 죽거나 파싱이 깨지면 스크래퍼가 0건을 들고 와도 예외가 아니라
+       'success'로 남는다. base_scraper의 50% 안전장치가 삭제는 막아주지만, 아무도
+       모르는 채로 그 업체 데이터가 낡아간다(2026-07-29 에모셔널오렌지에서 실제 발생:
+       252건 → 0건 크롤이 success로 기록됨). 그래서 여기서 따로 본다.
+    """
+    issues: list[dict] = []
+    since = (datetime.now(timezone.utc) - timedelta(hours=14)).isoformat()
+    try:
+        comps = {c['id']: c['name'] for c in sb.table('companies').select('id,name').execute().data}
+        logs = (
+            sb.table('crawl_logs')
+            .select('company_id,status,events_found,executed_at')
+            .gte('executed_at', since)
+            .order('executed_at', desc=True)
+            .execute()
+        ).data or []
+    except Exception as e:
+        return [{'level': 'WARN', 'msg': f'빈 크롤 점검 실패({str(e)[:60]})'}]
+
+    latest: dict = {}
+    for lg in logs:
+        latest.setdefault(lg['company_id'], lg)
+    for cid, lg in latest.items():
+        if lg.get('status') == 'success' and (lg.get('events_found') or 0) == 0:
+            issues.append({
+                'level': 'ERROR',
+                'msg': f"{comps.get(cid, cid)}: 최근 크롤이 0건인데 성공으로 기록됨 — 사이트 변경·파싱 깨짐 의심",
+            })
+    return issues
+
+
 def run() -> int:
     sb = get_supabase()
 
-    print('[1/3] 하트비트(마지막 성공 실행 시각) 확인...')
+    print('[1/4] 하트비트(마지막 성공 실행 시각) 확인...')
     heartbeat_issues = check_heartbeats()
 
-    print('[2/3] 완성도(가격+나이) 점검...')
+    print('[2/4] 완성도(가격+나이) 점검...')
     completeness_issues = check_completeness(sb)
 
-    print('[3/3] price_detail 정합성 점검...')
+    print('[3/4] price_detail 정합성 점검...')
     consistency_issues = check_field_consistency(sb)
+
+    print('[4/4] 빈 크롤(0건인데 success) 점검...')
+    consistency_issues += check_empty_crawls(sb)
 
     all_issues = heartbeat_issues + completeness_issues + consistency_issues
     errors = [i for i in all_issues if i['level'] == 'ERROR']

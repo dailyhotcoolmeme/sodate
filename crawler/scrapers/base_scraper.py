@@ -267,6 +267,21 @@ class BaseScraper(ABC):
         except Exception as e:
             self.logger.error(f"crawl_logs 기록 실패: {e}")
 
+    def _has_upcoming_events(self) -> bool:
+        """이 업체에 앞으로 일정이 DB에 남아 있는지. 0건 크롤이 진짜 이상인지 판단용."""
+        try:
+            res = (
+                self.supabase.table('events')
+                .select('id', count='exact')
+                .eq('company_id', self.get_company_id())
+                .gte('event_date', datetime.now(timezone.utc).isoformat())
+                .limit(1)
+                .execute()
+            )
+            return (res.count or 0) > 0
+        except Exception:
+            return False   # 판단 못 하면 기존대로 success (오탐으로 알림 남발 방지)
+
     def run(self) -> dict:
         """전체 크롤링 실행 (스크래핑 → 저장 → 로그)"""
         start = time.time()
@@ -278,11 +293,23 @@ class BaseScraper(ABC):
             result = self.save_events(events)
             duration = int((time.time() - start) * 1000)
 
+            # ⚠️ 0건인데 'success'로 남기면 아무도 모르는 채 그 업체 데이터가 낡아간다.
+            #    사이트가 느려 상품 파싱이 무더기로 실패해도 예외가 아니라 조용히 0건이
+            #    된다(2026-07-29 에모셔널오렌지: 252건 → 0건이 success로 기록됨).
+            #    앞으로 일정이 남아 있는데 0건을 들고 왔으면 실패로 기록해 워치독이 잡게 한다.
+            status = 'success'
+            error_msg = None
+            if not events and self._has_upcoming_events():
+                status = 'failed'
+                error_msg = '수집 0건 — 기존 일정이 있는데 아무것도 못 가져옴(사이트 지연·파싱 깨짐 의심)'
+                self.logger.error(f"[{self.company_slug}] {error_msg}")
+
             self.log_result(
-                status='success',
+                status=status,
                 events_found=len(events),
                 new=result['new'],
                 updated=result['updated'],
+                error=error_msg,
                 duration_ms=duration,
             )
             self.logger.info(
