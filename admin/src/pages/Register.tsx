@@ -345,14 +345,14 @@ export default function Register() {
         <div className="rounded-lg bg-blue-50/60 p-2.5">
           <p className="text-xs font-semibold text-blue-600 mb-2">남성</p>
           <div className="grid grid-cols-2 gap-2">
-            <CardInput label="가격" type="number" value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} />
+            <CardInput label="가격" type="number" value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} crawled={crawlPrice(r.price_detail, 'male')} />
             <CardInput label="연령" value={r.age_male} placeholder="예 2734" hint={bornHint(r.company_slug, r.age_male)} onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
           </div>
         </div>
         <div className="rounded-lg bg-pink-50/60 p-2.5">
           <p className="text-xs font-semibold text-pink-600 mb-2">여성</p>
           <div className="grid grid-cols-2 gap-2">
-            <CardInput label="가격" type="number" value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} />
+            <CardInput label="가격" type="number" value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} crawled={crawlPrice(r.price_detail, 'female')} />
             <CardInput label="연령" value={r.age_female} placeholder="예 2532" hint={bornHint(r.company_slug, r.age_female)} onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
           </div>
         </div>
@@ -429,9 +429,9 @@ export default function Register() {
           onBlur={() => flushSave(r.key)}
           className="border border-gray-200 rounded px-2 py-1 text-sm w-20" />
       </td>
-      <NumCell value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} wide />
+      <NumCell value={r.price_male} onChange={(v) => patch(r.key, 'price_male', v)} onBlur={() => flushSave(r.key)} wide crawled={crawlPrice(r.price_detail, 'male')} />
       <AgeCell value={r.age_male} hint={bornHint(r.company_slug, r.age_male)} onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
-      <NumCell value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} wide />
+      <NumCell value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} wide crawled={crawlPrice(r.price_detail, 'female')} />
       <AgeCell value={r.age_female} hint={bornHint(r.company_slug, r.age_female)} onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
 
       <td className="px-3 py-2 text-center">
@@ -636,30 +636,54 @@ const FIELD = 'h-8 border rounded-md px-2 text-sm bg-white focus:outline-none fo
 const fieldCls = (empty: boolean, extra = '') =>
   `${FIELD} ${empty ? 'border-amber-400' : 'border-gray-200'} ${extra}`
 
-function NumCell({ value, onChange, onBlur, wide }: {
+// 크롤이 뽑아온 그 성별의 정가. 입력값과 어긋나는지 비교하는 데 쓴다.
+// ⚠️ 이 화면은 칸을 벗어나면 바로 저장돼서, 무심코 누른 오타도 그대로 반영된다
+//    (2026-07-29 실제로 48,000 → 48,001이 저장돼 워치독이 잡았다). 크롤값이 있는
+//    업체라면 저장 직후 화면에서 바로 알아챌 수 있게 표시한다.
+function crawlPrice(detail: PriceDetail | null, gender: 'male' | 'female'): number | null {
+  const g = detail?.[gender]
+  return g?.regular ?? null
+}
+
+function NumCell({ value, onChange, onBlur, wide, crawled }: {
   value: string; onChange: (v: string) => void; onBlur: () => void; wide?: boolean
+  crawled?: number | null
 }) {
+  // 크롤값이 있고 입력값과 다르면 테두리를 빨갛게 + 크롤값을 툴팁으로. 행 높이는 그대로.
+  const mismatch =
+    crawled != null && value.trim() !== '' && Number(value) !== crawled
   return (
     <td className="px-2 py-1.5">
       <input type="number" value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
-        className={fieldCls(value.trim() === '', `text-right ${wide ? 'w-24' : 'w-16'}`)} />
+        title={mismatch ? `크롤값 ${crawled.toLocaleString()}원과 다릅니다` : undefined}
+        className={`${fieldCls(value.trim() === '', `text-right ${wide ? 'w-24' : 'w-16'}`)} ${
+          mismatch ? '!border-red-400 bg-red-50/40' : ''
+        }`} />
     </td>
   )
 }
 
 // 모바일 카드용 라벨 달린 입력칸
 // 가격 티어 읽기 표시(에모셔널오렌지 자동). 얼리버드 품절이면 취소선.
-function CardInput({ label, value, onChange, onBlur, type = 'text', placeholder, hint }: {
+function CardInput({ label, value, onChange, onBlur, type = 'text', placeholder, hint, crawled }: {
   label: string; value: string; onChange: (v: string) => void; onBlur: () => void
-  type?: string; placeholder?: string; hint?: string | null
+  type?: string; placeholder?: string; hint?: string | null; crawled?: number | null
 }) {
+  const mismatch = crawled != null && value.trim() !== '' && Number(value) !== crawled
   return (
     <div>
       <p className="text-[11px] text-gray-400 mb-0.5">{label}</p>
       <input type={type} value={value} placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
-        className={fieldCls(String(value).trim() === '', 'w-full text-center placeholder:text-gray-300')} />
-      {hint && <p className="text-[10px] text-gray-400 mt-0.5 text-center">{hint}</p>}
+        className={`${fieldCls(String(value).trim() === '', 'w-full text-center placeholder:text-gray-300')} ${
+          mismatch ? '!border-red-400 bg-red-50/40' : ''
+        }`} />
+      {/* 어긋날 때만 크롤값을 알려준다. 평소엔 줄이 안 생겨 카드 높이가 일정하다. */}
+      {mismatch ? (
+        <p className="text-[10px] text-red-500 mt-0.5 text-center">크롤 {crawled.toLocaleString()}</p>
+      ) : hint ? (
+        <p className="text-[10px] text-gray-400 mt-0.5 text-center">{hint}</p>
+      ) : null}
     </div>
   )
 }
