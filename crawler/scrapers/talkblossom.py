@@ -238,7 +238,25 @@ class TalkblossomScraper(BaseScraper):
             if sp < 0:
                 continue
 
-            stock_number = int(val.get('stock_number', 0) or 0)
+            # 예약대기석은 남은 자리가 아니다 — 잔여석으로 세면 마감인데 자리가 있는 것처럼 보인다.
+            if '예약대기석' in schedule_raw:
+                continue
+
+            # ⚠️ 이 쇼핑몰은 재고 관리를 쓰지 않는다(use_stock_original="F") → stock_number가
+            #    항상 0이다. 그걸 잔여석으로 읽어 8개 회차가 전부 '마감'으로 나가고 있었다
+            #    (2026-07-29 오너 지적). 재고를 실제로 쓰는 경우에만 숫자를 신뢰하고,
+            #    품절은 사이트가 품절 처리를 켰을 때만 인정한다.
+            uses_stock = str(val.get('use_stock_original', 'F')).upper() == 'T'
+            soldout = (
+                str(val.get('use_soldout_original', 'F')).upper() == 'T'
+                or str(val.get('is_auto_soldout', 'F')).upper() == 'T'
+            )
+            if soldout:
+                stock_number: Optional[int] = 0
+            elif uses_stock:
+                stock_number = int(val.get('stock_number', 0) or 0)
+            else:
+                stock_number = None      # 모름 — 앱에 마감 표시를 하지 않는다
 
             # 일정 파싱: "3월 28일 토|13:30|01-90|결혼"
             parts = [p.strip() for p in schedule_raw.split('|')]
@@ -255,8 +273,9 @@ class TalkblossomScraper(BaseScraper):
                     'raw': schedule_raw,
                     'date_str': date_str,
                     'time_str': time_str,
-                    'seats_left_male': 0,
-                    'seats_left_female': 0,
+                    # None = 모름(기본). 0으로 두면 성별 옵션이 안 잡힌 회차가 전부 마감이 된다.
+                    'seats_left_male': None,
+                    'seats_left_female': None,
                 }
                 # 연령대 파싱
                 yr_m = re.match(r'(\d{2})-(\d{2})', age_str)
@@ -275,15 +294,12 @@ class TalkblossomScraper(BaseScraper):
                     entry['theme'] = theme
                 schedule_map[sched_key] = entry
 
-            # 성별별 잔여석 합산 (같은 일정에 여러 옵션이 있을 수 있으므로 최대값 사용)
-            if gender in ('남자', '남성'):
-                schedule_map[sched_key]['seats_left_male'] = max(
-                    schedule_map[sched_key].get('seats_left_male', 0), stock_number
-                )
-            elif gender in ('여자', '여성'):
-                schedule_map[sched_key]['seats_left_female'] = max(
-                    schedule_map[sched_key].get('seats_left_female', 0), stock_number
-                )
+            # 성별별 잔여석 (같은 일정에 여러 옵션이 있으면 최대값). None(모름)은 무시한다.
+            gk = ('seats_left_male' if gender in ('남자', '남성')
+                  else 'seats_left_female' if gender in ('여자', '여성') else None)
+            if gk and stock_number is not None:
+                cur = schedule_map[sched_key].get(gk)
+                schedule_map[sched_key][gk] = stock_number if cur is None else max(cur, stock_number)
 
         return list(schedule_map.values())
 

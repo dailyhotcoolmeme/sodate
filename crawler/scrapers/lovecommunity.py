@@ -32,6 +32,9 @@ class LovecommunityLoco(BaseScraper):
     # 상품 본문에서 가격을 직접 뽑음 → DB 기록.
     # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행)
     WRITES_PRICE = True
+    # 예약위젯(gender_soldout_loco)이 성별 전 티켓 품절 여부를 정확히 준다 → 좌석도 기록.
+    # (플래그가 없어 성별 마감 정보를 받아놓고도 저장 단계에서 벗겨지고 있었다 — 2026-07-29)
+    WRITES_SEATS = True
 
     # 사이트에서 내려간 회차를 자동 정리한다. 전체 일정을 예약위젯 옵션에서
     # 안정적으로 뽑으므로 켜도 안전하다(부분 실패는 base_scraper 가 50% 룰로 막는다).
@@ -424,11 +427,21 @@ class LovecommunityLoco(BaseScraper):
                 # 예약위젯 가격이 있으면 정본으로 override(정적텍스트엔 진짜가격 없음)
                 ev_price_male, ev_price_female = price_male, price_female
                 wgd = (widget or {}).get((mo, d))
+                w_male = w_female = None
                 if wgd:
-                    if wgd.get('male'):
-                        ev_price_male = wgd['male'][0]
-                    if wgd.get('female'):
-                        ev_price_female = wgd['female'][0]
+                    w_male, w_female = wgd.get('male'), wgd.get('female')
+                    if w_male:
+                        ev_price_male = w_male[0]
+                    if w_female:
+                        ev_price_female = w_female[0]
+
+                # 성별 마감은 예약위젯이 정본(성별 전 티켓 품절 = 마감).
+                # ⚠️ 위젯이 없을 때만 참가자 목록의 '모집중' 개수로 대체한다. 그 개수가
+                #    0이라고 마감으로 단정하지 않는다(목록에 모집중 행이 안 뜰 수도 있음).
+                #    예전엔 '0이면 None'이라 위젯이 마감이라고 알려줘도 앱엔 표시가 없었다.
+                ev_seats_male = 0 if (w_male and w_male[1]) else (seats_left_male or None)
+                ev_seats_female = 0 if (w_female and w_female[1]) else (seats_left_female or None)
+                ev_closed = bool(w_male and w_male[1] and w_female and w_female[1])
 
                 try:
                     events.append(EventModel(
@@ -447,8 +460,9 @@ class LovecommunityLoco(BaseScraper):
                         age_group_label=age_group_label,
                         age_male=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
                         age_female=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
-                        seats_left_male=seats_left_male if seats_left_male > 0 else None,
-                        seats_left_female=seats_left_female if seats_left_female > 0 else None,
+                        seats_left_male=ev_seats_male,
+                        seats_left_female=ev_seats_female,
+                        is_closed=ev_closed,
                         participant_stats=participant_stats,
                     ))
                 except Exception as e:
@@ -518,6 +532,9 @@ class LovecommunityLoco(BaseScraper):
                 age_group_label=age_group_label,
                 age_male=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
                 age_female=(f'{age_min}~{age_max}' if age_min is not None and age_max is not None else None),
+                # 위젯에만 있는 회차 — 성별 품절도 위젯이 정본
+                seats_left_male=0 if (male and male[1]) else None,
+                seats_left_female=0 if (female and female[1]) else None,
                 is_closed=bool(male and male[1] and female and female[1]),
             ))
         return out
