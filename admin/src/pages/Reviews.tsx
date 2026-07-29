@@ -29,7 +29,7 @@ export default function Reviews() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [tab, setTab] = useState<Tab>('reported')
+  const [tab, setTab] = useState<Tab>('all')   // 신고됨이 0건일 때 빈 화면으로 보이던 문제
   const [expanded, setExpanded] = useState<string | null>(null)
   const [reports, setReports] = useState<Report[]>([])
   const [reportsLoading, setReportsLoading] = useState(false)
@@ -41,7 +41,9 @@ export default function Reviews() {
     const { data } = await supabase
       .from('reviews')
       .select('id, company_id, source, author_name, content, rating, report_count, is_active, published_at, created_at, companies(name)')
-      .or('source.eq.user,report_count.gt.0')
+      // ⚠️ 예전엔 .or('source.eq.user,report_count.gt.0')로 걸러서, 앱 작성 후기와
+      //    신고 후기가 모두 0건이 되자 화면이 통째로 비었다(후기는 666건 있는데도).
+      //    전부 불러오고 화면의 탭으로 좁힌다.
       .order('published_at', { ascending: false, nullsFirst: false })
       .limit(1000)
     setReviews((data as any) ?? [])
@@ -95,11 +97,12 @@ export default function Reviews() {
     })
   }, [reviews, tab, search])
 
+  // 전체를 맨 앞·기본으로. 신고됨이 0건일 때 빈 화면만 보이던 문제를 없앤다.
   const TABS: [Tab, string, number][] = [
+    ['all', '전체', counts.all],
     ['reported', '신고됨', counts.reported],
     ['user', '사용자 후기', counts.user],
     ['hidden', '숨김', counts.hidden],
-    ['all', '전체', counts.all],
   ]
 
   return (
@@ -141,18 +144,20 @@ export default function Reviews() {
       {loading ? (
         <p className="text-gray-400 text-sm">불러오는 중...</p>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+        // 폭 지정이 없어 '내용' 열이 공간을 독식하고 나머지 열이 최소 폭으로 눌려
+        // 헤더 글자가 한 자씩 줄바꿈됐다(2026-07-30 오너 지적).
+        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+          <table className="w-full min-w-[1040px] table-fixed text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
-                <th className="px-4 py-3 text-left font-medium">업체</th>
-                <th className="px-4 py-3 text-left font-medium">닉네임</th>
-                <th className="px-4 py-3 text-left font-medium">별점</th>
-                <th className="px-4 py-3 text-left font-medium">내용</th>
-                <th className="px-4 py-3 text-center font-medium">신고수</th>
-                <th className="px-4 py-3 text-center font-medium">노출</th>
-                <th className="px-4 py-3 text-left font-medium">작성일</th>
-                <th className="px-4 py-3 text-center font-medium">액션</th>
+                <th className="px-3 py-3 text-left font-medium whitespace-nowrap w-[130px]">업체</th>
+                <th className="px-3 py-3 text-left font-medium whitespace-nowrap w-[150px]">닉네임</th>
+                <th className="px-3 py-3 text-left font-medium whitespace-nowrap w-[70px]">별점</th>
+                <th className="px-3 py-3 text-left font-medium whitespace-nowrap">내용</th>
+                <th className="px-3 py-3 text-center font-medium whitespace-nowrap w-[80px]">신고수</th>
+                <th className="px-3 py-3 text-center font-medium whitespace-nowrap w-[86px]">노출</th>
+                <th className="px-3 py-3 text-left font-medium whitespace-nowrap w-[110px]">작성일</th>
+                <th className="px-3 py-3 text-center font-medium whitespace-nowrap w-[128px]">액션</th>
               </tr>
             </thead>
             <tbody>
@@ -162,42 +167,42 @@ export default function Reviews() {
                 return (
                   <Fragment key={review.id}>
                     <tr className="border-t border-gray-100 hover:bg-gray-50 align-top">
-                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{review.companies?.name ?? '-'}</td>
-                      <td className="px-4 py-3 text-gray-700 text-xs whitespace-nowrap">
+                      <td className="px-3 py-3 text-gray-500 text-xs"><span className="block truncate" title={review.companies?.name ?? ''}>{review.companies?.name ?? '-'}</span></td>
+                      <td className="px-3 py-3 text-gray-700 text-xs truncate">
                         {review.author_name ?? '익명'}
                         {review.source !== 'user' && (
                           <span className="ml-1.5 px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 text-[11px]">{review.source}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {review.rating != null ? (
                           <span className="flex items-center gap-0.5 text-yellow-500">
                             <Star size={12} className="fill-yellow-400 text-yellow-400" /> {review.rating}
                           </span>
                         ) : <span className="text-gray-300">-</span>}
                       </td>
-                      <td className="px-4 py-3 max-w-xs">
+                      <td className="px-3 py-3">
                         <p className="text-gray-800 text-xs whitespace-pre-wrap break-words line-clamp-3">{review.content ?? '-'}</p>
                       </td>
-                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                      <td className="px-3 py-3 text-center whitespace-nowrap">
                         {reportCount > 0 ? (
                           <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-semibold">
                             <Flag size={11} /> {reportCount}
                           </span>
                         ) : <span className="text-gray-300 text-xs">0</span>}
                       </td>
-                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                      <td className="px-3 py-3 text-center whitespace-nowrap">
                         {review.is_active ? (
                           <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-xs font-medium">노출 중</span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">숨김</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                      <td className="px-3 py-3 text-gray-400 text-xs whitespace-nowrap">
                         {review.published_at ? new Date(review.published_at).toLocaleDateString('ko-KR') : '-'}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col items-stretch gap-1.5 min-w-[7rem]">
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col items-stretch gap-1.5">
                           {review.is_active ? (
                             <button
                               onClick={() => toggleActive(review.id, review.is_active)}
