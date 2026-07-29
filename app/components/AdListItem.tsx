@@ -25,9 +25,14 @@ export default function AdListItem() {
   useEffect(() => {
     let mounted = true
     let loaded: NativeAd | null = null
-    // ⚠️ SDK 초기화 전에 요청하면 프라미스가 성공도 실패도 없이 매달린다 → 반드시 기다린다
+    // 어디서 멈추는지 찍는다: 컴포넌트가 마운트조차 안 되는지, SDK 대기에서 멈추는지,
+    // 광고 요청이 결말 없이 매달리는지 — 이 셋을 구분해야 원인을 짚을 수 있다.
+    track('ad_slot_mount', { properties: { slot: 'feed', platform: Platform.OS, unit: AD_UNIT_ID } })
+    const timeout = new Promise<never>((_r, reject) =>
+      setTimeout(() => reject(Object.assign(new Error('ad request timeout'), { code: 'timeout' })), 12000),
+    )
     waitForAdsReady()
-      .then(() => NativeAd.createForAdRequest(AD_UNIT_ID))
+      .then(() => { track('ad_request_start', { properties: { slot: 'feed' } }); return Promise.race([NativeAd.createForAdRequest(AD_UNIT_ID), timeout]) })
       .then((nativeAd) => {
         if (mounted) {
           loaded = nativeAd
