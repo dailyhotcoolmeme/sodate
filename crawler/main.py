@@ -24,10 +24,8 @@ from scrapers.modparty import ModpartyScraper
 from scrapers.talkblossom import TalkblossomScraper
 from scrapers.lovecasting import LovecastingScraper
 from scrapers.yeongyul import YeongyulScraper
-from scrapers.inssumparty import InssumPartyScraper
 from scrapers.twoyeonsi import TwoYeonsiScraper
 from scrapers.secretsalon import SecretSalonScraper
-from scrapers.flipo import FlipoScraper
 from scrapers.lovecommunity import LovecommunityLoco
 from utils.logger import get_logger
 
@@ -42,10 +40,8 @@ SCRAPERS = [
     TalkblossomScraper,
     LovecastingScraper,
     YeongyulScraper,
-    InssumPartyScraper,
     TwoYeonsiScraper,
     SecretSalonScraper,
-    FlipoScraper,
     LovecommunityLoco,
 ]
 
