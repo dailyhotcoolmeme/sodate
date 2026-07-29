@@ -17,11 +17,14 @@ export function dedupeTitles(rows: TitleRow[]): TitleRow[] {
  * 직접 보면서 결정하라고 링크로 건다.
  */
 export function TitleLink({ row }: { row: TitleRow }) {
-  if (!row.url) return <span className="text-[11px] text-gray-500">· {row.title}</span>
+  // ⚠️ inline-flex는 내용 폭만큼 늘어나 truncate가 무력화된다 — 긴 모임명이 박스를
+  //    뚫고 나갔다(2026-07-30 모바일 오너 지적). flex + w-full로 부모 폭에 가두고
+  //    제목 span만 flex-1 truncate.
+  if (!row.url) return <span className="block truncate text-[11px] text-gray-500">· {row.title}</span>
   return (
     <a href={row.url} target="_blank" rel="noreferrer"
-      className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:underline">
-      <span className="truncate">· {row.title}</span>
+      className="flex w-full min-w-0 items-center gap-1 text-[11px] text-blue-600 hover:underline">
+      <span className="flex-1 min-w-0 truncate">· {row.title}</span>
       <ExternalLink size={10} className="shrink-0" />
     </a>
   )
