@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Trash2, ExternalLink, Loader2, Check, Search, X } from 'lucide-react'
+import { Trash2, ExternalLink, Loader2, Check, Search, X, ChevronRight, ChevronDown } from 'lucide-react'
 import DateTimePicker from '../components/DateTimePicker'
 import HashtagEditor from '../components/HashtagEditor'
 
@@ -70,6 +70,8 @@ export default function Register() {
   const [search, setSearch] = useState('')
   const [statusTab, setStatusTab] = useState<'todo' | 'done'>('todo') // 해야할 것 / 입력 완료
   const [rows, setRows] = useState<Row[]>([])
+  // 펼친 행(해시태그·정원·삭제). 행마다 항상 펼쳐두면 화면이 태그 칩으로 뒤덮인다.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -104,7 +106,11 @@ export default function Register() {
       .order('company_id')
       .order('event_date')
     if (error) {
-      setMsg(`로딩 오류: ${error.message}`)
+      // ⚠️ 세션이 없으면 프록시가 {"error":"unauthorized"}(401)를 주는데 message 필드가 없어
+      //    "로딩 오류: undefined"만 떴다. 원인을 알 수 없는 메시지는 없느니만 못하다.
+      const detail = (error as any)?.message || (error as any)?.error || JSON.stringify(error)
+      const unauth = String(detail).includes('unauthorized') || (error as any)?.code === '401'
+      setMsg(unauth ? '로그인이 필요합니다. 다시 로그인해 주세요.' : `로딩 오류: ${detail}`)
       setLoading(false)
       return
     }
@@ -173,6 +179,14 @@ export default function Register() {
       setMsg('삭제했습니다.')
     }
     setRows((rs) => rs.filter((x) => x.key !== r.key))
+  }
+
+  function toggleExpand(key: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
   }
 
   function patch(key: string, field: keyof Row, value: string | boolean) {
@@ -257,8 +271,6 @@ export default function Register() {
     }
   }
 
-  // 완료 표시(테두리·체크)는 실시간. 나이 공란=미완료(오너 확인). '제한 없음'도 확인값이라 완료.
-  const isRowDone = (r: Row) => rowIsDone(r)
   // ⚠️ 탭 분류는 로드 시점 상태(wasDone)로 '고정' — 입력 중 완료로 바뀌어도 행이 목록에서
   //    사라지지 않게(포커스 튐 방지). 새로고침(재로드) 때 다시 분류된다.
   const todoRows = useMemo(() => visibleRows.filter((r) => !r.wasDone), [visibleRows])
@@ -266,8 +278,10 @@ export default function Register() {
   const shownRows = statusTab === 'todo' ? todoRows : doneRows
 
   // ── 모바일 카드 한 장 렌더 ──
+  // 카드도 노란 배경을 걷어냈다 — '해야할 것' 탭에선 전 카드가 노래서 구분이 안 됐다.
+  // 미완료는 빈 칸의 테두리(fieldCls)로만 알린다.
   const renderCard = (r: Row) => (
-    <div key={r.key} className={`rounded-xl border p-4 shadow-sm ${isRowDone(r) ? 'border-gray-200 bg-white' : 'border-amber-300 bg-amber-50/50'}`}>
+    <div key={r.key} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
       {/* 헤더: 업체명 옆에 확인하기 / 오른쪽에 마감·삭제 */}
       <div className="flex items-center gap-2 mb-3">
         <span className="font-bold text-gray-900 truncate min-w-0">{r.company_name}</span>
@@ -294,10 +308,7 @@ export default function Register() {
             onChange={(e) => { patch(r.key, 'is_featured', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
           추천
         </label>
-        <button onClick={() => deleteRow(r)}
-          className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 shrink-0">
-          <Trash2 size={13} /> 삭제
-        </button>
+
       </div>
 
       {/* 앱에 보이는 모임 제목 (일시·지역보다 앞) */}
@@ -325,7 +336,7 @@ export default function Register() {
           <p className="text-xs text-gray-400 mb-1">지역</p>
           <input value={r.location_region} onChange={(e) => patch(r.key, 'location_region', e.target.value)}
             onBlur={() => flushSave(r.key)}
-            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full bg-white" />
+            className={fieldCls(r.location_region.trim() === '', 'w-full')} />
         </div>
       </div>
 
@@ -349,18 +360,35 @@ export default function Register() {
       {/* 자동 크롤 가격/품절 참고표시 (읽기용, 입력란은 위에서 편집 가능) */}
       {r.price_detail && <PriceDetailReadout detail={r.price_detail} />}
 
-      {/* 해시태그 */}
-      <div className="mt-2.5">
-        <p className="text-xs text-gray-400 mb-1">해시태그</p>
-        <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
-      </div>
+      {/* 해시태그는 이 화면의 작업(가격·나이 검수)과 무관하고 칩이 화면을 뒤덮는다.
+          완료 판정(rowIsDone)에도 안 들어간다 → 펼쳤을 때만 보여준다. */}
+      <button onClick={() => toggleExpand(r.key)}
+        className="mt-2.5 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800">
+        {expanded.has(r.key) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        해시태그{r.hashtags.length > 0 && ` ${r.hashtags.length}`} · 정원 · 삭제
+      </button>
+      {expanded.has(r.key) && (
+        <div className="mt-2 pt-2.5 border-t border-gray-100 space-y-3">
+          <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
+          <div className="flex items-center gap-3 text-xs text-gray-500">
+            <span>정원 남 {r.capacity_male || '-'} · 여 {r.capacity_female || '-'}</span>
+            <div className="flex-1" />
+            <button onClick={() => deleteRow(r)}
+              className="inline-flex items-center gap-1 text-gray-400 hover:text-red-500">
+              <Trash2 size={13} /> 삭제
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 
   // ── 데스크탑 표 행 렌더(2행: 입력행 + 추천 해시태그행) ──
   const renderTableRow = (r: Row) => (
     <Fragment key={r.key}>
-    <tr className={isRowDone(r) ? '' : 'bg-amber-50/60'}>
+    {/* ⚠️ 행 전체를 노랗게 칠하던 것 제거 — '해야할 것' 탭에선 전 행이 노래서 정보량이 0이었다.
+        미완료는 빈 '칸'의 테두리로만 알린다(fieldCls). */}
+    <tr className="border-b border-gray-100">
       <td className="px-3 py-2">
         {r.source_url ? (
           <a href={r.source_url} target="_blank" rel="noreferrer"
@@ -402,13 +430,7 @@ export default function Register() {
       <AgeCell value={r.age_male} hint={bornHint(r.company_slug, r.age_male)} onChange={(v) => patch(r.key, 'age_male', v)} onBlur={() => flushSave(r.key)} />
       <NumCell value={r.price_female} onChange={(v) => patch(r.key, 'price_female', v)} onBlur={() => flushSave(r.key)} wide />
       <AgeCell value={r.age_female} hint={bornHint(r.company_slug, r.age_female)} onChange={(v) => patch(r.key, 'age_female', v)} onBlur={() => flushSave(r.key)} />
-      <td className="px-3 py-2 align-middle">
-        <div className="w-64">
-          <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showSuggestions={false} compact />
-        </div>
-      </td>
-      <td className="px-3 py-2">
-      </td>
+
       <td className="px-3 py-2 text-center">
         <input type="checkbox" checked={r.is_closed} title="마감"
           onChange={(e) => { patch(r.key, 'is_closed', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
@@ -417,23 +439,48 @@ export default function Register() {
         <input type="checkbox" checked={r.is_featured} title="추천" className="ml-2"
           onChange={(e) => { patch(r.key, 'is_featured', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
       </td>
-      <td className="px-3 py-2 text-right">
-        <button onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
-          className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-red-500">
-          <Trash2 size={14} /> 삭제
+      <td className="px-2 py-1.5 text-right">
+        <button onClick={() => toggleExpand(r.key)} title="자세히"
+          className="inline-flex items-center justify-center w-7 h-7 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+          {expanded.has(r.key) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </button>
       </td>
     </tr>
-    <tr className={`border-b border-gray-100 ${isRowDone(r) ? '' : 'bg-amber-50/60'}`}>
-      <td colSpan={14} className="px-3 pt-0 pb-3 whitespace-normal">
-        <div className="flex items-start gap-2">
-          <span className="text-xs text-gray-400 shrink-0 pt-0.5">추천</span>
-          <div className="min-w-0 flex-1">
-            <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} showInput={false} />
+    {/* 크롤이 뽑아온 가격 — 예전엔 모바일 카드에만 있어서, PC에선 답이 화면 밖에 있는 채로
+        매번 원본 사이트를 새 탭으로 열어야 했다. 참고줄로 항상 보이게 한다. */}
+    {r.price_detail && (
+      <tr className="border-b border-gray-100">
+        <td colSpan={12} className="px-3 pt-0 pb-1.5">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="text-gray-400 shrink-0">크롤값</span>
+            <PriceDetailReadout detail={r.price_detail} />
           </div>
-        </div>
-      </td>
-    </tr>
+        </td>
+      </tr>
+    )}
+    {expanded.has(r.key) && (
+      <tr className="border-b border-gray-100 bg-gray-50/60">
+        <td colSpan={12} className="px-3 py-3 whitespace-normal">
+          <div className="space-y-3">
+            <div className="flex items-start gap-2">
+              <span className="text-xs text-gray-400 shrink-0 pt-1.5 w-14">해시태그</span>
+              <div className="min-w-0 flex-1">
+                <HashtagEditor value={r.hashtags} onChange={(next) => patchHashtags(r.key, next)} />
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-gray-500">
+              <span>정원 남 {r.capacity_male || '-'} · 여 {r.capacity_female || '-'}</span>
+              <span>잔여 남 {r.seats_left_male || '-'} · 여 {r.seats_left_female || '-'}</span>
+              <div className="flex-1" />
+              <button onClick={() => deleteRow(r)}
+                className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-red-500">
+                <Trash2 size={14} /> 삭제
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>
+    )}
     </Fragment>
   )
 
@@ -526,13 +573,17 @@ export default function Register() {
         </div>
       ) : (
         <>
+        {/* 참고: patch()가 setRows(rs.map(...))로 배열을 통째로 새로 만들어 타이핑마다 전 행이
+            다시 렌더된다. 다만 행당 렌더 비용의 대부분이던 추천칩(HashtagEditor 2개 ×
+            칩 40여 개)을 펼침으로 옮겨 노드 수가 크게 줄었다. 그래도 느리면 그때 행
+            컴포넌트를 memo로 격리할 것(핸들러 useCallback 정리가 함께 필요). */}
         {/* 모바일: 카드형 — 선택된 탭 목록만 표시 */}
         <div className="md:hidden space-y-3">
           {shownRows.map(renderCard)}
         </div>
 
         {/* 데스크탑: 표 */}
-        <div className="hidden md:block bg-white border border-gray-200 rounded-xl overflow-x-auto">
+        <div className="hidden md:block bg-white border border-gray-200 rounded-xl overflow-hidden">
           <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-gray-50 text-gray-500 text-xs">
               <tr>
@@ -546,10 +597,8 @@ export default function Register() {
                 <th className="px-3 py-2.5 text-center font-medium text-blue-600">남 연령</th>
                 <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 가격</th>
                 <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 연령</th>
-                <th className="px-3 py-2.5 text-left font-medium">해시태그</th>
-                <th className="px-3 py-2.5 text-left font-medium">상세 이미지 유형</th>
-                <th className="px-3 py-2.5 text-center font-medium">마감</th>
-                <th className="px-3 py-2.5"></th>
+                <th className="px-2 py-2.5 text-center font-medium">마감·노출·추천</th>
+                <th className="px-2 py-2.5 w-9"></th>
               </tr>
             </thead>
             <tbody>
@@ -570,13 +619,21 @@ function tabClass(active: boolean): string {
     : 'px-3.5 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
 }
 
+// 입력칸 공통 규격 — 높이 32px 고정. 컴포넌트마다 제각각이던 것을 하나로 묶는다.
+// ⚠️ 힌트(년생)를 칸 아래 두면 그 행만 키가 커져 표가 들쭉날쭉해진다(오너 지적).
+//    힌트는 칸 아래가 아니라 절대배치 툴팁 없이 '아래 여백을 차지하지 않는' 위치에 둔다.
+const FIELD = 'h-8 border rounded-md px-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-500/40'
+// 값이 비었으면 테두리로 알린다. 행 전체를 칠하지 않고 '채워야 할 칸'만 짚어준다.
+const fieldCls = (empty: boolean, extra = '') =>
+  `${FIELD} ${empty ? 'border-amber-400' : 'border-gray-200'} ${extra}`
+
 function NumCell({ value, onChange, onBlur, wide }: {
   value: string; onChange: (v: string) => void; onBlur: () => void; wide?: boolean
 }) {
   return (
-    <td className="px-2 py-2 text-center">
+    <td className="px-2 py-1.5">
       <input type="number" value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
-        className={`border border-gray-200 rounded px-2 py-1 text-sm text-center ${wide ? 'w-24' : 'w-14'}`} />
+        className={fieldCls(value.trim() === '', `text-right ${wide ? 'w-24' : 'w-16'}`)} />
     </td>
   )
 }
@@ -592,7 +649,7 @@ function CardInput({ label, value, onChange, onBlur, type = 'text', placeholder,
       <p className="text-[11px] text-gray-400 mb-0.5">{label}</p>
       <input type={type} value={value} placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
-        className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm w-full text-center bg-white placeholder:text-gray-300" />
+        className={fieldCls(String(value).trim() === '', 'w-full text-center placeholder:text-gray-300')} />
       {hint && <p className="text-[10px] text-gray-400 mt-0.5 text-center">{hint}</p>}
     </div>
   )
@@ -603,11 +660,18 @@ function AgeCell({ value, onChange, onBlur, hint }: {
   value: string; onChange: (v: string) => void; onBlur: () => void; hint?: string | null
 }) {
   return (
-    <td className="px-2 py-2 text-center">
-      <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
-        placeholder="예 2734"
-        className="border border-gray-200 rounded px-2 py-1 text-sm text-center w-20 placeholder:text-gray-300" />
-      {hint && <p className="text-[10px] text-gray-400 mt-0.5">{hint}</p>}
+    <td className="px-2 py-1.5">
+      <div className="relative w-[4.5rem]">
+        <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
+          placeholder="예 2734"
+          className={fieldCls(value.trim() === '', 'text-center w-full placeholder:text-gray-300')} />
+        {/* 행 높이를 늘리지 않도록 흐름에서 빼서 칸 아래에 겹쳐 놓는다 */}
+        {hint && (
+          <span className="absolute left-0 right-0 -bottom-3 text-[10px] text-gray-400 text-center pointer-events-none">
+            {hint}
+          </span>
+        )}
+      </div>
     </td>
   )
 }
