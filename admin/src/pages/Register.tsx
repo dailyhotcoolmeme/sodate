@@ -5,7 +5,8 @@ import DateTimePicker from '../components/DateTimePicker'
 import HashtagEditor from '../components/HashtagEditor'
 
 /**
- * 직접 등록 페이지 — 크롤링 정확도 무시. 오너 입력값이 정답(source of truth).
+ * 일정 관리 페이지(메뉴명 '일정 관리', 경로 /register) — 크롤링된 일정을 검수·수정한다.
+ * 오너 입력값이 정답(source of truth).
  *
  * 자동(시스템): 업체별 예정 날짜 + 확인링크 + 지역을 event_candidates 에서 읽어 리스트업.
  * 입력(오너=정답): 정원·잔여·가격은 전부 빈칸 기본값. [확인하기]로 실제 페이지 확인 후 입력.
@@ -357,8 +358,10 @@ export default function Register() {
         </div>
       </div>
 
-      {/* 자동 크롤 가격/품절 참고표시 (읽기용, 입력란은 위에서 편집 가능) */}
-      {r.price_detail && <PriceDetailReadout detail={r.price_detail} />}
+      {/* 크롤 가격 참고 — 가격이 빈 행에서만(입력 완료 카드에선 숨김, 높이 일정하게) */}
+      {r.price_detail && (r.price_male.trim() === '' || r.price_female.trim() === '') && (
+        <PriceDetailReadout detail={r.price_detail} />
+      )}
 
       {/* 해시태그는 이 화면의 작업(가격·나이 검수)과 무관하고 칩이 화면을 뒤덮는다.
           완료 판정(rowIsDone)에도 안 들어간다 → 펼쳤을 때만 보여준다. */}
@@ -448,7 +451,10 @@ export default function Register() {
     </tr>
     {/* 크롤이 뽑아온 가격 — 예전엔 모바일 카드에만 있어서, PC에선 답이 화면 밖에 있는 채로
         매번 원본 사이트를 새 탭으로 열어야 했다. 참고줄로 항상 보이게 한다. */}
-    {r.price_detail && (
+    {/* ⚠️ 크롤값은 '채워 넣을 때 참고하는 값'이다. 이미 입력한 행에도 띄우면 행마다
+        한 줄이 생겼다 말았다 해서 목록 높이가 들쭉날쭉해진다(2026-07-29 오너 지적).
+        가격이 비어 있는 행에서만 보여준다 → 입력 완료 탭에서는 아예 안 나온다. */}
+    {r.price_detail && (r.price_male.trim() === '' || r.price_female.trim() === '') && (
       <tr className="border-b border-gray-100">
         <td colSpan={12} className="px-3 pt-0 pb-1.5">
           <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -487,10 +493,10 @@ export default function Register() {
   return (
     <div className="p-4 md:p-8 max-w-[1500px]">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">이벤트 직접 등록</h1>
+        <h1 className="text-xl font-bold text-gray-900">일정 관리</h1>
         <p className="text-sm text-gray-500 mt-1">
-          업체별 예정 날짜는 자동으로 리스트업됩니다. <b>[확인하기]</b> 링크로 직접 확인 후 정원·잔여·가격을 입력하세요.
-          입력칸은 모두 빈칸이며, <b>수정하고 칸을 벗어나면 즉시 저장</b>됩니다.
+          크롤링된 일정이 자동으로 올라옵니다. <b>[확인하기]</b>로 원본을 보고 가격·연령을 채우세요.
+          <b>칸을 벗어나면 즉시 저장</b>됩니다. 비어 있는 칸은 테두리로 표시됩니다.
         </p>
       </div>
 
