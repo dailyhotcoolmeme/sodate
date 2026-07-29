@@ -38,12 +38,6 @@ export type AnalyticsEventType =
   // 출시 후 플랫폼별 충전율·오류를 DB에서 바로 볼 수 있게 남긴다.
   | 'ad_load_success'
   | 'ad_load_fail'
-  // AdMob SDK 초기화 결과. 초기화 전이면 광고 요청이 성공도 실패도 하지 않고 조용히
-  // 매달려, 위 두 이벤트가 아예 안 남는다 — 그 상태를 구분하려고 따로 남긴다.
-  | 'ad_sdk_init'
-  // 광고가 안 나올 때 어디서 멈추는지 구분하는 계측
-  | 'ad_slot_mount'
-  | 'ad_request_start'
 
 interface AnalyticsPayload {
   event_type: AnalyticsEventType

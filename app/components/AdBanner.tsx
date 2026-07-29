@@ -11,7 +11,6 @@ import { Image } from 'expo-image'
 import { useColors } from '@/hooks/useColors'
 import { DETAIL_NATIVE_AD_UNIT_ID } from '@/lib/ads'
 import { track } from '@/lib/analytics'
-import { waitForAdsReady } from '@/lib/initAds'
 
 const ICON = 44
 
@@ -29,14 +28,7 @@ export default function AdBanner() {
   useEffect(() => {
     let mounted = true
     let loaded: NativeAd | null = null
-    // 어디서 멈추는지 찍는다: 컴포넌트가 마운트조차 안 되는지, SDK 대기에서 멈추는지,
-    // 광고 요청이 결말 없이 매달리는지 — 이 셋을 구분해야 원인을 짚을 수 있다.
-    track('ad_slot_mount', { properties: { slot: 'detail', platform: Platform.OS, unit: AD_UNIT_ID } })
-    const timeout = new Promise<never>((_r, reject) =>
-      setTimeout(() => reject(Object.assign(new Error('ad request timeout'), { code: 'timeout' })), 12000),
-    )
-    waitForAdsReady()
-      .then(() => { track('ad_request_start', { properties: { slot: 'detail' } }); return Promise.race([NativeAd.createForAdRequest(AD_UNIT_ID), timeout]) })
+    NativeAd.createForAdRequest(AD_UNIT_ID)
       .then((nativeAd) => {
         if (mounted) {
           loaded = nativeAd

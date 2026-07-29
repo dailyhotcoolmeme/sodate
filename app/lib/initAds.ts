@@ -1,6 +1,5 @@
 import mobileAds from 'react-native-google-mobile-ads'
 import { registerForPushNotifications } from '@/hooks/usePushNotification'
-import { track } from '@/lib/analytics'
 
 // 온보딩을 넘긴 뒤에 한 번만 도는 초기화 — 시스템 권한 팝업 2개와 AdMob 초기화.
 //
@@ -17,77 +16,27 @@ import { track } from '@/lib/analytics'
 //    App Store 개인정보 라벨의 "추적 사용" 선언과 바이너리가 어긋나 심사에서 걸린다.
 let started = false
 
-// ⚠️ 앞 단계가 멈추면 AdMob 초기화까지 영영 안 돈다 = 광고가 한 건도 안 나가고
-//    (요청 자체를 안 하므로) 실패 로그조차 안 남는다. 푸시 토큰 발급은 Expo 서버,
-//    토큰 등록은 Supabase Edge Function을 타서 네트워크가 나쁘면 오래 매달릴 수 있다.
-//    팝업 순서(알림 → ATT)는 그대로 지키되, 각 단계에 상한을 둬 광고를 막지 못하게 한다.
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
-  return Promise.race([
-    p.catch(() => null),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
-  ])
-}
-
 export async function runPostOnboardingSetup(): Promise<void> {
   if (started) return
   started = true
 
   // 1) 알림 권한 — 사용자가 기대하는 팝업이라 먼저 띄운다
-  //    (거부·실기기 아님·네트워크 지연 모두 통과. 앱 동작에는 지장 없음)
-  await withTimeout(registerForPushNotifications(), 15000)
+  try {
+    await registerForPushNotifications()
+  } catch {
+    // 거부·실기기 아님 등은 그냥 통과(앱 동작에는 지장 없음)
+  }
 
   // 2) 추적 권한(iOS ATT) → 3) AdMob 초기화
-  //    안드로이드·ATT 없는 구버전 iOS는 통과. 거부해도 광고 자체는 나간다
-  //    (비맞춤으로 내려갈 뿐) 이라 실패를 삼켜도 된다.
-  await withTimeout(
-    import('expo-tracking-transparency').then((m) => m.requestTrackingPermissionsAsync()),
-    15000,
-  )
+  try {
+    const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency')
+    await requestTrackingPermissionsAsync()
+  } catch {
+    // 안드로이드·ATT 없는 구버전 iOS는 통과. 거부해도 광고 자체는 나간다
+    // (비맞춤으로 내려갈 뿐) 이라 실패를 삼켜도 된다.
+  }
 
-  await ensureAdsInitialized()
-}
-
-// ⚠️ SDK 초기화 전에 광고를 요청하면 그 요청은 성공도 실패도 하지 않고 그대로 매달린다
-//    (2026-07-29 안드로이드에서 실제로 발생 — ad_sdk_init은 앱 실행 3초 뒤에 찍히는데
-//     홈 목록은 즉시 그려져 광고 요청이 먼저 나갔고, ad_load_success/fail이 0건이었다).
-//    광고 컴포넌트는 반드시 이 프라미스를 기다린 뒤 요청한다.
-let initPromise: Promise<void> | null = null
-
-export function ensureAdsInitialized(): Promise<void> {
-  if (initPromise) return initPromise
-  const t0 = Date.now()
-  initPromise = mobileAds()
-    .initialize()
-    .then(() => {
-      track('ad_sdk_init', { properties: { ok: true, ms: Date.now() - t0 } })
-    })
-    .catch((e) => {
-      track('ad_sdk_init', {
-        properties: { ok: false, ms: Date.now() - t0, message: String(e?.message ?? e).slice(0, 200) },
-      })
-    })
-  return initPromise
-}
-
-/**
- * 광고 요청 직전에 호출한다. 정상 흐름에서는 runPostOnboardingSetup이 ATT까지 마친 뒤
- * 초기화하므로(iOS IDFA 보존) 그 결과를 그대로 쓰고, 온보딩 중이거나 그 흐름이 지연되면
- * 최대 대기 후 직접 초기화한다 — 권한 흐름 때문에 광고가 영영 안 나가는 일은 없어야 한다.
- */
-export function waitForAdsReady(maxWaitMs = 12000): Promise<void> {
-  if (initPromise) return initPromise
-  return new Promise<void>((resolve) => {
-    const t = setInterval(() => {
-      if (initPromise) {
-        clearInterval(t)
-        initPromise.then(resolve)
-      }
-    }, 200)
-    setTimeout(() => {
-      clearInterval(t)
-      ensureAdsInitialized().then(resolve)
-    }, maxWaitMs)
-  })
+  mobileAds().initialize().catch(() => {})
 }
 
 /** @deprecated 이름만 남긴 하위호환. runPostOnboardingSetup을 쓸 것. */
