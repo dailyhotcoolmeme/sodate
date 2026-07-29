@@ -53,16 +53,23 @@ export default function PriceTierValue({
   const regular = detail?.regular ?? (price ?? null)
   const regularSold = (detail?.regular_soldout ?? false) || !!soldout
   const at = fmtAge(age)
-  if (regular == null && !at) return null
+  // ⚠️ 가격이 없어도 그 성별이 마감이면 마감이라고 알려야 한다. 예전엔 가격이 null이면
+  //    마감 표시를 통째로 건너뛰어, 실제로는 매진인데 앱에선 나이만 덩그러니 보였다.
+  //    (2026-07-29 시크릿살롱 '1:1 SIGNAL MESSAGE': 사이트가 남성 6/6 마감이라 남성
+  //     가격 옵션이 사라졌는데, 앱은 마감인지 아닌지 알 수 없는 상태로 보였다)
+  const soldOutOnly = regular == null && regularSold
+  if (regular == null && !at && !soldOutOnly) return null
 
   return (
     <Text style={styles.base} numberOfLines={compact ? 1 : 2} adjustsFontSizeToFit={compact} minimumFontScale={0.6}>
       {/* 정가 (마감/품절이면 취소선 + (마감)) — 다른 업체와 동일: 가격 (마감) 취소선 · 나이 */}
-      {regular != null && (
+      {regular != null ? (
         <Text style={regularSold ? styles.strike : undefined}>
           {wonRange(regular, detail?.regular_max)}{regularSold ? ' (마감)' : ''}
         </Text>
-      )}
+      ) : soldOutOnly ? (
+        <Text style={styles.muted}>마감</Text>
+      ) : null}
 
       {/* 얼리버드 — 상세에서만(카드는 compact로 생략) */}
       {!compact && detail?.earlybird != null && (
@@ -77,7 +84,7 @@ export default function PriceTierValue({
       {/* 연령 */}
       {at && (
         <>
-          <Text style={styles.muted}>{regular != null ? '  ·  ' : ''}</Text>
+          <Text style={styles.muted}>{regular != null || soldOutOnly ? '  ·  ' : ''}</Text>
           <Text style={styles.muted}>{at}</Text>
         </>
       )}
