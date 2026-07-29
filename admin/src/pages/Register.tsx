@@ -412,10 +412,10 @@ export default function Register() {
         ) : null}
       </td>
       <td className="px-3 py-2">
-        <span className="font-medium text-gray-800">{r.company_name}</span>
+        <span className="block truncate font-medium text-gray-800" title={r.company_name}>{r.company_name}</span>
       </td>
-      <td className="px-3 py-2">
-        <span className="text-gray-700">{r.title}</span>
+      <td className="px-3 py-2 max-w-0">
+        <span className="block truncate text-gray-700" title={r.title}>{r.title}</span>
       </td>
       <td className="px-3 py-2">
         <DateTimePicker
@@ -589,22 +589,25 @@ export default function Register() {
         </div>
 
         {/* 데스크탑: 표 */}
-        <div className="hidden md:block bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm whitespace-nowrap">
+        {/* ⚠️ overflow-hidden 으로 뒀더니 폭이 모자랄 때 오른쪽 열(연령·토글·펼치기)이
+            잘린 채 스크롤도 안 됐다(2026-07-29 오너 지적). 가로 스크롤을 되살리고,
+            table-fixed + 열별 고정폭으로 제목이 남는 폭을 다 먹지 않게 한다. */}
+        <div className="hidden md:block bg-white border border-gray-200 rounded-xl overflow-x-auto">
+          <table className="w-full min-w-[1180px] table-fixed text-sm whitespace-nowrap">
             <thead className="bg-gray-50 text-gray-500 text-xs">
               <tr>
-                <th className="px-3 py-2.5 text-left font-medium">확인</th>
-                <th className="px-3 py-2.5 text-left font-medium w-6"></th>
-                <th className="px-3 py-2.5 text-left font-medium">업체</th>
+                <th className="px-3 py-2.5 text-left font-medium w-[84px]">확인</th>
+                <th className="px-1 py-2.5 w-7"></th>
+                <th className="px-3 py-2.5 text-left font-medium w-[104px]">업체</th>
                 <th className="px-3 py-2.5 text-left font-medium">제목</th>
-                <th className="px-3 py-2.5 text-left font-medium">날짜/시간</th>
-                <th className="px-3 py-2.5 text-left font-medium">지역</th>
-                <th className="px-3 py-2.5 text-center font-medium text-blue-600">남 가격</th>
-                <th className="px-3 py-2.5 text-center font-medium text-blue-600">남 연령</th>
-                <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 가격</th>
-                <th className="px-3 py-2.5 text-center font-medium text-pink-600">여 연령</th>
-                <th className="px-2 py-2.5 text-center font-medium">마감·노출·추천</th>
-                <th className="px-2 py-2.5 w-9"></th>
+                <th className="px-3 py-2.5 text-left font-medium w-[164px]">날짜/시간</th>
+                <th className="px-3 py-2.5 text-left font-medium w-[92px]">지역</th>
+                <th className="px-2 py-2.5 text-center font-medium text-blue-600 w-[104px]">남 가격</th>
+                <th className="px-2 py-2.5 text-center font-medium text-blue-600 w-[92px]">남 연령</th>
+                <th className="px-2 py-2.5 text-center font-medium text-pink-600 w-[104px]">여 가격</th>
+                <th className="px-2 py-2.5 text-center font-medium text-pink-600 w-[92px]">여 연령</th>
+                <th className="px-2 py-2.5 text-center font-medium w-[124px]">마감·노출·추천</th>
+                <th className="px-2 py-2.5 w-[44px]"></th>
               </tr>
             </thead>
             <tbody>
