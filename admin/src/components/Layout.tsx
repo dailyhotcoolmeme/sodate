@@ -1,15 +1,18 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { logout } from '../lib/auth'
-import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut, PlusCircle, MessageSquareWarning } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut, MessageSquareWarning } from 'lucide-react'
 
+// 메뉴 순서 = 쓰는 빈도. 매일 보는 것(일정·업체·후기)이 앞, 가끔 보는 것(분석·로그)이 뒤.
+// ⚠️ /events(옛 '이벤트')는 메뉴에서 뺐다 — /register와 같은 events 테이블을 다뤄
+//    중복이었다. 거기에만 있던 앱 노출·추천·삭제·검색은 일정 관리로 옮겼다.
+//    라우트는 살려둬서 북마크나 직접 접근은 계속 동작한다.
 const NAV = [
   { to: '/', label: '대시보드', icon: LayoutDashboard },
-  { to: '/register', label: '직접 등록', icon: PlusCircle },
-  { to: '/events', label: '이벤트', icon: CalendarDays },
-  { to: '/companies', label: '업체', icon: Building2 },
+  { to: '/register', label: '일정 관리', icon: CalendarDays },
+  { to: '/companies', label: '업체 관리', icon: Building2 },
   { to: '/reviews', label: '후기 관리', icon: MessageSquareWarning },
-  { to: '/crawl-logs', label: '크롤링', icon: FileText },
   { to: '/analytics', label: '분석', icon: BarChart3 },
+  { to: '/crawl-logs', label: '크롤링 로그', icon: FileText },
 ]
 
 export default function Layout({ children }: { children: React.ReactNode }) {

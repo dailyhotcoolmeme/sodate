@@ -37,6 +37,8 @@ type Row = {
   age_female: string // 여 참가 연령대
   hashtags: string[]
   is_closed: boolean
+  is_active: boolean      // 앱 노출 on/off
+  is_featured: boolean    // 추천 지정
   source: 'crawl' | 'manual'
   price_detail: PriceDetail | null // 가격 티어(에모셔널오렌지 자동). 읽기전용 표시.
   saved: boolean
@@ -96,8 +98,7 @@ export default function Register() {
     const horizon = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
     const { data, error } = await supabase
       .from('events')
-      .select('id, title, image_type_id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, price_detail, age_male, age_female, hashtags, is_closed, source, companies(name, slug)')
-      .eq('is_active', true)
+      .select('id, title, image_type_id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, price_detail, age_male, age_female, hashtags, is_closed, is_active, is_featured, source, companies(name, slug)')
       .gte('event_date', now.toISOString())
       .lte('event_date', horizon.toISOString())
       .order('company_id')
@@ -125,6 +126,8 @@ export default function Register() {
         price_detail: e.price_detail ?? null,
         hashtags: e.hashtags ?? [],
         is_closed: e.is_closed ?? false,
+        is_active: e.is_active ?? true,
+        is_featured: e.is_featured ?? false,
         source: e.source === 'crawl' ? 'crawl' : 'manual', // crawl=미입력(흰), 그외=오너입력(노랑)
       })
       return { ...r, wasDone: rowIsDone(r) } // 로드 시점 완료여부로 탭 고정
@@ -158,6 +161,19 @@ export default function Register() {
     for (const r of searchedRows) m[r.company_id] = (m[r.company_id] ?? 0) + 1
     return m
   }, [searchedRows])
+
+  // 실제 삭제. ⚠️ 예전엔 화면에서 행만 걷어내(setRows filter) DB는 그대로였고,
+  //    새로고침하면 되살아났다. 크롤로 다시 들어올 일정은 '앱 노출'을 끄는 게 맞고,
+  //    삭제는 되돌릴 수 없으므로 한 번 확인한다.
+  async function deleteRow(r: Row) {
+    if (r.id) {
+      if (!confirm(`이 일정을 삭제할까요?\n\n${r.title || r.source_url}\n\n크롤로 다시 들어올 수 있는 일정이면 삭제 대신 '앱 노출'을 끄는 편이 낫습니다.`)) return
+      const { error } = await supabase.from('events').delete().eq('id', r.id)
+      if (error) { setMsg(`삭제 실패: ${error.message}`); return }
+      setMsg('삭제했습니다.')
+    }
+    setRows((rs) => rs.filter((x) => x.key !== r.key))
+  }
 
   function patch(key: string, field: keyof Row, value: string | boolean) {
     setRows((rs) => {
@@ -220,7 +236,10 @@ export default function Register() {
       age_range_max: ageNums.length ? Math.max(...ageNums) : null,
       hashtags: row.hashtags,
       is_closed: row.is_closed,
-      is_active: true,
+      // ⚠️ 예전엔 여기가 is_active: true 하드코딩이라, 앱 노출을 꺼도 그 행을 한 번만
+      //    더 수정하면 도로 켜졌다. 화면 상태를 그대로 저장한다.
+      is_active: row.is_active,
+      is_featured: row.is_featured,
       source: 'verified', // 오너가 손댄 이벤트 → 발견 재실행 시 덮어쓰지 않음(crawl만 교체)
     }
     const { error } = await supabase.from('events').upsert(payload, { onConflict: 'source_url' })
@@ -265,7 +284,17 @@ export default function Register() {
             onChange={(e) => { patch(r.key, 'is_closed', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
           마감
         </label>
-        <button onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
+        <label className="flex items-center gap-1 text-xs text-gray-600 shrink-0">
+          <input type="checkbox" checked={r.is_active}
+            onChange={(e) => { patch(r.key, 'is_active', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
+          앱 노출
+        </label>
+        <label className="flex items-center gap-1 text-xs text-gray-600 shrink-0">
+          <input type="checkbox" checked={r.is_featured}
+            onChange={(e) => { patch(r.key, 'is_featured', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
+          추천
+        </label>
+        <button onClick={() => deleteRow(r)}
           className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 shrink-0">
           <Trash2 size={13} /> 삭제
         </button>
@@ -381,8 +410,12 @@ export default function Register() {
       <td className="px-3 py-2">
       </td>
       <td className="px-3 py-2 text-center">
-        <input type="checkbox" checked={r.is_closed}
+        <input type="checkbox" checked={r.is_closed} title="마감"
           onChange={(e) => { patch(r.key, 'is_closed', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
+        <input type="checkbox" checked={r.is_active} title="앱 노출" className="ml-2"
+          onChange={(e) => { patch(r.key, 'is_active', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
+        <input type="checkbox" checked={r.is_featured} title="추천" className="ml-2"
+          onChange={(e) => { patch(r.key, 'is_featured', e.target.checked); setTimeout(() => flushSave(r.key), 0) }} />
       </td>
       <td className="px-3 py-2 text-right">
         <button onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
@@ -651,6 +684,8 @@ function makeRow(p: Partial<Row>): Row {
     age_female: '',
     hashtags: [],
     is_closed: false,
+    is_active: true,
+    is_featured: false,
     source: 'manual',
     price_detail: null,
     saved: false,
