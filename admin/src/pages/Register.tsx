@@ -582,7 +582,12 @@ function AgeCell({ value, onChange, onBlur, hint }: {
 // 만나이→출생연도(YY년생) 힌트 (오너 검증용, 작게 표시). frip 포함:
 // frip은 참가연령이 대부분 '88~04년생' 등 년생 기반이라 년도 힌트가 맞음(제외 금지).
 // 나이가 'NN~NN' 숫자범위일 때만 힌트가 뜸('2030' 밴드 등은 안 뜸 → 정상).
-const BIRTH_YEAR_VENDORS = new Set(['yeonin', 'lovecommunity-loco', 'talkblossom', 'frip', 'modparty', 'munto'])
+// twoyeonsi: 사이트가 '91-98년생'처럼 년생으로만 표기(만나이/세 표기 없음) → 힌트 필수.
+// secretsalon: '87년생이하'와 '만30-39세'를 섞어 씀.
+const BIRTH_YEAR_VENDORS = new Set([
+  'yeonin', 'lovecommunity-loco', 'talkblossom', 'frip', 'modparty', 'munto',
+  'twoyeonsi', 'secretsalon',
+])
 function bornHint(slug: string, age: string): string | null {
   if (!BIRTH_YEAR_VENDORS.has(slug)) return null
   const m = age.match(/^(\d{1,2})\s*[~\-]\s*(\d{1,2})$/)
