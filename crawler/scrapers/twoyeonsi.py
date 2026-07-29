@@ -43,11 +43,57 @@ class TwoYeonsiScraper(BaseScraper):
     WRITES_PRICE = True
     # 나이의 정본도 이 페이지(기수별 년생)다 → None도 기록해 옛 값을 지운다.
     WRITES_AGE = True
+    # 성별 모집 상태를 회차 블록에서 직접 밝힌다("✔️남 (모집마감)") → 좌석도 기록.
+    WRITES_SEATS = True
     # 매 크롤마다 전체 기수를 전수 확인하므로 사라진 회차 정리 가능.
     DELETE_STALE = True
 
     def __init__(self):
         super().__init__('twoyeonsi')
+
+    # 성별 섹션 헤더: "✔️남 (모집마감) *️⃣~181" / "✔️여 (모집중)"
+    # ⚠️ '✔️'는 ✔ + U+FE0F(이모지 변형 문자)라 체크마크에 \s*를 붙여 매칭하면 실패한다.
+    #    체크마크는 조건에서 빼고 '남/여 (모집…)' 형태만 본다.
+    GENDER_HEADER_RE = re.compile(r'([남여])\s*[（(]\s*모집\s*(마감|중)\s*[）)]')
+    # 잔여석: "99/00/ ㅡ ㅡ 5 자리 남았습니다."
+    SEATS_LEFT_RE = re.compile(r'(\d+)\s*자리\s*남았')
+
+    def _parse_gender_seats(self, block_lines: list[str]) -> tuple[Optional[int], Optional[int]]:
+        """회차 블록에서 남/여 잔여석을 뽑는다.
+
+        사이트가 성별마다 상태를 직접 밝히므로 추측하지 않는다.
+          '(모집마감)' → 0석
+          '(모집중)'   → 같은 섹션의 'N 자리 남았습니다'의 N (없으면 None=모름)
+        날짜 줄의 '*여5남음'은 요약 표기라 블록에 상태가 없을 때만 쓴다.
+        """
+        seats: dict[str, Optional[int]] = {'남': None, '여': None}
+        found: set[str] = set()
+        section: Optional[str] = None
+
+        for line in block_lines:
+            m = self.GENDER_HEADER_RE.search(line)
+            if m:
+                section = m.group(1)
+                found.add(section)
+                if m.group(2) == '마감':
+                    seats[section] = 0
+                    section = None          # 마감이면 뒤의 잔여석 문구를 볼 필요 없음
+                continue
+            if section and seats[section] is None:
+                s = self.SEATS_LEFT_RE.search(line)
+                if s:
+                    seats[section] = int(s.group(1))
+                    section = None
+
+        # 블록에 성별 상태가 아예 없으면 날짜 줄 요약('*남1여1남음')으로 보완
+        if not found and block_lines:
+            head = block_lines[0]
+            for g in ('남', '여'):
+                m = re.search(rf'{g}(\d+)\s*(?:여\d+\s*)?남음', head)
+                if m:
+                    seats[g] = int(m.group(1))
+
+        return seats['남'], seats['여']
 
     def scrape(self) -> list[EventModel]:
         events: list[EventModel] = []
@@ -97,12 +143,11 @@ class TwoYeonsiScraper(BaseScraper):
                     if not (1 <= mo <= 12 and 1 <= d <= 31):
                         continue
 
-                    # 마감 여부 확인
-                    if CLOSED_RE.search(line):
-                        continue
-                    # 남자마감+여자마감 모두 있으면 스킵
-                    if '남자마감' in line and '여자마감' in line:
-                        continue
+                    # ⚠️ 마감된 회차도 버리지 않는다. 아직 안 지난 일정이면 참가자가
+                    #    계속 바뀌어 자리가 다시 나므로 앱에 보여주고 마감 표시만 한다
+                    #    (2026-07-29 오너 지적 — 예전엔 여기서 continue로 통째로 버려
+                    #     22개 회차 중 8개가 앱에서 사라졌다).
+                    is_closed = bool(CLOSED_RE.search(line))
 
                     try:
                         event_date = datetime(current_year, mo, d, hour, minute)
@@ -167,28 +212,10 @@ class TwoYeonsiScraper(BaseScraper):
                     event_block_lines = lines[i:block_end]
                     participant_stats = self._parse_participant_stats(event_block_lines)
 
-                    # 잔여석 파싱 (라인 컨텍스트에서)
-                    seats_left_male = None
-                    seats_left_female = None
-                    context_block = ' '.join(lines[max(0, i-2):i+3])
-
-                    # "ㅡ ㅡ N 자리 남았습니다" 패턴
-                    seats_m = SEATS_RE.search(context_block)
-                    if seats_m:
-                        seats_num = int(seats_m.group(1))
-                        # 남자 잔여인지 여자 잔여인지 판단
-                        if '남' in context_block[max(0, context_block.find(seats_m.group(0))-20):context_block.find(seats_m.group(0))]:
-                            seats_left_male = seats_num
-                        elif '여' in context_block[max(0, context_block.find(seats_m.group(0))-20):context_block.find(seats_m.group(0))]:
-                            seats_left_female = seats_num
-
-                    # 마감 여부 재확인 (여자만 마감, 남자만 마감)
-                    is_male_closed = '남자마감' in line
-                    is_female_closed = '여자마감' in line
-                    if is_male_closed:
-                        seats_left_male = 0
-                    if is_female_closed:
-                        seats_left_female = 0
+                    # 성별 잔여석 — 회차 블록의 성별 섹션 헤더가 정본이다.
+                    #   ✔️남 (모집마감)                → 남 0석
+                    #   ✔️여 (모집중) … 5 자리 남았습니다 → 여 5석
+                    seats_left_male, seats_left_female = self._parse_gender_seats(event_block_lines)
 
                     # 앱에는 년생을 절대 표시하지 않는다(오너 규칙) → 만나이 범위로 환산해 표기
                     age_display = (
@@ -214,6 +241,7 @@ class TwoYeonsiScraper(BaseScraper):
                             theme=['일반'],
                             seats_left_male=seats_left_male,
                             seats_left_female=seats_left_female,
+                            is_closed=is_closed,
                             age_group_label=age_group_label,
                             age_range_min=age_range_min,
                             age_range_max=age_range_max,
