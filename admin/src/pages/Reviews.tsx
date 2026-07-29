@@ -23,13 +23,13 @@ interface Report {
   created_at: string | null
 }
 
-type Tab = 'reported' | 'user' | 'hidden' | 'all'
+type Tab = 'user' | 'reported' | 'hidden' | 'naver_blog' | 'instagram' | 'youtube'
 
 export default function Reviews() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [tab, setTab] = useState<Tab>('all')   // 신고됨이 0건일 때 빈 화면으로 보이던 문제
+  const [tab, setTab] = useState<Tab>('user')   // 자체 후기 관리가 이 화면의 핵심(오너 확정)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [reports, setReports] = useState<Report[]>([])
   const [reportsLoading, setReportsLoading] = useState(false)
@@ -77,10 +77,12 @@ export default function Reviews() {
   }
 
   const counts = useMemo(() => ({
-    reported: reviews.filter((r) => (r.report_count ?? 0) > 0).length,
     user: reviews.filter((r) => r.source === 'user').length,
+    reported: reviews.filter((r) => (r.report_count ?? 0) > 0).length,
     hidden: reviews.filter((r) => !r.is_active).length,
-    all: reviews.length,
+    naver_blog: reviews.filter((r) => r.source === 'naver_blog').length,
+    instagram: reviews.filter((r) => r.source === 'instagram').length,
+    youtube: reviews.filter((r) => r.source === 'youtube').length,
   }), [reviews])
 
   const filtered = useMemo(() => {
@@ -88,6 +90,9 @@ export default function Reviews() {
       if (tab === 'reported' && !((r.report_count ?? 0) > 0)) return false
       if (tab === 'user' && r.source !== 'user') return false
       if (tab === 'hidden' && r.is_active) return false
+      if (tab === 'naver_blog' && r.source !== 'naver_blog') return false
+      if (tab === 'instagram' && r.source !== 'instagram') return false
+      if (tab === 'youtube' && r.source !== 'youtube') return false
       if (search) {
         const q = search.toLowerCase()
         const hay = `${r.companies?.name ?? ''} ${r.author_name ?? ''} ${r.content ?? ''}`.toLowerCase()
@@ -97,12 +102,16 @@ export default function Reviews() {
     })
   }, [reviews, tab, search])
 
-  // 전체를 맨 앞·기본으로. 신고됨이 0건일 때 빈 화면만 보이던 문제를 없앤다.
+  // 자체 후기(사용자 작성)와 그에 대한 신고·숨김 관리가 이 화면의 핵심(오너 확정).
+  // 크롤 후기(블로그·인스타·유튜브)는 출처별로 나눠 뒤에 둔다 — 목록에서 본문을 길게
+  // 볼 이유가 없고(열어봐야 파악됨), 삭제해도 다음 크롤에 되살아나므로 참고용이다.
   const TABS: [Tab, string, number][] = [
-    ['all', '전체', counts.all],
-    ['reported', '신고됨', counts.reported],
     ['user', '사용자 후기', counts.user],
+    ['reported', '신고됨', counts.reported],
     ['hidden', '숨김', counts.hidden],
+    ['naver_blog', '블로그', counts.naver_blog],
+    ['instagram', '인스타', counts.instagram],
+    ['youtube', '유튜브', counts.youtube],
   ]
 
   return (
@@ -166,13 +175,10 @@ export default function Reviews() {
                 const isExpanded = expanded === review.id
                 return (
                   <Fragment key={review.id}>
-                    <tr className="border-t border-gray-100 hover:bg-gray-50 align-top">
+                    <tr className="border-t border-gray-100 hover:bg-gray-50 align-middle">
                       <td className="px-3 py-3 text-gray-500 text-xs"><span className="block truncate" title={review.companies?.name ?? ''}>{review.companies?.name ?? '-'}</span></td>
                       <td className="px-3 py-3 text-gray-700 text-xs truncate">
-                        {review.author_name ?? '익명'}
-                        {review.source !== 'user' && (
-                          <span className="ml-1.5 px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 text-[11px]">{review.source}</span>
-                        )}
+                        <span className="block truncate" title={review.author_name ?? ''}>{review.author_name ?? '익명'}</span>
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {review.rating != null ? (
@@ -182,7 +188,9 @@ export default function Reviews() {
                         ) : <span className="text-gray-300">-</span>}
                       </td>
                       <td className="px-3 py-3">
-                        <p className="text-gray-800 text-xs whitespace-pre-wrap break-words line-clamp-3">{review.content ?? '-'}</p>
+                        {/* 한 줄 말줄임 — 행마다 높이가 달라지지 않게(오너 확정). 전문은
+                            마우스 올리거나 [내용] 버튼으로 펼쳐 본다. */}
+                        <p className="text-gray-800 text-xs truncate" title={review.content ?? ''}>{review.content ?? '-'}</p>
                       </td>
                       <td className="px-3 py-3 text-center whitespace-nowrap">
                         {reportCount > 0 ? (
@@ -202,7 +210,7 @@ export default function Reviews() {
                         {review.published_at ? new Date(review.published_at).toLocaleDateString('ko-KR') : '-'}
                       </td>
                       <td className="px-3 py-3">
-                        <div className="flex flex-col items-stretch gap-1.5">
+                        <div className="flex items-center justify-center gap-1">
                           {review.is_active ? (
                             <button
                               onClick={() => toggleActive(review.id, review.is_active)}
