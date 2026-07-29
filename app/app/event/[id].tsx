@@ -387,23 +387,23 @@ export default function EventDetailScreen() {
 
   const daysLeft = daysUntil(event.event_date)
 
-  // 신청하기 버튼 — 상세설명 위/아래 두 곳에서 재사용 (마감 시 회색 비활성)
-  const renderCta = () =>
-    event.is_closed ? (
-      <View style={[styles.ctaBtn, styles.ctaBtnClosed]}>
-        <Text style={styles.ctaBtnClosedText}>신청 마감</Text>
-      </View>
-    ) : (
-      <TouchableOpacity
-        style={styles.ctaBtn}
-        onPress={() => {
-          track('event_apply_click', { eventId: event.id, companyId: event.company_id })
-          openOutlink(event.source_url)
-        }}
-      >
-        <Text style={styles.ctaBtnText}>신청하기 ›</Text>
-      </TouchableOpacity>
-    )
+  // 신청하기 버튼 — 상세설명 위/아래 두 곳에서 재사용.
+  // 마감이어도 눌러서 업체 사이트로 갈 수 있어야 한다(오너 확정, 2026-07-29) —
+  // 참가자가 계속 바뀌어 자리가 다시 나므로, 앱에서 막아버리면 신청 기회를 잃는다.
+  // 회색 '신청 마감' 모양은 그대로 두고 눌리기만 하게 한다.
+  const renderCta = () => (
+    <TouchableOpacity
+      style={[styles.ctaBtn, event.is_closed && styles.ctaBtnClosed]}
+      onPress={() => {
+        track('event_apply_click', { eventId: event.id, companyId: event.company_id })
+        openOutlink(event.source_url)
+      }}
+    >
+      <Text style={event.is_closed ? styles.ctaBtnClosedText : styles.ctaBtnText}>
+        {event.is_closed ? '신청 마감' : '신청하기 ›'}
+      </Text>
+    </TouchableOpacity>
+  )
 
   return (
     <View style={styles.screen}>

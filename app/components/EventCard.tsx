@@ -268,15 +268,17 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
 
         {/* 신청 버튼 */}
         <View style={styles.ctaRow}>
-          {event.is_closed ? (
-            <View style={[styles.cta, styles.ctaClosed]}>
-              <Text style={styles.ctaClosedText}>신청 마감</Text>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.cta} onPress={handleApply}>
-              <Text style={styles.ctaText}>신청하기  ›</Text>
-            </TouchableOpacity>
-          )}
+          {/* 마감이어도 눌러서 업체 사이트로 갈 수 있게 둔다(오너 확정, 2026-07-29).
+              참가자가 계속 바뀌어 자리가 다시 나므로 앱에서 막으면 신청 기회를 잃는다.
+              회색 '신청 마감' 모양은 그대로. */}
+          <TouchableOpacity
+            style={[styles.cta, event.is_closed && styles.ctaClosed]}
+            onPress={handleApply}
+          >
+            <Text style={event.is_closed ? styles.ctaClosedText : styles.ctaText}>
+              {event.is_closed ? '신청 마감' : '신청하기  ›'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
