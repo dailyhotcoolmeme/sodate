@@ -657,7 +657,7 @@ function NumCell({ value, onChange, onBlur, wide, crawled }: {
       <input type="number" value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
         title={mismatch ? `크롤값 ${crawled.toLocaleString()}원과 다릅니다` : undefined}
         className={`${fieldCls(value.trim() === '', `text-right ${wide ? 'w-24' : 'w-16'}`)} ${
-          mismatch ? '!border-red-400 bg-red-50/40' : ''
+          mismatch ? '!border-2 !border-red-500 bg-red-50/60' : ''
         }`} />
     </td>
   )
@@ -676,7 +676,7 @@ function CardInput({ label, value, onChange, onBlur, type = 'text', placeholder,
       <input type={type} value={value} placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
         className={`${fieldCls(String(value).trim() === '', 'w-full text-center placeholder:text-gray-300')} ${
-          mismatch ? '!border-red-400 bg-red-50/40' : ''
+          mismatch ? '!border-2 !border-red-500 bg-red-50/60' : ''
         }`} />
       {/* 어긋날 때만 크롤값을 알려준다. 평소엔 줄이 안 생겨 카드 높이가 일정하다. */}
       {mismatch ? (
