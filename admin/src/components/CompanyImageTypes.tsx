@@ -200,7 +200,7 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
       )}
 
       {types.map((t) => (
-        <div key={t.id} className="rounded-lg border border-gray-200 bg-white p-3">
+        <div key={t.id} className="rounded-lg border border-gray-200 bg-white p-3 min-w-0 max-w-full">
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="font-semibold text-gray-900 truncate">{t.name}</span>

@@ -199,7 +199,9 @@ export default function Companies() {
                 {/* 누른 카드 바로 아래에 전체 폭으로 펼친다. 예전엔 표 위쪽에 떠서
                     아래쪽 업체를 누르면 패널이 화면 밖에 생겼다. */}
                 {isOpen && (
-                  <div className="sm:col-span-2 xl:col-span-3 bg-white rounded-xl border border-pink-300 p-4 space-y-3">
+                  // min-w-0 필수: 그리드 자식은 기본 min-width:auto 라, 안의 가로 스크롤
+                  // 요소(해시태그 칩 줄 등)가 셀을 화면 밖까지 밀어냄(2026-07-29 모바일).
+                  <div className="sm:col-span-2 xl:col-span-3 min-w-0 max-w-full overflow-hidden bg-white rounded-xl border border-pink-300 p-4 space-y-3">
                     <div className="flex items-center gap-2">
                       <Images size={16} className="text-gray-500" />
                       <span className="font-semibold text-gray-900">{c.name}</span>
