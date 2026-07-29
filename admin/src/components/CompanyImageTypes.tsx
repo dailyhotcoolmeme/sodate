@@ -90,10 +90,16 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
       .limit(2000)
     const allTypes = types.map((x) => x.id === t.id ? { ...x, hashtags: next } : x)
     const targets = (evs ?? []).filter((e) => matchTypeByName(e.title ?? '', allTypes)?.id === t.id)
-    for (const e of targets) {
-      await supabase.from('events').update({ hashtags: next }).eq('id', e.id)
+    // ⚠️ 한 건씩 await 하면 수백 건일 때 수십 초가 걸리고, 그 사이 화면을 벗어나면
+    //    나머지가 조용히 누락된다(2026-07-29 실제 발생: 277건 중 89건만 적용돼
+    //    같은 유형인데 피드 태그가 카드마다 달랐음). 100건 단위 일괄 갱신으로.
+    const ids = targets.map((e) => e.id)
+    for (let i = 0; i < ids.length; i += 100) {
+      const { error: e2 } = await supabase.from('events')
+        .update({ hashtags: next }).in('id', ids.slice(i, i + 100))
+      if (e2) { alert(`일정 반영 실패(${i}~): ${e2.message}`); return }
     }
-    if (targets.length) alert(`해시태그를 매칭 일정 ${targets.length}건에 적용했습니다.`)
+    if (ids.length) alert(`해시태그를 매칭 일정 ${ids.length}건에 적용했습니다.`)
   }
 
   async function addType() {
