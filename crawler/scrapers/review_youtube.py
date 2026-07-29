@@ -57,23 +57,23 @@ def _title(t: Optional[dict]) -> Optional[str]:
     return t.get('simpleText')
 
 
-# 유튜브는 절대 날짜를 안 주고 "1년 전 / 7개월 전 / 3주 전" 상대 표기만 준다
-# (publishedTimeText). 게시일이 비면 후기 목록에서 언제 글인지 알 수 없어(오너 지적
-# 2026-07-30) 상대 표기를 절대 날짜로 환산해 저장한다. 일 단위 근사치다.
-_REL_RE = re.compile(r'(\d+)\s*(초|분|시간|일|주|개월|년)\s*전')
-_REL_DAYS = {'초': 0, '분': 0, '시간': 0, '일': 1, '주': 7, '개월': 30, '년': 365}
+# 게시일은 영상 페이지의 uploadDate(정확한 절대 시각)로 받는다.
+# 검색 결과의 publishedTimeText는 "1년 전" 같은 상대 표기라 며칠씩 틀어진다
+# (2026-07-30 오너 지적: "1년전 이런식이면 안된다"). 영상당 요청 1회가 늘지만
+# 후기 건수가 수십 건 수준이라 감당 가능하다.
+_UPLOAD_DATE_RE = re.compile(r'"uploadDate"\s*:\s*"([^"]+)"')
 
 
-def _published_at_from_relative(text: str | None):
-    """'7개월 전' → ISO 날짜 문자열. 못 읽으면 None."""
-    if not text:
+def fetch_upload_date(video_id: str) -> Optional[str]:
+    """유튜브 영상의 정확한 게시일(ISO). 못 읽으면 None."""
+    try:
+        r = httpx.get(f'https://www.youtube.com/watch?v={video_id}',
+                      headers=HEADERS, timeout=15, follow_redirects=True)
+        m = _UPLOAD_DATE_RE.search(r.text)
+        return m.group(1) if m else None
+    except Exception as e:
+        logger.debug(f'게시일 조회 실패 {video_id}: {e}')
         return None
-    m = _REL_RE.search(text)
-    if not m:
-        return None
-    n, unit = int(m.group(1)), m.group(2)
-    days = n * _REL_DAYS.get(unit, 0)
-    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
 
 def _walk(o, items: list):
@@ -136,7 +136,7 @@ def fetch_youtube_results(keyword: str, aliases: list[str]) -> list[dict]:
                 'content': title[:1000],
                 'source_url': url,
                 'thumbnail_url': f'https://i.ytimg.com/vi/{vid}/hqdefault.jpg',
-                'published_at': _published_at_from_relative(pub_text),
+                'published_at': fetch_upload_date(vid),
                 'author_name': None,
             })
             if len(results) >= MAX_PER_KEYWORD:
