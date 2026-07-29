@@ -1,5 +1,6 @@
 import mobileAds from 'react-native-google-mobile-ads'
 import { registerForPushNotifications } from '@/hooks/usePushNotification'
+import { track } from '@/lib/analytics'
 
 // 온보딩을 넘긴 뒤에 한 번만 도는 초기화 — 시스템 권한 팝업 2개와 AdMob 초기화.
 //
@@ -16,27 +17,42 @@ import { registerForPushNotifications } from '@/hooks/usePushNotification'
 //    App Store 개인정보 라벨의 "추적 사용" 선언과 바이너리가 어긋나 심사에서 걸린다.
 let started = false
 
+// ⚠️ 앞 단계가 멈추면 AdMob 초기화까지 영영 안 돈다 = 광고가 한 건도 안 나가고
+//    (요청 자체를 안 하므로) 실패 로그조차 안 남는다. 푸시 토큰 발급은 Expo 서버,
+//    토큰 등록은 Supabase Edge Function을 타서 네트워크가 나쁘면 오래 매달릴 수 있다.
+//    팝업 순서(알림 → ATT)는 그대로 지키되, 각 단계에 상한을 둬 광고를 막지 못하게 한다.
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p.catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ])
+}
+
 export async function runPostOnboardingSetup(): Promise<void> {
   if (started) return
   started = true
 
   // 1) 알림 권한 — 사용자가 기대하는 팝업이라 먼저 띄운다
-  try {
-    await registerForPushNotifications()
-  } catch {
-    // 거부·실기기 아님 등은 그냥 통과(앱 동작에는 지장 없음)
-  }
+  //    (거부·실기기 아님·네트워크 지연 모두 통과. 앱 동작에는 지장 없음)
+  await withTimeout(registerForPushNotifications(), 15000)
 
   // 2) 추적 권한(iOS ATT) → 3) AdMob 초기화
-  try {
-    const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency')
-    await requestTrackingPermissionsAsync()
-  } catch {
-    // 안드로이드·ATT 없는 구버전 iOS는 통과. 거부해도 광고 자체는 나간다
-    // (비맞춤으로 내려갈 뿐) 이라 실패를 삼켜도 된다.
-  }
+  //    안드로이드·ATT 없는 구버전 iOS는 통과. 거부해도 광고 자체는 나간다
+  //    (비맞춤으로 내려갈 뿐) 이라 실패를 삼켜도 된다.
+  await withTimeout(
+    import('expo-tracking-transparency').then((m) => m.requestTrackingPermissionsAsync()),
+    15000,
+  )
 
-  mobileAds().initialize().catch(() => {})
+  const t0 = Date.now()
+  mobileAds()
+    .initialize()
+    .then(() => track('ad_sdk_init', { properties: { ok: true, ms: Date.now() - t0 } }))
+    .catch((e) =>
+      track('ad_sdk_init', {
+        properties: { ok: false, ms: Date.now() - t0, message: String(e?.message ?? e).slice(0, 200) },
+      }),
+    )
 }
 
 /** @deprecated 이름만 남긴 하위호환. runPostOnboardingSetup을 쓸 것. */
