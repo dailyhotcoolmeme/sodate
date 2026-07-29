@@ -28,6 +28,11 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
   const [busy, setBusy] = useState<string | null>(null) // 업로드 중인 type id
   // 확대보기 — 썸네일이 잘려 보여서 제대로 올렸는지 확인이 안 됨
   const [preview, setPreview] = useState<{ name: string; images: string[]; index: number } | null>(null)
+  // 해시태그는 입력 즉시 저장하지 않는다 — 칩 하나 넣을 때마다 '적용했습니다' 팝업이 떠
+  // 입력을 끊고 오타를 유발했다(2026-07-29 오너 지적). 드래프트에 모아뒀다가
+  // [저장] 버튼 한 번으로 유형 저장 + 매칭 일정 일괄 반영.
+  const [tagDraft, setTagDraft] = useState<Record<string, string[]>>({})
+  const [tagStatus, setTagStatus] = useState<Record<string, string>>({})
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => { load() }, [companyId])
@@ -68,38 +73,43 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
   }
 
 
-  // 유형 해시태그 저장 + 이 유형에 매칭되는 앞으로 일정에 즉시 반영(오너 요청 2026-07-29).
-  // 유형 태그가 비어 있으면 아무것도 덮지 않는다 — 크롤러 자동 태그 유지.
-  async function saveTypeHashtags(t: ImageType, next: string[]) {
-    setTypes((prev) => prev.map((x) => x.id === t.id ? { ...x, hashtags: next } : x))
+  // 유형 해시태그 저장 + 매칭 일정 일괄 반영. [저장] 버튼에서만 호출된다(오너 확정
+  // 2026-07-29: 입력마다 저장·팝업이 떠 오타를 유발 → 드래프트에 모았다가 한 번에).
+  // 결과는 팝업이 아니라 버튼 옆 인라인 문구로 알린다.
+  async function commitTypeHashtags(t: ImageType) {
+    const next = tagDraft[t.id] ?? t.hashtags ?? []
+    setTagStatus((p) => ({ ...p, [t.id]: '저장 중...' }))
     const { error } = await supabase
       .from('company_image_types')
       .update({ hashtags: next, updated_at: new Date().toISOString() })
       .eq('id', t.id)
     if (error) {
-      setTypes((prev) => prev.map((x) => x.id === t.id ? { ...x, hashtags: t.hashtags } : x))
-      alert(`해시태그 저장 실패: ${error.message}`)
+      setTagStatus((p) => ({ ...p, [t.id]: `저장 실패: ${error.message}` }))
       return
     }
-    if (next.length === 0) return
-    // 이 업체의 앞으로 일정 중, "가장 긴 키워드 매칭"이 이 유형으로 떨어지는 것만 갱신
-    const { data: evs } = await supabase.from('events')
-      .select('id, title')
-      .eq('company_id', companyId)
-      .gte('event_date', new Date().toISOString())
-      .limit(2000)
-    const allTypes = types.map((x) => x.id === t.id ? { ...x, hashtags: next } : x)
-    const targets = (evs ?? []).filter((e) => matchTypeByName(e.title ?? '', allTypes)?.id === t.id)
-    // ⚠️ 한 건씩 await 하면 수백 건일 때 수십 초가 걸리고, 그 사이 화면을 벗어나면
-    //    나머지가 조용히 누락된다(2026-07-29 실제 발생: 277건 중 89건만 적용돼
-    //    같은 유형인데 피드 태그가 카드마다 달랐음). 100건 단위 일괄 갱신으로.
-    const ids = targets.map((e) => e.id)
-    for (let i = 0; i < ids.length; i += 100) {
-      const { error: e2 } = await supabase.from('events')
-        .update({ hashtags: next }).in('id', ids.slice(i, i + 100))
-      if (e2) { alert(`일정 반영 실패(${i}~): ${e2.message}`); return }
+    setTypes((prev) => prev.map((x) => x.id === t.id ? { ...x, hashtags: next } : x))
+    let applied = 0
+    if (next.length > 0) {
+      // 이 업체의 앞으로 일정 중, "가장 긴 키워드 매칭"이 이 유형으로 떨어지는 것만 갱신
+      const { data: evs } = await supabase.from('events')
+        .select('id, title')
+        .eq('company_id', companyId)
+        .gte('event_date', new Date().toISOString())
+        .limit(2000)
+      const allTypes = types.map((x) => x.id === t.id ? { ...x, hashtags: next } : x)
+      const ids = (evs ?? [])
+        .filter((e) => matchTypeByName(e.title ?? '', allTypes)?.id === t.id)
+        .map((e) => e.id)
+      // 한 건씩 await 하면 수백 건일 때 수십 초 + 이탈 시 부분 적용(277건 중 89건 사고).
+      for (let i = 0; i < ids.length; i += 100) {
+        const { error: e2 } = await supabase.from('events')
+          .update({ hashtags: next }).in('id', ids.slice(i, i + 100))
+        if (e2) { setTagStatus((p) => ({ ...p, [t.id]: `일정 반영 실패(${i}~): ${e2.message}` })); return }
+      }
+      applied = ids.length
     }
-    if (ids.length) alert(`해시태그를 매칭 일정 ${ids.length}건에 적용했습니다.`)
+    setTagDraft((p) => { const n = { ...p }; delete n[t.id]; return n })
+    setTagStatus((p) => ({ ...p, [t.id]: applied ? `저장 완료 · 일정 ${applied}건 적용` : '저장 완료' }))
   }
 
   async function addType() {
@@ -214,9 +224,26 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
               비워 두면 크롤러 자동 태그 그대로(오너 확정). */}
           <div className="mb-3">
             <p className="text-xs text-gray-500 mb-1">
-              해시태그 <span className="text-gray-400">(입력하면 이 유형에 매칭된 모임에 적용 · 비우면 자동 태그 유지)</span>
+              해시태그 <span className="text-gray-400">(입력 후 [저장]을 눌러야 매칭된 모임에 반영됩니다 · 비우고 저장하면 자동 태그로 복귀)</span>
             </p>
-            <HashtagEditor value={t.hashtags ?? []} onChange={(next) => saveTypeHashtags(t, next)} />
+            <HashtagEditor
+              value={tagDraft[t.id] ?? t.hashtags ?? []}
+              onChange={(next) => {
+                setTagDraft((p) => ({ ...p, [t.id]: next }))
+                setTagStatus((p) => ({ ...p, [t.id]: '' }))
+              }}
+            />
+            <div className="flex items-center gap-2 mt-1.5">
+              <button
+                onClick={() => commitTypeHashtags(t)}
+                disabled={tagDraft[t.id] === undefined}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-pink-500 hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                저장
+              </button>
+              {tagDraft[t.id] !== undefined && <span className="text-xs text-amber-600">저장 안 됨</span>}
+              {tagStatus[t.id] && <span className="text-xs text-gray-500">{tagStatus[t.id]}</span>}
+            </div>
           </div>
 
           {t.images.length > 0 && (
