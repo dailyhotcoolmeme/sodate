@@ -346,7 +346,11 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, init
                           accessibilityState={{ selected: on }}
                           accessibilityLabel={opt.label}
                         >
-                          <Text style={[styles.genderBtnText, on && styles.genderBtnTextOn]}>
+                          {/* 버튼이 좁아도 두 줄로 늘어나 입력칸과 높이가 어긋나지 않게 한 줄로 못박는다. */}
+                          <Text
+                            style={[styles.genderBtnText, on && styles.genderBtnTextOn]}
+                            numberOfLines={1}
+                          >
                             {opt.label}
                           </Text>
                         </TouchableOpacity>
