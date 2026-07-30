@@ -63,15 +63,23 @@ _UPLOAD_DATE_RE = re.compile(r'"uploadDate"\s*:\s*"([^"]+)"')
 
 
 def fetch_upload_date(video_id: str) -> Optional[str]:
-    """유튜브 영상의 정확한 게시일(ISO). 못 읽으면 None."""
-    try:
-        r = httpx.get(f'https://www.youtube.com/watch?v={video_id}',
-                      headers=HEADERS, timeout=15, follow_redirects=True)
-        m = _UPLOAD_DATE_RE.search(r.text)
-        return m.group(1) if m else None
-    except Exception as e:
-        logger.debug(f'게시일 조회 실패 {video_id}: {e}')
-        return None
+    """유튜브 영상의 정확한 게시일(ISO). 못 읽으면 None.
+
+    한 번에 수십 개를 연달아 요청하면 유튜브가 막아 빈 응답이 온다
+    (2026-07-30: 그래서 34건 중 27건이 비었다). 간격을 두고 두 번까지 재시도한다.
+    """
+    for attempt in range(2):
+        try:
+            r = httpx.get(f'https://www.youtube.com/watch?v={video_id}',
+                          headers=HEADERS, timeout=15, follow_redirects=True)
+            m = _UPLOAD_DATE_RE.search(r.text)
+            if m:
+                return m.group(1)
+        except Exception as e:
+            logger.debug(f'게시일 조회 실패 {video_id}: {e}')
+        time.sleep(1.5 * (attempt + 1))
+    logger.warning(f'게시일을 못 읽음: {video_id}')
+    return None
 
 
 def _walk(o, items: list):
@@ -180,8 +188,12 @@ def run_youtube_crawl():
             try:
                 review['company_id'] = company_id
                 review['crawled_at'] = datetime.utcnow().isoformat()
+                # 게시일 조회가 실패했으면 그 키를 아예 보내지 않는다 —
+                # None 으로 덮어쓰면 이미 확보한 정확한 게시일이 지워진다.
+                payload = {k: v for k, v in review.items()
+                           if not (k == 'published_at' and v is None)}
                 res = supabase.table('reviews').upsert(
-                    review, on_conflict='source_url'
+                    payload, on_conflict='source_url'
                 ).execute()
                 if res.data:
                     saved += 1

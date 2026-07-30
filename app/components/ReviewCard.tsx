@@ -79,14 +79,18 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
       borderRadius: 6,
       overflow: 'hidden',
     },
-    ratingRow: { flexDirection: 'row', marginLeft: 'auto' },
+    // marginLeft:auto — 배지 줄에 있을 때 오른쪽으로 밀어붙인다.
+    // flexShrink:0 — 모임명 줄에서 별이 찌그러지지 않게.
+    ratingRow: { flexDirection: 'row', marginLeft: 'auto', flexShrink: 0 },
     content: {
       fontSize: 14,
       color: colors.textPrimary,
       lineHeight: 21,
     },
     footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-    eventTitle: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+    // 모임명은 늘어나고 별점은 줄지 않게 — 모임명이 길면 모임명만 말줄임된다.
+    eventRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    eventTitle: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '600', color: colors.textSecondary },
     author: { fontSize: 12, color: colors.textTertiary, flexShrink: 1, marginRight: 8 },
     date: { fontSize: 12, color: colors.textTertiary, flexShrink: 0 },
     actionsWrap: { paddingHorizontal: 14, paddingBottom: 12 },
@@ -124,6 +128,14 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
 
   const hasActions = isMine ? !!(onEdit || onDelete) : !!onReport
 
+  const stars = review.rating ? (
+    <View style={styles.ratingRow}>
+      {Array.from({ length: review.rating }).map((_, i) => (
+        <Ionicons key={i} name="star" size={13} color="#FFB800" />
+      ))}
+    </View>
+  ) : null
+
   return (
     <View style={styles.card}>
       {/* 본문(썸네일+텍스트)만 링크 pressable — 액션 버튼은 이 영역 밖으로 빼서 탭 충돌 방지 */}
@@ -143,18 +155,16 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
           {showCompany && review.companies && (
             <Text style={styles.company}>{review.companies.name}</Text>
           )}
-          {review.rating && (
-            <View style={styles.ratingRow}>
-              {Array.from({ length: review.rating }).map((_, i) => (
-                <Ionicons key={i} name="star" size={13} color="#FFB800" />
-              ))}
-            </View>
-          )}
+          {/* 모임명이 있으면 별점은 모임명과 같은 줄로 내린다(오너 확정). */}
+          {!review.event_title && stars}
         </View>
         {/* 어떤 모임의 후기인지 — 업체명과 같은 줄에 두면 모임명이 잘려 알아볼 수 없어서 단독 줄로.
             일정이 정리돼 삭제된 뒤에도 보이도록 작성 시점 모임명 사본(event_title)을 쓴다. */}
         {!!review.event_title && (
-          <Text style={styles.eventTitle} numberOfLines={1}>{review.event_title}</Text>
+          <View style={styles.eventRow}>
+            <Text style={styles.eventTitle} numberOfLines={1}>{review.event_title}</Text>
+            {stars}
+          </View>
         )}
         <Text style={styles.content} numberOfLines={pressable ? 4 : undefined}>{cleanText(review.content ?? '')}</Text>
         <View style={styles.footer}>

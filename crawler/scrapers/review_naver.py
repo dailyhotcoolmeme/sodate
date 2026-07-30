@@ -55,6 +55,37 @@ def canonical_post_url(href: str) -> Optional[str]:
     return None
 
 
+# 검색 결과에서 날짜를 위치로 맞춰 읽다 보면(date_idx) 어긋나 비는 건이 생긴다
+# (2026-07-30: 511건 중 38건이 비어 있었다). 그때는 글 자체를 열어 게시일을 읽는다.
+# 네이버 블로그 본문은 iframe(PostView.naver) 안에 있고, 게시일은 se_publishDate 에 있다.
+_IFRAME_RE = re.compile(r'src="(/PostView\.naver[^"]+)"')
+_PUBDATE_RE = re.compile(r'se_publishDate[^>]*>\s*([^<]+?)\s*<')
+
+
+def fetch_blog_published_at(url: str) -> Optional[str]:
+    """네이버 블로그 글의 실제 게시일(ISO). 못 읽으면 None."""
+    try:
+        outer = httpx.get(url, headers=HEADERS, timeout=15, follow_redirects=True).text
+        m = _IFRAME_RE.search(outer)
+        if not m:
+            return None
+        inner_url = 'https://blog.naver.com' + m.group(1).replace('&amp;', '&')
+        inner = httpx.get(inner_url, headers=HEADERS, timeout=15, follow_redirects=True).text
+        d = _PUBDATE_RE.search(inner)
+        if not d:
+            return None
+        # "2025. 12. 7. 23:32" 형태
+        p = re.match(r'(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?(?:\s*(\d{1,2}):(\d{2}))?', d.group(1))
+        if not p:
+            return None
+        y, mo, day = int(p.group(1)), int(p.group(2)), int(p.group(3))
+        hh, mm = int(p.group(4) or 0), int(p.group(5) or 0)
+        return datetime(y, mo, day, hh, mm).isoformat()
+    except Exception as e:
+        logger.debug(f'블로그 게시일 조회 실패 {url}: {e}')
+        return None
+
+
 def fetch_naver_blog_results(keyword: str) -> list[dict]:
     """네이버 블로그 검색 결과에서 후기 파싱 (URL 기반 그룹핑)"""
     results = []
@@ -119,6 +150,9 @@ def fetch_naver_blog_results(keyword: str) -> list[dict]:
                     except ValueError:
                         pass
                 date_idx += 1
+            if not pub_date:
+                pub_date = fetch_blog_published_at(url)
+                time.sleep(0.5)
 
             results.append({
                 'source': 'naver_blog',
@@ -143,8 +177,12 @@ def save_reviews(company_id: str, reviews: list[dict]) -> int:
         try:
             review['company_id'] = company_id
             review['crawled_at'] = datetime.utcnow().isoformat()
+            # 게시일을 못 읽었으면 키를 빼고 보낸다 — None 으로 덮어쓰면
+            # 이미 확보한 정확한 게시일이 지워진다.
+            payload = {k: v for k, v in review.items()
+                       if not (k == 'published_at' and v is None)}
             result = supabase.table('reviews').upsert(
-                review, on_conflict='source_url'
+                payload, on_conflict='source_url'
             ).execute()
             if result.data:
                 saved += 1
