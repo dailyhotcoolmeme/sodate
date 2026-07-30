@@ -1,12 +1,15 @@
-// 상세 이미지 유형이 아직 없는 모임들을 "비슷한 것끼리" 묶어 보여주기 위한 후보 뽑기.
+// "같은 호스트가 올린 같은 모임"을 한 세트로 묶는다.
 //
-// 왜 필요한가: 문토·프립은 주최자가 제목을 자유롭게 쓴다. 제목이 전부 달라서 목록을
-// 아무리 봐도 공통점이 안 보이고, 어디부터 손대야 할지 알 수 없다(2026-07-30 오너).
-// 나머지 업체는 제목 형식이 일정해 눈으로 묶였지만 이 둘은 안 된다.
+// 왜 필요한가(2026-07-30 오너): 문토·프립은 한 호스트가 같은 모임을 지역·나이·날짜만
+// 바꿔 계속 올린다. 그래서 목록에는 제목이 전부 달라 보이지만 실제로는 몇 개 안 되는
+// 모임이다. 이걸 세트로 묶어야 상세 설명 이미지와 해시태그를 한 번에 같은 걸로 맞춘다.
 //
-// 왜 '구절'인가: 유형 매칭이 곧 검색어(match_keywords) 포함 여부다(matchImageType.ts).
-// 그러니 제목에서 자주 나오는 구절을 뽑아 "이 검색어를 쓰면 N건이 걸린다"로 보여주면,
-// 오너가 그 구절을 그대로 검색어에 넣으면 끝난다. 추상적인 군집보다 바로 쓸 수 있다.
+// 묶는 방법
+//   1) 같은 상품이면 무조건 한 세트 — 프립은 URL의 상품 id가 같으면 일정만 다른 같은 모임.
+//   2) 나머지는 제목에서 '매번 바뀌는 부분'(나이·날짜·요일·회차·가격·이모지)을 지우고,
+//      남은 고유 부분끼리 비슷하면 합친다.
+//   3) 비교할 때 '로테이션 소개팅'처럼 어느 모임에나 있는 말은 뺀다. 안 그러면
+//      전혀 다른 모임이 그 말만으로 묶여버린다.
 
 export interface TitleRow {
   title: string
@@ -14,79 +17,169 @@ export interface TitleRow {
 }
 
 export interface TitleGroup {
-  /** 검색어로 그대로 쓸 수 있는 구절 */
-  phrase: string
-  /** 이 구절이 제목에 들어있는 모임들 */
+  /** 이 세트를 대표하는 제목(가장 많이 쓰인 것) */
+  rep: string
+  /** 세트에 속한 모임들 */
   rows: TitleRow[]
+  /** 검색어로 쓰기 좋은 공통 문구. 없으면 빈 문자열 */
+  keyword: string
 }
 
-// 어느 모임에나 있어서 묶는 데 도움이 안 되는 말들.
-const STOP = new Set([
-  '소개팅', '로테이션', '모임', '파티', '만남', '참여', '신청', '모집', '진행',
-  '이상', '이하', '전용', '사람', '여자', '남자', '남녀', '이성', '친구',
-  '오늘', '내일', '주말', '평일', '마감', '임박', '자리', '인원',
-  // 판촉·조건 문구 — 유형이 아니라 그때그때 붙는 말이라 묶어도 쓸모가 없다
-  // (문토에서 '선착순' 12건, '할인' 5건, '년생' 5건처럼 올라왔다).
-  '선착순', '할인', '특가', '초특가', '한정', '이벤트', '오픈', '예약', '잔여',
-  '년생', '추가', '무제한',
-])
+// 어느 모임에나 붙어 비교에 방해되는 말
+const GENERIC = [
+  '로테이션소개팅', '로테이션', '소개팅', '모임', '파티', '만남',
+  '신규오픈', '오픈', '특집', '현재', '모집', '마감', '임박',
+]
 
-/** 제목에서 날짜·가격·[대괄호] 같은 건별 정보를 걷어내고 단어만 남긴다. */
-function tokenize(title: string): string[] {
-  let s = title.replace(/\[[^\]]*\]/g, ' ') // [프립], [서울 강남] 같은 머리표
-  s = s.replace(/\d[\d,:./~\-]*/g, ' ') // 날짜·시간·가격·8:8
-  s = s.replace(/[^\w가-힣\s]/g, ' ') // 이모지·기호
+const EMOJI =
+  /[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{2B00}-\u{2BFF}\u{00A9}\u{00AE}]/gu
+
+/** 제목에서 건마다 바뀌는 정보(날짜·나이·회차·가격)를 걷어낸다. */
+function normalize(title: string): string {
+  let s = title.replace(/^\[[^\]]*\]\s*/, '') // [프립] [문토] 머리표
+  s = s.replace(EMOJI, ' ')
+  s = s.replace(/\[[^\]]*\]/g, ' ') // [373회], [강남] 등
+  s = s.replace(/\(\s*[월화수목금토일][^)]*\)/g, ' ') // (토) (토요일 ...)
+  s = s.replace(/\d{1,2}\s*[/.]\s*\d{1,2}/g, ' ') // 8/1, 8.15
+  s = s.replace(/\d{1,2}\s*시(\s*\d{1,2}\s*분)?/g, ' ')
+  s = s.replace(/\d{2}\s*[-~]\s*\d{2}/g, ' ') // 32-40, 92~97
+  s = s.replace(/\d{1,2}\s*0?대(만)?/g, ' ') // 30대, 30대만
+  s = s.replace(/\d[\d,.]*\s*(원|만)/g, ' ') // 1.9만, 20000원
+  s = s.replace(/[월화수목금토일]요일/g, ' ')
+  s = s.replace(/\d+/g, ' ')
+  s = s.replace(/[^\w가-힣]+/g, ' ')
+  return s.trim().split(/\s+/).join(' ')
+}
+
+/** 비교용 — 흔한 말을 뺀 '이 모임만의 부분'. */
+function coreOf(title: string): string {
+  let s = normalize(title).replace(/\s+/g, '')
+  for (const g of GENERIC) s = s.split(g).join('')
   return s
-    .split(/\s+/)
-    .map((w) => w.trim())
-    .filter((w) => w.length >= 2 && !STOP.has(w))
 }
 
-/**
- * 모임 제목들에서 묶음 후보를 뽑아 '걸리는 모임 수' 많은 순으로 돌려준다.
- *
- * 겹치는 후보는 접는다 — '연령별'(51건)과 '연령별 와인파티'(51건)처럼 같은 모임을
- * 가리키면 더 구체적인 쪽만 남긴다. 그래서 목록에 같은 덩어리가 두 번 안 나온다.
- */
-export function suggestGroups(rows: TitleRow[], minCount = 2): TitleGroup[] {
-  // 구절 → 그 구절이 들어간 모임들
-  const byPhrase = new Map<string, TitleRow[]>()
-  for (const row of rows) {
-    const toks = tokenize(row.title)
-    const seen = new Set<string>()
-    for (const n of [2, 1]) {
-      for (let i = 0; i + n <= toks.length; i++) {
-        const phrase = toks.slice(i, i + n).join(' ')
-        if (seen.has(phrase)) continue
-        seen.add(phrase)
-        const list = byPhrase.get(phrase)
-        if (list) list.push(row)
-        else byPhrase.set(phrase, [row])
+function shingles(s: string): Set<string> {
+  const out = new Set<string>()
+  for (let i = 0; i + 2 <= s.length; i++) out.add(s.slice(i, i + 2))
+  if (!out.size && s) out.add(s)
+  return out
+}
+
+function similarity(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0
+  let inter = 0
+  for (const x of a) if (b.has(x)) inter++
+  return inter / (a.size + b.size - inter)
+}
+
+/** 두 문자열의 가장 긴 공통 부분 문자열 */
+function longestCommon(a: string, b: string): string {
+  if (!a || !b) return ''
+  let best = ''
+  // 제목 길이가 짧아(수십 자) 이 정도 비용은 문제되지 않는다.
+  for (let i = 0; i < a.length; i++) {
+    for (let j = a.length; j > i + best.length; j--) {
+      const sub = a.slice(i, j)
+      if (b.includes(sub)) {
+        if (sub.length > best.length) best = sub
+        break
       }
     }
   }
-
-  const all = [...byPhrase.entries()]
-    .filter(([, list]) => list.length >= minCount)
-    // 건수 많은 순 → 같으면 더 구체적인(긴) 구절 먼저
-    .sort((a, b) => b[1].length - a[1].length || b[0].length - a[0].length)
-
-  const picked: TitleGroup[] = []
-  for (const [phrase, list] of all) {
-    const urls = new Set(list.map((r) => r.url || r.title))
-    // 이미 뽑은 묶음에 완전히 포함되면 새 정보가 없다 → 버린다
-    const covered = picked.some((g) => {
-      const gu = new Set(g.rows.map((r) => r.url || r.title))
-      for (const u of urls) if (!gu.has(u)) return false
-      return true
-    })
-    if (covered) continue
-    picked.push({ phrase, rows: list })
-  }
-  return picked
+  return best
 }
 
-/** 남은(어느 묶음에도 안 들어간) 모임들 */
+/** 세트 전체 제목에 공통으로 들어있는 가장 긴 문구 = 그대로 검색어로 쓸 수 있다. */
+function commonKeyword(titles: string[]): string {
+  const uniq = [...new Set(titles.map((t) => t.replace(/^\[[^\]]*\]\s*/, '').trim()))]
+  if (!uniq.length) return ''
+  if (uniq.length === 1) return uniq[0]
+  let common = uniq[0]
+  for (let i = 1; i < uniq.length && common; i++) common = longestCommon(common, uniq[i])
+  common = common.replace(EMOJI, ' ').trim()
+  common = trimFragment(common)
+  return common.length >= 2 ? common : ''
+}
+
+/**
+ * 공통 문구 끝에 남는 잘린 조각을 떼어낸다.
+ * 예: '2차무료+매칭 [강' → '2차무료+매칭'
+ * (제목이 [강남]/[강서]로 갈리는데 공통 부분이 '[강'까지라 그대로 두면
+ *  검색어로 못 쓴다.)
+ */
+function trimFragment(s: string): string {
+  let out = s
+  // 짝이 안 맞는 여는 괄호부터 끝까지 자른다
+  for (const [open, close] of [['[', ']'], ['(', ')'], ['{', '}']]) {
+    const i = out.lastIndexOf(open)
+    if (i !== -1 && out.indexOf(close, i) === -1) out = out.slice(0, i)
+  }
+  // 양끝의 기호·공백 정리
+  return out.replace(/^[^\w가-힣]+/, '').replace(/[^\w가-힣]+$/, '').trim()
+}
+
+// 고유 부분이 이보다 짧으면 합치지 않는다 — 남은 글자가 몇 자 안 되면
+// 우연히 비슷해 보여 엉뚱한 모임이 붙는다.
+const MIN_CORE = 4
+const MERGE_THRESHOLD = 0.5
+
+/** 모임들을 '같은 호스트의 같은 모임' 세트로 묶어 건수 많은 순으로 돌려준다. */
+export function suggestGroups(rows: TitleRow[]): TitleGroup[] {
+  // 1) 같은 상품(URL의 # 앞)은 무조건 한 덩어리
+  const byProduct = new Map<string, TitleRow[]>()
+  for (const r of rows) {
+    const key = (r.url || r.title).split('#')[0]
+    const list = byProduct.get(key)
+    if (list) list.push(r)
+    else byProduct.set(key, [r])
+  }
+
+  interface Unit {
+    rows: TitleRow[]
+    rep: string
+    core: string
+    sh: Set<string>
+  }
+  const units: Unit[] = []
+  for (const list of byProduct.values()) {
+    const count = new Map<string, number>()
+    for (const r of list) count.set(r.title, (count.get(r.title) ?? 0) + 1)
+    const rep = [...count.entries()].sort((a, b) => b[1] - a[1])[0][0]
+    const core = coreOf(rep)
+    units.push({ rows: list, rep, core, sh: shingles(core) })
+  }
+  units.sort((a, b) => b.rows.length - a.rows.length)
+
+  // 2) 고유 부분이 비슷하면 합친다. 비교는 항상 '세트 대표'와만 한다 —
+  //    세트가 커질수록 아무거나 끌어당기는 것을 막기 위해서.
+  const clusters: Unit[] = []
+  for (const u of units) {
+    let best: Unit | null = null
+    let bestScore = 0
+    if (u.core.length >= MIN_CORE) {
+      for (const c of clusters) {
+        if (c.core.length < MIN_CORE) continue
+        const s = similarity(u.sh, c.sh)
+        if (s > bestScore) {
+          bestScore = s
+          best = c
+        }
+      }
+    }
+    if (best && bestScore >= MERGE_THRESHOLD) best.rows.push(...u.rows)
+    else clusters.push({ ...u, rows: [...u.rows] })
+  }
+
+  return clusters
+    .sort((a, b) => b.rows.length - a.rows.length)
+    .map((c) => ({
+      rep: c.rep,
+      rows: c.rows,
+      keyword: commonKeyword(c.rows.map((r) => r.title)),
+    }))
+}
+
+/** 어느 세트에도 안 들어간 모임(항상 비어 있지만, 화면 문구용으로 유지) */
 export function ungrouped(rows: TitleRow[], groups: TitleGroup[]): TitleRow[] {
   const inGroup = new Set(groups.flatMap((g) => g.rows.map((r) => r.url || r.title)))
   return rows.filter((r) => !inGroup.has(r.url || r.title))

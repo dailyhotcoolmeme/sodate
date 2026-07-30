@@ -6,7 +6,7 @@ import MatchKeywordEditor, { TitleLink, dedupeTitles } from './MatchKeywordEdito
 import HashtagEditor from './HashtagEditor'
 import DetailImagePreview from './DetailImagePreview'
 import { matchTypeByName } from '../lib/matchImageType'
-import { suggestGroups, ungrouped, type TitleGroup } from '../lib/titleGroups'
+import { suggestGroups, type TitleGroup } from '../lib/titleGroups'
 import { Loader2, Plus, Trash2, ArrowUp, ArrowDown, Pencil, Maximize2 } from 'lucide-react'
 
 interface ImageType {
@@ -131,7 +131,7 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
     await load()
   }
 
-  /** 묶음 구절을 검색어로 넣은 새 유형을 만든다 — 오너가 다시 타이핑하지 않게. */
+  /** 세트의 공통 문구를 검색어로 넣은 새 유형을 만든다 — 오너가 다시 타이핑하지 않게. */
   async function addTypeWithKeyword(phrase: string) {
     const name = window.prompt('새 유형 이름', phrase)?.trim()
     if (!name) return
@@ -340,14 +340,13 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
             </p>
           )
         }
-        // 제목이 자유롭게 쓰인 업체(문토·프립)는 목록만 봐선 공통점이 안 보인다.
-        // 자주 나오는 구절로 묶어 '몇 건이 걸리는지'를 보여줘, 큰 덩어리부터
-        // 작업할 수 있게 한다(2026-07-30 오너 요청).
+        // 한 호스트가 같은 모임을 지역·나이·날짜만 바꿔 올리므로 그것들을 한 세트로
+        // 묶어 건수 많은 순으로 보여준다. 세트 하나에 이미지·해시태그를 한 번만
+        // 맞추면 되므로 큰 세트부터 작업하면 된다(2026-07-30 오너 요청).
         // ⚠️ 묶음은 종(uniq)이 아니라 실제 모임 전체(missed)로 센다. 오너가 보려는 건
         //    "이 유형을 만들면 모임 몇 건이 해결되나"이기 때문. 종 기준으로 세면
         //    프립이 5건·4건처럼 나와 큰 덩어리가 안 보였다.
         const groups = suggestGroups(missed)
-        const rest = ungrouped(missed, groups)
         return (
           <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50 p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -359,7 +358,7 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
                   onClick={() => setMissedView('group')}
                   className={`px-2 py-0.5 rounded text-xs font-medium ${missedView === 'group' ? 'bg-orange-600 text-white' : 'bg-white text-orange-700 border border-orange-200'}`}
                 >
-                  묶어보기
+                  같은 모임끼리
                 </button>
                 <button
                   onClick={() => setMissedView('all')}
@@ -372,34 +371,43 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
 
             {missedView === 'group' ? (
               <div className="max-h-72 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden space-y-1">
-                {groups.length === 0 && (
-                  <p className="text-xs text-orange-700">묶일 만한 공통 구절이 없습니다. 전체 목록에서 확인하세요.</p>
-                )}
                 {groups.map((g: TitleGroup) => {
-                  const open = openGroup === g.phrase
+                  const open = openGroup === g.rep
+                  const kinds = dedupeTitles(g.rows)
                   return (
-                    <div key={g.phrase} className="rounded border border-orange-200 bg-white">
+                    <div key={g.rep} className="rounded border border-orange-200 bg-white">
                       <button
-                        onClick={() => setOpenGroup(open ? null : g.phrase)}
+                        onClick={() => setOpenGroup(open ? null : g.rep)}
                         className="w-full flex items-center gap-2 px-2 py-1.5 text-left"
                       >
                         <span className="shrink-0 px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-xs font-bold tabular-nums">
                           {g.rows.length}건
                         </span>
-                        <span className="flex-1 min-w-0 truncate text-xs font-medium text-gray-800">{g.phrase}</span>
-                        <span className="shrink-0 text-xs text-gray-400">{open ? '접기' : '제목 보기'}</span>
+                        <span className="flex-1 min-w-0 truncate text-xs font-medium text-gray-800">{g.rep}</span>
+                        <span className="shrink-0 text-xs text-gray-400">{open ? '접기' : `제목 ${kinds.length}종`}</span>
                       </button>
                       {open && (
-                        <div className="border-t border-orange-100 px-2 py-1.5 space-y-1">
+                        <div className="border-t border-orange-100 px-2 py-1.5 space-y-1.5">
+                          {g.keyword && (
+                            <p className="text-xs text-gray-500">
+                              공통 문구 <span className="font-medium text-gray-700">{g.keyword}</span>
+                            </p>
+                          )}
                           <button
-                            onClick={() => addTypeWithKeyword(g.phrase)}
-                            className="px-2 py-1 rounded bg-orange-600 text-white text-xs font-bold hover:bg-orange-700"
+                            onClick={() => addTypeWithKeyword(g.keyword || g.rep)}
+                            disabled={!g.keyword}
+                            className="px-2 py-1 rounded bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 disabled:bg-gray-200 disabled:text-gray-400"
                           >
-                            이 구절로 유형 만들기
+                            이 세트로 유형 만들기
                           </button>
-                          {/* 같은 제목이 지역·날짜만 달리해 수십 건씩 있으므로 제목은 접어서 보여준다. */}
+                          {!g.keyword && (
+                            <p className="text-xs text-gray-400">
+                              제목에 공통 문구가 없어 검색어를 자동으로 못 만듭니다. 직접 정해주세요.
+                            </p>
+                          )}
+                          {/* 같은 모임이 지역·날짜만 달리해 수십 건씩 있으므로 제목은 접어서 보여준다. */}
                           <ul className="space-y-0.5">
-                            {dedupeTitles(g.rows).map((r) => (
+                            {kinds.map((r) => (
                               <li key={r.title} className="min-w-0"><TitleLink row={r} /></li>
                             ))}
                           </ul>
@@ -408,11 +416,6 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
                     </div>
                   )
                 })}
-                {rest.length > 0 && (
-                  <p className="pt-1 text-xs text-orange-700">
-                    묶이지 않은 모임 {rest.length}건({dedupeTitles(rest).length}종) — 전체 목록에서 확인하세요.
-                  </p>
-                )}
               </div>
             ) : (
               /* 전체를 다 보여준다 — 오너가 하나씩 열어보며 어떤 이미지를 붙일지 정한다.
