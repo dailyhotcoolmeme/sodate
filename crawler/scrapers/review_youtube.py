@@ -139,12 +139,18 @@ def fetch_youtube_results(keyword: str, aliases: list[str]) -> list[dict]:
                 url = f'https://www.youtube.com/shorts/{vid}'
             else:
                 url = f'https://www.youtube.com/watch?v={vid}'
+            # 게시일을 못 읽은 건은 저장하지 않는다(오너 확정) — 앱 목록에
+            # 날짜 없는 행이 섞이지 않게 수집 단계에서 걸러낸다.
+            pub = fetch_upload_date(vid)
+            if not pub:
+                logger.info(f'게시일 없어 제외: {url}')
+                continue
             results.append({
                 'source': 'youtube',
                 'content': title[:1000],
                 'source_url': url,
                 'thumbnail_url': f'https://i.ytimg.com/vi/{vid}/hqdefault.jpg',
-                'published_at': fetch_upload_date(vid),
+                'published_at': pub,
                 'author_name': None,
             })
             if len(results) >= MAX_PER_KEYWORD:

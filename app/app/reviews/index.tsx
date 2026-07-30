@@ -104,10 +104,12 @@ function AggReviewRow({
             {title}
           </Text>
         )}
-        <Text style={styles.rowBody} numberOfLines={title ? 2 : 3}>
+        {/* 줄 수를 고정한다 — 본문 길이에 따라 아래 게시일 위치가 위아래로 흔들리던 문제. */}
+        <Text style={styles.rowBody} numberOfLines={title ? 1 : 2}>
           {body}
         </Text>
-        {/* 게시일. 인스타그램은 로그인 없이 게시일을 얻을 수 없어 이 줄이 아예 나오지 않는다. */}
+        {/* 게시일은 행 맨 아래에 붙여 모든 행에서 같은 높이에 온다.
+            인스타그램은 게시일을 얻을 수 없어 이 줄이 나오지 않는다. */}
         {!!postedAt && (
           <View style={styles.rowFooter}>
             <Text style={styles.rowDate}>{postedAt}</Text>
@@ -384,7 +386,7 @@ function makeStyles(colors: AppColors) {
     userCards: { marginHorizontal: -16 },
     // 정렬 버튼 행 (텍스트 버튼, 박스 없음)
     // 게시일은 본문과 겹치지 않게 아래 오른쪽에 두어, 행이 이어질 때 같은 위치에 정렬된다.
-    rowFooter: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 2 },
+    rowFooter: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 'auto' },
     rowDate: { fontSize: 11, color: colors.textTertiary },
     sortRow: { flexDirection: 'row', gap: 16, paddingHorizontal: 16, marginTop: 10, marginBottom: 2 },
     sortChip: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4 },
@@ -415,7 +417,9 @@ function makeStyles(colors: AppColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    rowText: { flex: 1, justifyContent: 'center', gap: 4 },
+    // 썸네일과 같은 높이로 고정 → 모든 행의 높이가 같고, 바닥에 붙인 게시일도
+    // 본문이 한 줄이든 두 줄이든 항상 같은 위치에 온다.
+    rowText: { flex: 1, height: 84, gap: 4 },
     rowHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     companyBadge: {
       backgroundColor: colors.primary + '1F',
@@ -426,6 +430,7 @@ function makeStyles(colors: AppColors) {
     companyBadgeText: { fontSize: 11.5, fontWeight: '700', color: colors.primary },
     sourceLabel: { fontSize: 11, fontWeight: '600', color: colors.textTertiary },
     rowTitle: { fontSize: 14.5, fontWeight: '700', color: colors.textPrimary, lineHeight: 20 },
-    rowBody: { fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
+    // flex:1 로 남은 공간을 차지해 게시일을 바닥까지 밀어낸다.
+    rowBody: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
   })
 }

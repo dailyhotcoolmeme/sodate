@@ -153,6 +153,10 @@ def fetch_naver_blog_results(keyword: str) -> list[dict]:
             if not pub_date:
                 pub_date = fetch_blog_published_at(url)
                 time.sleep(0.5)
+            # 그래도 못 읽으면 저장하지 않는다(오너 확정).
+            if not pub_date:
+                logger.info(f'게시일 없어 제외: {url}')
+                continue
 
             results.append({
                 'source': 'naver_blog',
