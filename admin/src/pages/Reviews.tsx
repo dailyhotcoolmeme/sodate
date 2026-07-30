@@ -44,7 +44,10 @@ export default function Reviews() {
       // ⚠️ 예전엔 .or('source.eq.user,report_count.gt.0')로 걸러서, 앱 작성 후기와
       //    신고 후기가 모두 0건이 되자 화면이 통째로 비었다(후기는 666건 있는데도).
       //    전부 불러오고 화면의 탭으로 좁힌다.
+      // 인스타그램은 게시일이 전건 없어 published_at만으로는 순서가 불확정이다.
+      // 수집일을 2차 기준으로 둬서 인스타 탭도 수집일순으로 안정되게 정렬된다.
       .order('published_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
       .limit(1000)
     setReviews((data as any) ?? [])
     setLoading(false)

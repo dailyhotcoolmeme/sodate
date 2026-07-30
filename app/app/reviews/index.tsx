@@ -203,6 +203,16 @@ export default function ReviewsScreen() {
     else setRecentDir((d) => (d === 'desc' ? 'asc' : 'desc'))
   }
 
+  // 인스타그램은 게시일을 얻을 수 없어(로그인 필수) 실제로는 수집일 기준으로 정렬된다.
+  // 그래서 이 탭에서만 '최신순'이 아니라 '수집일순'으로 표기한다. 방향은 화살표가 보여준다.
+  // 업체순일 때는 비활성 칩이므로 방향 표기를 되돌린다(기존 동작 유지).
+  const recentLabel =
+    currentTab === 'instagram'
+      ? '수집일순'
+      : sortMode === 'recent' && recentDir === 'asc'
+        ? '오래된순'
+        : '최신순'
+
   return (
     <View style={styles.container}>
       <TopBar showBack />
@@ -247,7 +257,7 @@ export default function ReviewsScreen() {
             activeOpacity={0.7}
           >
             <Text style={[styles.sortChipText, sortMode === 'recent' && styles.sortChipTextActive]}>
-              {sortMode === 'recent' && recentDir === 'asc' ? '오래된순' : '최신순'}
+              {recentLabel}
             </Text>
             {sortMode === 'recent' && (
               <Ionicons name={recentDir === 'asc' ? 'arrow-up' : 'arrow-down'} size={13} color={colors.primary} />
