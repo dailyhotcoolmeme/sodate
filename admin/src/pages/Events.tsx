@@ -6,7 +6,7 @@ import { matchTypeByName } from '../lib/matchImageType'
 
 interface Event {
   id: string; title: string; company_id: string
-  event_date: string; location_region: string
+  event_date: string; location_region: string; source_url: string | null
   price_male: number | null; price_female: number | null
   age_range_min: number | null; age_range_max: number | null
   age_group_label: string | null
@@ -63,7 +63,7 @@ export default function Events() {
 
     const { data, error } = await supabase
       .from('events')
-      .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, is_featured, verified, hashtags, image_type_id, companies(name)')
+      .select('id, title, company_id, event_date, source_url, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, is_featured, verified, hashtags, image_type_id, companies(name)')
       .gte('event_date', now)
       .lte('event_date', oneMonthLater)
       .order('event_date', { ascending: true })
@@ -71,7 +71,7 @@ export default function Events() {
     if (error) {
       const { data: data2 } = await supabase
         .from('events')
-        .select('id, title, company_id, event_date, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, verified, hashtags, image_type_id, companies(name)')
+        .select('id, title, company_id, event_date, source_url, location_region, price_male, price_female, age_range_min, age_range_max, age_group_label, participant_stats, seats_left_male, seats_left_female, is_active, is_closed, verified, hashtags, image_type_id, companies(name)')
         .gte('event_date', now)
         .lte('event_date', oneMonthLater)
         .order('event_date', { ascending: true })
@@ -386,6 +386,15 @@ export default function Events() {
   )
 }
 
+// datetime-local 입력칸은 '현지 시각'을 다루는데 DB의 event_date 는 UTC다.
+// 예전엔 UTC 문자열을 그대로 잘라 넣어(slice(0,16)) 화면에 9시간 이른 시각이 보였고,
+// 그 상태로 저장하면 실제 시각이 9시간 뒤로 밀렸다(2026-07-31 발견, 다행히 저장 이력 0건).
+function toLocalInput(iso: string): string {
+  const d = new Date(iso)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 function EventForm({ initial, onClose, onSaved }: {
   initial: Event | null
   onClose: () => void
@@ -395,12 +404,14 @@ function EventForm({ initial, onClose, onSaved }: {
   const [form, setForm] = useState({
     company_id: initial?.company_id ?? '',
     title: initial?.title ?? '',
-    event_date: initial ? initial.event_date.slice(0, 16) : '',
+    event_date: initial ? toLocalInput(initial.event_date) : '',
     location_region: initial?.location_region ?? '',
     price_male: initial?.price_male ?? '',
     price_female: initial?.price_female ?? '',
     age_group_label: initial?.age_group_label ?? '',
-    source_url: '',
+    // 수정 시 기존 값을 채운다. 예전엔 항상 빈 문자열로 시작해, 저장하면
+    // 신청 URL 이 통째로 지워졌다(앱 아웃링크가 끊기고 크롤러 매칭 키도 사라진다).
+    source_url: initial?.source_url ?? '',
   })
   const [hashtags, setHashtags] = useState<string[]>(initial?.hashtags ?? [])
   const [saving, setSaving] = useState(false)
@@ -421,6 +432,8 @@ function EventForm({ initial, onClose, onSaved }: {
       verified: true, // 관리자가 저장 = 검증완료 → 크롤러가 가격·연령을 덮어쓰지 않음
     }
     if (initial) {
+      // 빈 신청 URL 로 기존 값을 덮지 않는다.
+      if (!String(payload.source_url ?? '').trim()) delete payload.source_url
       await supabase.from('events').update(payload).eq('id', initial.id)
     } else {
       await supabase.from('events').insert({ ...payload, source_url: form.source_url || 'manual' })
