@@ -21,6 +21,7 @@ ERROR가 있으면 exit(1) → GitHub Actions에서 이 step이 실패로 표시
 import re
 import sys
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from playwright.sync_api import sync_playwright
 
@@ -78,16 +79,31 @@ def check_field_consistency(sb) -> list[dict]:
     ).eq('is_active', True).gte('event_date', now.isoformat()).not_.is_('price_detail', 'null').execute().data
     for e in ev:
         d = e['price_detail'] or {}
-        m = d.get('male', {}).get('regular')
-        f = d.get('female', {}).get('regular')
         slug = (e.get('companies') or {}).get('slug', '?')
-        if m is not None and e['price_male'] is not None and m != e['price_male']:
-            issues.append({'level': 'ERROR', 'company': slug,
-                            'msg': f"price_detail.male({m}) != price_male({e['price_male']}) | {e['source_url'][:70]}"})
-        if f is not None and e['price_female'] is not None and f != e['price_female']:
-            issues.append({'level': 'ERROR', 'company': slug,
-                            'msg': f"price_detail.female({f}) != price_female({e['price_female']}) | {e['source_url'][:70]}"})
+        for gender, col in (('male', 'price_male'), ('female', 'price_female')):
+            expected = _expected_price(d.get(gender) or {})
+            actual = e[col]
+            if expected is not None and actual is not None and expected != actual:
+                issues.append({'level': 'ERROR', 'company': slug, 'action': 'owner',
+                               'msg': f"price_detail.{gender}({expected}) != {col}({actual}) | {e['source_url'][:70]}"})
     return issues
+
+
+def _expected_price(tier: dict) -> Optional[int]:
+    """price_detail 한 성별에서 'price_male/female 에 들어가야 하는 값'을 계산한다.
+
+    ⚠️ 예전엔 regular 만 비교해서, 일반가가 품절이고 얼리버드만 살아 있는 정상 상태를
+    가격 오류로 신고했다(2026-07-30: 에모셔널오렌지 가산 티키타카 — 일반가 55000 품절,
+    얼리버드 45000 판매중, price_male=45000 이 맞는데 허위 경보).
+    utils.imweb_options._aggregate_base 의 규칙과 같아야 한다:
+    판매중인 게 있으면 그중 일반가 우선, 전부 품절이면 일반가.
+    """
+    reg, early = tier.get('regular'), tier.get('earlybird')
+    if reg is not None and not tier.get('regular_soldout'):
+        return reg
+    if early is not None and not tier.get('earlybird_soldout'):
+        return early
+    return reg if reg is not None else early
 
 
 def check_imweb_live(sb, pg) -> list[dict]:

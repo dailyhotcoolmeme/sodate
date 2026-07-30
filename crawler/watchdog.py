@@ -17,6 +17,7 @@ crawl.yml 자체가 타임아웃/실패하면 같이 못 돈다(실제로 그날
 중복으로 넣으면 워치독 자신도 똑같이 깨지기 쉬워진다(오늘 교훈: 감시자는 단순해야 안 죽는다).
 """
 import os
+import re
 import sys
 from datetime import datetime, timezone, timedelta
 
@@ -128,19 +129,136 @@ def check_heartbeats() -> list[dict]:
     return issues
 
 
-def build_message(heartbeat_issues, completeness_issues, consistency_issues) -> str | None:
+# ── 알림 방침(2026-07-30 오너 지적: "메일을 봐도 어떤 상태인지 전혀 모르겠다") ──
+# 이전에는 무엇이든 "🚨 문제 발견"으로 똑같이 보냈다. 워치독이 스스로 되살린 건과
+# 오너가 직접 봐야 하는 건이 구분되지 않아, 조치가 필요한지 알 수 없었다.
+# 그리고 같은 문제가 해결되기 전까지 20분마다 같은 메일이 반복됐다.
+#   → 제목에서 조치 필요 여부를 먼저 밝히고, 본문을 두 묶음으로 나눈다.
+#   → 같은 내용은 REPEAT_SILENCE_HOURS 안에는 다시 보내지 않는다.
+REPEAT_SILENCE_HOURS = 6
+# 자가복구(재발화)는 평소엔 알리지 않는다. 다만 짧은 시간에 반복되면 자동조치가
+# 듣지 않는다는 뜻이므로 그때는 알린다.
+AUTO_ESCALATE_COUNT = 3
+AUTO_ESCALATE_HOURS = 2
+
+
+def _fingerprint(issue: dict) -> str:
+    """같은 문제인지 판단하는 키. 숫자(경과 분 등)는 매번 달라지므로 지운다."""
+    raw = f'{issue.get("company", "")}|{issue["msg"]}'
+    return re.sub(r'\d+', '#', raw)[:300]
+
+
+def _needs_owner(issue: dict) -> bool:
+    """오너가 직접 봐야 하는 건인지. 워치독이 재발화로 되살린 건은 아니다."""
+    if issue.get('action') == 'owner':
+        return True
+    return '자동 재발화함' not in issue['msg']
+
+
+def load_alert_state(sb, fingerprints: list[str]) -> dict:
+    if not fingerprints:
+        return {}
+    try:
+        rows = sb.table('watchdog_alerts').select('*').in_('fingerprint', fingerprints).execute().data
+        return {r['fingerprint']: r for r in rows}
+    except Exception as e:
+        print(f'알림 이력 조회 실패(반복 억제 없이 진행): {e}')
+        return {}
+
+
+def record_alert(sb, fp: str, prev: dict | None, sent: bool) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    row = {
+        'fingerprint': fp,
+        'last_seen_at': now,
+        'seen_count': (prev.get('seen_count', 0) if prev else 0) + 1,
+    }
+    if sent:
+        row['last_sent_at'] = now
+    elif prev and prev.get('last_sent_at'):
+        row['last_sent_at'] = prev['last_sent_at']
+    if not prev:
+        row['first_seen_at'] = now
+    try:
+        sb.table('watchdog_alerts').upsert(row, on_conflict='fingerprint').execute()
+    except Exception as e:
+        print(f'알림 이력 기록 실패(무시): {e}')
+
+
+def build_message(sb, heartbeat_issues, completeness_issues, consistency_issues):
+    """(제목, 본문) 또는 (None, None). 보낼 게 없으면 None."""
     errors = [i for i in heartbeat_issues if i['level'] == 'ERROR'] \
         + [i for i in completeness_issues if i['level'] == 'ERROR'] \
         + [i for i in consistency_issues if i['level'] == 'ERROR']
-    if not errors:
-        return None
-    now_kst = datetime.now(timezone.utc).astimezone().strftime('%m/%d %H:%M')
-    lines = [f'🚨 소개팅모아 워치독 ({now_kst})', f'문제 {len(errors)}건 발견:']
-    for i in errors[:8]:
-        lines.append(f'· {i.get("company", "")} {i["msg"]}'.strip())
-    if len(errors) > 8:
-        lines.append(f'... 외 {len(errors) - 8}건 더')
-    return '\n'.join(lines)
+
+    now = datetime.now(timezone.utc)
+    state = load_alert_state(sb, [_fingerprint(i) for i in errors])
+
+    owner_items, auto_items = [], []
+    for i in errors:
+        fp = _fingerprint(i)
+        prev = state.get(fp)
+        owner = _needs_owner(i)
+
+        if owner:
+            # 같은 내용을 최근에 보냈으면 조용히 넘긴다(반복 폭탄 방지).
+            last_sent = prev and prev.get('last_sent_at')
+            if last_sent:
+                try:
+                    gap_h = (now - datetime.fromisoformat(last_sent.replace('Z', '+00:00'))).total_seconds() / 3600
+                except Exception:
+                    gap_h = 999
+                if gap_h < REPEAT_SILENCE_HOURS:
+                    record_alert(sb, fp, prev, sent=False)
+                    print(f'  (반복 억제) {i["msg"][:60]}')
+                    continue
+            owner_items.append((fp, prev, i))
+        else:
+            # 자가복구: 짧은 시간에 반복될 때만 알린다.
+            cnt = (prev.get('seen_count', 0) if prev else 0) + 1
+            recent = False
+            if prev and prev.get('first_seen_at'):
+                try:
+                    span_h = (now - datetime.fromisoformat(prev['first_seen_at'].replace('Z', '+00:00'))).total_seconds() / 3600
+                    recent = span_h <= AUTO_ESCALATE_HOURS
+                except Exception:
+                    pass
+            if cnt >= AUTO_ESCALATE_COUNT and recent:
+                auto_items.append((fp, prev, i))
+            else:
+                record_alert(sb, fp, prev, sent=False)
+                print(f'  (자가복구, 알림 생략) {i["msg"][:60]}')
+
+    if not owner_items and not auto_items:
+        return None, None
+
+    now_kst = now.astimezone().strftime('%m/%d %H:%M')
+    if owner_items:
+        subject = f'🚨 소개팅모아 워치독 — 확인 필요 {len(owner_items)}건'
+    else:
+        subject = f'⚠️ 소개팅모아 워치독 — 자동조치가 반복됨 {len(auto_items)}건'
+
+    lines = [f'소개팅모아 워치독 {now_kst}', '']
+    if owner_items:
+        lines.append(f'■ 확인 필요 {len(owner_items)}건 — 직접 손봐야 합니다')
+        for _, _, i in owner_items[:8]:
+            lines.append(f'  · {i.get("company", "")} {i["msg"]}'.strip())
+        if len(owner_items) > 8:
+            lines.append(f'  ... 외 {len(owner_items) - 8}건 더')
+        lines.append('')
+    if auto_items:
+        lines.append(f'■ 자동조치를 했는데 또 발생 {len(auto_items)}건 — 자동복구가 듣지 않습니다')
+        for _, _, i in auto_items[:5]:
+            lines.append(f'  · {i.get("company", "")} {i["msg"]}'.strip())
+        lines.append('')
+    lines.append(f'같은 내용은 {REPEAT_SILENCE_HOURS}시간 안에는 다시 보내지 않습니다.')
+    lines.append('스스로 되살린 지연은 이 메일에 넣지 않습니다(메일이 없으면 정상입니다).')
+    lines.append('실행 이력: https://github.com/dailyhotcoolmeme/sodate/actions')
+
+    for fp, prev, _ in owner_items + auto_items:
+        record_alert(sb, fp, prev, sent=True)
+
+    return subject, '\n'.join(lines)
 
 
 def send_kakao(text: str) -> None:
@@ -179,7 +297,7 @@ def send_kakao(text: str) -> None:
     print(f'카카오 전송 결과: {r.status_code} {r.text[:200]}')
 
 
-def send_email(text: str) -> None:
+def send_email(text: str, subject: str = '🚨 소개팅모아 워치독 — 문제 발견') -> None:
     """Resend API로 이메일 전송. 카카오 '나에게 보내기'는 푸시알림이 안 떠서(2026-07-25 확인)
     실제 알아채는 용도는 이메일이 정본 — 둘 다 보내되 이메일이 주력."""
     api_key = os.environ.get('RESEND_API_KEY')
@@ -193,7 +311,7 @@ def send_email(text: str) -> None:
         json={
             'from': 'Sodate Watchdog <onboarding@resend.dev>',
             'to': [to_addr],
-            'subject': '🚨 소개팅모아 워치독 — 문제 발견',
+            'subject': subject,
             'text': text,
         },
         timeout=15,
@@ -341,16 +459,16 @@ def run() -> int:
     for i in errors:
         print(f'  ✗ {i}')
 
-    msg = build_message(heartbeat_issues, completeness_issues, consistency_issues)
+    subject, msg = build_message(sb, heartbeat_issues, completeness_issues, consistency_issues)
     if msg:
         # 둘 다 시도 — 하나 실패해도 다른 하나는 계속 보낸다(알림 자체가 감시자니까 여기도
         # "한 건 실패가 전체를 못 죽인다" 원칙 적용).
         try:
-            send_email(msg)
+            send_email(msg, subject)
         except Exception as e:
             print(f'이메일 전송 실패: {e}')
         try:
-            send_kakao(msg)
+            send_kakao(f'{subject}\n\n{msg}')
         except Exception as e:
             print(f'카카오 전송 실패: {e}')
         print(msg)
