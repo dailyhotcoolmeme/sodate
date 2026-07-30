@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAllHashtags } from '../hooks/useAllHashtags'
 import { Trash2, ExternalLink, Loader2, Check, Search, X, ChevronDown, ChevronUp } from 'lucide-react'
 import DateTimePicker from '../components/DateTimePicker'
 import HashtagEditor from '../components/HashtagEditor'
@@ -162,7 +163,9 @@ export default function Register() {
   )
 
   // 자동완성 후보 — 지금 화면의 모든 행에 붙어 있는 태그(중복 제거).
-  const allUsedTags = useMemo(() => [...new Set(rows.flatMap((r) => r.hashtags))], [rows])
+  // 후보는 표에 로드된 행이 아니라 서비스 전체에서 모은다 — 범위를 좁히면
+  // 다른 업체에서 쓰는 표기가 안 떠서 #직장인검증/#직장검증 처럼 갈라진다.
+  const allUsedTags = useAllHashtags()
 
   // 업체별 건수 (탭 배지용) — 검색 중이면 검색 결과 기준이어야 한다.
   // 안 그러면 "265건 찾음"인데 탭엔 839가 떠서 화면이 어긋나 보인다.

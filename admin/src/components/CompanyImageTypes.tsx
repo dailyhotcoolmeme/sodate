@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, uploadDetailImage, deleteDetailImage } from '../lib/supabase'
+import { useAllHashtags } from '../hooks/useAllHashtags'
 import { resizeForUpload } from '../lib/resizeImage'
 import MatchKeywordEditor, { TitleLink, dedupeTitles } from './MatchKeywordEditor'
 import HashtagEditor from './HashtagEditor'
@@ -33,7 +34,8 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
   // [저장] 버튼 한 번으로 유형 저장 + 매칭 일정 일괄 반영.
   const [tagDraft, setTagDraft] = useState<Record<string, string[]>>({})
   const [tagStatus, setTagStatus] = useState<Record<string, string>>({})
-  const [usedTags, setUsedTags] = useState<string[]>([])
+  // 자동완성 후보는 이 업체 범위가 아니라 서비스 전체 태그(용어 통일 목적).
+  const allTags = useAllHashtags()
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => { load() }, [companyId])
@@ -57,8 +59,6 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
     setTitles(((ev.data as any[]) ?? [])
       .map((e) => ({ title: (e.title ?? '').trim(), url: e.source_url ?? '' }))
       .filter((e) => e.title))
-    // 자동완성 후보: 일정에 실제 붙어 있는 태그(유형 태그는 types 상태에서 합침)
-    setUsedTags([...new Set(((ev.data as any[]) ?? []).flatMap((e) => e.hashtags ?? []))])
     setLoading(false)
   }
 
@@ -230,7 +230,7 @@ export default function CompanyImageTypes({ companyId, slug }: { companyId: stri
               해시태그 <span className="text-gray-400">(입력 후 [저장]을 눌러야 매칭된 모임에 반영됩니다 · 비우고 저장하면 자동 태그로 복귀)</span>
             </p>
             <HashtagEditor
-              extraSuggestions={[...usedTags, ...types.flatMap((x) => x.hashtags ?? [])]}
+              extraSuggestions={allTags}
               value={tagDraft[t.id] ?? t.hashtags ?? []}
               onChange={(next) => {
                 setTagDraft((p) => ({ ...p, [t.id]: next }))
