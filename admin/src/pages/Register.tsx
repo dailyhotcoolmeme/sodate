@@ -70,7 +70,7 @@ export default function Register() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [filterCompany, setFilterCompany] = useState('')
   const [search, setSearch] = useState('')
-  const [statusTab, setStatusTab] = useState<'todo' | 'done'>('todo') // 해야할 것 / 입력 완료
+  const [statusTab, setStatusTab] = useState<'todo' | 'done'>('done') // 진입 시 '입력 완료'부터 본다(오너 확정)
   const [rows, setRows] = useState<Row[]>([])
   // 펼친 행(해시태그·정원·삭제). 행마다 항상 펼쳐두면 화면이 태그 칩으로 뒤덮인다.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -533,10 +533,12 @@ export default function Register() {
         )}
       </div>
 
-      {/* 업체별 탭 — 담당자별로 자기 업체 탭만 보고 입력하도록 구분 */}
+      {/* 업체별 탭 — 담당자별로 자기 업체 탭만 보고 입력하도록 구분.
+          업체를 고르면 상태 탭은 '입력 완료'로 돌아간다(오너 확정 2026-07-30) —
+          업체에 들어가는 목적이 대개 입력해둔 일정 확인이라서. */}
       <div className="flex flex-wrap gap-2 mb-4">
         <button
-          onClick={() => setFilterCompany('')}
+          onClick={() => { setFilterCompany(''); setStatusTab('done') }}
           className={tabClass(filterCompany === '')}
         >
           전체 <span className="opacity-60">{searchedRows.length}</span>
@@ -546,7 +548,7 @@ export default function Register() {
           .map((c) => (
             <button
               key={c.id}
-              onClick={() => setFilterCompany(c.id)}
+              onClick={() => { setFilterCompany(c.id); setStatusTab('done') }}
               className={tabClass(filterCompany === c.id)}
             >
               {c.name} <span className="opacity-60">{companyCounts[c.id] ?? 0}</span>
@@ -554,19 +556,20 @@ export default function Register() {
           ))}
       </div>
 
-      {/* 상태 탭 — 해야할 것 / 입력 완료 각각 분리해서 봄 */}
+      {/* 상태 탭 — 입력 완료를 앞에 두고 기본으로 연다(오너 확정 2026-07-30).
+          업체에 들어가면 대개 이미 입력해둔 일정을 확인·수정하는 일이 먼저다. */}
       <div className="flex items-center gap-2 mb-4 border-b border-gray-200">
-        <button
-          onClick={() => setStatusTab('todo')}
-          className={`px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${statusTab === 'todo' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-        >
-          🔴 해야할 것 <span className="ml-0.5">{todoRows.length}</span>
-        </button>
         <button
           onClick={() => setStatusTab('done')}
           className={`px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${statusTab === 'done' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
         >
           ✅ 입력 완료 <span className="ml-0.5">{doneRows.length}</span>
+        </button>
+        <button
+          onClick={() => setStatusTab('todo')}
+          className={`px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${statusTab === 'todo' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+        >
+          🔴 해야할 것 <span className="ml-0.5">{todoRows.length}</span>
         </button>
         {msg && <span className="ml-auto text-gray-600 bg-gray-50 rounded-lg px-3 py-1.5 text-sm">{msg}</span>}
       </div>
