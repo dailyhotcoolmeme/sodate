@@ -18,6 +18,7 @@ crawl.yml 자체가 타임아웃/실패하면 같이 못 돈다(실제로 그날
 """
 import os
 import re
+import hashlib
 import sys
 from datetime import datetime, timezone, timedelta
 
@@ -25,6 +26,7 @@ import httpx
 
 from utils.supabase_client import get_supabase
 from price_accuracy_check import check_completeness, check_field_consistency
+from utils.title_groups import suggest_groups
 
 REPO = 'dailyhotcoolmeme/sodate'
 GH_API = f'https://api.github.com/repos/{REPO}/actions/workflows'
@@ -136,16 +138,26 @@ def check_heartbeats() -> list[dict]:
 #   → 제목에서 조치 필요 여부를 먼저 밝히고, 본문을 두 묶음으로 나눈다.
 #   → 같은 내용은 REPEAT_SILENCE_HOURS 안에는 다시 보내지 않는다.
 REPEAT_SILENCE_HOURS = 6
+# 상세 이미지 유형이 없는 세트는 '지금 당장'이 아니라 꾸준히 해나가는 일이라
+# 하루 1회로 묶는다(오너: 워치독 메일이 시끄럽다).
+MISSING_TYPE_SILENCE_HOURS = 24
 # 자가복구(재발화)는 평소엔 알리지 않는다. 다만 짧은 시간에 반복되면 자동조치가
 # 듣지 않는다는 뜻이므로 그때는 알린다.
 AUTO_ESCALATE_COUNT = 3
 AUTO_ESCALATE_HOURS = 2
 
 
-def _fingerprint(issue: dict) -> str:
-    """같은 문제인지 판단하는 키. 숫자(경과 분 등)는 매번 달라지므로 지운다."""
+def _fingerprint_text(issue: dict) -> str:
+    """사람이 읽는 지문 원문. 숫자(경과 분·건수)는 매번 달라지므로 지운다."""
     raw = f'{issue.get("company", "")}|{issue["msg"]}'
     return re.sub(r'\d+', '#', raw)[:300]
+
+
+def _fingerprint(issue: dict) -> str:
+    """조회 키. 원문을 그대로 쓰면 따옴표·괄호·화살표 때문에 PostgREST의 in 필터가
+    조용히 빈 결과를 돌려줘 반복 억제가 아예 동작하지 않았다(2026-07-30).
+    특수문자 없는 해시로 쓴다. 원문은 note 컬럼에 남긴다."""
+    return hashlib.md5(_fingerprint_text(issue).encode('utf-8')).hexdigest()
 
 
 def _needs_owner(issue: dict) -> bool:
@@ -166,13 +178,15 @@ def load_alert_state(sb, fingerprints: list[str]) -> dict:
         return {}
 
 
-def record_alert(sb, fp: str, prev: dict | None, sent: bool) -> None:
+def record_alert(sb, fp: str, prev: dict | None, sent: bool, note: str = '') -> None:
     now = datetime.now(timezone.utc).isoformat()
     row = {
         'fingerprint': fp,
         'last_seen_at': now,
         'seen_count': (prev.get('seen_count', 0) if prev else 0) + 1,
     }
+    if note:
+        row['note'] = note[:300]
     if sent:
         row['last_sent_at'] = now
     elif prev and prev.get('last_sent_at'):
@@ -197,6 +211,7 @@ def build_message(sb, heartbeat_issues, completeness_issues, consistency_issues)
     owner_items, auto_items = [], []
     for i in errors:
         fp = _fingerprint(i)
+        note = _fingerprint_text(i)
         prev = state.get(fp)
         owner = _needs_owner(i)
 
@@ -208,11 +223,11 @@ def build_message(sb, heartbeat_issues, completeness_issues, consistency_issues)
                     gap_h = (now - datetime.fromisoformat(last_sent.replace('Z', '+00:00'))).total_seconds() / 3600
                 except Exception:
                     gap_h = 999
-                if gap_h < REPEAT_SILENCE_HOURS:
-                    record_alert(sb, fp, prev, sent=False)
+                if gap_h < i.get('silence_hours', REPEAT_SILENCE_HOURS):
+                    record_alert(sb, fp, prev, sent=False, note=note)
                     print(f'  (반복 억제) {i["msg"][:60]}')
                     continue
-            owner_items.append((fp, prev, i))
+            owner_items.append((fp, prev, i, note))
         else:
             # 자가복구: 짧은 시간에 반복될 때만 알린다.
             cnt = (prev.get('seen_count', 0) if prev else 0) + 1
@@ -224,9 +239,9 @@ def build_message(sb, heartbeat_issues, completeness_issues, consistency_issues)
                 except Exception:
                     pass
             if cnt >= AUTO_ESCALATE_COUNT and recent:
-                auto_items.append((fp, prev, i))
+                auto_items.append((fp, prev, i, note))
             else:
-                record_alert(sb, fp, prev, sent=False)
+                record_alert(sb, fp, prev, sent=False, note=note)
                 print(f'  (자가복구, 알림 생략) {i["msg"][:60]}')
 
     if not owner_items and not auto_items:
@@ -241,22 +256,22 @@ def build_message(sb, heartbeat_issues, completeness_issues, consistency_issues)
     lines = [f'소개팅모아 워치독 {now_kst}', '']
     if owner_items:
         lines.append(f'■ 확인 필요 {len(owner_items)}건 — 직접 손봐야 합니다')
-        for _, _, i in owner_items[:8]:
+        for _, _, i, _n in owner_items[:8]:
             lines.append(f'  · {i.get("company", "")} {i["msg"]}'.strip())
         if len(owner_items) > 8:
             lines.append(f'  ... 외 {len(owner_items) - 8}건 더')
         lines.append('')
     if auto_items:
         lines.append(f'■ 자동조치를 했는데 또 발생 {len(auto_items)}건 — 자동복구가 듣지 않습니다')
-        for _, _, i in auto_items[:5]:
+        for _, _, i, _n in auto_items[:5]:
             lines.append(f'  · {i.get("company", "")} {i["msg"]}'.strip())
         lines.append('')
-    lines.append(f'같은 내용은 {REPEAT_SILENCE_HOURS}시간 안에는 다시 보내지 않습니다.')
+    lines.append(f'같은 내용은 {REPEAT_SILENCE_HOURS}시간(상세 이미지 유형 건은 {MISSING_TYPE_SILENCE_HOURS}시간) 안에는 다시 보내지 않습니다.')
     lines.append('스스로 되살린 지연은 이 메일에 넣지 않습니다(메일이 없으면 정상입니다).')
     lines.append('실행 이력: https://github.com/dailyhotcoolmeme/sodate/actions')
 
-    for fp, prev, _ in owner_items + auto_items:
-        record_alert(sb, fp, prev, sent=True)
+    for fp, prev, _i, note in owner_items + auto_items:
+        record_alert(sb, fp, prev, sent=True, note=note)
 
     return subject, '\n'.join(lines)
 
@@ -435,23 +450,109 @@ def check_data_drift(sb) -> list[dict]:
     return issues
 
 
+
+# 상세 이미지 유형이 없는 '모임 세트'를 몇 건 이상일 때 알릴지(오너 확정 2026-07-30).
+# 프립·문토는 잘게 나오는 세트가 많아 낮게 잡으면 메일이 잦아진다.
+MISSING_TYPE_MIN_EVENTS = 5
+# 한 번에 너무 많이 늘어놓지 않는다. 나머지는 건수만 알리고, 반복 억제(6시간)에
+# 걸리지 않는 다음 점검에서 이어서 나온다.
+MISSING_TYPE_MAX_LINES = 5
+
+
+def check_missing_image_types(sb) -> list[dict]:
+    """상세 이미지 유형이 없는 새 모임 세트를 찾는다.
+
+    검색어(match_keywords)가 걸리는 모임은 새로 올라와도 이미지·해시태그가 자동으로
+    붙는다. 문제는 처음 보는 모임 — 걸리는 유형이 없어 상세 설명이 통째로 안 나온다.
+    오너가 업체별 화면을 열어보지 않으면 모르므로 여기서 알린다(2026-07-30 오너 요청).
+
+    묶는 규칙은 admin(titleGroups.ts)과 같아야 한다 — 알림에 적힌 세트를 그 화면에서
+    찾을 수 있어야 하기 때문. utils/title_groups.py 를 공유한다.
+    """
+    issues: list[dict] = []
+    now = datetime.now(timezone.utc)
+    try:
+        companies = sb.table('companies').select('id,name').execute().data or []
+    except Exception as e:
+        return [{'level': 'WARN', 'msg': f'유형 없는 모임 점검 실패({str(e)[:60]})'}]
+
+    found: list[tuple] = []  # (건수, 업체명, 문구, 대표제목)
+    for c in companies:
+        try:
+            types = (
+                sb.table('company_image_types')
+                .select('match_keywords,images')
+                .eq('company_id', c['id'])
+                .execute()
+            ).data or []
+            kws = [
+                str(k).strip().lower()
+                for t in types if (t.get('images') or [])
+                for k in (t.get('match_keywords') or []) if k and str(k).strip()
+            ]
+            ev = (
+                sb.table('events')
+                .select('title,source_url')
+                .eq('company_id', c['id'])
+                .eq('is_active', True)
+                .gte('event_date', now.isoformat())
+                .limit(2000)
+                .execute()
+            ).data or []
+        except Exception:
+            continue
+
+        rows = [
+            {'title': e['title'], 'url': e['source_url']}
+            for e in ev
+            if (e.get('title') or '').strip()
+            and not any(k in e['title'].lower() for k in kws)
+        ]
+        if not rows:
+            continue
+        for g in suggest_groups(rows):
+            if len(g['rows']) < MISSING_TYPE_MIN_EVENTS:
+                continue
+            found.append((len(g['rows']), c['name'], g['keyword'] or '', g['rep']))
+
+    found.sort(key=lambda x: -x[0])
+    for n, name, kw, rep in found[:MISSING_TYPE_MAX_LINES]:
+        label = kw if kw else rep
+        issues.append({
+            'level': 'ERROR', 'company': name, 'action': 'owner',
+            'silence_hours': MISSING_TYPE_SILENCE_HOURS,
+            'msg': f'상세 이미지 유형이 없는 모임 {n}건 — 공통 문구 "{label[:40]}" '
+                   f'(업체 관리 → 상세 이미지 관리 → 같은 모임끼리)',
+        })
+    if len(found) > MISSING_TYPE_MAX_LINES:
+        issues.append({
+            'level': 'ERROR', 'action': 'owner',
+            'silence_hours': MISSING_TYPE_SILENCE_HOURS,
+            'msg': f'상세 이미지 유형이 없는 세트가 {len(found)}개 더 있습니다'
+                   f'(위 {MISSING_TYPE_MAX_LINES}개 외).',
+        })
+    return issues
+
 def run() -> int:
     sb = get_supabase()
 
-    print('[1/5] 하트비트(마지막 성공 실행 시각) 확인...')
+    print('[1/6] 하트비트(마지막 성공 실행 시각) 확인...')
     heartbeat_issues = check_heartbeats()
 
-    print('[2/5] 완성도(가격+나이) 점검...')
+    print('[2/6] 완성도(가격+나이) 점검...')
     completeness_issues = check_completeness(sb)
 
-    print('[3/5] price_detail 정합성 점검...')
+    print('[3/6] price_detail 정합성 점검...')
     consistency_issues = check_field_consistency(sb)
 
-    print('[4/5] 빈 크롤(0건인데 success) 점검...')
+    print('[4/6] 빈 크롤(0건인데 success) 점검...')
     consistency_issues += check_empty_crawls(sb)
 
-    print('[5/5] 데이터 드리프트(건수 급락·마감률·가격 결측) 점검...')
+    print('[5/6] 데이터 드리프트(건수 급락·마감률·가격 결측) 점검...')
     consistency_issues += check_data_drift(sb)
+
+    print('[6/6] 상세 이미지 유형 없는 모임 세트 점검...')
+    consistency_issues += check_missing_image_types(sb)
 
     all_issues = heartbeat_issues + completeness_issues + consistency_issues
     errors = [i for i in all_issues if i['level'] == 'ERROR']
@@ -460,6 +561,7 @@ def run() -> int:
         print(f'  ✗ {i}')
 
     subject, msg = build_message(sb, heartbeat_issues, completeness_issues, consistency_issues)
+    sent = False
     if msg:
         # 둘 다 시도 — 하나 실패해도 다른 하나는 계속 보낸다(알림 자체가 감시자니까 여기도
         # "한 건 실패가 전체를 못 죽인다" 원칙 적용).
@@ -472,8 +574,11 @@ def run() -> int:
         except Exception as e:
             print(f'카카오 전송 실패: {e}')
         print(msg)
+        sent = True
 
-    return len(errors)
+    # 발견 건수와 '보냈는지'는 다르다 — 이미 알린 문제는 억제되므로 발견됐는데도
+    # 메일이 안 나갈 수 있다. 로그에 사실대로 남긴다.
+    return len(errors), sent
 
 
 if __name__ == '__main__':
@@ -483,9 +588,10 @@ if __name__ == '__main__':
     #    지적: 하루 43회 중 7회가 failed로 표시). 실제 알림은 카카오·이메일로 이미 간다.
     #    실패(1)는 워치독이 죽었을 때만 — 그래야 'failed'가 진짜 신호가 된다.
     try:
-        n = run()
+        n, sent = run()
         if n:
-            print(f'문제 {n}건 발견 — 알림 발송 완료(워치독 자체는 정상 동작)')
+            state = '알림 발송' if sent else '이미 알린 문제라 발송 생략'
+            print(f'문제 {n}건 발견 — {state}(워치독 자체는 정상 동작)')
         sys.exit(0)
     except Exception as e:
         print(f'워치독 실행 실패: {e}')
