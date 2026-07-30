@@ -13,7 +13,9 @@ interface Target {
   inputs?: Record<string, string>;
 }
 const CRON_TARGETS: Record<string, Target> = {
-  '*/15 * * * *': { workflow: 'refresh-soldout.yml' },
+  // 백업 트리거도 스케줄과 같은 '임박 2일내' 경량 작업을 시키려면 days 를 넘겨야 한다.
+  // 안 넘기면 워크플로가 전체 미래를 도는 무거운 쪽으로 빠진다(2026-07-31 정정).
+  '*/10 * * * *': { workflow: 'refresh-soldout.yml', inputs: { days: '2' } },
   '*/20 * * * *': { workflow: 'watchdog.yml' },
   '0 23 * * *': { workflow: 'crawl.yml', inputs: { slot: 'morning' } },  // 08:00 KST
   '0 11 * * *': { workflow: 'crawl.yml', inputs: { slot: 'evening' } },  // 20:00 KST

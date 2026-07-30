@@ -5,7 +5,7 @@ name: Refresh Soldout imweb (경량 매진·가격)
 # 이 주석으로 워크플로 파일을 건드려 스케줄 재등록 유도.
 # 전체 크롤과 별개로, imweb 예약위젯에서 성별 매진·가격만 자주 갱신(발굴·블로그 없이 가벼움).
 # 퍼블릭 레포 = Actions 무료 무제한 → 짧은 간격 가능.
-#   - 임박(2일내) 이벤트: 15분마다 (near-realtime)
+#   - 임박(2일내) 이벤트: 10분마다 (near-realtime)
 #   - 전체 미래 이벤트(imweb) + 비-imweb(프립·토크블라썸·괜찮소 스크래퍼 재사용): 1시간마다
 # ⚠️(2026-07-29) 이 워크플로는 imweb 위젯 갱신만 담당한다. 예전엔 비-imweb 업체
 #    (프립·토크블라썸·괜찮소) 전체 크롤까지 같이 돌았는데, 그쪽은 days 필터가 안 먹어
@@ -13,7 +13,9 @@ name: Refresh Soldout imweb (경량 매진·가격)
 #    보니 imweb 경량 갱신까지 밀려 15분 주기를 못 지켰다 → refresh-nonimweb.yml로 분리.
 on:
   schedule:
-    - cron: '*/15 * * * *'   # 15분마다 → 임박(2일내) imweb
+    # 10분마다 → 임박(2일내) imweb. 작업 자체는 1분이고 러너 준비까지 4~6분이라
+    # 10분 주기가 실질적 하한이다(5분으로 하면 쉬지 않고 도는 셈, 큐가 밀린다).
+    - cron: '*/10 * * * *'
     - cron: '7 * * * *'      # 1시간마다 → 전체 미래 imweb
   workflow_dispatch:
     inputs:
@@ -67,8 +69,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           cd crawler
-          # 15분 크론(*/15)=임박 2일내, 그 외(2시간·수동)=전체
-          if [ "${{ github.event.schedule }}" = "*/15 * * * *" ]; then
+          # 10분 크론(*/10)=임박 2일내, 그 외(1시간·수동)=전체
+          if [ "${{ github.event.schedule }}" = "*/10 * * * *" ]; then
             python refresh_soldout.py --part imweb --days 2
           elif [ -n "${{ github.event.inputs.days }}" ]; then
             python refresh_soldout.py --part imweb --days "${{ github.event.inputs.days }}"
