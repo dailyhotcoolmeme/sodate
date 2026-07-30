@@ -43,6 +43,7 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
   // 순서를 옮기려고 '집어든' 태그. null 이면 평상시 모습(이동 버튼 숨김).
   const [picked, setPicked] = useState<string | null>(null)
 
+
   const addTag = (raw: string) => {
     const tag = normalizeHashtag(raw)
     if (!tag) return
@@ -88,6 +89,12 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
   //    회색 칩이 상시 깔려 화면을 먹었다. 자동완성이 생긴 뒤로는 글자를 치면
   //    관련된 것만 뜨므로 상시 노출은 불필요.
   const remaining = q ? notSelected.filter((s) => s.toLowerCase().includes(q)) : []
+  // 치던 글자보다 긴 후보가 남아 있으면 '아직 고르는 중'으로 본다.
+  // 입력값과 똑같은 후보만 남았다면 그건 다 친 것이므로 확정해도 된다.
+  const hasPickableSuggestion = remaining.some((s) => {
+    const body = s.replace(/^#+/, '').toLowerCase()
+    return body !== q && body.includes(q)
+  })
 
   return (
     <div>
@@ -164,6 +171,15 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
           onBlur={() => {
             // 추천 칩을 누르는 중이면 치던 글자를 확정하지 않는다.
             if (pickingRef.current) return
+            // 아직 고를 후보가 남아 있으면(치던 글자가 어떤 후보의 앞부분이면)
+            // 확정하지 않고 입력값을 그대로 둔다. 후보 목록도 그대로 남아 있으므로
+            // 눌러서 고를 수 있다.
+            //
+            // 왜 이렇게 하나: 모바일에서 추천 칩을 누르는 첫 탭이 키보드를 내리면서
+            // blur 를 먼저 일으킨다. 여기서 '직'을 확정하면 후보 목록이 사라져
+            // 칩이 안 들어가고 '#직'만 박혔다(2026-07-30 오너 지적).
+            // 타이머로 미루는 방식은 탭이 늦으면 또 실패하는 시간 경합이라 쓰지 않는다.
+            if (hasPickableSuggestion) return
             commitInput()
           }}
           placeholder={value.length === 0 ? '태그 입력 후 Enter (예: 와인)' : '추가...'}
@@ -181,9 +197,15 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
               type="button"
               // mousedown 기본동작(포커스 이동)을 막아 onBlur 자체가 안 일어나게 한다.
               // 터치 기기용으로 플래그도 함께 세운다.
+              onPointerDown={() => { pickingRef.current = true }}
               onMouseDown={(e) => { e.preventDefault(); pickingRef.current = true }}
               onTouchStart={() => { pickingRef.current = true }}
-              onClick={() => { addTag(s); setInput(''); pickingRef.current = false }}
+              onClick={() => {
+                // 치던 글자는 버리고 고른 태그만 넣는다.
+                addTag(s)
+                setInput('')
+                pickingRef.current = false
+              }}
               className="px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 text-xs hover:border-pink-300 hover:text-pink-500"
             >
               {s}
