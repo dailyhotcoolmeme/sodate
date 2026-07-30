@@ -9,6 +9,7 @@
 """
 import re
 import sys
+import httpx
 import time
 from datetime import datetime, timezone, timedelta
 
@@ -129,17 +130,178 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
     return updated
 
 
-def _refresh_nonimweb(sb, comps, slugs=None) -> None:
-    """비-imweb 업체(프립·토크블라썸·괜찮소) 좌석/마감 갱신 — 스크래퍼 로직 재사용.
+def _refresh_frip_soon(sb, cid, days: int) -> int:
+    """프립 임박분만 갱신 — 전체 사이트를 다시 긁지 않고 필요한 상품만 조회한다.
 
-    스크래퍼가 all-or-nothing이라 days 필터가 안 먹고 매번 전체를 돈다. 프립이 커지면서
-    이 부분이 실행 시간을 지배하게 돼(2026-07-29) imweb 경량 갱신과 분리했다.
+    왜: 비-imweb 갱신 9분 중 프립이 6분 40초를 차지해 30분 주기가 한계였다. 정작
+    임박(2일내) 일정은 그 안에 57건뿐이다. 상품별 스케줄 조회 API가 이미 있으므로
+    임박 일정이 있는 상품만 부르면 1분 안쪽으로 끝난다(2026-07-31 오너 승인).
+
+    마감 판정은 전체 크롤(FripScraper.scrape)과 같은 규칙이어야 한다:
+      · 성별 잔여석은 selectItems 의 남/여 옵션에서
+      · 스케줄 remains 가 0이면 성별 잔여석이 없더라도 0으로 간주
+      · 남·여 모두 0이면 마감
+    """
+    from scrapers.frip import FripScraper
+
+    now = datetime.now(timezone.utc)
+    horizon = (now + timedelta(days=days)).isoformat()
+    rows = (
+        sb.table('events')
+        .select('id,source_url,event_date')
+        .eq('company_id', cid).eq('is_active', True)
+        .gte('event_date', now.isoformat()).lte('event_date', horizon)
+        .execute()
+    ).data or []
+    if not rows:
+        print('[frip] 임박 일정 없음 — 건너뜀')
+        return 0
+
+    # 상품id → {evt시각: [event_id...]}
+    by_product: dict = {}
+    for e in rows:
+        pm = re.search(r'/products/(\d+)', e['source_url'] or '')
+        em = _EVT_RE.search(e['source_url'] or '')
+        if not pm or not em:
+            continue
+        by_product.setdefault(pm.group(1), {}).setdefault(em.group(1), []).append(e['id'])
+
+    # ⚠️ 같은 상품·같은 시각에 지점이 여러 곳인 일정(#evt=...-문래 / -홍대)은 지점마다
+    #    잔여석이 다른데, 여기서는 어느 지점인지 구분할 수 없다. 잘못된 좌석을 쓰느니
+    #    건너뛰고 30분 전체 갱신에 맡긴다.
+    skipped = 0
+    for pid, anchors in by_product.items():
+        for anchor, ids in list(anchors.items()):
+            if len(ids) > 1:
+                skipped += len(ids)
+                del anchors[anchor]
+    if skipped:
+        print(f'[frip] 다지점 일정 {skipped}건은 전체 갱신에 맡기고 건너뜀')
+    by_product = {p: a for p, a in by_product.items() if a}
+    if not by_product:
+        return 0
+
+    sc = FripScraper()
+    kst = timezone(timedelta(hours=9))
+    updated = 0
+    with httpx.Client(timeout=20) as client:
+        for pid, want in by_product.items():
+            try:
+                scheds = sc._fetch_schedules_multi(pid, client)
+            except Exception as ex:
+                print(f'  [frip] 상품 {pid} 일정 조회 실패: {str(ex)[:60]}')
+                continue
+            for s in scheds:
+                anchor = datetime.fromtimestamp(s['startedAt'] / 1000, kst).strftime('%Y%m%d%H%M')
+                ids = want.get(anchor)
+                if not ids:
+                    continue
+                eid = ids[0]
+                items = sc._fetch_select_items(pid, s.get('id'), client)
+                _pm, _pf, sm, sf, _cm, _cf = sc._parse_gender_items(items)
+                if s.get('remains') == 0:
+                    sm = 0 if sm is None else sm
+                    sf = 0 if sf is None else sf
+                if sm is not None and sm < 0:
+                    sm = 0
+                if sf is not None and sf < 0:
+                    sf = 0
+                closed = sm is not None and sf is not None and sm <= 0 and sf <= 0
+                try:
+                    sb.table('events').update({
+                        'seats_left_male': sm, 'seats_left_female': sf, 'is_closed': closed,
+                    }).eq('id', eid).execute()
+                    updated += 1
+                except Exception as ex:
+                    print(f'  [frip] 갱신 실패(스킵) {eid}: {str(ex)[:80]}')
+    print(f'[frip] 임박 {days}일내 갱신 {updated}건 (대상 {len(rows)}건 / 상품 {len(by_product)}개)')
+    return updated
+
+
+def _refresh_munto_soon(sb, cid, days: int) -> int:
+    """문토 임박분만 갱신 — 목록 230개를 훑고 상세를 전부 여는 대신 임박분만 연다.
+
+    왜: 전체 갱신은 3분 걸리는데 그중 대부분이 상세 조회다. 임박(2일내) 일정은 73건
+    남짓이라 그것만 열면 훨씬 빠르다(2026-07-31 오너 승인).
+
+    마감·좌석 계산은 전체 크롤(MuntoScraper.scrape)과 같은 규칙을 그대로 쓴다.
+    """
+    from scrapers.munto import MUNTO_API_BASE, _get, _build_participant_stats
+
+    now = datetime.now(timezone.utc)
+    horizon = (now + timedelta(days=days)).isoformat()
+    rows = (
+        sb.table('events')
+        .select('id,source_url')
+        .eq('company_id', cid).eq('is_active', True)
+        .gte('event_date', now.isoformat()).lte('event_date', horizon)
+        .execute()
+    ).data or []
+    targets = []
+    for e in rows:
+        m = re.search(r'socialing\?id=(\d+)', e['source_url'] or '')
+        if m:
+            targets.append((e['id'], m.group(1)))
+    if not targets:
+        print('[munto] 임박 일정 없음 — 건너뜀')
+        return 0
+
+    updated = 0
+    with httpx.Client(timeout=20) as client:
+        for eid, sid in targets:
+            detail = _get(client, f'{MUNTO_API_BASE}/socialing/{sid}')
+            if not detail:
+                continue
+            members_data = _get(
+                client, f'{MUNTO_API_BASE}/socialing/{sid}/members', params={'status': 'APPROVE'}
+            )
+            members = members_data.get('members', []) if members_data else []
+            stats, _cm, _cf, sm, sf = _build_participant_stats(
+                members,
+                detail.get('maleMaximumCount') or 0,
+                detail.get('femaleMaximumCount') or 0,
+                detail.get('maleCurrentCount') or 0,
+                detail.get('femaleCurrentCount') or 0,
+            )
+            closed = detail.get('status', '') in ('CLOSED', 'CONFIRM', 'CANCEL') \
+                or bool(detail.get('stopRecruit', False))
+            if sm is not None and sm < 0:
+                sm = 0
+            if sf is not None and sf < 0:
+                sf = 0
+            if not closed and sm is not None and sf is not None and sm <= 0 and sf <= 0:
+                closed = True
+            try:
+                sb.table('events').update({
+                    'seats_left_male': sm, 'seats_left_female': sf,
+                    'is_closed': closed, 'participant_stats': stats,
+                }).eq('id', eid).execute()
+                updated += 1
+            except Exception as ex:
+                print(f'  [munto] 갱신 실패(스킵) {eid}: {str(ex)[:80]}')
+            time.sleep(0.3)
+    print(f'[munto] 임박 {days}일내 갱신 {updated}건 (대상 {len(targets)}건)')
+    return updated
+
+
+def _refresh_nonimweb(sb, comps, slugs=None, days=None) -> None:
+    """비-imweb 업체(프립·문토·토크블라썸·괜찮소·시크릿살롱·모드파티) 좌석/마감 갱신.
+
+    스크래퍼가 all-or-nothing이라 days 필터가 안 먹고 매번 전체를 돈다(2026-07-29에
+    imweb 경량 갱신과 분리한 이유). 다만 프립은 상품별 조회가 가능해 days 가 오면
+    임박분만 도는 경량 경로를 쓴다 — 여기가 전체 시간의 대부분이었다.
     """
     for slug, Sc in _nonimweb_scrapers().items():
         if slugs and slug not in slugs:
             continue
         cid = comps.get(slug)
         if not cid:
+            continue
+        if days and slug == 'frip':
+            _refresh_frip_soon(sb, cid, days)
+            continue
+        if days and slug == 'munto':
+            _refresh_munto_soon(sb, cid, days)
             continue
         n = _refresh_via_scraper(sb, cid, Sc)
         print(f'[{slug}] 갱신 {n}건 (스크래퍼 재사용)')
@@ -161,7 +323,7 @@ def refresh(slugs=None, days=None, part='all'):
     targets = slugs or list(VENDORS.keys())
 
     if part == 'nonimweb':
-        _refresh_nonimweb(sb, comps, slugs)
+        _refresh_nonimweb(sb, comps, slugs, days)
         return
 
     with sync_playwright() as p:
@@ -264,7 +426,7 @@ def refresh(slugs=None, days=None, part='all'):
         browser.close()
 
     if part != 'imweb':
-        _refresh_nonimweb(sb, comps, slugs)
+        _refresh_nonimweb(sb, comps, slugs, days)
 
 
 if __name__ == '__main__':

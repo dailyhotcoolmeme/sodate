@@ -1,4 +1,4 @@
-name: Refresh Nonimweb (프립·토크블라썸·괜찮소 마감)
+name: Refresh Nonimweb (프립·문토·토크블라썸·괜찮소·시크릿살롱·모드파티 마감)
 
 # 2026-07-29 분리 신설. 이 세 업체는 imweb 예약위젯이 없어 스크래퍼를 통째로 재사용하는데,
 # all-or-nothing이라 days 필터가 안 먹고 매번 전체를 돈다. 프립이 418건까지 커지면서
@@ -6,11 +6,19 @@ name: Refresh Nonimweb (프립·토크블라썸·괜찮소 마감)
 # 별도 concurrency group으로 떼어내 서로 큐를 막지 않게 한다.
 on:
   schedule:
-    - cron: '13,43 * * * *'   # 30분마다(다른 워크플로와 시각 분산)
+    # 임박(2일내): 15분마다 — 프립·문토는 경량 경로(상품/일정별 조회)로 40초면 끝난다.
+    #   나머지 업체(토크블라썸·괜찮소·시크릿살롱·모드파티)는 원래도 합쳐서 2분대라 같이 돈다.
+    - cron: '2,17,32,47 * * * *'
+    # 전체 미래: 1시간마다 — 경량 경로가 못 다루는 것(프립 다지점 등)까지 훑는다.
+    - cron: '43 * * * *'
   # ⚠️ 새로 추가한 워크플로는 GH가 크론을 곧바로 등록하지 않는 경우가 있다(2026-07-29
   #    실제 발생: 추가 후 스케줄이 한 번도 안 돌아 워치독이 82분 갭을 잡아 알렸다).
   #    워치독의 자가복구 재발화가 이 공백을 메운다.
   workflow_dispatch:
+    inputs:
+      days:
+        description: '앞으로 N일 내 일정만(비우면 전체)'
+        required: false
 
 concurrency:
   group: refresh-nonimweb
@@ -54,6 +62,18 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # 모드파티는 로그인해야 마감을 볼 수 있다. 이 둘이 없어서 매 실행마다
+          # "환경변수 없음 — 스킵"으로 건너뛰었고, 마감 정보가 하루 2회 기본 크롤에만
+          # 반영돼 최대 12시간 낡은 채로 나갔다(2026-07-31 발견).
+          MODPARTY_ID: ${{ secrets.MODPARTY_ID }}
+          MODPARTY_PW: ${{ secrets.MODPARTY_PW }}
         run: |
           cd crawler
-          python refresh_soldout.py --part nonimweb
+          # 15분 크론=임박 2일내(경량), 그 외(1시간·수동)=전체 미래
+          if [ "${{ github.event.schedule }}" = "2,17,32,47 * * * *" ]; then
+            python refresh_soldout.py --part nonimweb --days 2
+          elif [ -n "${{ github.event.inputs.days }}" ]; then
+            python refresh_soldout.py --part nonimweb --days "${{ github.event.inputs.days }}"
+          else
+            python refresh_soldout.py --part nonimweb
+          fi

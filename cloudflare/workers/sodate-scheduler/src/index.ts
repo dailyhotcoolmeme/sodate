@@ -17,6 +17,9 @@ const CRON_TARGETS: Record<string, Target> = {
   // 안 넘기면 워크플로가 전체 미래를 도는 무거운 쪽으로 빠진다(2026-07-31 정정).
   '*/10 * * * *': { workflow: 'refresh-soldout.yml', inputs: { days: '2' } },
   '*/20 * * * *': { workflow: 'watchdog.yml' },
+  // 비imweb 임박분도 백업 트리거를 건다 — 임박 마감이 실제 신청에 직결된다.
+  // 워크플로 크론과 같은 시각(2,17,32,47)으로 맞춰 중복 큐를 만들지 않는다.
+  '2,17,32,47 * * * *': { workflow: 'refresh-nonimweb.yml', inputs: { days: '2' } },
   '0 23 * * *': { workflow: 'crawl.yml', inputs: { slot: 'morning' } },  // 08:00 KST
   '0 11 * * *': { workflow: 'crawl.yml', inputs: { slot: 'evening' } },  // 20:00 KST
 };
