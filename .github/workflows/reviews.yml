@@ -7,7 +7,10 @@ name: Crawl Reviews
 # 됨 — 완전히 분리된 워크플로로 뺐다. 여기가 타임아웃 나도 crawl.yml엔 영향 없음.
 on:
   schedule:
-    - cron: '0 23 * * *'   # 매일 08:00 KST 1회
+    # 주 1회 — 월요일 08:00 KST(오너 확정 2026-07-31: "크게 중요하지 않다").
+    # 후기는 한 번 모이면 잘 안 바뀌고, 게시일을 정확히 받으려고 글마다 한 번씩 더
+    # 열게 되면서 느려졌다. 매일 돌릴 이유가 없다.
+    - cron: '0 23 * * 0'
   workflow_dispatch:
 
 concurrency:
@@ -17,7 +20,9 @@ concurrency:
 jobs:
   reviews:
     runs-on: ubuntu-22.04
-    timeout-minutes: 25
+    # 게시일을 글마다 따로 조회하게 되면서 느려졌다(유튜브 영상별 1회 + 재시도,
+    # 블로그는 검색 결과에서 날짜를 못 읽은 건만 본문 조회). 주 1회라 여유를 넉넉히.
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
