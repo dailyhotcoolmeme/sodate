@@ -1,3 +1,4 @@
+import re
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone, timedelta
@@ -10,6 +11,25 @@ from utils.supabase_client import get_supabase
 from utils.logger import get_logger
 from utils.date_filter import is_within_one_month
 from utils.hashtags import derive_hashtags
+
+
+# 오류 페이지의 <title>이 모임명으로 저장되는 것을 막는다.
+# 2026-07-30: 모드파티 상세가 일시적으로 403을 내던 순간에 크롤이 돌아
+# 앱에 "[모드파티] Error 403 (Forbidden)" 이라는 모임 2건이 노출됐다.
+# 업체마다 다른 CDN/서버 오류 페이지를 다 알 수 없으니 공통 지점에서 걸러낸다.
+# 정상 제목의 '403호' 같은 표기를 잡지 않도록, 숫자 단독은 오류 문구와 함께 있을 때만 본다.
+_ERROR_TITLE_RE = re.compile(
+    r'(error\s*\d{3}'
+    r'|\b(?:40[0-9]|41[0-9]|429|50[0-9])\b\s*(?:error|forbidden|not\s*found)'
+    r'|forbidden|not\s+found|bad\s*gateway|service\s*unavailable'
+    r'|gateway\s*time\s*-?\s*out|access\s*denied|접근\s*거부|잘못된\s*요청)',
+    re.IGNORECASE,
+)
+
+
+def looks_like_error_title(title: Optional[str]) -> bool:
+    """모임명이 서버 오류 페이지에서 긁혀온 것처럼 보이면 True."""
+    return bool(title) and bool(_ERROR_TITLE_RE.search(title))
 
 
 class BaseScraper(ABC):
@@ -112,6 +132,14 @@ class BaseScraper(ABC):
                 continue
 
             data = event.model_dump()
+
+            # 오류 페이지 제목은 저장하지 않는다. 이번 응답을 못 믿는 상황이므로
+            # 기존 행도 건드리지 않고 넘긴다(정상 응답 때 갱신된다).
+            if looks_like_error_title(data.get('title')):
+                self.logger.warning(f"오류 페이지 제목으로 보여 건너뜀: {data.get('title')!r} ({event.source_url})")
+                current_urls.discard(event.source_url)
+                continue
+
             data['company_id'] = company_id
             data['crawled_at'] = datetime.now(timezone.utc).isoformat()
 

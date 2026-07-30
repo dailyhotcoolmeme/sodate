@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { X } from 'lucide-react'
 
 // 추천 해시태그 사전 — admin 입력 보조용 (섹션별 그룹)
@@ -36,6 +36,10 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
   extraSuggestions?: string[]
 }) {
   const [input, setInput] = useState('')
+  // 미리보기(추천) 칩을 누르는 중인지. 누르는 순간 입력칸이 포커스를 잃어 onBlur 가
+  // 먼저 실행되면, 치던 글자('직')가 태그로 확정되고 그 자리에서 후보 목록이 사라져
+  // 클릭이 완결되지 못한다 → '직장인'을 골랐는데 '직'이 박혔다(2026-07-30 오너 지적).
+  const pickingRef = useRef(false)
 
   const addTag = (raw: string) => {
     const tag = normalizeHashtag(raw)
@@ -95,7 +99,12 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
               removeTag(value[value.length - 1])
             }
           }}
-          onBlur={commitInput}
+          onFocus={() => { pickingRef.current = false }}
+          onBlur={() => {
+            // 추천 칩을 누르는 중이면 치던 글자를 확정하지 않는다.
+            if (pickingRef.current) return
+            commitInput()
+          }}
           placeholder={value.length === 0 ? '태그 입력 후 Enter (예: 와인)' : '추가...'}
           className="shrink-0 flex-1 min-w-24 text-sm focus:outline-none py-0.5 bg-transparent"
         />
@@ -109,7 +118,11 @@ export default function HashtagEditor({ value, onChange, showInput = true, showS
             <button
               key={s}
               type="button"
-              onClick={() => { addTag(s); setInput('') }}
+              // mousedown 기본동작(포커스 이동)을 막아 onBlur 자체가 안 일어나게 한다.
+              // 터치 기기용으로 플래그도 함께 세운다.
+              onMouseDown={(e) => { e.preventDefault(); pickingRef.current = true }}
+              onTouchStart={() => { pickingRef.current = true }}
+              onClick={() => { addTag(s); setInput(''); pickingRef.current = false }}
               className="px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 text-xs hover:border-pink-300 hover:text-pink-500"
             >
               {s}
