@@ -27,6 +27,8 @@ from utils.date_filter import is_within_one_month
 
 MUNTO_BASE_URL = 'https://www.munto.kr'
 MUNTO_API_BASE = 'https://api.munto.kr/api/web/v1'
+# 평소 목록은 200~240개가 온다. 이보다 훨씬 적으면 API 쪽 일시 오류로 보고 다시 부른다.
+MIN_EXPECTED_SOCIALINGS = 50
 
 # 연애·사랑 카테고리 ID (소개팅/미팅 포함)
 DATING_CATEGORY_ID = 12
@@ -479,16 +481,27 @@ class MuntoScraper(BaseScraper):
                 # 연애·사랑 카테고리 소셜링 목록. ⚠️예전 limit=30은 인위적 상한이라
                 # 실제 활성 리스팅(235건 확인, 2026-07-24)의 앞 30개만 가져오고 나머지
                 # (및 거기 딸린 더 먼 미래 날짜)를 통째로 놓치고 있었음. 여유있게 상향.
-                list_data = _get(
-                    client,
-                    f'{MUNTO_API_BASE}/socialing/section',
-                    params={'type': 'default', 'categoryId': DATING_CATEGORY_ID, 'limit': 300}
-                )
-                if not list_data:
-                    self.logger.error('문토 목록 API 응답 없음')
+                # ⚠️ 문토 API가 간헐적으로 빈 목록(0개)이나 극소수만 돌려준다
+                #    (2026-07-31 확인: 최근 6회 중 1회 0개, 1회 8개). 그대로 두면 그 회차는
+                #    갱신이 통째로 건너뛰어지므로, 평소 수백 개가 오는 점을 이용해
+                #    비정상적으로 적으면 몇 번 다시 부른다.
+                socialings: list = []
+                for attempt in range(3):
+                    list_data = _get(
+                        client,
+                        f'{MUNTO_API_BASE}/socialing/section',
+                        params={'type': 'default', 'categoryId': DATING_CATEGORY_ID, 'limit': 300}
+                    )
+                    socialings = (list_data or {}).get('socialings', []) or []
+                    if len(socialings) >= MIN_EXPECTED_SOCIALINGS:
+                        break
+                    self.logger.warning(
+                        f'문토 목록이 {len(socialings)}개뿐 — 재시도 {attempt + 1}/3'
+                    )
+                    time.sleep(3 * (attempt + 1))
+                if not socialings:
+                    self.logger.error('문토 목록 API 응답 없음(재시도 후에도) — 이번 회차 건너뜀')
                     return events
-
-                socialings = list_data.get('socialings', [])
                 self.logger.info(f'문토 연애·사랑 카테고리 소셜링 {len(socialings)}개 발견')
 
                 for item in socialings:
