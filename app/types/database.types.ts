@@ -320,6 +320,9 @@ export interface Database {
           created_at: string
           owner_token: string | null
           report_count: number | null
+          gender: 'male' | 'female' | null
+          event_id: string | null
+          event_title: string | null
         }
         Insert: {
           id?: string
@@ -337,6 +340,9 @@ export interface Database {
           created_at?: string
           owner_token?: string | null
           report_count?: number | null
+          gender?: 'male' | 'female' | null
+          event_id?: string | null
+          event_title?: string | null
         }
         Update: {
           id?: string
@@ -354,6 +360,9 @@ export interface Database {
           created_at?: string
           owner_token?: string | null
           report_count?: number | null
+          gender?: 'male' | 'female' | null
+          event_id?: string | null
+          event_title?: string | null
         }
       }
       crawl_logs: {

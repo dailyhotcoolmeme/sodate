@@ -21,11 +21,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import { submitReview, updateReview, type SubmittedReview } from '@/lib/reviews'
-import { getLastNickname } from '@/lib/reviewIdentity'
+import { getLastNickname, getLastGender, type ReviewGender } from '@/lib/reviewIdentity'
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
 const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.85
 const DISMISS_THRESHOLD = 80
+
+const GENDER_OPTIONS: { value: ReviewGender; label: string }[] = [
+  { value: 'male', label: '남성' },
+  { value: 'female', label: '여성' },
+]
 
 const NICK_MIN = 2
 const NICK_MAX = 20
@@ -37,19 +42,22 @@ export interface ReviewSheetInitial {
   author_name: string | null
   rating: number | null
   content: string
+  gender?: ReviewGender | null
 }
 
 interface Props {
   visible: boolean
   onClose: () => void
   companyId: string
+  /** 후기를 작성한 일정. 서버가 이 id로 모임명을 읽어 함께 저장한다(수정 시엔 불필요). */
+  eventId?: string
   /** 편집 모드일 때 기존 후기를 넘기면 프리필 + 수정 동작 */
   initial?: ReviewSheetInitial | null
   /** 작성/수정 성공 시 호출(목록 새로고침용) */
   onDone?: (review: SubmittedReview) => void
 }
 
-export default function ReviewSheet({ visible, onClose, companyId, initial, onDone }: Props) {
+export default function ReviewSheet({ visible, onClose, companyId, eventId, initial, onDone }: Props) {
   const insets = useSafeAreaInsets()
   const colors = useColors()
   const translateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current
@@ -85,6 +93,7 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
   }, [visible, kbHeight])
 
   const [nickname, setNickname] = useState('')
+  const [gender, setGender] = useState<ReviewGender | null>(null)
   const [rating, setRating] = useState(0)
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -94,14 +103,18 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
   useEffect(() => {
     if (visible) {
       setNickname(initial?.author_name ?? '')
+      setGender(initial?.gender ?? null)
       setRating(initial?.rating ?? 0)
       setContent(initial?.content ?? '')
       setError(null)
       setSubmitting(false)
-      // 신규 작성이면 마지막에 쓴 닉네임 자동 세팅(수정은 가능)
+      // 신규 작성이면 마지막에 쓴 닉네임·성별 자동 세팅(둘 다 수정 가능)
       if (!initial) {
         getLastNickname().then((last) => {
           if (last) setNickname((cur) => (cur ? cur : last))
+        })
+        getLastGender().then((last) => {
+          if (last) setGender((cur) => cur ?? last)
         })
       }
     }
@@ -158,19 +171,21 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
   const nickValid = nick.length >= NICK_MIN && nick.length <= NICK_MAX
   const ratingValid = rating >= 1 && rating <= 5
   const contentValid = body.length >= CONTENT_MIN && body.length <= CONTENT_MAX
-  const canSubmit = nickValid && ratingValid && contentValid && !submitting
+  const genderValid = gender === 'male' || gender === 'female'
+  const canSubmit = nickValid && genderValid && ratingValid && contentValid && !submitting
 
   const handleSubmit = async () => {
     if (submitting) return
     // 비활성 대신 무엇이 빠졌는지 안내
     if (!nickValid) { setError('닉네임을 2~20자로 입력해주세요.'); return }
+    if (!genderValid) { setError('성별을 선택해주세요.'); return }
     if (!ratingValid) { setError('별점을 선택해주세요.'); return }
     if (!contentValid) { setError('후기를 5자 이상 입력해주세요.'); return }
     setSubmitting(true)
     setError(null)
     const result = isEdit
-      ? await updateReview({ reviewId: initial!.id, nickname: nick, rating, content: body })
-      : await submitReview({ companyId, nickname: nick, rating, content: body })
+      ? await updateReview({ reviewId: initial!.id, nickname: nick, rating, content: body, gender: gender! })
+      : await submitReview({ companyId, eventId, nickname: nick, rating, content: body, gender: gender! })
     if ('error' in result) {
       setError(result.error)
       setSubmitting(false)
@@ -221,6 +236,26 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
           borderColor: colors.border,
         },
         textArea: { minHeight: 120, textAlignVertical: 'top' },
+        // 닉네임:성별 = 1.4:1 — 좁은 화면(320)에서도 성별 버튼 하나가 50px 이상 확보돼
+        // '남성'/'여성'을 줄임말 없이 온전히 넣을 수 있다.
+        identityRow: { flexDirection: 'row', gap: 10 },
+        nickField: { flex: 1.4, minWidth: 0 },
+        genderField: { flex: 1, minWidth: 0 },
+        genderRow: { flexDirection: 'row', gap: 8 },
+        genderBtn: {
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          // 입력칸과 같은 높이/모양(paddingVertical·borderRadius·borderWidth 동일)
+          paddingVertical: 12,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surfaceHigh,
+        },
+        genderBtnOn: { borderColor: colors.primary, backgroundColor: colors.primary + '14' },
+        genderBtnText: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
+        genderBtnTextOn: { color: colors.primary, fontWeight: '700' },
         starRow: { flexDirection: 'row', gap: 6 },
         counterRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
         counterText: { fontSize: 12, color: colors.textTertiary },
@@ -278,20 +313,47 @@ export default function ReviewSheet({ visible, onClose, companyId, initial, onDo
               keyboardShouldPersistTaps="handled"
               bounces={false}
             >
-              {/* 닉네임 */}
-              <View>
-                <Text style={styles.fieldLabel}>닉네임</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="2~20자로 입력해주세요"
-                  placeholderTextColor={colors.textTertiary}
-                  value={nickname}
-                  onChangeText={setNickname}
-                  maxLength={NICK_MAX}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!submitting}
-                />
+              {/* 닉네임 + 성별 — 둘 다 작성자 정보라 한 줄에 둔다(시트가 한 칸 짧아져 키보드 여유 확보).
+                  성별은 닉네임처럼 기기에 기억돼 다음 작성부터 자동 선택된다. */}
+              <View style={styles.identityRow}>
+                <View style={styles.nickField}>
+                  <Text style={styles.fieldLabel}>닉네임</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="2~20자"
+                    placeholderTextColor={colors.textTertiary}
+                    value={nickname}
+                    onChangeText={setNickname}
+                    maxLength={NICK_MAX}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!submitting}
+                  />
+                </View>
+                <View style={styles.genderField}>
+                  <Text style={styles.fieldLabel}>성별</Text>
+                  <View style={styles.genderRow}>
+                    {GENDER_OPTIONS.map((opt) => {
+                      const on = gender === opt.value
+                      return (
+                        <TouchableOpacity
+                          key={opt.value}
+                          style={[styles.genderBtn, on && styles.genderBtnOn]}
+                          onPress={() => setGender(opt.value)}
+                          disabled={submitting}
+                          activeOpacity={0.7}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={opt.label}
+                        >
+                          <Text style={[styles.genderBtnText, on && styles.genderBtnTextOn]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </View>
+                </View>
               </View>
 
               {/* 별점 */}

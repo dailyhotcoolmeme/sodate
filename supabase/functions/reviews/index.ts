@@ -43,7 +43,7 @@ serve(async (req) => {
   try {
     // ── 작성 ──
     if (action === 'submit') {
-      const { companyId, nickname, rating, content, ownerToken } = body
+      const { companyId, nickname, rating, content, ownerToken, gender, eventId } = body
       if (!companyId || !ownerToken) return json({ error: '필수값 누락' }, 400)
       const nick = String(nickname ?? '').trim()
       const text = String(content ?? '').trim()
@@ -52,6 +52,18 @@ serve(async (req) => {
       if (!(r >= 1 && r <= 5)) return json({ error: '별점을 선택해주세요.' }, 400)
       if (text.length < 5 || text.length > 1000) return json({ error: '후기는 5~1000자로 입력해주세요.' }, 400)
       if (containsBadWord(nick) || containsBadWord(text)) return json({ error: '부적절한 표현이 포함되어 있습니다.' }, 400)
+      if (gender !== 'male' && gender !== 'female') return json({ error: '성별을 선택해주세요.' }, 400)
+
+      // 모임명은 클라이언트가 보낸 문자열을 믿지 않고 서버가 일정에서 직접 읽는다.
+      // 지난 일정은 정리되면서 삭제되므로, event_id 연결과 별개로 제목 사본을 남긴다.
+      let eventTitle: string | null = null
+      if (eventId) {
+        const { data: ev } = await supabase
+          .from('events').select('id, company_id, title').eq('id', eventId).maybeSingle()
+        if (!ev) return json({ error: '일정을 찾을 수 없어요. 목록을 새로고침해주세요.' }, 400)
+        if (ev.company_id !== companyId) return json({ error: '일정과 업체가 맞지 않아요.' }, 400)
+        eventTitle = ev.title ?? null
+      }
 
       // 소유권 확인/수정·삭제용 해시(작성 제한 없음 — 한 기기가 같은 업체에 여러 후기 가능)
       const hash = await sha256(ownerToken)
@@ -64,11 +76,14 @@ serve(async (req) => {
           author_name: nick,
           content: text,
           rating: r,
+          gender,
+          event_id: eventId ?? null,
+          event_title: eventTitle,
           owner_token: hash,
           is_active: true,
           published_at: new Date().toISOString(),
         })
-        .select('id, company_id, source, author_name, content, rating, published_at')
+        .select('id, company_id, source, author_name, content, rating, gender, event_id, event_title, published_at')
         .single()
       if (error) return json({ error: error.message }, 500)
       return json({ review: data })
@@ -76,7 +91,7 @@ serve(async (req) => {
 
     // ── 수정 ──
     if (action === 'update') {
-      const { reviewId, ownerToken, rating, content, nickname } = body
+      const { reviewId, ownerToken, rating, content, nickname, gender } = body
       if (!reviewId || !ownerToken) return json({ error: '필수값 누락' }, 400)
       const hash = await sha256(ownerToken)
       const { data: row } = await supabase.from('reviews').select('owner_token').eq('id', reviewId).maybeSingle()
@@ -100,9 +115,14 @@ serve(async (req) => {
         if (containsBadWord(nick)) return json({ error: '부적절한 표현이 포함되어 있습니다.' }, 400)
         patch.author_name = nick
       }
+      if (gender != null) {
+        if (gender !== 'male' && gender !== 'female') return json({ error: '성별을 선택해주세요.' }, 400)
+        patch.gender = gender
+      }
+      // 모임(event_id/event_title)은 수정 대상이 아니다 — 작성 당시 다녀온 모임이 바뀔 수는 없다.
       const { data, error } = await supabase
         .from('reviews').update(patch).eq('id', reviewId)
-        .select('id, author_name, content, rating, published_at, updated_at').single()
+        .select('id, author_name, content, rating, gender, event_id, event_title, published_at, updated_at').single()
       if (error) return json({ error: error.message }, 500)
       return json({ review: data })
     }

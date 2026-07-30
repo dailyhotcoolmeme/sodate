@@ -11,6 +11,8 @@ interface Review {
   rating: number | null
   report_count: number | null
   is_active: boolean
+  gender: 'male' | 'female' | null
+  event_title: string | null
   published_at: string | null
   created_at: string | null
   companies: { name: string } | null
@@ -24,6 +26,8 @@ interface Report {
 }
 
 type Tab = 'user' | 'reported' | 'hidden' | 'naver_blog' | 'instagram' | 'youtube'
+
+const GENDER_LABELS: Record<string, string> = { male: '남성', female: '여성' }
 
 export default function Reviews() {
   const [reviews, setReviews] = useState<Review[]>([])
@@ -40,7 +44,7 @@ export default function Reviews() {
     setLoading(true)
     const { data } = await supabase
       .from('reviews')
-      .select('id, company_id, source, author_name, content, rating, report_count, is_active, published_at, created_at, companies(name)')
+      .select('id, company_id, source, author_name, content, rating, gender, event_title, report_count, is_active, published_at, created_at, companies(name)')
       // ⚠️ 예전엔 .or('source.eq.user,report_count.gt.0')로 걸러서, 앱 작성 후기와
       //    신고 후기가 모두 0건이 되자 화면이 통째로 비었다(후기는 666건 있는데도).
       //    전부 불러오고 화면의 탭으로 좁힌다.
@@ -179,7 +183,11 @@ export default function Reviews() {
                     <tr className="border-t border-gray-100 hover:bg-gray-50 align-middle [&>td]:whitespace-nowrap">
                       <td className="px-3 py-3 text-gray-500 text-xs"><span className="block truncate" title={review.companies?.name ?? ''}>{review.companies?.name ?? '-'}</span></td>
                       <td className="px-3 py-3 text-gray-700 text-xs truncate">
-                        <span className="block truncate" title={review.author_name ?? ''}>{review.author_name ?? '익명'}</span>
+                        {/* 성별은 열을 새로 만들지 않고 닉네임 뒤에 붙인다(표 폭 유지). */}
+                        <span className="block truncate" title={review.author_name ?? ''}>
+                          {review.author_name ?? '익명'}
+                          {review.gender ? <span className="text-gray-400">{` · ${GENDER_LABELS[review.gender]}`}</span> : null}
+                        </span>
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {review.rating != null ? (
@@ -252,7 +260,14 @@ export default function Reviews() {
                     </tr>
                     {isExpanded && (
                       <tr className="border-t border-gray-100 bg-gray-50/60">
-                        <td colSpan={8} className="px-4 py-3">
+                        <td colSpan={8} className="px-4 py-3 space-y-2">
+                          {/* 모임명은 열로 넣으면 표가 넓어져 잘리므로 펼침 영역에서 보여준다. */}
+                          {review.event_title && (
+                            <p className="text-xs text-gray-600">
+                              <span className="font-medium text-gray-500">모임명 </span>
+                              {review.event_title}
+                            </p>
+                          )}
                           {reportsLoading ? (
                             <p className="text-gray-400 text-xs">신고 사유 불러오는 중...</p>
                           ) : reports.length === 0 ? (

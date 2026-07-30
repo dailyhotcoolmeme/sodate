@@ -10,6 +10,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 const TOKEN_KEY = 'sodate_review_token'
 const MY_IDS_KEY = 'sodate_my_review_ids'
 const LAST_NICK_KEY = 'sodate_last_nickname'
+const LAST_GENDER_KEY = 'sodate_last_gender'
+
+export type ReviewGender = 'male' | 'female'
 
 function generateToken(): string {
   // 40자 이상 보장: 타임스탬프 + Math.random 여러 번 이어붙임
@@ -83,6 +86,27 @@ export async function setLastNickname(name: string): Promise<void> {
   try {
     const v = (name ?? '').trim()
     if (v) await AsyncStorage.setItem(LAST_NICK_KEY, v)
+  } catch {
+    // ignore
+  }
+}
+
+/** 마지막으로 후기에 쓴 성별(닉네임과 같은 방식으로 기기에 한 번만 입력) */
+export async function getLastGender(): Promise<ReviewGender | null> {
+  try {
+    const v = await AsyncStorage.getItem(LAST_GENDER_KEY)
+    return v === 'male' || v === 'female' ? v : null
+  } catch {
+    return null
+  }
+}
+
+/** 후기 작성/수정 성공 시 성별 기억 */
+export async function setLastGender(gender: ReviewGender): Promise<void> {
+  try {
+    if (gender === 'male' || gender === 'female') {
+      await AsyncStorage.setItem(LAST_GENDER_KEY, gender)
+    }
   } catch {
     // ignore
   }

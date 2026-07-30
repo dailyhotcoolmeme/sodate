@@ -4,6 +4,8 @@ import {
   addMyReviewId,
   removeMyReviewId,
   setLastNickname,
+  setLastGender,
+  type ReviewGender,
 } from '@/lib/reviewIdentity'
 
 /**
@@ -15,7 +17,16 @@ import {
 // 서버 submit/update 응답의 review 형태(전체 컬럼이 아닌 일부만 내려옴)
 export type SubmittedReview = Pick<
   ReviewRow,
-  'id' | 'company_id' | 'source' | 'author_name' | 'content' | 'rating' | 'published_at'
+  | 'id'
+  | 'company_id'
+  | 'source'
+  | 'author_name'
+  | 'content'
+  | 'rating'
+  | 'published_at'
+  | 'gender'
+  | 'event_id'
+  | 'event_title'
 >
 
 interface SubmitParams {
@@ -23,6 +34,9 @@ interface SubmitParams {
   nickname: string
   rating: number
   content: string
+  gender: ReviewGender
+  /** 후기를 작성한 일정. 모임명은 서버가 이 id로 직접 읽어 사본을 남긴다. */
+  eventId?: string
 }
 
 interface UpdateParams {
@@ -30,6 +44,7 @@ interface UpdateParams {
   rating?: number
   content?: string
   nickname?: string
+  gender?: ReviewGender
 }
 
 /** 서버 함수 응답에서 사용자 친화적 에러 메시지 추출 */
@@ -71,6 +86,8 @@ export async function submitReview(
       nickname: params.nickname,
       rating: params.rating,
       content: params.content,
+      gender: params.gender,
+      eventId: params.eventId,
       ownerToken,
     },
   })
@@ -80,6 +97,7 @@ export async function submitReview(
   if (!review) return { error: '후기를 저장하지 못했습니다.' }
   await addMyReviewId(review.id)
   await setLastNickname(params.nickname)
+  await setLastGender(params.gender)
   return { review }
 }
 
@@ -95,6 +113,7 @@ export async function updateReview(
   if (params.rating !== undefined) body.rating = params.rating
   if (params.content !== undefined) body.content = params.content
   if (params.nickname !== undefined) body.nickname = params.nickname
+  if (params.gender !== undefined) body.gender = params.gender
 
   const { data, error } = await supabase.functions.invoke('reviews', { body })
   const errMsg = await extractError(error, data)
@@ -102,6 +121,7 @@ export async function updateReview(
   const review = data?.review as SubmittedReview | undefined
   if (!review) return { error: '후기를 수정하지 못했습니다.' }
   if (params.nickname) await setLastNickname(params.nickname)
+  if (params.gender) await setLastGender(params.gender)
   return { review }
 }
 

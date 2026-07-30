@@ -64,6 +64,9 @@ function AggReviewRow({
   const title = review.author_name ? cleanText(review.author_name) : ''
   const body = cleanText(review.content ?? '')
   const companyName = review.companies?.name ?? '기타'
+  const postedAt = review.published_at
+    ? new Date(review.published_at).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    : ''
 
   return (
     <TouchableOpacity
@@ -104,6 +107,12 @@ function AggReviewRow({
         <Text style={styles.rowBody} numberOfLines={title ? 2 : 3}>
           {body}
         </Text>
+        {/* 게시일. 인스타그램은 로그인 없이 게시일을 얻을 수 없어 이 줄이 아예 나오지 않는다. */}
+        {!!postedAt && (
+          <View style={styles.rowFooter}>
+            <Text style={styles.rowDate}>{postedAt}</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   )
@@ -131,7 +140,7 @@ export default function ReviewsScreen() {
   const [editCompanyId, setEditCompanyId] = useState<string>('')
 
   const openEdit = (r: ReviewRow) => {
-    setEditTarget({ id: r.id, author_name: r.author_name, rating: r.rating, content: r.content })
+    setEditTarget({ id: r.id, author_name: r.author_name, rating: r.rating, content: r.content, gender: r.gender })
     setEditCompanyId(r.company_id)
     setSheetVisible(true)
   }
@@ -374,6 +383,9 @@ function makeStyles(colors: AppColors) {
     // ReviewCard는 자체 marginHorizontal:16을 가지므로 ScrollView 좌우 패딩(16)을 상쇄
     userCards: { marginHorizontal: -16 },
     // 정렬 버튼 행 (텍스트 버튼, 박스 없음)
+    // 게시일은 본문과 겹치지 않게 아래 오른쪽에 두어, 행이 이어질 때 같은 위치에 정렬된다.
+    rowFooter: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 2 },
+    rowDate: { fontSize: 11, color: colors.textTertiary },
     sortRow: { flexDirection: 'row', gap: 16, paddingHorizontal: 16, marginTop: 10, marginBottom: 2 },
     sortChip: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4 },
     sortChipActive: {},

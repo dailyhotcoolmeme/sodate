@@ -334,7 +334,7 @@ export default function EventDetailScreen() {
   }
 
   const openEdit = (review: ReviewRow) => {
-    setEditTarget({ id: review.id, author_name: review.author_name, rating: review.rating, content: review.content })
+    setEditTarget({ id: review.id, author_name: review.author_name, rating: review.rating, content: review.content, gender: review.gender })
     setSheetVisible(true)
   }
 
@@ -582,6 +582,7 @@ export default function EventDetailScreen() {
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
         companyId={companyId}
+        eventId={id}
         initial={editTarget}
         onDone={handleSheetDone}
       />
