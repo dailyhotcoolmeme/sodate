@@ -40,7 +40,11 @@ type Row = {
   hashtags: string[]
   is_closed: boolean
   is_active: boolean      // 앱 노출 on/off
-  is_featured: boolean    // 추천 지정
+  // 추천 지정. ⚠️ 앱에서 읽는 곳이 아직 없다 — admin 표시(별표·'추천만' 필터)와
+  // DB 값만 남는다. 홈 피드에 추천 영역을 넣으려고 만든 자리인데 앱 구현이 안 됐다.
+  // 지우지 말고 그대로 둔다(2026-07-30 오너: 나중에 필요하면 쓰겠다).
+  // featured_until 은 체크 시 30일 후로 자동 설정된다(Events.tsx).
+  is_featured: boolean
   source: 'crawl' | 'manual'
   price_detail: PriceDetail | null // 가격 티어(에모셔널오렌지 자동). 읽기전용 표시.
   saved: boolean
