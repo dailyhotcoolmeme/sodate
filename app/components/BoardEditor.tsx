@@ -8,6 +8,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { pickAndUpload, MAX_IMAGES } from '@/lib/boardImage'
+import LoadingOverlay from '@/components/LoadingOverlay'
 
 /**
  * 게시판 본문 편집기 — 서식 도구 + 사진 첨부.
@@ -115,11 +116,8 @@ export default function BoardEditor({
           accessibilityLabel="사진 첨부"
           hitSlop={6}
         >
-          <Ionicons
-            name={uploading ? 'hourglass-outline' : 'image-outline'}
-            size={20}
-            color={colors.textSecondary}
-          />
+          {/* 진행 표시는 버튼 안이 아니라 화면 중앙 오버레이로 낸다(오너 확정). */}
+          <Ionicons name="image-outline" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -157,6 +155,8 @@ export default function BoardEditor({
           textAlignVertical="top"
         />
       )}
+
+      <LoadingOverlay visible={uploading} />
 
       {images.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>

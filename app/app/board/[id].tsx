@@ -1,7 +1,10 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Keyboard, Platform,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Keyboard,
 } from 'react-native'
+// 댓글 입력을 키보드 위에 붙여 둔다. RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서
+// 동작하지 않는 것이 알려진 문제라(react-native#16826) 이 라이브러리를 쓴다.
+import { KeyboardStickyView } from 'react-native-keyboard-controller'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
@@ -9,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import AppSpinner from '@/components/AppSpinner'
 import ReportSheet from '@/components/ReportSheet'
+import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
@@ -38,23 +42,6 @@ export default function BoardPostScreen() {
   const [editing, setEditing] = useState<BoardComment | null>(null)
   const [sending, setSending] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'image'; id: string } | null>(null)
-
-  // 키보드 가림 — 파킨온에서 검증한 패턴(PostDetailScreen 댓글 입력)과 같다.
-  // 댓글 입력칸은 화면 맨 아래에 고정돼 있으므로 커서 추적까지는 필요 없고,
-  // 안드로이드는 키보드 높이만큼 입력칸을 띄우면 된다(edge-to-edge라 창이 안 줄어든다).
-  // iOS 는 ScrollView 의 automaticallyAdjustKeyboardInsets 가 처리한다.
-  const [kbHeight, setKbHeight] = useState(0)
-  useEffect(() => {
-    if (Platform.OS !== 'android') return
-    const show = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates?.height ?? 0))
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0))
-    return () => { show.remove(); hide.remove() }
-  }, [])
-
-  useEffect(() => { getLastNickname().then((n) => n && setNickname(n)) }, [])
-  // 조회수는 화면에 감춰뒀지만 값은 쌓아둔다(나중에 켜면 그때까지 숫자가 그대로).
-  useEffect(() => { if (id) markViewed(id) }, [id])
-  useFocusEffect(useCallback(() => { refetch() }, [refetch]))
 
   const handleVote = async (value: 1 | -1) => {
     if (voting) return
@@ -147,7 +134,6 @@ export default function BoardPostScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       >
         <View style={styles.head}>
           <Text style={styles.title}>{post.title}</Text>
@@ -245,19 +231,21 @@ export default function BoardPostScreen() {
         ))}
       </ScrollView>
 
-      {/* 댓글 입력 */}
-      <View style={[styles.inputWrap, { paddingBottom: (kbHeight || insets.bottom) + 8 }]}>
-        {(replyTo || editing) && (
-          <View style={styles.inputHint}>
-            <Text style={styles.inputHintText}>
-              {editing ? '댓글 수정 중' : `${replyTo?.nickname}님에게 답글`}
-            </Text>
-            <TouchableOpacity onPress={() => { setReplyTo(null); setEditing(null); setDraft('') }} hitSlop={8}>
-              <Text style={styles.inputHintCancel}>취소</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        <View style={styles.inputRow}>
+      {/* 댓글 입력 — 키보드 위에 붙는다 */}
+      <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+        <View style={[styles.inputWrap, { paddingBottom: insets.bottom + 8 }]}>
+          {(replyTo || editing) && (
+            <View style={styles.inputHint}>
+              <Text style={styles.inputHintText}>
+                {editing ? '댓글 수정 중' : `${replyTo?.nickname}님에게 답글`}
+              </Text>
+              <TouchableOpacity onPress={() => { setReplyTo(null); setEditing(null); setDraft('') }} hitSlop={8}>
+                <Text style={styles.inputHintCancel}>취소</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {/* 닉네임은 윗줄에 따로 둔다. 댓글칸 옆에 두면 여러 줄이 될 때 아래로 밀려
+              높이가 어긋나 보기 흉하다(2026-08-01 오너 지적). */}
           <TextInput
             style={styles.nickInput}
             value={nickname}
@@ -266,23 +254,27 @@ export default function BoardPostScreen() {
             placeholderTextColor={colors.textTertiary}
             maxLength={20}
           />
-          <TextInput
-            style={styles.commentInput}
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="댓글을 입력하세요"
-            placeholderTextColor={colors.textTertiary}
-            multiline
-          />
-          <TouchableOpacity
-            style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnOff]}
-            onPress={submitComment}
-            disabled={!draft.trim() || sending}
-          >
-            <Text style={styles.sendBtnText}>{editing ? '수정' : '등록'}</Text>
-          </TouchableOpacity>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.commentInput}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="댓글을 입력하세요"
+              placeholderTextColor={colors.textTertiary}
+              multiline
+            />
+            <TouchableOpacity
+              style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnOff]}
+              onPress={submitComment}
+              disabled={!draft.trim() || sending}
+            >
+              <Text style={styles.sendBtnText}>{editing ? '수정' : '등록'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </KeyboardStickyView>
+
+      <LoadingOverlay visible={sending || voting} />
 
       <ReportSheet
         visible={reportTarget !== null}
@@ -408,8 +400,9 @@ function makeStyles(colors: AppColors) {
     inputHintCancel: { fontSize: 12, color: colors.textSecondary },
     inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
     nickInput: {
-      width: 78, fontSize: 13, color: colors.textPrimary,
-      backgroundColor: colors.surfaceHigh, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9,
+      alignSelf: 'flex-start', minWidth: 110, fontSize: 13, color: colors.textPrimary,
+      backgroundColor: colors.surfaceHigh, borderRadius: 8,
+      paddingHorizontal: 10, paddingVertical: 7, marginBottom: 6,
     },
     commentInput: {
       flex: 1, maxHeight: 96, fontSize: 14, color: colors.textPrimary,

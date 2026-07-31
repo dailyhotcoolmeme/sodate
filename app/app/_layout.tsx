@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+// 키보드 처리. RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는 것이
+// 알려진 문제라(react-native#16826, 미해결) 이 라이브러리를 쓴다. 앱 전체를 감싸야
+// 화면들이 키보드 상태를 받아볼 수 있다.
+import { KeyboardProvider } from 'react-native-keyboard-controller'
 import { View, Text, Image, StyleSheet, Dimensions } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
@@ -59,6 +63,7 @@ export default function RootLayout() {
   // 사용자가 할 수 있는 게 없었다. 최소한 무슨 상황인지 알리고 문의 경로를 준다.
   if (!isSupabaseConfigured) {
     return (
+      <KeyboardProvider>
       <SafeAreaProvider>
         <StatusBar style="light" />
         <View style={styles.configErrorWrap}>
@@ -71,10 +76,12 @@ export default function RootLayout() {
           <Text style={styles.configErrorContact}>문의: admin@ourmine.co.kr</Text>
         </View>
       </SafeAreaProvider>
+      </KeyboardProvider>
     )
   }
 
   return (
+    <KeyboardProvider>
     <SafeAreaProvider>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
@@ -134,6 +141,7 @@ export default function RootLayout() {
         </View>
       )}
     </SafeAreaProvider>
+    </KeyboardProvider>
   )
 }
 
