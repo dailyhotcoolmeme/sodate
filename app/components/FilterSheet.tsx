@@ -162,6 +162,9 @@ export default function FilterSheet({ visible, onClose }: Props) {
       borderBottomWidth: 1,
       borderBottomColor: colors.divider,
     },
+    sectionLast: {
+      borderBottomWidth: 0,
+    },
     sectionTitle: {
       fontSize: 13,
       fontWeight: '600',
@@ -425,9 +428,10 @@ export default function FilterSheet({ visible, onClose }: Props) {
             </View>
           </Section>
 
-          {/* 업체 */}
+          {/* 업체 — 마지막 묶음이라 아래 구분선을 넣지 않는다. 바로 밑 초기화·적용하기
+              바에 이미 윗선이 있어 선이 두 줄로 겹쳐 보였다(2026-07-31 오너 지적). */}
           {companyOptions.length > 0 && (
-            <Section styles={styles}>
+            <Section styles={styles} last>
               <View style={styles.groupRow}>
                 <Text style={styles.groupRowLabelTop}>업체</Text>
                 <View style={styles.groupRowChips}>
@@ -466,13 +470,16 @@ function Section({
   title,
   children,
   styles,
+  last = false,
 }: {
   title?: string
   children: React.ReactNode
   styles: any
+  /** 맨 아래 묶음이면 구분선을 그리지 않는다 */
+  last?: boolean
 }) {
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, last && styles.sectionLast]}>
       {!!title && <Text style={styles.sectionTitle}>{title}</Text>}
       {children}
     </View>
