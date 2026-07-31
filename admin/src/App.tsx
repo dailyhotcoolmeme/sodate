@@ -8,6 +8,7 @@ import Register from './pages/Register'
 import Events from './pages/Events'
 import Companies from './pages/Companies'
 import Reviews from './pages/Reviews'
+import Board from './pages/Board'
 import CrawlLogs from './pages/CrawlLogs'
 import Analytics from './pages/Analytics'
 
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/events" element={guard(authed, <Events />)} />
         <Route path="/companies" element={guard(authed, <Companies />)} />
         <Route path="/reviews" element={guard(authed, <Reviews />)} />
+        <Route path="/board" element={guard(authed, <Board />)} />
         <Route path="/crawl-logs" element={guard(authed, <CrawlLogs />)} />
         <Route path="/analytics" element={guard(authed, <Analytics />)} />
         <Route path="*" element={<Navigate to="/" replace />} />
