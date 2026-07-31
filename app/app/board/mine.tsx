@@ -37,7 +37,7 @@ export default function MyPostsScreen() {
         <View style={styles.center}>
           <Ionicons name="create-outline" size={32} color={colors.textTertiary} />
           <Text style={styles.emptyText}>아직 쓴 글이 없어요</Text>
-          <Text style={styles.emptySub}>게시판에 첫 글을 남겨보세요!</Text>
+          <Text style={styles.emptySub}>커뮤니티에 첫 글을 남겨보세요!</Text>
         </View>
       ) : (
         <ScrollView

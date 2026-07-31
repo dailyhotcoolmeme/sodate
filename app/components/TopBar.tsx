@@ -6,7 +6,6 @@ import { useRouter, usePathname } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import { useNotificationStore } from '@/stores/notificationStore'
-import { useFilter } from '@/hooks/useFilter'
 import { useProfileSheetStore } from '@/stores/profileSheetStore'
 
 /**
@@ -17,24 +16,18 @@ import { useProfileSheetStore } from '@/stores/profileSheetStore'
 export default function TopBar({
   showBack = false,
   onLogoPress,
-  onFilterPress,
-  filterCount = 0,
   onBeforeNavigate,
   segment,
-  onSearchPress,
   noSafeTop = false,
   onBeforeLeave,
 }: {
   showBack?: boolean
   onLogoPress?: () => void
-  onFilterPress?: () => void
-  filterCount?: number
   onBeforeNavigate?: () => void // 메뉴 이동 직전(예: 열린 모달 닫기)
   // 일정 ↔ 게시판 전환. 지금 있는 화면에 따라 알아서 정해지므로 보통 안 넘겨도 된다.
-  // ⚠️ 심사 통과 전까지 '게시판' 글자가 보이는 형태를 유지할 것 — 아이콘만 남기면
+  // ⚠️ 심사 통과 전까지 '커뮤니티' 글자가 보이는 형태를 유지할 것 — 아이콘만 남기면
   //    심사자가 눌러보지 않고, 눌러보지 않은 기능은 없는 것으로 본다(docs/BOARD_SPEC.md).
   segment?: 'event' | 'board'
-  onSearchPress?: () => void // 게시판에서 필터 자리를 대신하는 검색
   /** pageSheet 모달 안에서 쓸 때. 시트가 이미 상태바 아래에서 시작해 위 여백이 필요 없다 */
   noSafeTop?: boolean
   /**
@@ -53,7 +46,6 @@ export default function TopBar({
   useEffect(() => {
     refreshUnread()
   }, [refreshUnread])
-  const { activeFilterCount } = useFilter()
 
   // 톱바는 어느 화면에서나 같은 모양이어야 한다(2026-07-31 오너 지시).
   // 화면마다 넘겨주지 않아도 지금 경로를 보고 일정/게시판을 정한다.
@@ -87,7 +79,6 @@ export default function TopBar({
     // 라이트·다크 양쪽에서 보이는 핑크 버전만 사용(검정/흰색은 한쪽에서 사라짐).
     // 일정/게시판 전환 버튼이 늘 함께 있어서 좁은 폭으로 통일한다.
     logoWordmark: { width: 96, height: 21 },
-    right: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     // 일정 ↔ 게시판 전환. 로고와 아이콘 사이에서 남는 폭을 쓰되, 좁은 화면에서는
     // 로고가 먼저 줄어들도록 로고에 flexShrink 를 뒀다.
     segWrap: {
@@ -113,6 +104,15 @@ export default function TopBar({
       shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8,
     },
     menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+    menuBadge: {
+      marginLeft: 'auto', minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9,
+      backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
+    },
+    menuBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+    menuDot: {
+      position: 'absolute', top: 5, right: 4,
+      width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary,
+    },
     menuItemText: { fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
   }), [colors])
 
@@ -121,7 +121,8 @@ export default function TopBar({
     ? { label: '내가 쓴 글', icon: 'create-outline', action: () => router.push('/board/mine') }
     : { label: '내가 쓴 후기', icon: 'create-outline', action: () => router.push({ pathname: '/reviews', params: { tab: 'mine' } }) }
 
-  const MENU: { label: string; icon: string; action: () => void }[] = [
+  const MENU: { label: string; icon: string; action: () => void; badge?: number }[] = [
+    { label: '알림', icon: 'notifications-outline', action: () => router.push('/notifications'), badge: unread },
     firstItem,
     { label: '후기 모음', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
     { label: '관심 모임', icon: 'heart-outline', action: () => router.push('/favorites') },
@@ -159,7 +160,7 @@ export default function TopBar({
             accessibilityRole="tab"
             accessibilityState={{ selected: seg === 'event' }}
           >
-            <Text style={[styles.segText, seg === 'event' && styles.segTextOn]}>일정</Text>
+            <Text style={[styles.segText, seg === 'event' && styles.segTextOn]}>소개팅</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.segBtn, seg === 'board' && styles.segBtnOn]}
@@ -167,42 +168,15 @@ export default function TopBar({
             accessibilityRole="tab"
             accessibilityState={{ selected: seg === 'board' }}
           >
-            <Text style={[styles.segText, seg === 'board' && styles.segTextOn]}>게시판</Text>
+            <Text style={[styles.segText, seg === 'board' && styles.segTextOn]}>커뮤니티</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.right}>
-          {/* 게시판에서는 걸러낼 조건이 없다 → 필터 자리를 검색이 대신한다. */}
-          {seg === 'board' ? (
-            <TouchableOpacity style={styles.iconBtn} onPress={onSearchPress}>
-              <Ionicons name="search-outline" size={21} color={colors.textPrimary} />
-            </TouchableOpacity>
-          ) : (
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={onFilterPress ?? (() => router.push({ pathname: '/', params: { openFilter: '1' } }))}
-          >
-            <Ionicons name="funnel-outline" size={20} color={colors.textPrimary} />
-            {activeFilterCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          )}
-          {/* 알림 내역(종) — 필터-종-햄버거 */}
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/notifications')}>
-            <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
-            {unread > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{unread > 99 ? '99+' : unread}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setMenuVisible(true)}>
-            <Ionicons name="menu" size={26} color={colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => setMenuVisible(true)}>
+          <Ionicons name="menu" size={26} color={colors.textPrimary} />
+          {/* 안 읽은 알림이 있으면 점만 찍는다. 숫자는 메뉴 안 '알림' 줄에서 보여준다. */}
+          {unread > 0 && <View style={styles.menuDot} />}
+        </TouchableOpacity>
       </View>
 
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
@@ -213,6 +187,11 @@ export default function TopBar({
                 onPress={() => { setMenuVisible(false); onBeforeNavigate?.(); m.action() }}>
                 <Ionicons name={m.icon as any} size={18} color={colors.textSecondary} />
                 <Text style={styles.menuItemText}>{m.label}</Text>
+                {!!m.badge && (
+                  <View style={styles.menuBadge}>
+                    <Text style={styles.menuBadgeText}>{m.badge > 99 ? '99+' : m.badge}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </TouchableOpacity>

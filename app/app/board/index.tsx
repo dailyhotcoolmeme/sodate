@@ -27,7 +27,6 @@ export default function BoardListScreen() {
 
   const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
-  const [searchOpen, setSearchOpen] = useState(false)
   const [draft, setDraft] = useState('')
 
   const settings = useBoardSettings()
@@ -45,12 +44,12 @@ export default function BoardListScreen() {
     <View style={styles.container}>
       <TopBar
         segment="board"
-        onSearchPress={() => setSearchOpen((v) => !v)}
         onLogoPress={() => { setPage(0); refetch() }}
       />
 
-      {searchOpen && (
-        <View style={styles.searchRow}>
+      {/* 검색줄은 항상 보인다. 톱바 돋보기로 여닫던 방식이었는데, 톱바를 메뉴 하나로
+          줄이면서 이리로 옮겼다(2026-07-31 오너 확정). */}
+      <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={17} color={colors.textTertiary} />
           <TextInput
             style={styles.searchInput}
@@ -59,7 +58,6 @@ export default function BoardListScreen() {
             placeholder="제목·본문 검색"
             placeholderTextColor={colors.textTertiary}
             returnKeyType="search"
-            autoFocus
             onSubmitEditing={() => { setPage(0); setSearch(draft) }}
           />
           {(draft.length > 0 || search.length > 0) && (
@@ -70,8 +68,7 @@ export default function BoardListScreen() {
               <Text style={styles.searchClear}>지우기</Text>
             </TouchableOpacity>
           )}
-        </View>
-      )}
+      </View>
 
       {!!search && (
         <Text style={styles.searchInfo}>
