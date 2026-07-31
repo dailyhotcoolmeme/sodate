@@ -43,6 +43,13 @@ export default function BoardPostScreen() {
   const [sending, setSending] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'image'; id: string } | null>(null)
 
+  // 닉네임은 가장 최근에 쓴 값을 물고 간다(후기 작성과 동일). 여기서 바꾸면
+  // 그 값이 다음부터 기본값이 된다 — 저장은 lib/board.ts 에서 한다.
+  useEffect(() => { getLastNickname().then((n) => n && setNickname(n)) }, [])
+  // 조회수는 화면에 감춰뒀지만 값은 쌓아둔다(나중에 켜면 그때까지 숫자가 그대로).
+  useEffect(() => { if (id) markViewed(id) }, [id])
+  useFocusEffect(useCallback(() => { refetch() }, [refetch]))
+
   const handleVote = async (value: 1 | -1) => {
     if (voting) return
     setVoting(true)
@@ -234,16 +241,26 @@ export default function BoardPostScreen() {
       {/* 댓글 입력 — 키보드 위에 붙는다 */}
       <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
         <View style={[styles.inputWrap, { paddingBottom: insets.bottom + 8 }]}>
-          {(replyTo || editing) && (
-            <View style={styles.inputHint}>
-              <Text style={styles.inputHintText}>
-                {editing ? '댓글 수정 중' : `${replyTo?.nickname}님에게 답글`}
-              </Text>
-              <TouchableOpacity onPress={() => { setReplyTo(null); setEditing(null); setDraft('') }} hitSlop={8}>
-                <Text style={styles.inputHintCancel}>취소</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <View style={styles.inputHint}>
+            {replyTo || editing ? (
+              <>
+                <Text style={styles.inputHintText}>
+                  {editing ? '댓글 수정 중' : `${replyTo?.nickname}님에게 답글`}
+                </Text>
+                <TouchableOpacity onPress={() => { setReplyTo(null); setEditing(null); setDraft('') }} hitSlop={8}>
+                  <Text style={styles.inputHintCancel}>취소</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View />
+                {/* 아이폰 키보드에는 닫기 키가 없다. 앱이 직접 줘야 한다. */}
+                <TouchableOpacity onPress={() => Keyboard.dismiss()} hitSlop={8}>
+                  <Text style={styles.inputHintCancel}>키보드 닫기</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
           {/* 닉네임은 윗줄에 따로 둔다. 댓글칸 옆에 두면 여러 줄이 될 때 아래로 밀려
               높이가 어긋나 보기 흉하다(2026-08-01 오너 지적). */}
           <TextInput

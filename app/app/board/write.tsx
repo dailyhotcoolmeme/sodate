@@ -12,6 +12,7 @@ import type { AppColors } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { createPost, updatePost } from '@/lib/board'
 import BoardEditor from '@/components/BoardEditor'
+import KeyboardBar from '@/components/KeyboardBar'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { wideContent } from '@/constants/layout'
 
@@ -120,21 +121,20 @@ export default function BoardWriteScreen() {
             />
           </View>
 
-          <TouchableOpacity
-            style={[styles.saveBtn, !canSave && styles.saveBtnOff]}
-            onPress={save}
-            disabled={!canSave || saving}
-          >
-            <Text style={[styles.saveBtnText, !canSave && styles.saveBtnTextOff]}>
-              {isEdit ? '수정 완료' : '등록'}
-            </Text>
-          </TouchableOpacity>
-
           <Text style={styles.notice}>
             욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
           </Text>
         </KeyboardAwareScrollView>
       </View>
+
+      {/* 등록은 키보드 위 고정 줄에 둔다. 스크롤 안에 두면 키보드가 덮어
+          버튼을 누르려고 화면을 따로 올려야 한다(2026-08-01 오너 지적). */}
+      <KeyboardBar
+        action={isEdit ? '수정 완료' : '등록'}
+        onAction={save}
+        disabled={!canSave || saving}
+        bottomInset={insets.bottom}
+      />
 
       <LoadingOverlay visible={saving || loading} />
     </View>
