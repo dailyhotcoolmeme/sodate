@@ -27,6 +27,9 @@ import { wideContent } from '@/constants/layout'
 import type { BoardComment } from '@/lib/board'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
+/** 댓글 입력칸과 등록 버튼의 한 줄 높이 */
+const COMPOSER_H = 38
+
 /** 글 상세 — 추천·비추, 댓글(대댓글 한 단계), 내 글이면 수정·삭제. */
 export default function BoardPostScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -472,11 +475,18 @@ function makeStyles(colors: AppColors) {
       backgroundColor: colors.surfaceHigh, borderRadius: 8,
       paddingHorizontal: 10, paddingVertical: 7, marginBottom: 6,
     },
+    // 한 줄일 때 입력칸과 등록 버튼의 높이가 정확히 같아야 한다. 글자 크기가 달라
+    // 눈대중 여백으로는 안 맞았다 — 둘 다 같은 minHeight 를 주고 가운데 정렬한다.
     commentInput: {
-      flex: 1, maxHeight: 96, fontSize: 14, color: colors.textPrimary,
-      backgroundColor: colors.surfaceHigh, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9,
+      flex: 1, minHeight: COMPOSER_H, maxHeight: 96,
+      fontSize: 14, lineHeight: 20, color: colors.textPrimary,
+      backgroundColor: colors.surfaceHigh, borderRadius: 8,
+      paddingHorizontal: 12, paddingVertical: 9,
     },
-    sendBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.primary },
+    sendBtn: {
+      minHeight: COMPOSER_H, justifyContent: 'center',
+      paddingHorizontal: 14, borderRadius: 8, backgroundColor: colors.primary,
+    },
     sendBtnOff: { backgroundColor: colors.border },
     sendBtnText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   })
