@@ -242,3 +242,21 @@ create or replace function public.increment_board_view(p_id uuid)
 returns void language sql security definer as $$
   update public.board_posts set view_count = view_count + 1 where id = p_id;
 $$;
+-- owner_token 이 조회에 나가면 같은 기기가 쓴 글을 전부 묶어낼 수 있다.
+-- 익명 게시판에서는 이것만으로 신원이 드러난다 → 앱에는 이 열을 주지 않는다.
+-- '내 글인지'는 앱이 기기에 저장한 id 목록으로 판단한다(후기와 동일한 방식).
+revoke select on public.board_posts    from anon, authenticated;
+revoke select on public.board_comments from anon, authenticated;
+revoke select on public.board_votes    from anon, authenticated;
+
+grant select (id, nickname, title, content, image_urls, upvotes, downvotes,
+              comment_count, view_count, report_count, image_report_count,
+              is_active, image_hidden, created_at, updated_at)
+  on public.board_posts to anon, authenticated;
+
+grant select (id, post_id, parent_id, nickname, content,
+              report_count, is_active, created_at, updated_at)
+  on public.board_comments to anon, authenticated;
+
+-- 투표 집계는 board_posts 에 이미 있으므로 앱이 이 표를 직접 읽을 이유가 없다.
+drop policy if exists board_votes_read on public.board_votes;

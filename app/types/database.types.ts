@@ -303,6 +303,64 @@ export interface Database {
           created_at?: string
         }
       }
+      board_posts: {
+        Row: {
+          id: string
+          nickname: string
+          title: string
+          content: string
+          image_urls: string[] | null
+          owner_token: string
+          upvotes: number
+          downvotes: number
+          comment_count: number
+          view_count: number
+          report_count: number
+          image_report_count: number
+          is_active: boolean
+          image_hidden: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Record<string, unknown>
+        Update: Record<string, unknown>
+      }
+      board_comments: {
+        Row: {
+          id: string
+          post_id: string
+          parent_id: string | null
+          nickname: string
+          content: string
+          owner_token: string
+          report_count: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Record<string, unknown>
+        Update: Record<string, unknown>
+      }
+      board_votes: {
+        Row: { post_id: string; owner_token: string; value: number; created_at: string }
+        Insert: Record<string, unknown>
+        Update: Record<string, unknown>
+      }
+      board_settings: {
+        Row: {
+          id: boolean
+          hide_post_reports: number
+          hide_image_reports: number
+          hide_comment_reports: number
+          hot_upvotes: number
+          cold_downvotes: number
+          post_cooldown_seconds: number
+          comment_cooldown_seconds: number
+          updated_at: string
+        }
+        Insert: Record<string, unknown>
+        Update: Record<string, unknown>
+      }
       reviews: {
         Row: {
           id: string
