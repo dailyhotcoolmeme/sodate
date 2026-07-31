@@ -20,12 +20,19 @@ export default function TopBar({
   onFilterPress,
   filterCount = 0,
   onBeforeNavigate,
+  segment,
+  onSearchPress,
 }: {
   showBack?: boolean
   onLogoPress?: () => void
   onFilterPress?: () => void
   filterCount?: number
   onBeforeNavigate?: () => void // 메뉴 이동 직전(예: 열린 모달 닫기)
+  // 일정 ↔ 게시판 전환. 두 목록 화면에서만 준다(상세 화면에는 없음).
+  // ⚠️ 심사 통과 전까지 '게시판' 글자가 보이는 형태를 유지할 것 — 아이콘만 남기면
+  //    심사자가 눌러보지 않고, 눌러보지 않은 기능은 없는 것으로 본다(docs/BOARD_SPEC.md).
+  segment?: 'event' | 'board'
+  onSearchPress?: () => void // 게시판에서 필터 자리를 대신하는 검색
 }) {
   const router = useRouter()
   const colors = useColors()
@@ -53,7 +60,18 @@ export default function TopBar({
     // 하트+"소개팅모아"가 한 이미지로 된 워드마크(원본 1042x231 = 4.51:1).
     // 라이트·다크 양쪽에서 보이는 핑크 버전만 사용(검정/흰색은 한쪽에서 사라짐).
     logoWordmark: { width: 122, height: 27 },
+    logoWordmarkNarrow: { width: 96, height: 21 },
     right: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+    // 일정 ↔ 게시판 전환. 로고와 아이콘 사이에서 남는 폭을 쓰되, 좁은 화면에서는
+    // 로고가 먼저 줄어들도록 로고에 flexShrink 를 뒀다.
+    segWrap: {
+      flexDirection: 'row', borderRadius: 999, overflow: 'hidden',
+      borderWidth: 1, borderColor: colors.border, marginHorizontal: 6, flexShrink: 0,
+    },
+    segBtn: { paddingHorizontal: 11, paddingVertical: 4 },
+    segBtnOn: { backgroundColor: colors.primary },
+    segText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+    segTextOn: { color: '#fff', fontWeight: '800' },
     iconBtn: { padding: 6, borderRadius: 8 },
     filterBadge: {
       position: 'absolute', top: 0, right: 0, minWidth: 15, height: 15,
@@ -72,7 +90,13 @@ export default function TopBar({
     menuItemText: { fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
   }), [colors])
 
+  // 첫 줄만 화면에 따라 다르다. 메뉴가 통째로 바뀌면 '아까 있던 게 없어졌다'가 된다.
+  const firstItem = segment === 'board'
+    ? { label: '내가 쓴 글', icon: 'create-outline', action: () => router.push('/board/mine') }
+    : { label: '내가 쓴 후기', icon: 'create-outline', action: () => router.push({ pathname: '/reviews', params: { tab: 'mine' } }) }
+
   const MENU: { label: string; icon: string; action: () => void }[] = [
+    firstItem,
     { label: '후기 모음', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
     { label: '관심 모임', icon: 'heart-outline', action: () => router.push('/favorites') },
     { label: '알림 설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
@@ -93,15 +117,41 @@ export default function TopBar({
             onPress={onLogoPress ?? (() => router.replace('/'))}>
             <Image
               source={require('../assets/logo-wordmark.png')}
-              style={styles.logoWordmark}
+              style={segment ? styles.logoWordmarkNarrow : styles.logoWordmark}
               contentFit="contain"
               accessibilityLabel="소개팅모아"
             />
           </TouchableOpacity>
         </View>
 
+        {segment && (
+          <View style={styles.segWrap}>
+            <TouchableOpacity
+              style={[styles.segBtn, segment === 'event' && styles.segBtnOn]}
+              onPress={() => segment !== 'event' && router.replace('/')}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: segment === 'event' }}
+            >
+              <Text style={[styles.segText, segment === 'event' && styles.segTextOn]}>일정</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.segBtn, segment === 'board' && styles.segBtnOn]}
+              onPress={() => segment !== 'board' && router.replace('/board')}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: segment === 'board' }}
+            >
+              <Text style={[styles.segText, segment === 'board' && styles.segTextOn]}>게시판</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.right}>
-          {/* 필터 — 모든 톱바 페이지에 표시. 홈이 아니면 홈으로 이동해 필터 열기 */}
+          {/* 게시판에서는 걸러낼 조건이 없다 → 필터 자리를 검색이 대신한다. */}
+          {segment === 'board' ? (
+            <TouchableOpacity style={styles.iconBtn} onPress={onSearchPress}>
+              <Ionicons name="search-outline" size={21} color={colors.textPrimary} />
+            </TouchableOpacity>
+          ) : (
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={onFilterPress ?? (() => router.push({ pathname: '/', params: { openFilter: '1' } }))}
@@ -113,6 +163,7 @@ export default function TopBar({
               </View>
             )}
           </TouchableOpacity>
+          )}
           {/* 알림 내역(종) — 필터-종-햄버거 */}
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/notifications')}>
             <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />

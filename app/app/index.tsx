@@ -613,6 +613,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* ── 공용 톱바 ── */}
       <TopBar
+        segment="event"
         onLogoPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
         onFilterPress={() => setFilterVisible(true)}
         filterCount={activeFilterCount}
