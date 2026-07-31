@@ -51,11 +51,27 @@ export default function BoardPostScreen() {
   const [sending, setSending] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'image'; id: string } | null>(null)
   const keyboardShown = useKeyboardState((k) => k.isVisible)
+  const keyboardH = useKeyboardState((k) => k.height)
+  const scrollY = useRef(0)
   const [composing, setComposing] = useState(false)   // 입력칸을 만졌는가(닉네임 줄 펼침)
   const scrollRef = useRef<ScrollView>(null)
   // 댓글마다 화면에서의 세로 위치. 새 댓글·답글로 옮겨갈 때 쓴다.
   const commentY = useRef<Record<string, number>>({})
   const [scrollToId, setScrollToId] = useState<string | null>(null)
+
+  /**
+   * 키보드가 올라오면 그 높이만큼 목록을 밀어 올린다.
+   *
+   * 이걸 안 하면 보이는 창만 줄어들어, 누르기 직전에 보던 댓글이 키보드 뒤로 숨는다.
+   * 인스타·레딧(아이폰)은 실제로 그렇게 동작하지만(화면녹화 프레임으로 확인),
+   * 그 앱들은 댓글이 화면 맨 위부터 시작한다. 우리는 위에 제목·본문·추천이 얹혀 있어
+   * 창이 100pt 남짓으로 줄고 댓글 한 개만 남는다 — 그래서 다르게 간다
+   * (2026-08-01 오너 지적, 실측으로 확인).
+   */
+  useEffect(() => {
+    if (!keyboardShown || !keyboardH) return
+    scrollRef.current?.scrollTo({ y: scrollY.current + keyboardH, animated: true })
+  }, [keyboardShown, keyboardH])
 
   // 목록이 새로 그려진 뒤에 옮겨간다. 위치를 아직 모르면 다음 그리기까지 기다린다.
   useEffect(() => {
@@ -72,6 +88,7 @@ export default function BoardPostScreen() {
   // 조회수는 화면에 감춰뒀지만 값은 쌓아둔다(나중에 켜면 그때까지 숫자가 그대로).
   useEffect(() => { if (id) markViewed(id) }, [id])
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
+
 
   const handleVote = async (value: 1 | -1) => {
     if (voting) return
@@ -171,6 +188,8 @@ export default function BoardPostScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y }}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <View style={styles.head}>
