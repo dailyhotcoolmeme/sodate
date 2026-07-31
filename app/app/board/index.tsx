@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, RefreshControl
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
@@ -76,7 +76,7 @@ export default function BoardListScreen() {
         </Text>
       )}
 
-      {loading ? (
+      {loading && posts.length === 0 ? (
         <View style={styles.center}><AppSpinner /></View>
       ) : posts.length === 0 ? (
         <View style={styles.center}>
@@ -90,6 +90,7 @@ export default function BoardListScreen() {
         <ScrollView
           contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 90 }]}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />}
         >
           {posts.map((p) => (
             <PostRow key={p.id} post={p} hot={hot} cold={cold} styles={styles} colors={colors}

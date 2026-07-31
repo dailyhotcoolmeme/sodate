@@ -9,7 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
+  ActivityIndicator, RefreshControl
 } from 'react-native'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -289,7 +289,7 @@ export default function ReviewsScreen() {
         </View>
       )}
 
-      {loading ? (
+      {loading && reviews.length === 0 ? (
         <View style={styles.center}>
           <AppSpinner />
         </View>
@@ -318,6 +318,7 @@ export default function ReviewsScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 20 }}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />}
         >
           {currentTab === 'user' || currentTab === 'mine' ? (
             // 직접 작성 후기는 이미지가 없으니 상세페이지와 동일한 카드 구조로

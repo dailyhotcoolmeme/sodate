@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, RefreshControl } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -26,7 +26,7 @@ export default function NotificationsScreen() {
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { items, loading, markAllRead, deleteOne, deleteAll } = useNotifications()
+  const { items, loading, refetch, markAllRead, deleteOne, deleteAll } = useNotifications()
 
   // 진입 시 모두 읽음 처리
   useEffect(() => {
@@ -66,7 +66,7 @@ export default function NotificationsScreen() {
         )}
       </View>
 
-      {loading ? (
+      {loading && items.length === 0 ? (
         <View style={styles.center}>
           <AppSpinner />
         </View>
@@ -83,6 +83,7 @@ export default function NotificationsScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />}
         >
           {items.map((n) => (
             <TouchableOpacity

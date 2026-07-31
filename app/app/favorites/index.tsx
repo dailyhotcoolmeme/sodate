@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import AppSpinner from '@/components/AppSpinner'
 import TopBar from '@/components/TopBar'
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native'
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFavoriteEvents, useFavorites } from '@/hooks/useFavorites'
@@ -88,7 +88,7 @@ export default function FavoritesScreen() {
         </Text>
       </View>
 
-      {loading ? (
+      {loading && events.length === 0 ? (
         <View style={styles.center}>
           <AppSpinner />
         </View>
@@ -110,6 +110,7 @@ export default function FavoritesScreen() {
         </View>
       ) : (
         <FlatList
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />}
           data={events as EventWithCompany[]}
           renderItem={({ item }) =>
             viewMode === 'card' ? (

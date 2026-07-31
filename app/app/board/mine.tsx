@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -28,7 +28,7 @@ export default function MyPostsScreen() {
       <TopBar showBack onLogoPress={() => router.replace('/board')} />
       <Text style={styles.heading}>내가 쓴 글</Text>
 
-      {loading ? (
+      {loading && posts.length === 0 ? (
         <View style={styles.center}><AppSpinner /></View>
       ) : posts.length === 0 ? (
         <View style={styles.center}>
@@ -37,7 +37,10 @@ export default function MyPostsScreen() {
           <Text style={styles.emptySub}>게시판에 첫 글을 남겨보세요!</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}>
+        <ScrollView
+          contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />}
+        >
           {posts.map((p) => (
             <TouchableOpacity
               key={p.id}
