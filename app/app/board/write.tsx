@@ -59,6 +59,16 @@ export default function BoardWriteScreen() {
 
   const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && content.trim().length > 0
 
+  // 쓰던 게 있으면 떠나기 전에 물어본다
+  const dirty = title.trim().length > 0 || content.trim().length > 0 || images.length > 0
+  const confirmLeave = (proceed: () => void) => {
+    if (!dirty) { proceed(); return }
+    Alert.alert('작성 중인 글이 있어요', '지금 나가면 쓰던 내용이 사라집니다.', [
+      { text: '계속 쓰기', style: 'cancel' },
+      { text: '나가기', style: 'destructive', onPress: proceed },
+    ])
+  }
+
   const save = async () => {
     if (!canSave || saving) return
     setSaving(true)
@@ -72,7 +82,13 @@ export default function BoardWriteScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack onLogoPress={() => router.replace('/board')} />
+      {/* 톱바에서 화면을 떠나는 이동(일정/게시판 전환, 로고)은 쓰던 글을 날린다.
+          그래서 확인을 한 번 받는다(2026-07-31 오너 확정). */}
+      <TopBar
+        showBack
+        onLogoPress={() => router.replace('/board')}
+        onBeforeLeave={confirmLeave}
+      />
       <View style={{ flex: 1 }}>
         <KeyboardAwareScrollView
           contentContainerStyle={[wideContent, { padding: 16, paddingBottom: insets.bottom + 24, gap: 14 }]}

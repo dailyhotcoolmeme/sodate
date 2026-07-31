@@ -23,6 +23,7 @@ export default function TopBar({
   segment,
   onSearchPress,
   noSafeTop = false,
+  onBeforeLeave,
 }: {
   showBack?: boolean
   onLogoPress?: () => void
@@ -36,6 +37,11 @@ export default function TopBar({
   onSearchPress?: () => void // 게시판에서 필터 자리를 대신하는 검색
   /** pageSheet 모달 안에서 쓸 때. 시트가 이미 상태바 아래에서 시작해 위 여백이 필요 없다 */
   noSafeTop?: boolean
+  /**
+   * 이 화면을 떠나는 이동(일정/게시판 전환, 로고) 직전에 불린다. 받은 함수를 부르면
+   * 이동하고, 안 부르면 그대로 머문다. 글쓰기처럼 쓰던 게 날아가는 화면에서 쓴다.
+   */
+  onBeforeLeave?: (proceed: () => void) => void
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -53,10 +59,16 @@ export default function TopBar({
   // 화면마다 넘겨주지 않아도 지금 경로를 보고 일정/게시판을 정한다.
   const seg: 'event' | 'board' = segment ?? (pathname.startsWith('/board') ? 'board' : 'event')
 
+  /** 화면을 떠나는 이동. 화면이 막아둘 수 있다(글쓰기 등). */
+  const leave = (go: () => void) => {
+    if (onBeforeLeave) onBeforeLeave(go)
+    else go()
+  }
+
   const goSegment = (to: 'event' | 'board') => {
     if (seg === to) return
     onBeforeNavigate?.()
-    router.replace(to === 'board' ? '/board' : '/')
+    leave(() => router.replace(to === 'board' ? '/board' : '/'))
   }
 
   const styles = useMemo(() => StyleSheet.create({
@@ -130,7 +142,7 @@ export default function TopBar({
           <TouchableOpacity style={styles.logoBtn} activeOpacity={0.7}
             // 게시판 안에서는 게시판 홈으로 간다. 로고를 눌렀다고 일정으로 튕기면
             // 쓰던 흐름이 끊긴다(2026-07-31 오너 지적).
-            onPress={onLogoPress ?? (() => router.replace(seg === 'board' ? '/board' : '/'))}>
+            onPress={() => leave(onLogoPress ?? (() => router.replace(seg === 'board' ? '/board' : '/')))}>
             <Image
               source={require('../assets/logo-wordmark.png')}
               style={styles.logoWordmark}
