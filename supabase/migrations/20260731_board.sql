@@ -236,3 +236,9 @@ delete from public.board_reports r
         and not exists (select 1 from public.board_posts p where p.id = r.target_id))
     or (r.target_type = 'comment'
         and not exists (select 1 from public.board_comments c where c.id = r.target_id));
+
+-- 조회수는 경쟁 없이 올려야 한다(여러 명이 동시에 열면 값이 어긋난다).
+create or replace function public.increment_board_view(p_id uuid)
+returns void language sql security definer as $$
+  update public.board_posts set view_count = view_count + 1 where id = p_id;
+$$;
