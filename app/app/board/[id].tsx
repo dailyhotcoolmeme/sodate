@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, RefreshControl,
 } from 'react-native'
 // 댓글 입력을 키보드 위에 붙여 둔다. RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서
 // 동작하지 않는 것이 알려진 문제라(react-native#16826) 이 라이브러리를 쓴다.
@@ -22,6 +22,7 @@ import {
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { wideContent } from '@/constants/layout'
 import type { BoardComment } from '@/lib/board'
+import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 /** 글 상세 — 추천·비추, 댓글(대댓글 한 단계), 내 글이면 수정·삭제. */
 export default function BoardPostScreen() {
@@ -32,6 +33,10 @@ export default function BoardPostScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors])
 
   const { post, comments, myVote, isMine, myCommentIds, loading, refetch } = useBoardPost(id)
+
+  // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
+
+  const refreshing = useRefreshIndicator(loading)
   const [voting, setVoting] = useState(false)
   const [nickname, setNickname] = useState('')
   const [draft, setDraft] = useState('')
@@ -141,6 +146,7 @@ export default function BoardPostScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
       >
         <View style={styles.head}>
           <Text style={styles.title}>{post.title}</Text>

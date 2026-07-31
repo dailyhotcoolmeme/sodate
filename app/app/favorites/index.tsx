@@ -11,6 +11,7 @@ import EventListItem from '@/components/EventListItem'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
 import { track } from '@/lib/analytics'
+import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 type ViewMode = 'card' | 'list'
 
@@ -18,6 +19,8 @@ export default function FavoritesScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { events, loading, error, refetch } = useFavoriteEvents()
+  // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
+  const refreshing = useRefreshIndicator(loading)
   const { favoriteIds, toggle } = useFavorites()
 
   React.useEffect(() => { track('screen_view', { properties: { screen: 'favorites' } }) }, [])
@@ -110,7 +113,7 @@ export default function FavoritesScreen() {
         </View>
       ) : (
         <FlatList
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
           data={events as EventWithCompany[]}
           renderItem={({ item }) =>
             viewMode === 'card' ? (

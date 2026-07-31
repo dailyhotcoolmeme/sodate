@@ -12,6 +12,7 @@ import type { AppColors } from '@/constants/colors'
 import { useBoardList, useBoardSettings, PAGE_SIZE } from '@/hooks/useBoard'
 import { wideContent } from '@/constants/layout'
 import type { BoardPost } from '@/lib/board'
+import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 /**
  * 게시판 목록 — 번호 페이지 방식(오너 확정). 무한 스크롤이 아니다.
@@ -31,6 +32,8 @@ export default function BoardListScreen() {
 
   const settings = useBoardSettings()
   const { posts, total, loading, pageCount, refetch } = useBoardList(page, search)
+  // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
+  const refreshing = useRefreshIndicator(loading)
 
   // 글을 쓰고 돌아오면 목록이 최신이어야 한다.
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
@@ -90,7 +93,7 @@ export default function BoardListScreen() {
         <ScrollView
           contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 90 }]}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
         >
           {posts.map((p) => (
             <PostRow key={p.id} post={p} hot={hot} cold={cold} styles={styles} colors={colors}

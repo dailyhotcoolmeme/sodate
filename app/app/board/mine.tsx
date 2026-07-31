@@ -9,6 +9,7 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useMyPosts } from '@/hooks/useBoard'
 import { wideContent } from '@/constants/layout'
+import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 /**
  * 내가 쓴 글 — 익명이라 목록에서 자기 글을 찾을 방법이 없어서 따로 둔다.
@@ -20,6 +21,8 @@ export default function MyPostsScreen() {
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const { posts, loading, refetch } = useMyPosts()
+  // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
+  const refreshing = useRefreshIndicator(loading)
 
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
 
@@ -39,7 +42,7 @@ export default function MyPostsScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
         >
           {posts.map((p) => (
             <TouchableOpacity

@@ -8,6 +8,7 @@ import TopBar from '@/components/TopBar'
 import { useColors } from '@/hooks/useColors'
 import { useNotifications, type NotificationRow } from '@/hooks/useNotifications'
 import { openOutlink } from '@/lib/outlink'
+import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -27,6 +28,8 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const { items, loading, refetch, markAllRead, deleteOne, deleteAll } = useNotifications()
+  // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
+  const refreshing = useRefreshIndicator(loading)
 
   // 진입 시 모두 읽음 처리
   useEffect(() => {
@@ -83,7 +86,7 @@ export default function NotificationsScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
         >
           {items.map((n) => (
             <TouchableOpacity

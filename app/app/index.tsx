@@ -38,6 +38,7 @@ import TopBar from '@/components/TopBar'
 import { useFilterStore, useFilterHydrated, type FilterState } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { track } from '@/lib/analytics'
+import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
 const SORT_OPTIONS: SortOption[] = [
@@ -61,6 +62,8 @@ type ListRow =
 export default function HomeScreen() {
   const insets = useSafeAreaInsets()
   const { events, loading, loadingMore, error, refetch, loadMore } = useEvents()
+  // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
+  const refreshing = useRefreshIndicator(loading)
   const [filterVisible, setFilterVisible] = useState(false)
   const { regions, themes, maxPrice, dateRange, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, setRegionsBulk, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
   const regionOptions = useRegions()
@@ -765,7 +768,7 @@ export default function HomeScreen() {
           }}
           keyExtractor={(item) => item.type === 'ad' ? item.key : item.event.id}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={refetch} tintColor={colors.primary} />
+            <RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />
           }
           ListEmptyComponent={<EmptyState error={error} onRetry={refetch} />}
           ListFooterComponent={
