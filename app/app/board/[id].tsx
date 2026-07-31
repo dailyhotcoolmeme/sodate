@@ -1,10 +1,10 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Keyboard,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert,
 } from 'react-native'
 // 댓글 입력을 키보드 위에 붙여 둔다. RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서
 // 동작하지 않는 것이 알려진 문제라(react-native#16826) 이 라이브러리를 쓴다.
-import { KeyboardStickyView } from 'react-native-keyboard-controller'
+import { KeyboardStickyView, KeyboardController } from 'react-native-keyboard-controller'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
@@ -39,9 +39,6 @@ export default function BoardPostScreen() {
   const [editing, setEditing] = useState<BoardComment | null>(null)
   const [sending, setSending] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'image'; id: string } | null>(null)
-  // 등록 후 입력칸을 확실히 놓아준다. Keyboard.dismiss() 만으로는 칸이 포커스를 쥐고
-  // 있어 목록이 새로 그려질 때 키보드가 다시 올라온다(2026-07-31 오너 지적).
-  const commentRef = useRef<TextInput>(null)
 
   // 닉네임은 가장 최근에 쓴 값을 물고 간다(후기 작성과 동일). 여기서 바꾸면
   // 그 값이 다음부터 기본값이 된다 — 저장은 lib/board.ts 에서 한다.
@@ -77,6 +74,10 @@ export default function BoardPostScreen() {
     const text = draft.trim()
     if (!text || sending) return
     if (nickname.trim().length < 2) { Alert.alert('알림', '닉네임을 2자 이상 입력해주세요.'); return }
+    // 키보드는 이 라이브러리의 API 로 닫는다. 이 앱은 keyboard-controller 가 키보드를
+    // 직접 쥐고 있어서 RN 기본 Keyboard.dismiss() / blur() 로는 닫히지 않았다.
+    // dismiss() 는 포커스까지 떼고, 키보드가 실제로 닫힐 때까지 기다린다.
+    await KeyboardController.dismiss()
     setSending(true)
     const r = editing
       ? await updateComment(editing.id, text)
@@ -89,8 +90,6 @@ export default function BoardPostScreen() {
     setSending(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
     setDraft(''); setReplyTo(null); setEditing(null)
-    commentRef.current?.blur()
-    Keyboard.dismiss()
     refetch()
   }
 
@@ -263,7 +262,7 @@ export default function BoardPostScreen() {
                 <View />
                 {/* 아이폰 키보드에는 닫기 키가 없다. 앱이 직접 줘야 한다.
                     글자 대신 아래꺾쇠 — 메모·메일 앱이 쓰는 모양이다. */}
-                <TouchableOpacity onPress={() => Keyboard.dismiss()} hitSlop={10}>
+                <TouchableOpacity onPress={() => KeyboardController.dismiss()} hitSlop={10}>
                   <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               </>
@@ -281,7 +280,6 @@ export default function BoardPostScreen() {
           />
           <View style={styles.inputRow}>
             <TextInput
-              ref={commentRef}
               style={styles.commentInput}
               value={draft}
               onChangeText={setDraft}

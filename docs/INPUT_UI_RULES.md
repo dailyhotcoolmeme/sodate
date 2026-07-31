@@ -13,6 +13,19 @@
 - 화면 아래 고정 입력줄(댓글 등) → `KeyboardStickyView`
 - 앱 루트에 `KeyboardProvider` 가 있어야 동작한다(`app/_layout.tsx`).
 
+**키보드를 닫을 때는 `KeyboardController.dismiss()` 를 쓴다.** RN 기본
+`Keyboard.dismiss()` 나 `ref.blur()` 로는 닫히지 않는다 — 이 라이브러리가 키보드를
+직접 쥐고 있기 때문이다. 2026-07-31 에 이걸 모르고 세 번을 헛짚었다.
+
+```ts
+import { KeyboardController } from 'react-native-keyboard-controller'
+await KeyboardController.dismiss()   // 포커스까지 떼고, 실제로 닫힐 때까지 기다린다
+```
+
+등록 같은 동작에서는 **닫히길 기다린 다음에** 스피너를 띄운다. 스피너
+(`LoadingOverlay`)가 `Modal` 이라, 포커스를 쥔 채로 Modal 이 열리면 닫힐 때 그 입력칸으로
+포커스를 되돌려 키보드가 다시 올라온다.
+
 ## 2. 주 동작은 화면 아래 고정 버튼 — `components/BottomCTA.tsx`
 
 2026-07-31 외부 조사로 확정. 상단 내비게이션 바에 두는 안, 키보드 위에 '등록' 글자만
@@ -67,6 +80,7 @@ Edit rich text), 커뮤니티 게시판에 그만한 무게를 들이지 않는�
 | 게시판 글쓰기 | 적용 — 등록은 화면 아래 고정 CTA, 서식 없음 |
 | 게시판 상세(댓글) | 적용 |
 | 후기 작성 시트 | **미적용** — 직접 만든 키보드 추적 코드가 남아 있다 |
+| 신고 시트 | **미적용** — 직접 만든 키보드 추적 코드가 남아 있다 |
 | 알림 설정 | 입력 없음 |
 
 후기 작성 시트는 순차적으로 이 규칙에 맞춘다.
