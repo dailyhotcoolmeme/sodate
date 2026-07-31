@@ -1,27 +1,43 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native'
+// 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
-// 포커스된 칸을 키보드 위로 스크롤해 주는 이 컴포넌트가 현재 표준이다.
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
+import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import TopBar from '@/components/TopBar'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { createPost, updatePost } from '@/lib/board'
 import { useBoardEditor, BoardEditorInput } from '@/components/BoardEditor'
-import BottomCTA from '@/components/BottomCTA'
+import { MAX_IMAGES } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { wideContent } from '@/constants/layout'
 
 const TITLE_MAX = 60
 const CONTENT_MAX = 10000
 
+/** 커서와 키보드(도구줄 포함) 사이에 둘 여유 */
+const CARET_GAP = 8
+
 /**
  * 글쓰기 · 수정. `?id=` 가 있으면 수정 모드.
- * 닉네임은 후기와 같은 저장소를 써서 한 번 쓰면 다음부터 자동으로 채워진다.
+ *
+ * 화면 구조는 2026-08-01 조사한 실제 앱들을 따른다(네이버 카페·당근 동네생활·
+ * 블라인드·에브리타임·X·페이스북 모두 같은 구조였다).
+ *
+ *   [상단 고정]  닫기 ·  글쓰기  ·  등록      ← 작성 전용 바. 로고·탭 없음
+ *   [가운데]     닉네임 / 제목 / 내용        ← 키보드가 올라오면 이 영역만 좁아진다
+ *   [맨 아래]    사진 첨부 도구줄            ← 키보드가 올라오면 그 위에 붙는다
+ *
+ * 키보드가 커서를 가릴 때의 규칙:
+ *   · 안 가려지면 움직이지 않는다.
+ *   · 가려질 때만, 가려진 만큼만 올린다.
+ *   · 올린 뒤 커서는 키보드(+도구줄) 바로 위에 붙는다. 화면 가운데로 오지 않는다.
+ * 예전에는 등록 바 높이까지 더해 올려서 필요보다 훨씬 많이 밀려 올라갔고, 제목·닉네임이
+ * 화면 밖으로 사라졌다(2026-08-01 오너 지적).
  */
 export default function BoardWriteScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>()
@@ -37,7 +53,7 @@ export default function BoardWriteScreen() {
   const [images, setImages] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
-  const [ctaHeight, setCtaHeight] = useState(0)
+  const [toolbarH, setToolbarH] = useState(0)
   const editor = useBoardEditor(images, setImages)
 
   useEffect(() => {
@@ -60,13 +76,13 @@ export default function BoardWriteScreen() {
 
   const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && content.trim().length > 0
 
-  // 쓰던 게 있으면 떠나기 전에 물어본다
+  // 쓰던 게 있으면 닫기 전에 물어본다
   const dirty = title.trim().length > 0 || content.trim().length > 0 || images.length > 0
-  const confirmLeave = (proceed: () => void) => {
-    if (!dirty) { proceed(); return }
+  const close = () => {
+    if (!dirty) { router.back(); return }
     Alert.alert('작성 중인 글이 있어요', '지금 나가면 쓰던 내용이 사라집니다.', [
       { text: '계속 쓰기', style: 'cancel' },
-      { text: '나가기', style: 'destructive', onPress: proceed },
+      { text: '나가기', style: 'destructive', onPress: () => router.back() },
     ])
   }
 
@@ -81,79 +97,102 @@ export default function BoardWriteScreen() {
     router.back()
   }
 
+  const full = images.length >= MAX_IMAGES
+
   return (
     <View style={styles.container}>
-      {/* 톱바에서 화면을 떠나는 이동(일정/게시판 전환, 로고)은 쓰던 글을 날린다.
-          그래서 확인을 한 번 받는다(2026-07-31 오너 확정). */}
-      <TopBar
-        showBack
-        onLogoPress={() => router.replace('/board')}
-        onBeforeLeave={confirmLeave}
-      />
-      <View style={{ flex: 1 }}>
-        <KeyboardAwareScrollView
-          contentContainerStyle={[wideContent, { padding: 16, paddingBottom: insets.bottom + 24, gap: 14 }]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          // 키보드 위에 등록 바가 얹혀 있으므로 그 높이만큼 더 올려야 마지막 줄이
-          // 가리지 않는다. 바가 홈 인디케이터 영역까지 먹고 있으니 그건 뺀다.
-          bottomOffset={Math.max(24, ctaHeight - insets.bottom + 12)}
+      {/* 작성 전용 상단 바. 글을 쓰는 동안 로고·탭은 두지 않는다 — 실제 앱들이 모두
+          닫기 / 제목 / 등록 세 개만 둔다. */}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity onPress={close} hitSlop={10} style={styles.headerSide}>
+          <Ionicons name="close" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{isEdit ? '글 수정' : '글쓰기'}</Text>
+        <TouchableOpacity
+          onPress={save}
+          disabled={!canSave || saving}
+          hitSlop={10}
+          style={[styles.headerSide, styles.headerRight]}
         >
-          <Text style={styles.heading}>{isEdit ? '글 수정' : '글쓰기'}</Text>
-
-          <View>
-            <Text style={styles.label}>닉네임</Text>
-            <TextInput
-              style={styles.input}
-              value={nickname}
-              onChangeText={setNickname}
-              placeholder="2~20자"
-              placeholderTextColor={colors.textTertiary}
-              maxLength={20}
-              editable={!isEdit}
-            />
-            {isEdit && <Text style={styles.hint}>닉네임은 수정할 수 없습니다</Text>}
-          </View>
-
-          <View>
-            <Text style={styles.label}>제목</Text>
-            <TextInput
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="제목을 입력하세요"
-              placeholderTextColor={colors.textTertiary}
-              maxLength={TITLE_MAX}
-            />
-            <Text style={styles.counter}>{title.length}/{TITLE_MAX}</Text>
-          </View>
-
-          <View>
-            <Text style={styles.label}>내용</Text>
-            <BoardEditorInput
-              api={editor}
-              value={content}
-              onChangeText={setContent}
-              images={images}
-              maxLength={CONTENT_MAX}
-              placeholder="내용을 입력하세요"
-            />
-          </View>
-
-          <Text style={styles.notice}>
-            욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
+          <Text style={[styles.headerAction, (!canSave || saving) && styles.headerActionOff]}>
+            {isEdit ? '완료' : '등록'}
           </Text>
-        </KeyboardAwareScrollView>
+        </TouchableOpacity>
       </View>
 
-      {/* 등록은 화면 아래 고정. 키보드가 올라오면 그 위로 따라 올라온다. */}
-      <BottomCTA
-        label={isEdit ? '수정 완료' : '등록'}
-        onPress={save}
-        disabled={!canSave || saving}
-        bottomInset={insets.bottom}
-        onHeight={setCtaHeight}
-      />
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[wideContent, { padding: 16, paddingBottom: 24, gap: 14 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        // 커서와 키보드 사이에 둘 거리. 키보드 위에 도구줄이 얹혀 있으니 그 높이까지만
+        // 비켜준다. 이보다 크게 잡으면 필요 없이 화면이 밀려 올라간다.
+        bottomOffset={toolbarH + CARET_GAP}
+      >
+        <View>
+          <Text style={styles.label}>닉네임</Text>
+          <TextInput
+            style={styles.input}
+            value={nickname}
+            onChangeText={setNickname}
+            placeholder="2~20자"
+            placeholderTextColor={colors.textTertiary}
+            maxLength={20}
+            editable={!isEdit}
+          />
+          {isEdit && <Text style={styles.hint}>닉네임은 수정할 수 없습니다</Text>}
+        </View>
+
+        <View>
+          <Text style={styles.label}>제목</Text>
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="제목을 입력하세요"
+            placeholderTextColor={colors.textTertiary}
+            maxLength={TITLE_MAX}
+          />
+          <Text style={styles.counter}>{title.length}/{TITLE_MAX}</Text>
+        </View>
+
+        <View>
+          <Text style={styles.label}>내용</Text>
+          <BoardEditorInput
+            api={editor}
+            value={content}
+            onChangeText={setContent}
+            images={images}
+            maxLength={CONTENT_MAX}
+            placeholder="내용을 입력하세요"
+          />
+        </View>
+
+        <Text style={styles.notice}>
+          욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
+        </Text>
+      </KeyboardAwareScrollView>
+
+      {/* 사진 첨부 — 화면 맨 아랫줄. 키보드가 올라오면 그 위에 붙는다.
+          네이버 카페의 '기본 도구 막대', 당근 동네생활의 '사진·장소·투표' 줄과 같은 자리. */}
+      <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
+        <View
+          style={[styles.toolbar, { paddingBottom: 8 + insets.bottom }]}
+          onLayout={(e) => setToolbarH(e.nativeEvent.layout.height)}
+        >
+          <TouchableOpacity
+            style={styles.tool}
+            onPress={editor.addImage}
+            disabled={full || editor.uploading}
+            hitSlop={8}
+          >
+            <Ionicons name="image-outline" size={21} color={full ? colors.textTertiary : colors.textSecondary} />
+            <Text style={[styles.toolText, full && styles.toolTextOff]}>
+              사진 {images.length}/{MAX_IMAGES}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardStickyView>
 
       <LoadingOverlay visible={saving || loading} />
     </View>
@@ -163,20 +202,37 @@ export default function BoardWriteScreen() {
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    heading: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.4 },
+
+    header: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 14, paddingBottom: 10,
+      borderBottomWidth: 1, borderBottomColor: colors.divider,
+      backgroundColor: colors.background,
+    },
+    headerSide: { minWidth: 52 },
+    headerRight: { alignItems: 'flex-end' },
+    headerTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+    headerAction: { fontSize: 16, fontWeight: '800', color: colors.primary },
+    headerActionOff: { color: colors.textTertiary },
+
     label: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 7 },
     input: {
       backgroundColor: colors.surfaceHigh, borderRadius: 12,
       paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: colors.textPrimary,
       borderWidth: 1, borderColor: colors.border,
     },
-    textArea: { minHeight: 220 },
     counter: { fontSize: 11, color: colors.textTertiary, textAlign: 'right', marginTop: 5 },
     hint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 5 },
-    saveBtn: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-    saveBtnOff: { backgroundColor: colors.border },
-    saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-    saveBtnTextOff: { color: colors.textTertiary },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
+
+    toolbar: {
+      flexDirection: 'row', alignItems: 'center',
+      paddingHorizontal: 14, paddingTop: 8,
+      backgroundColor: colors.surface,
+      borderTopWidth: 1, borderTopColor: colors.divider,
+    },
+    tool: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+    toolText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+    toolTextOff: { color: colors.textTertiary },
   })
 }

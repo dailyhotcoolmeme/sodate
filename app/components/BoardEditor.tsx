@@ -55,7 +55,6 @@ export function BoardEditorInput({
 }) {
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
-  const full = images.length >= MAX_IMAGES
 
   return (
     <View style={styles.wrap}>
@@ -86,16 +85,6 @@ export function BoardEditorInput({
         </ScrollView>
       )}
 
-      <TouchableOpacity
-        style={[styles.addBtn, full && styles.addBtnOff]}
-        onPress={api.addImage}
-        disabled={full || api.uploading}
-      >
-        <Ionicons name="image-outline" size={17} color={full ? colors.textTertiary : colors.textSecondary} />
-        <Text style={[styles.addText, full && styles.addTextOff]}>
-          사진 첨부 {images.length}/{MAX_IMAGES}
-        </Text>
-      </TouchableOpacity>
     </View>
   )
 }
@@ -120,14 +109,5 @@ function makeStyles(colors: AppColors) {
       alignItems: 'center', justifyContent: 'center',
     },
 
-    addBtn: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-      alignSelf: 'flex-start',
-      paddingHorizontal: 13, paddingVertical: 9, borderRadius: 10,
-      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-    },
-    addBtnOff: { opacity: 0.5 },
-    addText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
-    addTextOff: { color: colors.textTertiary },
   })
 }
