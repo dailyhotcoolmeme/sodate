@@ -315,6 +315,27 @@ serve(async (req) => {
       return json({ ok: true })
     }
 
+    // ── 이미지 업로드 ──
+    // 앱에서 곧바로 Storage 에 올리게 하면 익명 사용자에게 쓰기 권한을 열어야 한다.
+    // 여기로 받으면 차단된 기기를 먼저 걸러내고(위 board_blocks 검사) 크기·형식도 본다.
+    if (action === 'uploadImage') {
+      const dataUrl = String(body.dataUrl ?? '')
+      const m = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/)
+      if (!m) return json({ error: '지원하지 않는 이미지 형식입니다.' }, 400)
+      const [, mime, b64] = m
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+      if (bytes.length > 5 * 1024 * 1024) {
+        return json({ error: '이미지는 5MB 이하만 올릴 수 있습니다.' }, 400)
+      }
+      const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg'
+      const key = `${hash.slice(0, 12)}/${crypto.randomUUID()}.${ext}`
+      const { error } = await supabase.storage.from('board-images')
+        .upload(key, bytes, { contentType: mime, upsert: false })
+      if (error) return json({ error: error.message }, 500)
+      const { data } = supabase.storage.from('board-images').getPublicUrl(key)
+      return json({ url: data.publicUrl })
+    }
+
     // ── 조회수 (화면에는 감춰두지만 값은 쌓아둔다) ──
     if (action === 'view') {
       const postId = String(body.postId ?? '')

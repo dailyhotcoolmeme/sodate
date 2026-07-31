@@ -10,6 +10,7 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { createPost, updatePost } from '@/lib/board'
+import BoardEditor from '@/components/BoardEditor'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { wideContent } from '@/constants/layout'
 
@@ -31,6 +32,7 @@ export default function BoardWriteScreen() {
   const [nickname, setNickname] = useState('')
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [images, setImages] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
 
@@ -40,12 +42,13 @@ export default function BoardWriteScreen() {
 
   useEffect(() => {
     if (!id) return
-    supabase.from('board_posts').select('nickname,title,content').eq('id', id).maybeSingle()
+    supabase.from('board_posts').select('nickname,title,content,image_urls').eq('id', id).maybeSingle()
       .then(({ data }) => {
         if (data) {
           setNickname((data as any).nickname ?? '')
           setTitle((data as any).title ?? '')
           setContent((data as any).content ?? '')
+          setImages((data as any).image_urls ?? [])
         }
         setLoading(false)
       }, () => setLoading(false))
@@ -57,8 +60,8 @@ export default function BoardWriteScreen() {
     if (!canSave || saving) return
     setSaving(true)
     const r = isEdit
-      ? await updatePost({ postId: id!, title: title.trim(), content: content.trim() })
-      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: content.trim() })
+      ? await updatePost({ postId: id!, title: title.trim(), content: content.trim(), imageUrls: images })
+      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: content.trim(), imageUrls: images })
     setSaving(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
     router.back()
@@ -108,15 +111,13 @@ export default function BoardWriteScreen() {
 
           <View>
             <Text style={styles.label}>내용</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
+            <BoardEditor
               value={content}
               onChangeText={setContent}
-              placeholder="내용을 입력하세요"
-              placeholderTextColor={colors.textTertiary}
+              images={images}
+              onChangeImages={setImages}
               maxLength={CONTENT_MAX}
-              multiline
-              textAlignVertical="top"
+              placeholder="내용을 입력하세요"
             />
           </View>
 

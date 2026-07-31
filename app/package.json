@@ -18,6 +18,8 @@
     "expo-constants": "~55.0.9",
     "expo-device": "~55.0.10",
     "expo-image": "~55.0.6",
+    "expo-image-manipulator": "~55.0.19",
+    "expo-image-picker": "~55.0.22",
     "expo-linking": "~55.0.8",
     "expo-notifications": "~55.0.13",
     "expo-router": "~55.0.7",
