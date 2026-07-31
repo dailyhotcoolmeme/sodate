@@ -22,7 +22,7 @@ export default function MyPostsScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors])
   const { posts, loading, refetch } = useMyPosts()
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
-  const refreshing = useRefreshIndicator(loading)
+  const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
 
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
 
@@ -42,7 +42,7 @@ export default function MyPostsScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
           {posts.map((p) => (
             <TouchableOpacity

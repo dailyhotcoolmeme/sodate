@@ -29,7 +29,7 @@ export default function NotificationsScreen() {
   const router = useRouter()
   const { items, loading, refetch, markAllRead, deleteOne, deleteAll } = useNotifications()
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
-  const refreshing = useRefreshIndicator(loading)
+  const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
 
   // 진입 시 모두 읽음 처리
   useEffect(() => {
@@ -86,7 +86,7 @@ export default function NotificationsScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
           {items.map((n) => (
             <TouchableOpacity

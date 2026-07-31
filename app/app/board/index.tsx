@@ -33,7 +33,7 @@ export default function BoardListScreen() {
   const settings = useBoardSettings()
   const { posts, total, loading, pageCount, refetch } = useBoardList(page, search)
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
-  const refreshing = useRefreshIndicator(loading)
+  const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
 
   // 글을 쓰고 돌아오면 목록이 최신이어야 한다.
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
@@ -93,7 +93,7 @@ export default function BoardListScreen() {
         <ScrollView
           contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 90 }]}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
           {posts.map((p) => (
             <PostRow key={p.id} post={p} hot={hot} cold={cold} styles={styles} colors={colors}

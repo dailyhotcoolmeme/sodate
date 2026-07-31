@@ -126,7 +126,7 @@ export default function ReviewsScreen() {
   const insets = useSafeAreaInsets()
   const { reviews, loading, refetch } = useAllReviews(500)
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
-  const refreshing = useRefreshIndicator(loading)
+  const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
@@ -321,7 +321,7 @@ export default function ReviewsScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 20 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
           {currentTab === 'user' || currentTab === 'mine' ? (
             // 직접 작성 후기는 이미지가 없으니 상세페이지와 동일한 카드 구조로

@@ -36,7 +36,7 @@ export default function BoardPostScreen() {
 
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
 
-  const refreshing = useRefreshIndicator(loading)
+  const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const [voting, setVoting] = useState(false)
   const [nickname, setNickname] = useState('')
   const [draft, setDraft] = useState('')
@@ -146,7 +146,7 @@ export default function BoardPostScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refetch} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <View style={styles.head}>
           <Text style={styles.title}>{post.title}</Text>
