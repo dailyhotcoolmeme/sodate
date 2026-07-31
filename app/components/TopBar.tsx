@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useRouter, usePathname } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import { useNotificationStore } from '@/stores/notificationStore'
@@ -22,19 +22,23 @@ export default function TopBar({
   onBeforeNavigate,
   segment,
   onSearchPress,
+  noSafeTop = false,
 }: {
   showBack?: boolean
   onLogoPress?: () => void
   onFilterPress?: () => void
   filterCount?: number
   onBeforeNavigate?: () => void // 메뉴 이동 직전(예: 열린 모달 닫기)
-  // 일정 ↔ 게시판 전환. 두 목록 화면에서만 준다(상세 화면에는 없음).
+  // 일정 ↔ 게시판 전환. 지금 있는 화면에 따라 알아서 정해지므로 보통 안 넘겨도 된다.
   // ⚠️ 심사 통과 전까지 '게시판' 글자가 보이는 형태를 유지할 것 — 아이콘만 남기면
   //    심사자가 눌러보지 않고, 눌러보지 않은 기능은 없는 것으로 본다(docs/BOARD_SPEC.md).
   segment?: 'event' | 'board'
   onSearchPress?: () => void // 게시판에서 필터 자리를 대신하는 검색
+  /** pageSheet 모달 안에서 쓸 때. 시트가 이미 상태바 아래에서 시작해 위 여백이 필요 없다 */
+  noSafeTop?: boolean
 }) {
   const router = useRouter()
+  const pathname = usePathname()
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const [menuVisible, setMenuVisible] = useState(false)
@@ -44,6 +48,16 @@ export default function TopBar({
     refreshUnread()
   }, [refreshUnread])
   const { activeFilterCount } = useFilter()
+
+  // 톱바는 어느 화면에서나 같은 모양이어야 한다(2026-07-31 오너 지시).
+  // 화면마다 넘겨주지 않아도 지금 경로를 보고 일정/게시판을 정한다.
+  const seg: 'event' | 'board' = segment ?? (pathname.startsWith('/board') ? 'board' : 'event')
+
+  const goSegment = (to: 'event' | 'board') => {
+    if (seg === to) return
+    onBeforeNavigate?.()
+    router.replace(to === 'board' ? '/board' : '/')
+  }
 
   const styles = useMemo(() => StyleSheet.create({
     wrap: { backgroundColor: colors.background },
@@ -59,8 +73,8 @@ export default function TopBar({
     logoBtn: { flexDirection: 'row', alignItems: 'center' },
     // 하트+"소개팅모아"가 한 이미지로 된 워드마크(원본 1042x231 = 4.51:1).
     // 라이트·다크 양쪽에서 보이는 핑크 버전만 사용(검정/흰색은 한쪽에서 사라짐).
-    logoWordmark: { width: 122, height: 27 },
-    logoWordmarkNarrow: { width: 96, height: 21 },
+    // 일정/게시판 전환 버튼이 늘 함께 있어서 좁은 폭으로 통일한다.
+    logoWordmark: { width: 96, height: 21 },
     right: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     // 일정 ↔ 게시판 전환. 로고와 아이콘 사이에서 남는 폭을 쓰되, 좁은 화면에서는
     // 로고가 먼저 줄어들도록 로고에 flexShrink 를 뒀다.
@@ -91,7 +105,7 @@ export default function TopBar({
   }), [colors])
 
   // 첫 줄만 화면에 따라 다르다. 메뉴가 통째로 바뀌면 '아까 있던 게 없어졌다'가 된다.
-  const firstItem = segment === 'board'
+  const firstItem = seg === 'board'
     ? { label: '내가 쓴 글', icon: 'create-outline', action: () => router.push('/board/mine') }
     : { label: '내가 쓴 후기', icon: 'create-outline', action: () => router.push({ pathname: '/reviews', params: { tab: 'mine' } }) }
 
@@ -105,7 +119,7 @@ export default function TopBar({
   ]
 
   return (
-    <View style={[styles.wrap, { paddingTop: insets.top }]}>
+    <View style={[styles.wrap, { paddingTop: noSafeTop ? 0 : insets.top }]}>
       <View style={styles.bar}>
         <View style={styles.left}>
           {showBack && (
@@ -116,40 +130,38 @@ export default function TopBar({
           <TouchableOpacity style={styles.logoBtn} activeOpacity={0.7}
             // 게시판 안에서는 게시판 홈으로 간다. 로고를 눌렀다고 일정으로 튕기면
             // 쓰던 흐름이 끊긴다(2026-07-31 오너 지적).
-            onPress={onLogoPress ?? (() => router.replace(segment === 'board' ? '/board' : '/'))}>
+            onPress={onLogoPress ?? (() => router.replace(seg === 'board' ? '/board' : '/'))}>
             <Image
               source={require('../assets/logo-wordmark.png')}
-              style={segment ? styles.logoWordmarkNarrow : styles.logoWordmark}
+              style={styles.logoWordmark}
               contentFit="contain"
               accessibilityLabel="소개팅모아"
             />
           </TouchableOpacity>
         </View>
 
-        {segment && (
-          <View style={styles.segWrap}>
-            <TouchableOpacity
-              style={[styles.segBtn, segment === 'event' && styles.segBtnOn]}
-              onPress={() => segment !== 'event' && router.replace('/')}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: segment === 'event' }}
-            >
-              <Text style={[styles.segText, segment === 'event' && styles.segTextOn]}>일정</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segBtn, segment === 'board' && styles.segBtnOn]}
-              onPress={() => segment !== 'board' && router.replace('/board')}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: segment === 'board' }}
-            >
-              <Text style={[styles.segText, segment === 'board' && styles.segTextOn]}>게시판</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={styles.segWrap}>
+          <TouchableOpacity
+            style={[styles.segBtn, seg === 'event' && styles.segBtnOn]}
+            onPress={() => goSegment('event')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: seg === 'event' }}
+          >
+            <Text style={[styles.segText, seg === 'event' && styles.segTextOn]}>일정</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segBtn, seg === 'board' && styles.segBtnOn]}
+            onPress={() => goSegment('board')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: seg === 'board' }}
+          >
+            <Text style={[styles.segText, seg === 'board' && styles.segTextOn]}>게시판</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.right}>
           {/* 게시판에서는 걸러낼 조건이 없다 → 필터 자리를 검색이 대신한다. */}
-          {segment === 'board' ? (
+          {seg === 'board' ? (
             <TouchableOpacity style={styles.iconBtn} onPress={onSearchPress}>
               <Ionicons name="search-outline" size={21} color={colors.textPrimary} />
             </TouchableOpacity>

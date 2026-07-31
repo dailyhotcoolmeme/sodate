@@ -248,7 +248,9 @@ export default function FilterSheet({ visible, onClose }: Props) {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        <TopBar onBeforeNavigate={onClose} />
+        {/* pageSheet 모달은 이미 상태바 아래에서 시작한다. 여기서 안전영역 여백을
+            또 주면 홈 화면보다 한참 아래에서 시작해 보인다(2026-07-31 오너 지적). */}
+        <TopBar onBeforeNavigate={onClose} noSafeTop />
         {/* 헤더 — 초기화·적용은 하단 플로팅으로 이동 */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>필터</Text>
