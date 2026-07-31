@@ -102,7 +102,7 @@ export default function BoardPostScreen() {
   if (loading && !post) {
     return (
       <View style={styles.container}>
-        <TopBar showBack />
+        <TopBar showBack onLogoPress={() => router.replace('/board')} />
         <View style={styles.center}><AppSpinner /></View>
       </View>
     )
@@ -111,7 +111,7 @@ export default function BoardPostScreen() {
   if (!post) {
     return (
       <View style={styles.container}>
-        <TopBar showBack />
+        <TopBar showBack onLogoPress={() => router.replace('/board')} />
         <View style={styles.center}>
           <Text style={styles.emptyText}>글을 찾을 수 없어요</Text>
           <Text style={styles.emptySub}>삭제되었거나 숨겨진 글입니다.</Text>
@@ -129,7 +129,7 @@ export default function BoardPostScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <TopBar showBack />
+      <TopBar showBack onLogoPress={() => router.replace('/board')} />
 
       <ScrollView
         contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 16 }]}

@@ -25,7 +25,7 @@ export default function MyPostsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack />
+      <TopBar showBack onLogoPress={() => router.replace('/board')} />
       <Text style={styles.heading}>내가 쓴 글</Text>
 
       {loading ? (

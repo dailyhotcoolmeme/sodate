@@ -71,7 +71,7 @@ export default function BoardWriteScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <TopBar showBack />
+      <TopBar showBack onLogoPress={() => router.replace('/board')} />
       <View style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[wideContent, { padding: 16, paddingBottom: insets.bottom + 24, gap: 14 }]}
