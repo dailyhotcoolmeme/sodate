@@ -21,7 +21,6 @@ import {
 } from '@/lib/board'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { wideContent } from '@/constants/layout'
-import { MarkdownText, makeStyles as makeEditorStyles } from '@/components/BoardEditor'
 import type { BoardComment } from '@/lib/board'
 
 /** 글 상세 — 추천·비추, 댓글(대댓글 한 단계), 내 글이면 수정·삭제. */
@@ -31,8 +30,6 @@ export default function BoardPostScreen() {
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(colors), [colors])
-  // 본문은 글쓰기에서 넣은 표시 기호(굵게·인용 등)를 그대로 그려준다.
-  const mdStyles = useMemo(() => makeEditorStyles(colors), [colors])
 
   const { post, comments, myVote, isMine, myCommentIds, loading, refetch } = useBoardPost(id)
   const [voting, setVoting] = useState(false)
@@ -179,7 +176,7 @@ export default function BoardPostScreen() {
         </View>
 
         <View style={styles.body}>
-          <MarkdownText text={post.content} styles={mdStyles} />
+          <Text style={styles.bodyText} selectable>{post.content}</Text>
         </View>
 
         {!!post.image_urls?.length && (
@@ -388,6 +385,7 @@ function makeStyles(colors: AppColors) {
     metaActDanger: { color: colors.error },
 
     body: { paddingHorizontal: 16, paddingVertical: 16 },
+    bodyText: { fontSize: 15, lineHeight: 23, color: colors.textPrimary },
 
     images: { paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
     imageWrap: { position: 'relative', borderRadius: 10, overflow: 'hidden' },

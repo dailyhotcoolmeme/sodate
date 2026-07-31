@@ -11,7 +11,8 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { createPost, updatePost } from '@/lib/board'
-import { useBoardEditor, BoardEditorInput, BoardEditorToolbar } from '@/components/BoardEditor'
+import { useBoardEditor, BoardEditorInput } from '@/components/BoardEditor'
+import BottomCTA from '@/components/BottomCTA'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { wideContent } from '@/constants/layout'
 
@@ -36,7 +37,7 @@ export default function BoardWriteScreen() {
   const [images, setImages] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
-  const editor = useBoardEditor(content, setContent, images, setImages)
+  const editor = useBoardEditor(images, setImages)
 
   useEffect(() => {
     getLastNickname().then((n) => n && setNickname((cur) => cur || n))
@@ -71,17 +72,7 @@ export default function BoardWriteScreen() {
 
   return (
     <View style={styles.container}>
-      {/* 애플 가이드라인: 이 화면의 주 동작은 상단 내비게이션 바에 둔다.
-          키보드 위 액세서리는 서식 도구 자리다(2026-07-31 조사·오너 지적). */}
-      <TopBar
-        showBack
-        onLogoPress={() => router.replace('/board')}
-        rightAction={{
-          label: isEdit ? '완료' : '등록',
-          onPress: save,
-          disabled: !canSave || saving,
-        }}
-      />
+      <TopBar showBack onLogoPress={() => router.replace('/board')} />
       <View style={{ flex: 1 }}>
         <KeyboardAwareScrollView
           contentContainerStyle={[wideContent, { padding: 16, paddingBottom: insets.bottom + 24, gap: 14 }]}
@@ -137,8 +128,13 @@ export default function BoardWriteScreen() {
         </KeyboardAwareScrollView>
       </View>
 
-      {/* 서식 도구 — 키보드 위에 붙는다. 스크롤 밖에 둬야 키보드가 덮지 않는다. */}
-      <BoardEditorToolbar api={editor} bottomInset={insets.bottom} />
+      {/* 등록은 화면 아래 고정. 키보드가 올라오면 그 위로 따라 올라온다. */}
+      <BottomCTA
+        label={isEdit ? '수정 완료' : '등록'}
+        onPress={save}
+        disabled={!canSave || saving}
+        bottomInset={insets.bottom}
+      />
 
       <LoadingOverlay visible={saving || loading} />
     </View>
