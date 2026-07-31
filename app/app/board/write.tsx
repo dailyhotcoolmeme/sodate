@@ -37,6 +37,7 @@ export default function BoardWriteScreen() {
   const [images, setImages] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
+  const [ctaHeight, setCtaHeight] = useState(0)
   const editor = useBoardEditor(images, setImages)
 
   useEffect(() => {
@@ -94,8 +95,9 @@ export default function BoardWriteScreen() {
           contentContainerStyle={[wideContent, { padding: 16, paddingBottom: insets.bottom + 24, gap: 14 }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          // 커서가 키보드 바로 위에 붙지 않게 띄우는 여백
-          bottomOffset={24}
+          // 키보드 위에 등록 바가 얹혀 있으므로 그 높이만큼 더 올려야 마지막 줄이
+          // 가리지 않는다. 바가 홈 인디케이터 영역까지 먹고 있으니 그건 뺀다.
+          bottomOffset={Math.max(24, ctaHeight - insets.bottom + 12)}
         >
           <Text style={styles.heading}>{isEdit ? '글 수정' : '글쓰기'}</Text>
 
@@ -150,6 +152,7 @@ export default function BoardWriteScreen() {
         onPress={save}
         disabled={!canSave || saving}
         bottomInset={insets.bottom}
+        onHeight={setCtaHeight}
       />
 
       <LoadingOverlay visible={saving || loading} />

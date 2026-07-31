@@ -21,19 +21,29 @@ export default function BottomCTA({
   onPress,
   disabled = false,
   bottomInset = 0,
+  onHeight,
 }: {
   label: string
   onPress: () => void
   disabled?: boolean
   /** 키보드가 닫혀 있을 때 아래에 둘 여백(홈 인디케이터 영역) */
   bottomInset?: number
+  /**
+   * 이 바가 차지하는 높이를 알려준다. 입력칸을 키보드 위로 올릴 때 이 바만큼 더
+   * 올려야 마지막 줄이 가리지 않는다(2026-07-31 오너 지적). 값을 눈대중으로 적지
+   * 않고 실제로 그려진 높이를 잰다.
+   */
+  onHeight?: (h: number) => void
 }) {
   const colors = useColors()
   const styles = makeStyles(colors)
 
   return (
     <KeyboardStickyView offset={{ closed: 0, opened: bottomInset }}>
-      <View style={[styles.bar, { paddingBottom: 10 + bottomInset }]}>
+      <View
+        style={[styles.bar, { paddingBottom: 10 + bottomInset }]}
+        onLayout={(e) => onHeight?.(e.nativeEvent.layout.height)}
+      >
         <TouchableOpacity
           style={[styles.btn, disabled && styles.btnOff]}
           onPress={onPress}

@@ -77,8 +77,9 @@ export default function TopBar({
     logoBtn: { flexDirection: 'row', alignItems: 'center' },
     // 하트+"소개팅모아"가 한 이미지로 된 워드마크(원본 1042x231 = 4.51:1).
     // 라이트·다크 양쪽에서 보이는 핑크 버전만 사용(검정/흰색은 한쪽에서 사라짐).
-    // 일정/게시판 전환 버튼이 늘 함께 있어서 좁은 폭으로 통일한다.
-    logoWordmark: { width: 96, height: 21 },
+    // 소개팅|커뮤니티 알약(글자 14)과 덩치를 맞춘다. 원본 1042x231 = 4.51:1 이라
+    // 높이 24 에 맞는 폭은 108 이다(2026-07-31 오너 지적).
+    logoWordmark: { width: 108, height: 24 },
     // 일정 ↔ 게시판 전환. 로고와 아이콘 사이에서 남는 폭을 쓰되, 좁은 화면에서는
     // 로고가 먼저 줄어들도록 로고에 flexShrink 를 뒀다.
     segWrap: {
