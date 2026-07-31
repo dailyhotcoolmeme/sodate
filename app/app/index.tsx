@@ -253,13 +253,12 @@ export default function HomeScreen() {
       flexDirection: 'row',
       alignItems: 'center',
     },
+    // 지역 칩과 같은 모양이어야 한다 — 여백·글자 값은 regionChip/regionChipText 를
+    // 그대로 쓰고, 여기서는 줄 끝에 놓기 위한 것만 더한다(2026-07-31 오너 지적).
     filterBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 4,
       marginRight: 16, marginLeft: 4,
-      paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
-      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
     },
-    filterBtnText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
     filterBtnBadge: {
       minWidth: 15, height: 15, paddingHorizontal: 3, borderRadius: 8,
       backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
@@ -659,9 +658,13 @@ export default function HomeScreen() {
       </ScrollView>
       {/* 필터는 톱바에서 여기로 내려왔다. 톱바는 로고·소개팅/커뮤니티·메뉴만 둔다
           (2026-07-31 오너 확정). 지역 칩과 같은 줄 오른쪽 끝. */}
-      <TouchableOpacity style={styles.filterBtn} onPress={() => setFilterVisible(true)} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={[styles.regionChip, styles.filterBtn]}
+        onPress={() => setFilterVisible(true)}
+        activeOpacity={0.8}
+      >
         <Ionicons name="funnel-outline" size={13} color={colors.textSecondary} />
-        <Text style={styles.filterBtnText}>필터</Text>
+        <Text style={styles.regionChipText}>필터</Text>
         {activeFilterCount > 0 && (
           <View style={styles.filterBtnBadge}>
             <Text style={styles.filterBtnBadgeText}>{activeFilterCount}</Text>

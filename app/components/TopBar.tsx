@@ -85,9 +85,10 @@ export default function TopBar({
       flexDirection: 'row', borderRadius: 999, overflow: 'hidden',
       borderWidth: 1, borderColor: colors.border, marginHorizontal: 6, flexShrink: 0,
     },
-    segBtn: { paddingHorizontal: 11, paddingVertical: 4 },
+    segBtn: { paddingHorizontal: 14, paddingVertical: 6, justifyContent: 'center' },
     segBtnOn: { backgroundColor: colors.primary },
-    segText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+    // lineHeight 를 명시해야 글자가 알약 안에서 위아래 가운데에 앉는다.
+    segText: { fontSize: 14, lineHeight: 18, fontWeight: '600', color: colors.textSecondary },
     segTextOn: { color: '#fff', fontWeight: '800' },
     iconBtn: { padding: 6, borderRadius: 8 },
     filterBadge: {
