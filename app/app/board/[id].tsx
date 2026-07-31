@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react'
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Keyboard,
 } from 'react-native'
@@ -42,6 +42,9 @@ export default function BoardPostScreen() {
   const [editing, setEditing] = useState<BoardComment | null>(null)
   const [sending, setSending] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'image'; id: string } | null>(null)
+  // 등록 후 입력칸을 확실히 놓아준다. Keyboard.dismiss() 만으로는 칸이 포커스를 쥐고
+  // 있어 목록이 새로 그려질 때 키보드가 다시 올라온다(2026-07-31 오너 지적).
+  const commentRef = useRef<TextInput>(null)
 
   // 닉네임은 가장 최근에 쓴 값을 물고 간다(후기 작성과 동일). 여기서 바꾸면
   // 그 값이 다음부터 기본값이 된다 — 저장은 lib/board.ts 에서 한다.
@@ -89,6 +92,7 @@ export default function BoardPostScreen() {
     setSending(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
     setDraft(''); setReplyTo(null); setEditing(null)
+    commentRef.current?.blur()
     Keyboard.dismiss()
     refetch()
   }
@@ -144,7 +148,34 @@ export default function BoardPostScreen() {
       >
         <View style={styles.head}>
           <Text style={styles.title}>{post.title}</Text>
-          <Text style={styles.meta}>{post.nickname} · {formatFull(post.created_at)}</Text>
+          {/* 수정·삭제는 닉네임·날짜와 같은 줄 오른쪽에 둔다(2026-07-31 오너 지시).
+              글자 크기를 메타와 맞춰야 줄 높이가 흔들리지 않는다. */}
+          <View style={styles.metaRow}>
+            <Text style={styles.meta}>{post.nickname} · {formatFull(post.created_at)}</Text>
+            <View style={styles.metaActions}>
+              {isMine ? (
+                <>
+                  <TouchableOpacity onPress={() => router.push(`/board/write?id=${id}`)} hitSlop={8}>
+                    <Text style={styles.metaAct}>수정</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleDelete} hitSlop={8}>
+                    <Text style={[styles.metaAct, styles.metaActDanger]}>삭제</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity onPress={() => setReportTarget({ type: 'post', id })} hitSlop={8}>
+                    <Text style={styles.metaAct}>신고</Text>
+                  </TouchableOpacity>
+                  {!!post.image_urls?.length && !post.image_hidden && (
+                    <TouchableOpacity onPress={() => setReportTarget({ type: 'image', id })} hitSlop={8}>
+                      <Text style={styles.metaAct}>이미지 신고</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </View>
+          </View>
         </View>
 
         <View style={styles.body}>
@@ -185,30 +216,6 @@ export default function BoardPostScreen() {
             <Ionicons name="chevron-down" size={18} color={myVote === -1 ? colors.primary : colors.textSecondary} />
             <Text style={[styles.voteText, myVote === -1 && styles.voteTextOn]}>비추 {post.downvotes}</Text>
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.actions}>
-          {isMine ? (
-            <>
-              <TouchableOpacity style={styles.act} onPress={() => router.push(`/board/write?id=${id}`)}>
-                <Text style={styles.actText}>수정</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.act} onPress={handleDelete}>
-                <Text style={[styles.actText, styles.actDanger]}>삭제</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity style={styles.act} onPress={() => setReportTarget({ type: 'post', id })}>
-                <Text style={styles.actText}>신고</Text>
-              </TouchableOpacity>
-              {!!post.image_urls?.length && !post.image_hidden && (
-                <TouchableOpacity style={styles.act} onPress={() => setReportTarget({ type: 'image', id })}>
-                  <Text style={styles.actText}>이미지 신고</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
         </View>
 
         <Text style={styles.commentHead}>댓글 {post.comment_count}</Text>
@@ -274,6 +281,7 @@ export default function BoardPostScreen() {
           />
           <View style={styles.inputRow}>
             <TextInput
+              ref={commentRef}
               style={styles.commentInput}
               value={draft}
               onChangeText={setDraft}
@@ -322,30 +330,36 @@ function CommentRow({
 }) {
   return (
     <View style={[styles.comment, reply && styles.commentReply]}>
-      <Text style={styles.commentMeta}>{c.nickname} · {formatFull(c.created_at)}</Text>
+      {/* 수정·삭제(신고)는 닉네임·날짜와 같은 줄 오른쪽. 글자 크기·줄높이를 메타와
+          똑같이 맞춰 줄 간격이 밀리지 않게 한다(2026-07-31 오너 지시). */}
+      <View style={styles.commentMetaRow}>
+        <Text style={styles.commentMeta}>{c.nickname} · {formatFull(c.created_at)}</Text>
+        <View style={styles.commentManage}>
+          {mine ? (
+            <>
+              <TouchableOpacity onPress={onEdit} hitSlop={8}>
+                <Text style={styles.commentMetaAct}>수정</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onDelete} hitSlop={8}>
+                <Text style={[styles.commentMetaAct, styles.commentActDanger]}>삭제</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity onPress={onReport} hitSlop={8}>
+              <Text style={styles.commentMetaAct}>신고</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
       <Text style={styles.commentBody}>{c.content}</Text>
-      <View style={styles.commentActions}>
-        {/* 답글에는 다시 답글을 달 수 없다(대댓글 한 단계) */}
-        {!reply && onReply && (
+      {/* 답글에는 다시 답글을 달 수 없다(대댓글 한 단계) */}
+      {!reply && onReply && (
+        <View style={styles.commentActions}>
           <TouchableOpacity onPress={onReply} hitSlop={6}>
             <Text style={styles.commentAct}>답글</Text>
           </TouchableOpacity>
-        )}
-        {mine ? (
-          <>
-            <TouchableOpacity onPress={onEdit} hitSlop={6}>
-              <Text style={styles.commentAct}>수정</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onDelete} hitSlop={6}>
-              <Text style={[styles.commentAct, styles.commentActDanger]}>삭제</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <TouchableOpacity onPress={onReport} hitSlop={6}>
-            <Text style={styles.commentAct}>신고</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   )
 }
@@ -366,7 +380,12 @@ function makeStyles(colors: AppColors) {
     head: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12, gap: 5,
       borderBottomWidth: 1, borderBottomColor: colors.divider },
     title: { fontSize: 18, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.3 },
-    meta: { fontSize: 12, color: colors.textTertiary },
+    meta: { fontSize: 12, lineHeight: 17, color: colors.textTertiary },
+    metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+    metaActions: { flexDirection: 'row', gap: 12 },
+    // 메타와 같은 크기·줄높이 — 다르면 줄 간격이 어긋난다
+    metaAct: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
+    metaActDanger: { color: colors.error },
 
     body: { paddingHorizontal: 16, paddingVertical: 16 },
 
@@ -389,12 +408,6 @@ function makeStyles(colors: AppColors) {
     voteText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
     voteTextOn: { color: colors.primary, fontWeight: '800' },
 
-    actions: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 14 },
-    act: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
-      borderWidth: 1, borderColor: colors.border },
-    actText: { fontSize: 12.5, color: colors.textSecondary },
-    actDanger: { color: colors.error },
-
     commentHead: {
       fontSize: 14, fontWeight: '800', color: colors.textPrimary,
       paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8,
@@ -405,7 +418,10 @@ function makeStyles(colors: AppColors) {
     comment: { paddingHorizontal: 16, paddingVertical: 11, gap: 4,
       borderTopWidth: 1, borderTopColor: colors.divider },
     commentReply: { paddingLeft: 34, backgroundColor: colors.surface },
-    commentMeta: { fontSize: 11.5, color: colors.textTertiary },
+    commentMeta: { fontSize: 11.5, lineHeight: 16, color: colors.textTertiary },
+    commentMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+    commentManage: { flexDirection: 'row', gap: 12 },
+    commentMetaAct: { fontSize: 11.5, lineHeight: 16, color: colors.textSecondary },
     commentBody: { fontSize: 14, lineHeight: 21, color: colors.textPrimary },
     commentActions: { flexDirection: 'row', gap: 12, marginTop: 2 },
     commentAct: { fontSize: 12, color: colors.textSecondary },
