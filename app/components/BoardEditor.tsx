@@ -5,21 +5,25 @@ import {
 } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
+import { KeyboardStickyView } from 'react-native-keyboard-controller'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { pickAndUpload, MAX_IMAGES } from '@/lib/boardImage'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
 /**
- * 게시판 본문 편집기 — 서식 도구 + 사진 첨부.
+ * 게시판 본문 편집기.
  *
- * 웹 게시판처럼 화면에 바로 굵게 보이는 편집기는 RN에서 만들기 어렵고 버그가 잦다.
- * 대신 표시용 기호를 넣어주는 도구 모음을 두고, 읽을 때 서식으로 그려준다(마크다운).
- * 사용자는 버튼만 누르면 되고, 무엇이 적용됐는지 미리보기로 확인할 수 있다.
+ * 화면 배치는 애플 가이드라인을 따른다(2026-08-01 조사).
+ *   · 주 동작(등록)은 **상단 내비게이션 바**에 둔다. 키보드 위에 '등록' 글자를 얹는
+ *     형태는 어느 앱에도 없다.
+ *   · **키보드 위 액세서리는 서식 도구 자리다.** 가이드라인이 메일 앱의 서식 도구를
+ *     그 예로 든다. 오른쪽 끝에 키보드 내리는 버튼을 둔다(아이폰엔 닫기 키가 없다).
+ *
+ * 그래서 입력칸과 도구 모음을 따로 내보낸다. 화면이 입력칸은 스크롤 안에,
+ * 도구 모음은 스크롤 밖(키보드 위)에 둔다.
  */
 
-// 도구는 어느 편집기에서나 쓰는 아이콘 그대로 둔다(굵게 B, 기울임 I, 취소선 S…).
-// 글자 라벨을 테두리 상자에 넣으면 게시판 편집기처럼 안 보인다(2026-08-01 오너 지적).
 type Mark = {
   label: string
   icon: keyof typeof MaterialIcons.glyphMap
@@ -35,47 +39,30 @@ const MARKS: Mark[] = [
   { label: '링크', icon: 'link', wrap: ['[', '](https://)'] },
 ]
 
-export default function BoardEditor({
-  value, onChangeText, images, onChangeImages, maxLength, placeholder,
-  inputRef, onFocus, onBlur, onCaretMove,
-}: {
-  value: string
-  onChangeText: (t: string) => void
-  images: string[]
+export function useBoardEditor(
+  value: string,
+  onChangeText: (t: string) => void,
+  images: string[],
   onChangeImages: (next: string[]) => void
-  maxLength?: number
-  placeholder?: string
-  /** 바깥에서 입력칸 위치를 재야 커서를 키보드 위로 끌어올릴 수 있다. */
-  inputRef?: React.RefObject<TextInput | null>
-  onFocus?: () => void
-  onBlur?: () => void
-  /** 줄이 늘거나 커서가 움직일 때 — 화면을 커서에 맞춰 스크롤하라는 신호. */
-  onCaretMove?: () => void
-}) {
-  const colors = useColors()
-  const styles = useMemo(() => makeStyles(colors), [colors])
-  const localRef = useRef<TextInput>(null)
-  const ref = inputRef ?? localRef
+) {
+  const inputRef = useRef<TextInput>(null)
   const [sel, setSel] = useState({ start: 0, end: 0 })
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState(false)
 
-  const onSelectionChange = (e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+  const onSelectionChange = (e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) =>
     setSel(e.nativeEvent.selection)
-    onCaretMove?.()
-  }
 
-  /** 고른 글자를 기호로 감싼다. 고른 게 없으면 커서 자리에 넣고 가운데로 커서를 둔다. */
+  /** 고른 글자를 기호로 감싼다. 고른 게 없으면 커서 자리에 넣는다. */
   const applyMark = (m: Mark) => {
     const [open, close] = m.wrap
     const start = Math.min(sel.start, sel.end)
     const end = Math.max(sel.start, sel.end)
     const picked = value.slice(start, end)
-    const next = value.slice(0, start) + open + picked + close + value.slice(end)
-    onChangeText(next)
+    onChangeText(value.slice(0, start) + open + picked + close + value.slice(end))
     const caret = start + open.length + picked.length
     requestAnimationFrame(() => {
-      ref.current?.setNativeProps({ selection: { start: caret, end: caret } })
+      inputRef.current?.setNativeProps({ selection: { start: caret, end: caret } })
     })
   }
 
@@ -92,14 +79,86 @@ export default function BoardEditor({
     onChangeImages([...images, r.url])
   }
 
+  return {
+    inputRef, onSelectionChange, applyMark, addImage,
+    uploading, preview, setPreview,
+    removeImage: (u: string) => onChangeImages(images.filter((x) => x !== u)),
+  }
+}
+
+export type BoardEditorApi = ReturnType<typeof useBoardEditor>
+
+/** 본문 입력칸 + 첨부한 사진. 스크롤 안에 둔다. */
+export function BoardEditorInput({
+  api, value, onChangeText, images, maxLength, placeholder,
+}: {
+  api: BoardEditorApi
+  value: string
+  onChangeText: (t: string) => void
+  images: string[]
+  maxLength?: number
+  placeholder?: string
+}) {
+  const colors = useColors()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+
   return (
     <View style={styles.wrap}>
-      <View style={styles.toolbar}>
+      {api.preview ? (
+        <View style={styles.previewBox}>
+          <MarkdownText text={value} styles={styles} />
+        </View>
+      ) : (
+        <TextInput
+          ref={api.inputRef}
+          style={styles.input}
+          value={value}
+          onChangeText={onChangeText}
+          onSelectionChange={api.onSelectionChange}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textTertiary}
+          maxLength={maxLength}
+          multiline
+          textAlignVertical="top"
+        />
+      )}
+
+      <LoadingOverlay visible={api.uploading} />
+
+      {images.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
+          {images.map((u) => (
+            <View key={u} style={styles.thumbWrap}>
+              <Image source={{ uri: u }} style={styles.thumb} contentFit="cover" />
+              <TouchableOpacity style={styles.thumbX} onPress={() => api.removeImage(u)} hitSlop={6}>
+                <Ionicons name="close" size={13} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  )
+}
+
+/** 서식 도구 — 키보드 위에 붙는다. 화면 맨 아래(스크롤 밖)에 둘 것. */
+export function BoardEditorToolbar({
+  api, bottomInset = 0,
+}: {
+  api: BoardEditorApi
+  bottomInset?: number
+}) {
+  const colors = useColors()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+
+  return (
+    <KeyboardStickyView offset={{ closed: 0, opened: bottomInset }}>
+      <View style={[styles.toolbar, { paddingBottom: 6 + bottomInset }]}>
         {MARKS.map((m) => (
           <TouchableOpacity
             key={m.label}
             style={styles.tool}
-            onPress={() => applyMark(m)}
+            onPress={() => api.applyMark(m)}
             accessibilityLabel={m.label}
             hitSlop={6}
           >
@@ -111,77 +170,44 @@ export default function BoardEditor({
 
         <TouchableOpacity
           style={styles.tool}
-          onPress={addImage}
-          disabled={uploading}
+          onPress={api.addImage}
+          disabled={api.uploading}
           accessibilityLabel="사진 첨부"
           hitSlop={6}
         >
-          {/* 진행 표시는 버튼 안이 아니라 화면 중앙 오버레이로 낸다(오너 확정). */}
           <Ionicons name="image-outline" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tool, styles.toolLast]}
-          onPress={() => setPreview((v) => !v)}
-          accessibilityLabel={preview ? '편집으로 돌아가기' : '미리보기'}
+          style={styles.tool}
+          onPress={() => api.setPreview((v) => !v)}
+          accessibilityLabel={api.preview ? '편집으로 돌아가기' : '미리보기'}
           hitSlop={6}
         >
           <Ionicons
-            name={preview ? 'create-outline' : 'eye-outline'}
+            name={api.preview ? 'create-outline' : 'eye-outline'}
             size={20}
-            color={preview ? colors.primary : colors.textSecondary}
+            color={api.preview ? colors.primary : colors.textSecondary}
           />
         </TouchableOpacity>
+
+        {/* 아이폰 키보드에는 닫기 키가 없다. 오른쪽 끝에 내리는 버튼을 둔다. */}
+        <TouchableOpacity
+          style={[styles.tool, styles.toolLast]}
+          onPress={() => api.inputRef.current?.blur()}
+          accessibilityLabel="키보드 내리기"
+          hitSlop={6}
+        >
+          <Ionicons name="chevron-down" size={22} color={colors.textSecondary} />
+        </TouchableOpacity>
       </View>
-
-      {preview ? (
-        <View style={styles.previewBox}>
-          <MarkdownText text={value} styles={styles} />
-        </View>
-      ) : (
-        <TextInput
-          ref={ref}
-          style={styles.input}
-          value={value}
-          onChangeText={onChangeText}
-          onSelectionChange={onSelectionChange}
-          onContentSizeChange={() => onCaretMove?.()}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textTertiary}
-          maxLength={maxLength}
-          multiline
-          textAlignVertical="top"
-        />
-      )}
-
-      <LoadingOverlay visible={uploading} />
-
-      {images.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
-          {images.map((u) => (
-            <View key={u} style={styles.thumbWrap}>
-              <Image source={{ uri: u }} style={styles.thumb} contentFit="cover" />
-              <TouchableOpacity
-                style={styles.thumbX}
-                onPress={() => onChangeImages(images.filter((x) => x !== u))}
-                hitSlop={6}
-              >
-                <Ionicons name="close" size={13} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-    </View>
+    </KeyboardStickyView>
   )
 }
 
 /**
- * 아주 작은 마크다운 표시기.
- * 게시판에서 쓰는 것만 그린다 — 굵게·기울임·취소선·인용·목록·링크.
- * 외부 라이브러리를 쓰면 스타일이 앱과 겉돌아 직접 그린다.
+ * 아주 작은 마크다운 표시기 — 굵게·기울임·취소선·인용·목록·링크만.
+ * 외부 라이브러리는 스타일이 앱과 겉돌아 직접 그린다.
  */
 export function MarkdownText({
   text, styles,
@@ -214,7 +240,6 @@ export function MarkdownText({
   )
 }
 
-/** **굵게** _기울임_ ~~취소선~~ [글자](주소) 를 조각으로 나눠 그린다. */
 function renderInline(line: string, styles: ReturnType<typeof makeStyles>): React.ReactNode[] {
   const out: React.ReactNode[] = []
   const re = /(\*\*[^*]+\*\*|_[^_]+_|~~[^~]+~~|\[[^\]]+\]\([^)]+\))/g
@@ -227,10 +252,7 @@ function renderInline(line: string, styles: ReturnType<typeof makeStyles>): Reac
     if (t.startsWith('**')) out.push(<Text key={key++} style={styles.bold}>{t.slice(2, -2)}</Text>)
     else if (t.startsWith('~~')) out.push(<Text key={key++} style={styles.strike}>{t.slice(2, -2)}</Text>)
     else if (t.startsWith('_')) out.push(<Text key={key++} style={styles.italic}>{t.slice(1, -1)}</Text>)
-    else {
-      const label = t.slice(1, t.indexOf(']'))
-      out.push(<Text key={key++} style={styles.link}>{label}</Text>)
-    }
+    else out.push(<Text key={key++} style={styles.link}>{t.slice(1, t.indexOf(']'))}</Text>)
     last = m.index + t.length
   }
   if (last < line.length) out.push(line.slice(last))
@@ -240,10 +262,16 @@ function renderInline(line: string, styles: ReturnType<typeof makeStyles>): Reac
 export function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     wrap: { gap: 8 },
-    // 테두리 상자 없이 아이콘만 늘어놓는다. 시중 게시판 편집기가 다 이 모양이다.
-    toolbar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2 },
-    tool: { paddingHorizontal: 7, paddingVertical: 4 },
-    toolLast: { marginLeft: 'auto', paddingRight: 0 },
+
+    // 서식 도구 — 테두리 상자 없이 아이콘만. 키보드 위에 붙는다.
+    toolbar: {
+      flexDirection: 'row', alignItems: 'center',
+      paddingHorizontal: 10, paddingTop: 6,
+      backgroundColor: colors.surface,
+      borderTopWidth: 1, borderTopColor: colors.divider,
+    },
+    tool: { paddingHorizontal: 7, paddingVertical: 6 },
+    toolLast: { marginLeft: 'auto', paddingRight: 2 },
     toolDivider: { width: 1, height: 15, marginHorizontal: 6, backgroundColor: colors.border },
 
     input: {
@@ -262,10 +290,7 @@ export function makeStyles(colors: AppColors) {
     italic: { fontStyle: 'italic' },
     strike: { textDecorationLine: 'line-through', color: colors.textSecondary },
     link: { color: colors.primary, textDecorationLine: 'underline' },
-    quote: {
-      borderLeftWidth: 3, borderLeftColor: colors.border,
-      paddingLeft: 10, marginVertical: 3,
-    },
+    quote: { borderLeftWidth: 3, borderLeftColor: colors.border, paddingLeft: 10, marginVertical: 3 },
     bullet: { flexDirection: 'row', gap: 7, marginVertical: 1 },
     bulletDot: { fontSize: 15, lineHeight: 23, color: colors.textSecondary },
 

@@ -254,9 +254,10 @@ export default function BoardPostScreen() {
             ) : (
               <>
                 <View />
-                {/* 아이폰 키보드에는 닫기 키가 없다. 앱이 직접 줘야 한다. */}
-                <TouchableOpacity onPress={() => Keyboard.dismiss()} hitSlop={8}>
-                  <Text style={styles.inputHintCancel}>키보드 닫기</Text>
+                {/* 아이폰 키보드에는 닫기 키가 없다. 앱이 직접 줘야 한다.
+                    글자 대신 아래꺾쇠 — 메모·메일 앱이 쓰는 모양이다. */}
+                <TouchableOpacity onPress={() => Keyboard.dismiss()} hitSlop={10}>
+                  <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               </>
             )}

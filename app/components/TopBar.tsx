@@ -22,6 +22,7 @@ export default function TopBar({
   onBeforeNavigate,
   segment,
   onSearchPress,
+  rightAction,
 }: {
   showBack?: boolean
   onLogoPress?: () => void
@@ -33,6 +34,11 @@ export default function TopBar({
   //    심사자가 눌러보지 않고, 눌러보지 않은 기능은 없는 것으로 본다(docs/BOARD_SPEC.md).
   segment?: 'event' | 'board'
   onSearchPress?: () => void // 게시판에서 필터 자리를 대신하는 검색
+  /**
+   * 이 화면의 주 동작(등록·저장 등). 주면 오른쪽 아이콘들 대신 이것만 보인다.
+   * 애플 가이드라인상 주 동작은 상단 내비게이션 바에 둔다 — 키보드 위에 두지 않는다.
+   */
+  rightAction?: { label: string; onPress: () => void; disabled?: boolean }
 }) {
   const router = useRouter()
   const colors = useColors()
@@ -73,6 +79,9 @@ export default function TopBar({
     segText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
     segTextOn: { color: '#fff', fontWeight: '800' },
     iconBtn: { padding: 6, borderRadius: 8 },
+    actionBtn: { paddingHorizontal: 4, paddingVertical: 6 },
+    actionText: { fontSize: 16, fontWeight: '800', color: colors.primary },
+    actionTextOff: { color: colors.textTertiary },
     filterBadge: {
       position: 'absolute', top: 0, right: 0, minWidth: 15, height: 15,
       paddingHorizontal: 3, borderRadius: 8, backgroundColor: colors.primary,
@@ -147,6 +156,18 @@ export default function TopBar({
           </View>
         )}
 
+        {rightAction ? (
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={rightAction.onPress}
+            disabled={rightAction.disabled}
+            hitSlop={8}
+          >
+            <Text style={[styles.actionText, rightAction.disabled && styles.actionTextOff]}>
+              {rightAction.label}
+            </Text>
+          </TouchableOpacity>
+        ) : (
         <View style={styles.right}>
           {/* 게시판에서는 걸러낼 조건이 없다 → 필터 자리를 검색이 대신한다. */}
           {segment === 'board' ? (
@@ -179,6 +200,7 @@ export default function TopBar({
             <Ionicons name="menu" size={26} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
+        )}
       </View>
 
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
