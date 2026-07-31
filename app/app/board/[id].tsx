@@ -182,16 +182,19 @@ export default function BoardPostScreen() {
         {!!post.image_urls?.length && (
           <View style={styles.images}>
             {post.image_urls.map((u) => (
-              <View key={u} style={styles.imageWrap}>
-                <Image source={{ uri: u }} style={styles.image} contentFit="cover" />
-                {/* 신고가 쌓이면 이미지만 가린다. 가려진 이유가 보여야 작성자도 납득한다. */}
-                {post.image_hidden && (
-                  <View style={styles.imageMask}>
-                    <Ionicons name="eye-off-outline" size={20} color="#fff" />
-                    <Text style={styles.imageMaskText}>이미지 검수 중</Text>
-                  </View>
-                )}
-              </View>
+              // 가려진 이미지는 아예 그리지 않는다. 반투명 덮개를 씌우는 방식은
+              // 밝은 사진이 그대로 비쳐 보여 가린 게 아니었다(2026-07-31 오너 지적).
+              post.image_hidden ? (
+                <View key={u} style={[styles.imageWrap, styles.imageBlocked]}>
+                  <Ionicons name="eye-off-outline" size={22} color={colors.textSecondary} />
+                  <Text style={styles.imageBlockedText}>이미지 검수 중</Text>
+                  <Text style={styles.imageBlockedSub}>신고가 접수되어 확인하고 있습니다</Text>
+                </View>
+              ) : (
+                <View key={u} style={styles.imageWrap}>
+                  <Image source={{ uri: u }} style={styles.image} contentFit="cover" />
+                </View>
+              )
             ))}
           </View>
         )}
@@ -390,11 +393,13 @@ function makeStyles(colors: AppColors) {
     images: { paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
     imageWrap: { position: 'relative', borderRadius: 10, overflow: 'hidden' },
     image: { width: '100%', height: 220, backgroundColor: colors.surfaceHigh },
-    imageMask: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(0,0,0,0.82)', alignItems: 'center', justifyContent: 'center', gap: 6,
+    // 가림 = 사진을 아예 안 그리고 이 자리를 대신 채운다
+    imageBlocked: {
+      height: 220, alignItems: 'center', justifyContent: 'center', gap: 5,
+      backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
     },
-    imageMaskText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+    imageBlockedText: { color: colors.textPrimary, fontSize: 13, fontWeight: '700' },
+    imageBlockedSub: { color: colors.textTertiary, fontSize: 11.5 },
 
     votes: { flexDirection: 'row', justifyContent: 'center', gap: 10, paddingVertical: 14 },
     voteBtn: {
