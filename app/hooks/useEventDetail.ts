@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase, type EventWithCompany } from '@/lib/supabase'
 
 /**
@@ -47,8 +47,7 @@ export function useEventDetail(id: string) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function fetchEvent() {
+  const fetchEvent = useCallback(async () => {
       setLoading(true)
       setError(null)
       try {
@@ -68,10 +67,9 @@ export function useEventDetail(id: string) {
       } finally {
         setLoading(false)
       }
-    }
-
-    if (id) fetchEvent()
   }, [id])
 
-  return { event, loading, error }
+  useEffect(() => { if (id) fetchEvent() }, [id, fetchEvent])
+
+  return { event, loading, error, refetch: fetchEvent }
 }

@@ -8,6 +8,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -34,6 +35,7 @@ import { daysUntil } from '@/lib/dday'
 import PriceTierValue from '@/components/PriceTierValue'
 import ThemeBadge from '@/components/ThemeBadge'
 import { getThemeBadge } from '@/constants/themeBadges'
+import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 function cleanText(text: string): string {
   return text
@@ -87,7 +89,7 @@ function formatDate(dateStr: string): string {
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { event, loading, error } = useEventDetail(id)
+  const { event, loading, error, refetch } = useEventDetail(id)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const colors = useColors()
@@ -309,6 +311,9 @@ export default function EventDetailScreen() {
   const companyId = event?.companies?.id ?? null
   // 한 업체 후기 전체를 가져와야 탭별(블로그/인스타/유튜브) 개수·목록이 잘리지 않음(업체 최대 ~164건)
   const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviews(companyId, 300)
+  // 당겨서 새로고침 — 일정 정보와 후기를 함께 새로 받는다
+  const refreshAll = useCallback(() => { refetch(); refetchReviews() }, [refetch, refetchReviews])
+  const { refreshing, onRefresh } = useRefreshIndicator(loading || reviewsLoading, refreshAll)
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
 
   // 후기 작성/수정 시트 + 내 후기 식별
@@ -364,7 +369,7 @@ export default function EventDetailScreen() {
     }
   }, [event?.id])
 
-  if (loading) {
+  if (loading && !event) {
     return (
       <View style={styles.center}>
         <AppSpinner />
@@ -408,7 +413,12 @@ export default function EventDetailScreen() {
   return (
     <View style={styles.screen}>
       <TopBar showBack />
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+    >
       {/* 썸네일 */}
       <View style={styles.imageContainer}>
         <EventThumbnail

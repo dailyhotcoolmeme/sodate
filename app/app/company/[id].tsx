@@ -7,6 +7,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native'
@@ -18,6 +19,7 @@ import { openOutlink } from '@/lib/outlink'
 import { useAlertStore } from '@/stores/alertStore'
 import { useColors } from '@/hooks/useColors'
 import EventCard from '@/components/EventCard'
+import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 function cleanText(text: string): string {
   return text
@@ -28,7 +30,8 @@ function cleanText(text: string): string {
 
 export default function CompanyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { data, loading, error } = useCompany(id)
+  const { data, loading, error, refetch } = useCompany(id)
+  const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { isSubscribed, subscribe, unsubscribe } = useAlertStore()
@@ -147,7 +150,7 @@ export default function CompanyDetailScreen() {
     backLink: { color: colors.primary, fontSize: 14 },
   }), [colors])
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <View style={styles.center}>
         <AppSpinner />
@@ -174,7 +177,12 @@ export default function CompanyDetailScreen() {
   return (
     <View style={styles.screen}>
     <TopBar showBack />
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+    >
       {/* 업체 헤더 */}
       <View style={styles.header}>
         {company.logo_url ? (

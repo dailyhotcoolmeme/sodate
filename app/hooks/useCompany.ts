@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback} from 'react'
 import { supabase, type CompanyRow, type EventWithCompany } from '@/lib/supabase'
 
 interface CompanyWithEvents {
@@ -11,8 +11,7 @@ export function useCompany(id: string) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function fetchCompany() {
+  const fetchCompany = useCallback(async () => {
       setLoading(true)
       setError(null)
       try {
@@ -41,10 +40,9 @@ export function useCompany(id: string) {
       } finally {
         setLoading(false)
       }
-    }
-
-    if (id) fetchCompany()
   }, [id])
 
-  return { data, loading, error }
+  useEffect(() => { if (id) fetchCompany() }, [id, fetchCompany])
+
+  return { data, loading, error, refetch: fetchCompany }
 }
