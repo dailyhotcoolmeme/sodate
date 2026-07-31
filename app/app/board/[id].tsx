@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Keyboard,
+  KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
@@ -124,7 +125,10 @@ export default function BoardPostScreen() {
   const repliesOf = (pid: string) => comments.filter((c) => c.parent_id === pid)
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <TopBar showBack />
 
       <ScrollView
@@ -275,7 +279,7 @@ export default function BoardPostScreen() {
           refetch()
         }}
       />
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 

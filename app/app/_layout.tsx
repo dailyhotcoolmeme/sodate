@@ -98,6 +98,11 @@ export default function RootLayout() {
           options={{ headerShown: false }}
         />
         <Stack.Screen name="reviews/index" options={{ headerShown: false }} />
+        {/* 게시판. 등록하지 않으면 기본 헤더에 'board/index' 같은 경로가 그대로 뜬다. */}
+        <Stack.Screen name="board/index" options={{ headerShown: false }} />
+        <Stack.Screen name="board/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="board/write" options={{ headerShown: false }} />
+        <Stack.Screen name="board/mine" options={{ headerShown: false }} />
         <Stack.Screen name="favorites/index" options={{ headerShown: false }} />
         <Stack.Screen name="alerts" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />

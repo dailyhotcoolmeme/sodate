@@ -114,7 +114,9 @@ export default function TopBar({
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.logoBtn} activeOpacity={0.7}
-            onPress={onLogoPress ?? (() => router.replace('/'))}>
+            // 게시판 안에서는 게시판 홈으로 간다. 로고를 눌렀다고 일정으로 튕기면
+            // 쓰던 흐름이 끊긴다(2026-07-31 오너 지적).
+            onPress={onLogoPress ?? (() => router.replace(segment === 'board' ? '/board' : '/'))}>
             <Image
               source={require('../assets/logo-wordmark.png')}
               style={segment ? styles.logoWordmarkNarrow : styles.logoWordmark}

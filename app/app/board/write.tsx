@@ -65,13 +65,14 @@ export default function BoardWriteScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    // 톱바까지 감싸야 offset 계산이 필요 없다. 톱바를 밖에 두면 그 높이만큼
+    // 어긋나 입력칸이 키보드에 가린다(2026-07-31 오너 지적).
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <TopBar showBack />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top + 44}
-      >
+      <View style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[wideContent, { padding: 16, paddingBottom: insets.bottom + 24, gap: 14 }]}
           keyboardShouldPersistTaps="handled"
@@ -133,10 +134,10 @@ export default function BoardWriteScreen() {
             욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
           </Text>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
 
       <LoadingOverlay visible={saving || loading} />
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 
