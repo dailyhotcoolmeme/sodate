@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router'
 import React, { useState, useMemo, useEffect } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import AppSpinner from '@/components/AppSpinner'
@@ -185,7 +186,9 @@ export default function ReviewsScreen() {
     return list
   }, [counts, myCount])
 
-  const [activeTab, setActiveTab] = useState<TabKey>('user')
+  // 톱바 햄버거의 '내가 쓴 후기'는 이 화면의 '내 후기' 탭으로 바로 들어온다.
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>()
+  const [activeTab, setActiveTab] = useState<TabKey>(tabParam === 'mine' ? 'mine' : 'user')
   const currentTab: TabKey = tabs.some((t) => t.key === activeTab)
     ? activeTab
     : tabs[0]?.key ?? 'naver_blog'

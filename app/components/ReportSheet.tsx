@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import { reportReview } from '@/lib/reviews'
+import { report as reportBoard } from '@/lib/board'
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
 const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.85
@@ -35,11 +36,16 @@ interface Props {
   visible: boolean
   onClose: () => void
   reviewId: string | null
-  /** 신고 완료 시 호출 (already: 이미 신고한 후기 여부) */
+  /**
+   * 게시판에서 쓸 때 지정한다. 주면 후기가 아니라 이쪽으로 신고가 간다.
+   * 화면·문구·사유 목록은 후기와 똑같이 두고 보내는 곳만 바꾼다.
+   */
+  board?: { type: 'post' | 'comment' | 'image'; id: string } | null
+  /** 신고 완료 시 호출 (already: 이미 신고한 대상 여부) */
   onReported?: (already: boolean) => void
 }
 
-export default function ReportSheet({ visible, onClose, reviewId, onReported }: Props) {
+export default function ReportSheet({ visible, onClose, reviewId, board, onReported }: Props) {
   const insets = useSafeAreaInsets()
   const colors = useColors()
   const translateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current
@@ -112,13 +118,15 @@ export default function ReportSheet({ visible, onClose, reviewId, onReported }: 
   const canSubmit = selected !== null && (!isEtc || detailTrim.length >= 2) && !submitting
 
   const handleSubmit = async () => {
-    if (submitting || !reviewId) return
+    if (submitting || (!reviewId && !board)) return
     if (selected === null) { setError('신고 사유를 선택해주세요.'); return }
     if (isEtc && detailTrim.length < 2) { setError('기타 사유를 2자 이상 입력해주세요.'); return }
     const reason = isEtc ? detailTrim : REASONS[selected]
     setSubmitting(true)
     setError(null)
-    const result = await reportReview(reviewId, reason)
+    const result = board
+      ? await reportBoard(board.type, board.id, reason)
+      : await reportReview(reviewId!, reason)
     if ('error' in result) {
       setError(result.error)
       setSubmitting(false)
