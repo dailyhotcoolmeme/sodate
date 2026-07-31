@@ -30,6 +30,7 @@ const MARKS: Mark[] = [
 
 export default function BoardEditor({
   value, onChangeText, images, onChangeImages, maxLength, placeholder,
+  inputRef, onFocus, onBlur, onCaretMove,
 }: {
   value: string
   onChangeText: (t: string) => void
@@ -37,16 +38,25 @@ export default function BoardEditor({
   onChangeImages: (next: string[]) => void
   maxLength?: number
   placeholder?: string
+  /** 바깥에서 입력칸 위치를 재야 커서를 키보드 위로 끌어올릴 수 있다. */
+  inputRef?: React.RefObject<TextInput | null>
+  onFocus?: () => void
+  onBlur?: () => void
+  /** 줄이 늘거나 커서가 움직일 때 — 화면을 커서에 맞춰 스크롤하라는 신호. */
+  onCaretMove?: () => void
 }) {
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
-  const inputRef = useRef<TextInput>(null)
+  const localRef = useRef<TextInput>(null)
+  const ref = inputRef ?? localRef
   const [sel, setSel] = useState({ start: 0, end: 0 })
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState(false)
 
-  const onSelectionChange = (e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) =>
+  const onSelectionChange = (e: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
     setSel(e.nativeEvent.selection)
+    onCaretMove?.()
+  }
 
   /** 고른 글자를 기호로 감싼다. 고른 게 없으면 커서 자리에 넣고 가운데로 커서를 둔다. */
   const applyMark = (m: Mark) => {
@@ -58,7 +68,7 @@ export default function BoardEditor({
     onChangeText(next)
     const caret = start + open.length + picked.length
     requestAnimationFrame(() => {
-      inputRef.current?.setNativeProps({ selection: { start: caret, end: caret } })
+      ref.current?.setNativeProps({ selection: { start: caret, end: caret } })
     })
   }
 
@@ -102,11 +112,14 @@ export default function BoardEditor({
         </View>
       ) : (
         <TextInput
-          ref={inputRef}
+          ref={ref}
           style={styles.input}
           value={value}
           onChangeText={onChangeText}
           onSelectionChange={onSelectionChange}
+          onContentSizeChange={() => onCaretMove?.()}
+          onFocus={onFocus}
+          onBlur={onBlur}
           placeholder={placeholder}
           placeholderTextColor={colors.textTertiary}
           maxLength={maxLength}

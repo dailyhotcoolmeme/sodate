@@ -1,7 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Keyboard,
-  KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Keyboard, Platform,
 } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
@@ -39,6 +38,18 @@ export default function BoardPostScreen() {
   const [editing, setEditing] = useState<BoardComment | null>(null)
   const [sending, setSending] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'image'; id: string } | null>(null)
+
+  // 키보드 가림 — 파킨온에서 검증한 패턴(PostDetailScreen 댓글 입력)과 같다.
+  // 댓글 입력칸은 화면 맨 아래에 고정돼 있으므로 커서 추적까지는 필요 없고,
+  // 안드로이드는 키보드 높이만큼 입력칸을 띄우면 된다(edge-to-edge라 창이 안 줄어든다).
+  // iOS 는 ScrollView 의 automaticallyAdjustKeyboardInsets 가 처리한다.
+  const [kbHeight, setKbHeight] = useState(0)
+  useEffect(() => {
+    if (Platform.OS !== 'android') return
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates?.height ?? 0))
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0))
+    return () => { show.remove(); hide.remove() }
+  }, [])
 
   useEffect(() => { getLastNickname().then((n) => n && setNickname(n)) }, [])
   // 조회수는 화면에 감춰뒀지만 값은 쌓아둔다(나중에 켜면 그때까지 숫자가 그대로).
@@ -128,16 +139,15 @@ export default function BoardPostScreen() {
   const repliesOf = (pid: string) => comments.filter((c) => c.parent_id === pid)
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={styles.container}>
       <TopBar showBack onLogoPress={() => router.replace('/board')} />
 
       <ScrollView
         contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 16 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       >
         <View style={styles.head}>
           <Text style={styles.title}>{post.title}</Text>
@@ -236,7 +246,7 @@ export default function BoardPostScreen() {
       </ScrollView>
 
       {/* 댓글 입력 */}
-      <View style={[styles.inputWrap, { paddingBottom: insets.bottom + 8 }]}>
+      <View style={[styles.inputWrap, { paddingBottom: (kbHeight || insets.bottom) + 8 }]}>
         {(replyTo || editing) && (
           <View style={styles.inputHint}>
             <Text style={styles.inputHintText}>
@@ -284,7 +294,7 @@ export default function BoardPostScreen() {
           refetch()
         }}
       />
-    </KeyboardAvoidingView>
+    </View>
   )
 }
 
