@@ -4,7 +4,7 @@ import {
   type NativeSyntheticEvent, type TextInputSelectionChangeEventData,
 } from 'react-native'
 import { Image } from 'expo-image'
-import { Ionicons } from '@expo/vector-icons'
+import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { pickAndUpload, MAX_IMAGES } from '@/lib/boardImage'
@@ -17,15 +17,21 @@ import { pickAndUpload, MAX_IMAGES } from '@/lib/boardImage'
  * 사용자는 버튼만 누르면 되고, 무엇이 적용됐는지 미리보기로 확인할 수 있다.
  */
 
-type Mark = { label: string; icon: keyof typeof Ionicons.glyphMap; wrap: [string, string] }
+// 도구는 어느 편집기에서나 쓰는 아이콘 그대로 둔다(굵게 B, 기울임 I, 취소선 S…).
+// 글자 라벨을 테두리 상자에 넣으면 게시판 편집기처럼 안 보인다(2026-08-01 오너 지적).
+type Mark = {
+  label: string
+  icon: keyof typeof MaterialIcons.glyphMap
+  wrap: [string, string]
+}
 
 const MARKS: Mark[] = [
-  { label: '굵게', icon: 'text', wrap: ['**', '**'] },
-  { label: '기울임', icon: 'text-outline', wrap: ['_', '_'] },
-  { label: '취소선', icon: 'remove-outline', wrap: ['~~', '~~'] },
-  { label: '인용', icon: 'chatbox-outline', wrap: ['\n> ', ''] },
-  { label: '목록', icon: 'list-outline', wrap: ['\n- ', ''] },
-  { label: '링크', icon: 'link-outline', wrap: ['[', '](https://)'] },
+  { label: '굵게', icon: 'format-bold', wrap: ['**', '**'] },
+  { label: '기울임', icon: 'format-italic', wrap: ['_', '_'] },
+  { label: '취소선', icon: 'format-strikethrough', wrap: ['~~', '~~'] },
+  { label: '인용', icon: 'format-quote', wrap: ['\n> ', ''] },
+  { label: '목록', icon: 'format-list-bulleted', wrap: ['\n- ', ''] },
+  { label: '링크', icon: 'link', wrap: ['[', '](https://)'] },
 ]
 
 export default function BoardEditor({
@@ -88,21 +94,45 @@ export default function BoardEditor({
   return (
     <View style={styles.wrap}>
       <View style={styles.toolbar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tools}>
-          {MARKS.map((m) => (
-            <TouchableOpacity key={m.label} style={styles.tool} onPress={() => applyMark(m)}>
-              <Text style={styles.toolText}>{m.label}</Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={styles.tool} onPress={addImage} disabled={uploading}>
-            <Ionicons name="image-outline" size={14} color={colors.textSecondary} />
-            <Text style={styles.toolText}>{uploading ? '올리는 중' : '사진'}</Text>
+        {MARKS.map((m) => (
+          <TouchableOpacity
+            key={m.label}
+            style={styles.tool}
+            onPress={() => applyMark(m)}
+            accessibilityLabel={m.label}
+            hitSlop={6}
+          >
+            <MaterialIcons name={m.icon} size={21} color={colors.textSecondary} />
           </TouchableOpacity>
-        </ScrollView>
-        <TouchableOpacity style={styles.previewBtn} onPress={() => setPreview((v) => !v)}>
-          <Text style={[styles.toolText, preview && styles.previewOn]}>
-            {preview ? '편집' : '미리보기'}
-          </Text>
+        ))}
+
+        <View style={styles.toolDivider} />
+
+        <TouchableOpacity
+          style={styles.tool}
+          onPress={addImage}
+          disabled={uploading}
+          accessibilityLabel="사진 첨부"
+          hitSlop={6}
+        >
+          <Ionicons
+            name={uploading ? 'hourglass-outline' : 'image-outline'}
+            size={20}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tool, styles.toolLast]}
+          onPress={() => setPreview((v) => !v)}
+          accessibilityLabel={preview ? '편집으로 돌아가기' : '미리보기'}
+          hitSlop={6}
+        >
+          <Ionicons
+            name={preview ? 'create-outline' : 'eye-outline'}
+            size={20}
+            color={preview ? colors.primary : colors.textSecondary}
+          />
         </TouchableOpacity>
       </View>
 
@@ -210,19 +240,11 @@ function renderInline(line: string, styles: ReturnType<typeof makeStyles>): Reac
 export function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     wrap: { gap: 8 },
-    toolbar: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    tools: { gap: 6, paddingRight: 6 },
-    tool: {
-      flexDirection: 'row', alignItems: 'center', gap: 4,
-      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
-      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-    },
-    toolText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
-    previewBtn: {
-      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
-      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-    },
-    previewOn: { color: colors.primary },
+    // 테두리 상자 없이 아이콘만 늘어놓는다. 시중 게시판 편집기가 다 이 모양이다.
+    toolbar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2 },
+    tool: { paddingHorizontal: 7, paddingVertical: 4 },
+    toolLast: { marginLeft: 'auto', paddingRight: 0 },
+    toolDivider: { width: 1, height: 15, marginHorizontal: 6, backgroundColor: colors.border },
 
     input: {
       backgroundColor: colors.surfaceHigh, borderRadius: 12,
