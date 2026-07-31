@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
+/** PostgREST 가 한 번에 내주는 최대 행 수 */
+const PAGE = 1000
+
 /**
  * 지금 서비스에 실제로 쓰이고 있는 해시태그 전체.
  *
@@ -18,13 +21,6 @@ export function useAllHashtags(): string[] {
   useEffect(() => {
     let alive = true
     ;(async () => {
-      // 태그 컬럼만 받는다(1000여 건이라도 payload가 작다).
-      const [ev, ty] = await Promise.all([
-        supabase.from('events').select('hashtags').eq('is_active', true).limit(5000),
-        supabase.from('company_image_types').select('hashtags').limit(1000),
-      ])
-      if (!alive) return
-
       const counts = new Map<string, { tag: string; n: number }>()
       const add = (rows: { hashtags: string[] | null }[] | null) => {
         for (const r of rows ?? []) {
@@ -39,8 +35,22 @@ export function useAllHashtags(): string[] {
           }
         }
       }
-      add(ev.data as any)
-      add(ty.data as any)
+      const { data: ty } = await supabase
+        .from('company_image_types').select('hashtags').limit(PAGE)
+      if (!alive) return
+      add(ty as any)
+
+      // ⚠️ PostgREST 는 한 번에 1000행까지만 내준다. .limit(5000) 을 적어도 서버가
+      //    1000에서 자른다. 활성 일정이 그보다 많아 뒤쪽 태그가 통째로 빠지고 있었다
+      //    (2026-07-31 확인). 끝까지 나눠 받는다.
+      for (let from = 0; ; from += PAGE) {
+        const { data } = await supabase
+          .from('events').select('hashtags').eq('is_active', true)
+          .range(from, from + PAGE - 1)
+        if (!alive) return
+        add(data as any)
+        if (!data || data.length < PAGE) break
+      }
 
       setTags([...counts.values()].sort((a, b) => b.n - a.n).map((x) => x.tag))
     })()
