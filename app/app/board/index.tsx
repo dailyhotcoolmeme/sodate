@@ -10,6 +10,7 @@ import AppSpinner from '@/components/AppSpinner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardList, useBoardSettings, PAGE_SIZE } from '@/hooks/useBoard'
+import { wideContent } from '@/constants/layout'
 import type { BoardPost } from '@/lib/board'
 
 /**
@@ -87,7 +88,7 @@ export default function BoardListScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
+          contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 90 }]}
           showsVerticalScrollIndicator={false}
         >
           {posts.map((p) => (

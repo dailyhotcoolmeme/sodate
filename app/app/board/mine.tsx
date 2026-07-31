@@ -8,6 +8,7 @@ import AppSpinner from '@/components/AppSpinner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useMyPosts } from '@/hooks/useBoard'
+import { wideContent } from '@/constants/layout'
 
 /**
  * 내가 쓴 글 — 익명이라 목록에서 자기 글을 찾을 방법이 없어서 따로 둔다.
@@ -36,7 +37,7 @@ export default function MyPostsScreen() {
           <Text style={styles.emptySub}>게시판에 첫 글을 남겨보세요!</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
+        <ScrollView contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}>
           {posts.map((p) => (
             <TouchableOpacity
               key={p.id}

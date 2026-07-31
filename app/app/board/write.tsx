@@ -11,6 +11,7 @@ import type { AppColors } from '@/constants/colors'
 import { supabase } from '@/lib/supabase'
 import { createPost, updatePost } from '@/lib/board'
 import { getLastNickname } from '@/lib/reviewIdentity'
+import { wideContent } from '@/constants/layout'
 
 const TITLE_MAX = 60
 const CONTENT_MAX = 10000
@@ -72,7 +73,7 @@ export default function BoardWriteScreen() {
         keyboardVerticalOffset={insets.top + 44}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24, gap: 14 }}
+          contentContainerStyle={[wideContent, { padding: 16, paddingBottom: insets.bottom + 24, gap: 14 }]}
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.heading}>{isEdit ? '글 수정' : '글쓰기'}</Text>

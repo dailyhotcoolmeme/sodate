@@ -16,6 +16,7 @@ import {
   vote, deletePost, createComment, updateComment, deleteComment, markViewed,
 } from '@/lib/board'
 import { getLastNickname } from '@/lib/reviewIdentity'
+import { wideContent } from '@/constants/layout'
 import type { BoardComment } from '@/lib/board'
 
 /** 글 상세 — 추천·비추, 댓글(대댓글 한 단계), 내 글이면 수정·삭제. */
@@ -127,7 +128,7 @@ export default function BoardPostScreen() {
       <TopBar showBack />
 
       <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 16 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >

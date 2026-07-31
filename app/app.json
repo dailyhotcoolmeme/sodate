@@ -3,7 +3,10 @@
     "name": "소개팅모아",
     "slug": "sodate",
     "version": "1.0.0",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "orientation": "portrait",
     "_comment_backgroundColor": "네이티브 창/루트뷰 배경. 없으면 스플래시가 끝나고 JS 첫 프레임이 그려지기 전까지 시스템 기본 배경(라이트모드=흰색)이 잠깐 보인다(2026-07-28 오너 지적). 스플래시와 같은 색으로 맞춰 이음새를 없앤다. expo-system-ui가 이 값을 네이티브에 반영한다.",
     "backgroundColor": "#0F0F0F",
@@ -15,7 +18,7 @@
       "backgroundColor": "#0F0F0F"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.sodate.app",
       "buildNumber": "5",
       "infoPlist": {
