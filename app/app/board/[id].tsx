@@ -1,13 +1,13 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, RefreshControl,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, RefreshControl, Modal, Pressable,
 } from 'react-native'
 // 키보드가 올라오면 '내용 영역 자체가 줄어든다'. 애플이 keyboard layout guide 로
 // 설명하는 방식이다 — 보던 자리는 그대로 있고 목록 끝까지 접근할 수 있다.
 // 입력줄만 띄우고 목록을 그대로 두면 아래쪽 댓글이 덮여 손이 닿지 않는다
 // (2026-08-01 오너 지적 후 조사). RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서
 // 동작하지 않으므로(react-native#16826) 이 라이브러리 것을 쓴다.
-import { KeyboardAvoidingView, KeyboardController, useKeyboardState } from 'react-native-keyboard-controller'
+import { KeyboardAvoidingView, KeyboardController, KeyboardEvents, useKeyboardState } from 'react-native-keyboard-controller'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
@@ -46,39 +46,70 @@ export default function BoardPostScreen() {
   const [voting, setVoting] = useState(false)
   const [nickname, setNickname] = useState('')
   const [draft, setDraft] = useState('')
-  const [replyTo, setReplyTo] = useState<BoardComment | null>(null)
   const [editing, setEditing] = useState<BoardComment | null>(null)
   const [sending, setSending] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'image'; id: string } | null>(null)
   const keyboardShown = useKeyboardState((k) => k.isVisible)
-  const keyboardH = useKeyboardState((k) => k.height)
   const scrollY = useRef(0)
   const [composing, setComposing] = useState(false)   // 입력칸을 만졌는가(닉네임 줄 펼침)
+  // 댓글 입력칸 높이를 직접 정한다. `minHeight` 는 최솟값일 뿐이라 iOS 는 내부
+  // 여백 때문에 그보다 커져서 등록 버튼(정확히 COMPOSER_H)과 높이가 안 맞았다
+  // (2026-08-01 오너 지적). 네이티브가 알아서 정하게 두지 않고 숫자로 고정한다.
+  const [commentInputH, setCommentInputH] = useState(COMPOSER_H)
   const scrollRef = useRef<ScrollView>(null)
-  // 댓글마다 화면에서의 세로 위치. 새 댓글·답글로 옮겨갈 때 쓴다.
+  // 댓글마다 화면에서의 세로 위치. 방금 쓰거나 수정한 댓글로 옮겨갈 때 쓴다.
   const commentY = useRef<Record<string, number>>({})
   const [scrollToId, setScrollToId] = useState<string | null>(null)
+  // 답글은 팝업으로 쓴다 — 목록을 스크롤해 대상 댓글을 입력줄 위로 맞추는 방식은
+  // 댓글이 짧은 글에서 계속 어긋났다(빈 공간이 남거나 엉뚱한 자리에서 멈춤,
+  // 2026-08-01). mlbpark 등 실제 커뮤니티가 쓰는 방식대로 팝업 안에 "OOO님에게
+  // 답글" 표시 + 입력칸을 두면 목록을 움직일 필요 자체가 없다(오너 지시).
+  const [replyModal, setReplyModal] = useState<BoardComment | null>(null)
+  const [replyDraft, setReplyDraft] = useState('')
+  const [replyNickname, setReplyNickname] = useState('')
+  const [replySending, setReplySending] = useState(false)
+  // 목록(ScrollView) 실제 내용 길이·창 높이. 얼마나 밀 수 있는지, 밀 필요가
+  // 있기는 한지 계산하는 데 쓴다. 억지로 여백을 만들어 늘리지 않는다 — 댓글이
+  // 하나뿐인 글처럼 가릴 내용 자체가 없으면 밀 필요도 없다(2026-08-01 실측).
+  const contentHeightRef = useRef(0)
+  const viewportHeightRef = useRef(0)
 
   /**
-   * 키보드가 올라오면 그 높이만큼 목록을 밀어 올린다.
+   * 댓글 입력줄을 누르면 가장 마지막 댓글이 보이도록 목록을 밀어 올린다.
+   * 이미 다 보이면(내용이 짧은 글) 밀지 않는다 — 밀어 봐야 그 아래는 빈 공간이다
+   * (2026-08-01 오너 지시).
    *
-   * 이걸 안 하면 보이는 창만 줄어들어, 누르기 직전에 보던 댓글이 키보드 뒤로 숨는다.
-   * 인스타·레딧(아이폰)은 실제로 그렇게 동작하지만(화면녹화 프레임으로 확인),
-   * 그 앱들은 댓글이 화면 맨 위부터 시작한다. 우리는 위에 제목·본문·추천이 얹혀 있어
-   * 창이 100pt 남짓으로 줄고 댓글 한 개만 남는다 — 그래서 다르게 간다
-   * (2026-08-01 오너 지적, 실측으로 확인).
+   * `keyboardDidShow`(키보드가 다 올라온 "뒤"에 온다)가 아니라 `keyboardWillShow`
+   * (키보드가 올라오기 "직전"에 온다)를 쓴다. Did-show 를 쓰면 키보드가 다 올라오고
+   * 나서야 화면이 뒤늦게 움직여서 두 동작이 따로 노는 것처럼 보인다(오너 지적).
    */
-  useEffect(() => {
-    if (!keyboardShown || !keyboardH) return
-    scrollRef.current?.scrollTo({ y: scrollY.current + keyboardH, animated: true })
-  }, [keyboardShown, keyboardH])
+  const scrollForKeyboard = useCallback(() => {
+    // 키보드가 다 올라온 뒤 실제로 보일 수 있는 최대 스크롤 값(지금 잰 창 높이 기준).
+    const maxScroll = Math.max(0, contentHeightRef.current - viewportHeightRef.current)
+    if (maxScroll > scrollY.current) {
+      scrollRef.current?.scrollTo({ y: maxScroll, animated: true })
+    }
+  }, [])
 
+  useEffect(() => {
+    const willShow = KeyboardEvents.addListener('keyboardWillShow', (e) => {
+      scrollForKeyboard()
+      // 창 높이(viewportHeightRef)가 키보드만큼 줄어드는 layout 반영이 이 시점엔
+      // 아직 안 끝났을 수 있다 — 키보드 애니메이션이 실제로 끝나는 시점(e.duration)에
+      // 맞춰 반영된 값으로 한 번 더 계산해서 보정한다.
+      setTimeout(scrollForKeyboard, e.duration || 250)
+    })
+    return () => willShow.remove()
+  }, [scrollForKeyboard])
+
+  // 방금 쓰거나 수정한 댓글이 화면 밖에 있으면 그 자리로 옮겨간다(등록 후).
   // 목록이 새로 그려진 뒤에 옮겨간다. 위치를 아직 모르면 다음 그리기까지 기다린다.
   useEffect(() => {
     if (!scrollToId) return
     const y = commentY.current[scrollToId]
     if (y == null) return
-    scrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true })
+    const maxScroll = Math.max(0, contentHeightRef.current - viewportHeightRef.current)
+    scrollRef.current?.scrollTo({ y: Math.min(Math.max(0, y - 80), maxScroll), animated: true })
     setScrollToId(null)
   }, [scrollToId, comments])
 
@@ -126,15 +157,52 @@ export default function BoardPostScreen() {
       ? await updateComment(editing.id, text)
       : await createComment({
           postId: id,
-          parentId: replyTo?.id ?? null,
+          parentId: null,
           nickname: nickname.trim(),
           content: text,
         })
     setSending(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
-    setDraft(''); setReplyTo(null); setEditing(null)
-    // 방금 쓴 댓글이 화면 밖에 있으면 올라간 줄 모른다. 그 자리로 옮겨간다.
-    setScrollToId(editing ? editing.id : ('id' in r ? r.id : null))
+    const wasEditing = !!editing
+    setDraft(''); setEditing(null)
+    setComposing(false)   // 닉네임 칸은 등록 후 다시 접어 둔다(오너 지시)
+    setCommentInputH(COMPOSER_H)
+    if (wasEditing) {
+      // 수정은 특정 댓글로 — 방금 그 댓글이 화면 밖에 있으면 그 자리로 옮겨간다.
+      setScrollToId(editing!.id)
+    } else {
+      // 새 댓글은 항상 목록 맨 끝에 붙는다 — 마지막 댓글이 보이도록 옮겨간다.
+      // refetch 로 목록이 다시 그려지고 실제 내용 길이가 잡힐 때까지 살짝 기다린다.
+      setTimeout(() => {
+        const maxScroll = Math.max(0, contentHeightRef.current - viewportHeightRef.current)
+        scrollRef.current?.scrollTo({ y: maxScroll, animated: true })
+      }, 150)
+    }
+    refetch()
+  }
+
+  const openReply = (c: BoardComment) => {
+    setReplyModal(c)
+    setReplyDraft('')
+    setReplyNickname(nickname)   // 마지막에 쓴 닉네임을 기본값으로
+  }
+
+  const submitReply = async () => {
+    if (!replyModal) return
+    const text = replyDraft.trim()
+    if (!text || replySending) return
+    if (replyNickname.trim().length < 2) { Alert.alert('알림', '닉네임을 2자 이상 입력해주세요.'); return }
+    setReplySending(true)
+    const r = await createComment({
+      postId: id,
+      parentId: replyModal.id,
+      nickname: replyNickname.trim(),
+      content: text,
+    })
+    setReplySending(false)
+    if ('error' in r) { Alert.alert('알림', r.error); return }
+    setReplyModal(null)
+    setNickname(replyNickname.trim())   // 메인 입력줄에도 반영
     refetch()
   }
 
@@ -190,6 +258,8 @@ export default function BoardPostScreen() {
         keyboardDismissMode="interactive"
         onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y }}
         scrollEventThrottle={16}
+        onContentSizeChange={(_w, h) => { contentHeightRef.current = h }}
+        onLayout={(e) => { viewportHeightRef.current = e.nativeEvent.layout.height }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <View style={styles.head}>
@@ -254,7 +324,7 @@ export default function BoardPostScreen() {
             onPress={() => handleVote(1)}
             disabled={voting}
           >
-            <Ionicons name="chevron-up" size={18} color={myVote === 1 ? colors.primary : colors.textSecondary} />
+            <Ionicons name={myVote === 1 ? 'thumbs-up' : 'thumbs-up-outline'} size={17} color={myVote === 1 ? colors.primary : colors.textSecondary} />
             <Text style={[styles.voteText, myVote === 1 && styles.voteTextOn]}>추천 {post.upvotes}</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -262,25 +332,30 @@ export default function BoardPostScreen() {
             onPress={() => handleVote(-1)}
             disabled={voting}
           >
-            <Ionicons name="chevron-down" size={18} color={myVote === -1 ? colors.primary : colors.textSecondary} />
+            <Ionicons name={myVote === -1 ? 'thumbs-down' : 'thumbs-down-outline'} size={17} color={myVote === -1 ? colors.primary : colors.textSecondary} />
             <Text style={[styles.voteText, myVote === -1 && styles.voteTextOn]}>비추 {post.downvotes}</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.commentHead}>댓글 {post.comment_count}</Text>
+        <View style={styles.commentHeadRow}>
+          <Text style={styles.commentHead}>댓글 {post.comment_count}</Text>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={8}>
+            <Text style={styles.listLinkText}>목록으로</Text>
+          </TouchableOpacity>
+        </View>
 
         {roots.length === 0 && (
           <Text style={styles.noComment}>첫 댓글을 남겨보세요</Text>
         )}
 
         {roots.map((c) => (
-          // 각 댓글이 어디에 그려졌는지 기억해 둔다. 답글을 달거나 새 댓글이 올라오면
-          // 그 자리로 옮겨가야 한다(2026-08-01 조사).
+          // 각 댓글이 어디에 그려졌는지 기억해 둔다. 방금 쓰거나 수정한 댓글로
+          // 옮겨가야 한다(2026-08-01 조사).
           <View key={c.id} onLayout={(e) => { commentY.current[c.id] = e.nativeEvent.layout.y }}>
             <CommentRow
               c={c} mine={myCommentIds.includes(c.id)} styles={styles}
-              onReply={() => { setReplyTo(c); setEditing(null); setDraft(''); setScrollToId(c.id) }}
-              onEdit={() => { setEditing(c); setReplyTo(null); setDraft(c.content) }}
+              onReply={() => openReply(c)}
+              onEdit={() => { setEditing(c); setDraft(c.content) }}
               onDelete={() => removeComment(c)}
               onReport={() => setReportTarget({ type: 'comment', id: c.id })}
             />
@@ -288,7 +363,7 @@ export default function BoardPostScreen() {
               <CommentRow
                 key={r.id} c={r} reply mine={myCommentIds.includes(r.id)} styles={styles}
                 onLayout={(y) => { commentY.current[r.id] = (commentY.current[c.id] ?? 0) + y }}
-                onEdit={() => { setEditing(r); setReplyTo(null); setDraft(r.content) }}
+                onEdit={() => { setEditing(r); setDraft(r.content) }}
                 onDelete={() => removeComment(r)}
                 onReport={() => setReportTarget({ type: 'comment', id: r.id })}
               />
@@ -302,14 +377,12 @@ export default function BoardPostScreen() {
       <View style={[styles.inputWrap, { paddingBottom: (keyboardShown ? 8 : insets.bottom + 8) }]}>
           {/* 키보드 닫는 버튼은 두지 않는다. 목록을 아래로 쓸어내리면 닫힌다
               (keyboardDismissMode="interactive"). 애플 가이드라인도 키보드 위에는
-              '지금 하는 일에 관련된' 컨트롤만 두고 시스템 기능을 겹쳐 만들지 말라고
+              '지금 하는 일에 관련된' 컨트롤만 두고 시스템 기능을 겹쳐 놓지 말라고
               한다(2026-08-01 조사). */}
-          {!!(replyTo || editing) && (
+          {!!editing && (
             <View style={styles.inputHint}>
-              <Text style={styles.inputHintText}>
-                {editing ? '댓글 수정 중' : `${replyTo?.nickname}님에게 답글`}
-              </Text>
-              <TouchableOpacity onPress={() => { setReplyTo(null); setEditing(null); setDraft('') }} hitSlop={8}>
+              <Text style={styles.inputHintText}>댓글 수정 중</Text>
+              <TouchableOpacity onPress={() => { setEditing(null); setDraft(''); setCommentInputH(COMPOSER_H) }} hitSlop={8}>
                 <Text style={styles.inputHintCancel}>취소</Text>
               </TouchableOpacity>
             </View>
@@ -328,12 +401,13 @@ export default function BoardPostScreen() {
           )}
           <View style={styles.inputRow}>
             <TextInput
-              style={styles.commentInput}
+              style={[styles.commentInput, { height: Math.min(96, Math.max(COMPOSER_H, commentInputH)) }]}
               value={draft}
-              onChangeText={setDraft}
+              onChangeText={(t) => { setDraft(t); if (!t) setCommentInputH(COMPOSER_H) }}
               placeholder="댓글을 입력하세요"
               placeholderTextColor={colors.textTertiary}
               multiline
+              onContentSizeChange={(e) => setCommentInputH(e.nativeEvent.contentSize.height)}
               onFocus={() => setComposing(true)}
             />
             <TouchableOpacity
@@ -349,6 +423,18 @@ export default function BoardPostScreen() {
 
       <LoadingOverlay visible={sending || voting} />
 
+      <ReplyModal
+        target={replyModal}
+        nickname={replyNickname}
+        draft={replyDraft}
+        sending={replySending}
+        colors={colors}
+        onChangeNickname={setReplyNickname}
+        onChangeDraft={setReplyDraft}
+        onCancel={() => setReplyModal(null)}
+        onSubmit={submitReply}
+      />
+
       <ReportSheet
         visible={reportTarget !== null}
         reviewId={null}
@@ -361,6 +447,125 @@ export default function BoardPostScreen() {
       />
     </View>
   )
+}
+
+/**
+ * 답글 팝업 — mlbpark 등 실제 커뮤니티가 쓰는 방식(2026-08-01 오너 지시).
+ * "OOO님에게 답글" 표시가 팝업 안에 있으므로, 목록을 스크롤해 대상 댓글을
+ * 입력줄 위로 맞출 필요가 없다.
+ */
+function ReplyModal({
+  target, nickname, draft, sending, colors, onChangeNickname, onChangeDraft, onCancel, onSubmit,
+}: {
+  target: BoardComment | null
+  nickname: string
+  draft: string
+  sending: boolean
+  colors: AppColors
+  onChangeNickname: (v: string) => void
+  onChangeDraft: (v: string) => void
+  onCancel: () => void
+  onSubmit: () => void
+}) {
+  const styles = useMemo(() => makeReplyModalStyles(colors), [colors])
+  // 메인 댓글칸과 같은 규칙 — 닉네임 칸은 입력칸을 만졌을 때만 펼친다.
+  // 팝업이 새로 열릴 때(대상이 바뀔 때)마다 접힌 상태로 되돌린다.
+  const [nickComposing, setNickComposing] = useState(false)
+  useEffect(() => { if (target) setNickComposing(false) }, [target])
+
+  return (
+    <Modal visible={!!target} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
+      {/* 화면 정가운데(justifyContent: 'center')가 톱바 뒤 빈 공간까지 셈에 들어가
+          살짝 위로 치우쳐 보인다는 지적이 있었지만, 고정 픽셀 값으로 보정했다가
+          기기마다 화면 크기·비율이 달라 안드로이드에서 훨씬 더 어긋났다
+          (2026-08-01). 고정값 대신 상대적인 가운데 정렬로 되돌린다 — 화면 크기와
+          무관하게 항상 남은 공간 기준으로 맞다. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
+        <View style={styles.card}>
+          <Text style={styles.title}>{target?.nickname}님에게 답글</Text>
+          {nickComposing && (
+            <TextInput
+              style={styles.nickInput}
+              value={nickname}
+              onChangeText={onChangeNickname}
+              placeholder="닉네임"
+              placeholderTextColor={colors.textTertiary}
+              maxLength={20}
+            />
+          )}
+          <TextInput
+            style={styles.draftInput}
+            value={draft}
+            onChangeText={onChangeDraft}
+            placeholder="답글을 입력하세요"
+            placeholderTextColor={colors.textTertiary}
+            multiline
+            autoFocus
+            onFocus={() => setNickComposing(true)}
+          />
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.actionBtn} onPress={onCancel} hitSlop={8}>
+              <Text style={styles.cancelText}>취소</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={onSubmit}
+              disabled={!draft.trim() || sending}
+              hitSlop={8}
+            >
+              <Text style={[styles.submitText, (!draft.trim() || sending) && styles.submitTextOff]}>등록</Text>
+            </TouchableOpacity>
+          </View>
+          {/* 지금 답글 다는 대상 댓글 원문 — 오너가 캡처해준 참고 화면대로 팝업
+              맨 아래에 보여준다. 목록으로 안 돌아가도 뭐에 답하는지 알 수 있다. */}
+          {!!target && (
+            <View style={styles.targetBox}>
+              <Text style={styles.targetMeta}>{target.nickname} · {formatFull(target.created_at)}</Text>
+              <Text style={styles.targetBody}>{target.content}</Text>
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  )
+}
+
+function makeReplyModalStyles(colors: AppColors) {
+  return StyleSheet.create({
+    // 팝업과 뒤 배경이 잘 구분 안 된다는 지적(2026-08-01, 아이폰·안드로이드 둘 다) —
+    // 배경을 더 어둡게 하고 카드에 테두리·그림자를 줘서 구분되게 한다. 흐림 효과는
+    // expo-blur 를 새로 추가해야 해서(네이티브 재빌드 필요) 쓰지 않는다.
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+    card: {
+      width: '100%', maxWidth: 400, borderRadius: 16, backgroundColor: colors.surface, padding: 16, gap: 10,
+      borderWidth: 1, borderColor: colors.border,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16,
+      elevation: 12,
+    },
+    title: { fontSize: 14, fontWeight: '700', color: colors.primary },
+    nickInput: {
+      fontSize: 13, color: colors.textPrimary, backgroundColor: colors.surfaceHigh,
+      borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8,
+    },
+    draftInput: {
+      minHeight: 90, maxHeight: 160, fontSize: 14, lineHeight: 20, color: colors.textPrimary,
+      backgroundColor: colors.surfaceHigh, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
+      // 안드로이드는 여러 줄 입력칸 기본이 세로 가운데 정렬이다(iOS는 위부터).
+      // 안드로이드 전용 속성이라 iOS는 그냥 무시한다.
+      textAlignVertical: 'top',
+    },
+    actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, paddingTop: 4 },
+    actionBtn: { paddingVertical: 6, paddingHorizontal: 4 },
+    cancelText: { fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
+    submitText: { fontSize: 14, color: colors.primary, fontWeight: '800' },
+    submitTextOff: { color: colors.border },
+    targetBox: {
+      borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: 10, gap: 4,
+    },
+    targetMeta: { fontSize: 11.5, color: colors.textTertiary },
+    targetBody: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
+  })
 }
 
 function CommentRow({
@@ -464,11 +669,14 @@ function makeStyles(colors: AppColors) {
     voteText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
     voteTextOn: { color: colors.primary, fontWeight: '800' },
 
-    commentHead: {
-      fontSize: 14, fontWeight: '800', color: colors.textPrimary,
+    commentHeadRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8,
       borderTopWidth: 1, borderTopColor: colors.divider,
     },
+    commentHead: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+    // 테두리 없는 글자만(오너 지시) — 수정·삭제·신고 같은 기존 텍스트 링크와 같은 톤.
+    listLinkText: { fontSize: 12.5, color: colors.textSecondary },
     noComment: { fontSize: 13, color: colors.textTertiary, paddingHorizontal: 16, paddingVertical: 12 },
 
     comment: { paddingHorizontal: 16, paddingVertical: 11, gap: 4,
@@ -488,16 +696,17 @@ function makeStyles(colors: AppColors) {
     inputHint: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 6 },
     inputHintText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
     inputHintCancel: { fontSize: 12, color: colors.textSecondary },
-    inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+    inputRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     nickInput: {
       alignSelf: 'flex-start', minWidth: 110, fontSize: 13, color: colors.textPrimary,
       backgroundColor: colors.surfaceHigh, borderRadius: 8,
       paddingHorizontal: 10, paddingVertical: 7, marginBottom: 6,
     },
-    // 한 줄일 때 입력칸과 등록 버튼의 높이가 정확히 같아야 한다. 글자 크기가 달라
-    // 눈대중 여백으로는 안 맞았다 — 둘 다 같은 minHeight 를 주고 가운데 정렬한다.
+    // 한 줄일 때 입력칸과 등록 버튼의 높이가 정확히 같아야 한다. 높이는 여기서
+    // 정하지 않고 JS 에서 직접 숫자로 준다(위 commentInputH) — CSS 최솟값에
+    // 맡기면 iOS 가 내부 여백만큼 더 키워서 버튼과 안 맞았다.
     commentInput: {
-      flex: 1, minHeight: COMPOSER_H, maxHeight: 96,
+      flex: 1,
       fontSize: 14, lineHeight: 20, color: colors.textPrimary,
       backgroundColor: colors.surfaceHigh, borderRadius: 8,
       paddingHorizontal: 12, paddingVertical: 9,

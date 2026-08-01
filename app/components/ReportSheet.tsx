@@ -38,7 +38,8 @@ interface Props {
   reviewId: string | null
   /**
    * 게시판에서 쓸 때 지정한다. 주면 후기가 아니라 이쪽으로 신고가 간다.
-   * 화면·문구·사유 목록은 후기와 똑같이 두고 보내는 곳만 바꾼다.
+   * 사유 목록·화면 구조는 후기와 똑같이 두고, 제목·안내문의 대상 이름만
+   * 신고 대상에 맞게 바꾼다(2026-08-01 — "후기 신고"로 고정돼 있던 걸 지적받아 고침).
    */
   board?: { type: 'post' | 'comment' | 'image'; id: string } | null
   /** 신고 완료 시 호출 (already: 이미 신고한 대상 여부) */
@@ -116,6 +117,15 @@ export default function ReportSheet({ visible, onClose, reviewId, board, onRepor
   const isEtc = selected !== null && REASONS[selected] === ETC
   const detailTrim = detail.trim()
   const canSubmit = selected !== null && (!isEtc || detailTrim.length >= 2) && !submitting
+  // 화면 구조·사유 목록은 후기와 게시판이 똑같이 쓰지만, 제목·안내문에 들어가는
+  // 대상 이름은 실제 신고 대상에 맞게 보여준다 — 게시글을 신고하는데 "후기"라고
+  // 뜨면 헷갈린다(오너 지적, 2026-08-01: 제목만 고쳤다가 안내문에 "후기"가 남아있던
+  // 걸 또 지적받아 여기서 같이 뺐다).
+  const subject = !board ? '후기'
+    : board.type === 'comment' ? '댓글'
+    : board.type === 'image' ? '이미지'
+    : '게시글'
+  const sheetTitle = `${subject} 신고`
 
   const handleSubmit = async () => {
     if (submitting || (!reviewId && !board)) return
@@ -193,7 +203,7 @@ export default function ReportSheet({ visible, onClose, reviewId, board, onRepor
               <View style={styles.handle} />
             </View>
             <View style={styles.headerRow}>
-              <Text style={styles.headerTitle}>후기 신고</Text>
+              <Text style={styles.headerTitle}>{sheetTitle}</Text>
               <TouchableOpacity onPress={closeSheet} hitSlop={8} disabled={submitting}>
                 <Text style={styles.cancelText}>취소</Text>
               </TouchableOpacity>
@@ -206,7 +216,7 @@ export default function ReportSheet({ visible, onClose, reviewId, board, onRepor
             keyboardShouldPersistTaps="handled"
             bounces={false}
           >
-            <Text style={styles.guide}>부적절한 후기를 신고해주세요. 신고 사유는 관리자 검토에 사용됩니다.</Text>
+            <Text style={styles.guide}>부적절한 {subject}를 신고해주세요. 신고 사유는 관리자 검토에 사용됩니다.</Text>
 
             {REASONS.map((r, i) => {
               const active = selected === i

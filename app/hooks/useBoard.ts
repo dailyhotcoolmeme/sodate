@@ -131,3 +131,52 @@ export function useMyPosts() {
   useEffect(() => { load() }, [load])
   return { posts, loading, refetch: load }
 }
+
+/** 내 댓글 한 줄 — 어느 글에 달았는지 알아야 눌렀을 때 그 글로 갈 수 있다. */
+export type MyComment = {
+  id: string
+  post_id: string
+  content: string
+  is_active: boolean
+  created_at: string
+  post_title: string | null
+  /** 글 자체가 지워졌으면(post_title 이 null) 눌러도 갈 곳이 없다 */
+}
+
+/**
+ * 내가 쓴 댓글 (햄버거 → 내가 쓴 글 → 댓글 탭).
+ * 디시인사이드·루리웹·클리앙·Reddit 전부 글/댓글을 탭으로 나눠 보여준다
+ * (2026-08-01 외부 조사로 확인, 오너 승인).
+ */
+export function useMyComments() {
+  const [comments, setComments] = useState<MyComment[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const ids = await getMyCommentIds()
+      if (!ids.length) {
+        setComments([])
+        return
+      }
+      const { data } = await supabase.from('board_comments')
+        .select('id,post_id,content,is_active,created_at,board_posts(title)')
+        .in('id', ids)
+        .order('created_at', { ascending: false })
+      const mapped = ((data ?? []) as unknown as Array<{
+        id: string; post_id: string; content: string; is_active: boolean; created_at: string
+        board_posts: { title: string } | null
+      }>).map((c) => ({
+        id: c.id, post_id: c.post_id, content: c.content, is_active: c.is_active, created_at: c.created_at,
+        post_title: c.board_posts?.title ?? null,
+      }))
+      setComments(mapped)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+  return { comments, loading, refetch: load }
+}

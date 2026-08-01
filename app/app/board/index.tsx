@@ -1,6 +1,7 @@
-import React, { useMemo, useState, useCallback } from 'react'
+import React, { useMemo, useState, useCallback, useRef } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, RefreshControl
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, RefreshControl, Animated,
+  type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
@@ -39,6 +40,18 @@ export default function BoardListScreen() {
 
   const hot = settings?.hot_upvotes ?? 10
   const cold = settings?.cold_downvotes ?? 10
+
+  // 글쓰기 FAB — 목록을 스크롤하면 아이콘만 남고 "글쓰기" 글자는 접힌다.
+  // 맨 위로 돌아오면 다시 펼쳐진다(오너 지시, Material 확장 FAB의 표준 동작).
+  const fabAnim = useRef(new Animated.Value(1)).current   // 1 = 글자 보임, 0 = 아이콘만
+  const fabExpandedRef = useRef(true)
+  const onListScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const expand = e.nativeEvent.contentOffset.y <= 8
+    if (expand !== fabExpandedRef.current) {
+      fabExpandedRef.current = expand
+      Animated.timing(fabAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
+    }
+  }
 
   return (
     <View style={styles.container}>
@@ -91,6 +104,8 @@ export default function BoardListScreen() {
           contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 90 }]}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          onScroll={onListScroll}
+          scrollEventThrottle={16}
         >
           {posts.map((p) => (
             <PostRow key={p.id} post={p} hot={hot} cold={cold} styles={styles} colors={colors}
@@ -101,14 +116,23 @@ export default function BoardListScreen() {
         </ScrollView>
       )}
 
-      {/* 글쓰기 — 목록 위에 떠 있다 */}
+      {/* 글쓰기 — 목록 위에 떠 있다. 스크롤하면 아이콘만 남는다. */}
       <TouchableOpacity
         style={[styles.writeBtn, { bottom: insets.bottom + 18 }]}
         onPress={() => router.push('/board/write')}
         activeOpacity={0.85}
       >
         <Ionicons name="pencil" size={17} color="#fff" />
-        <Text style={styles.writeBtnText}>글쓰기</Text>
+        <Animated.View
+          style={{
+            opacity: fabAnim,
+            maxWidth: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 80] }),
+            marginLeft: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 6] }),
+            overflow: 'hidden',
+          }}
+        >
+          <Text style={styles.writeBtnText} numberOfLines={1}>글쓰기</Text>
+        </Animated.View>
       </TouchableOpacity>
     </View>
   )
@@ -138,27 +162,37 @@ function PostRow({
           {post.title}
         </Text>
         {hasImage && (
-          <Ionicons name="image-outline" size={13} color={colors.textTertiary} style={styles.rowIcon} />
+          <Ionicons name="image-outline" size={16} color={colors.textSecondary} style={styles.rowIcon} />
         )}
         {post.comment_count > 0 && (
           <Text style={styles.rowCount}>[{post.comment_count}]</Text>
         )}
       </View>
-      <Text style={styles.rowMeta}>
-        {post.nickname} {formatWhen(post.created_at)} · 추천 {post.upvotes} · 비추 {post.downvotes}
-      </Text>
+      <View style={styles.rowMetaRow}>
+        <Text style={styles.rowMeta} numberOfLines={1}>
+          {post.nickname} · {formatWhen(post.created_at)}
+        </Text>
+        <Text style={styles.rowMeta}>·</Text>
+        <View style={styles.rowVoteItem}>
+          <Ionicons name="thumbs-up-outline" size={11} color={colors.textTertiary} />
+          <Text style={styles.rowMeta}>{post.upvotes}</Text>
+        </View>
+        <View style={styles.rowVoteItem}>
+          <Ionicons name="thumbs-down-outline" size={11} color={colors.textTertiary} />
+          <Text style={styles.rowMeta}>{post.downvotes}</Text>
+        </View>
+      </View>
     </TouchableOpacity>
   )
 }
 
-/** 오늘 글은 시각만, 지난 글은 날짜만 — 게시판에서 흔한 표기. */
+/** 연도 2자리-월-일(요일) 시:분:초 — 오너 지시(2026-08-01). */
 function formatWhen(iso: string): string {
   const d = new Date(iso)
-  const now = new Date()
-  const sameDay = d.getFullYear() === now.getFullYear()
-    && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  const days = ['일', '월', '화', '수', '목', '금', '토']
   const p = (n: number) => String(n).padStart(2, '0')
-  return sameDay ? `${p(d.getHours())}:${p(d.getMinutes())}` : `${p(d.getMonth() + 1)}/${p(d.getDate())}`
+  const yy = String(d.getFullYear()).slice(-2)
+  return `${yy}-${p(d.getMonth() + 1)}-${p(d.getDate())}(${days[d.getDay()]}) ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
 /**
@@ -239,6 +273,8 @@ function makeStyles(colors: AppColors) {
     rowIcon: { flexShrink: 0 },
     rowCount: { flexShrink: 0, fontSize: 13, fontWeight: '700', color: colors.primary },
     rowMeta: { fontSize: 11.5, color: colors.textTertiary },
+    rowMetaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5 },
+    rowVoteItem: { flexDirection: 'row', alignItems: 'center', gap: 2 },
 
     pager: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 18 },
     pg: { minWidth: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
@@ -248,7 +284,7 @@ function makeStyles(colors: AppColors) {
     pgTextOff: { color: colors.textTertiary, opacity: 0.4 },
 
     writeBtn: {
-      position: 'absolute', right: 18, flexDirection: 'row', alignItems: 'center', gap: 6,
+      position: 'absolute', right: 18, flexDirection: 'row', alignItems: 'center',
       paddingHorizontal: 16, paddingVertical: 12, borderRadius: 999,
       backgroundColor: colors.primary,
       shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },

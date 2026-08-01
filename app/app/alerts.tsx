@@ -38,6 +38,17 @@ export default function AlertsScreen() {
     backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
     headerTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5, marginTop: 4 },
     pageTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5, marginBottom: 16 },
+    summaryBox: {
+      backgroundColor: colors.primary + '14', borderWidth: 1, borderColor: colors.primary + '40',
+      borderRadius: 12, padding: 14, marginBottom: 20, gap: 6,
+    },
+    summaryHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    summaryTitle: { fontSize: 13, fontWeight: '800', color: colors.primary },
+    summaryText: { fontSize: 13, lineHeight: 20, color: colors.textPrimary },
+    summaryBoxEmpty: {
+      backgroundColor: colors.surfaceHigh, borderRadius: 12, padding: 14, marginBottom: 20,
+    },
+    summaryEmptyText: { fontSize: 13, color: colors.textTertiary },
     scroll: { flex: 1 },
     content: { padding: 16, paddingBottom: 40 },
     sectionTitle: {
@@ -126,6 +137,11 @@ export default function AlertsScreen() {
   const [notifyDeadline, setNotifyDeadline] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loadingExisting, setLoadingExisting] = useState(true)
+  // 실제로 저장된 값만 담는다. 아래 편집 중인 값(selectedRegions 등)과 분리해 둬야
+  // 저장 누르기 전에 체크만 만져도 상단 요약이 같이 흔들리지 않는다(오너 지시).
+  const [savedSummary, setSavedSummary] = useState<{
+    regions: string[]; hashtags: string[]; notifyNew: boolean; notifyDeadline: boolean
+  } | null>(null)
 
   // AsyncStorage에서 로컬 설정 불러오기
   React.useEffect(() => {
@@ -133,10 +149,15 @@ export default function AlertsScreen() {
       if (raw) {
         try {
           const saved = JSON.parse(raw)
-          setSelectedRegions(saved.regions ?? [])
-          setSelectedHashtags(saved.hashtags ?? [])
-          setNotifyNew(saved.notify_new ?? true)
-          setNotifyDeadline(saved.notify_deadline ?? true)
+          const regions = saved.regions ?? []
+          const hashtags = saved.hashtags ?? []
+          const nNew = saved.notify_new ?? true
+          const nDeadline = saved.notify_deadline ?? true
+          setSelectedRegions(regions)
+          setSelectedHashtags(hashtags)
+          setNotifyNew(nNew)
+          setNotifyDeadline(nDeadline)
+          setSavedSummary({ regions, hashtags, notifyNew: nNew, notifyDeadline: nDeadline })
         } catch {}
       }
       setLoadingExisting(false)
@@ -217,7 +238,12 @@ export default function AlertsScreen() {
           notify_deadline: notifyDeadline,
         },
       })
-      Alert.alert('저장 완료', '알림 설정이 저장되었습니다.')
+      setSavedSummary({
+        regions: selectedRegions, hashtags: selectedHashtags, notifyNew, notifyDeadline,
+      })
+      Alert.alert('저장 완료', describeSummary({
+        regions: selectedRegions, hashtags: selectedHashtags, notifyNew, notifyDeadline,
+      }, regionOptions))
     } catch (e) {
       console.error('알림 설정 저장 실패:', e)
       Alert.alert('오류', '저장 중 문제가 발생했습니다. 다시 시도해주세요.')
@@ -237,6 +263,25 @@ export default function AlertsScreen() {
     <TopBar showBack />
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
       <Text style={styles.pageTitle}>알림 설정</Text>
+
+      {/* 지금 실제로 저장된 알림 상태 — 눈에 띄게(오너 지시). 아래 편집 중인 값이
+          아니라 마지막으로 저장한 값만 보여준다. */}
+      {savedSummary ? (
+        <View style={styles.summaryBox}>
+          <View style={styles.summaryHead}>
+            <Ionicons name="notifications" size={15} color={colors.primary} />
+            <Text style={styles.summaryTitle}>현재 알림 설정</Text>
+          </View>
+          <Text style={styles.summaryText}>
+            {describeSummary(savedSummary, regionOptions)}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.summaryBoxEmpty}>
+          <Text style={styles.summaryEmptyText}>아직 저장한 알림 설정이 없어요</Text>
+        </View>
+      )}
+
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitleInline}>관심 지역</Text>
         <TouchableOpacity
@@ -354,4 +399,17 @@ export default function AlertsScreen() {
     </ScrollView>
     </View>
   )
+}
+
+/** 저장 완료 팝업과 상단 요약에 같이 쓴다 — 문구가 서로 어긋나지 않게. */
+function describeSummary(
+  s: { regions: string[]; hashtags: string[]; notifyNew: boolean; notifyDeadline: boolean },
+  regionOptions: RegionOption[]
+): string {
+  const regionLabels = s.regions.length
+    ? s.regions.map((id) => regionOptions.find((r) => r.id === id)?.label ?? id).join(', ')
+    : '전국(지역 조건 없음)'
+  const tagLabels = s.hashtags.length ? s.hashtags.join(', ') : '전체(태그 조건 없음)'
+  const types = [s.notifyNew && '새 일정', s.notifyDeadline && '마감 임박(D-1)'].filter(Boolean).join(', ') || '없음'
+  return `지역: ${regionLabels}\n태그: ${tagLabels}\n알림 종류: ${types}`
 }
