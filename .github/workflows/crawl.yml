@@ -152,6 +152,25 @@ jobs:
               print(f'마감 알림 큐: {edge_resp.status_code}')
           "
 
+      - name: Process push queue again (deadline reminders just queued above)
+        # ⚠️(2026-08-03) 마감알림(D-1)은 바로 위 단계에서 막 큐에 들어가는데, 큐 소진은
+        # 그보다 앞선 단계에서 한 번뿐이라 이 실행분은 다음날 아침 실행 때까지 묵혀 있었다.
+        # 그 사이 사용자가 알림을 끄면 이미 꺼둔 사람에게도 나가는 사고로 이어졌다(발송
+        # 시점에 다시 걸러주는 process-push-queue 자체 수정과는 별개로, 큐에 오래 쌓여
+        # 있을수록 그럴 일이 늘어나므로 최대한 빨리 비워야 한다). crawler 단계의 비동기
+        # pg_net 웹훅이 살짝 늦게 들어와 앞선 소진에서 놓친 new_event 메시지도 여기서 마저 비운다.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          for i in 1 2 3; do
+            curl -sf -X POST \
+              "$SUPABASE_URL/functions/v1/process-push-queue" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Content-Type: application/json" || true
+            sleep 2
+          done
+
       - name: Notify on failure
         if: failure()
         run: |

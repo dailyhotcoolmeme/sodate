@@ -20,12 +20,30 @@ serve(async (_req) => {
     return new Response(JSON.stringify({ sent: 0 }), { status: 200 })
   }
 
+  // 발송 직전 구독 상태를 다시 조회한다. target_tokens는 match-subscriptions가 큐에 넣던
+  // "그 순간"의 대상자 스냅샷이라, 그 뒤 사용자가 알림을 끄더라도 메시지엔 그대로 남아있다.
+  // 큐가 밀리면(2026-08-03 실측: 최대 34시간·13건 적체) 이미 꺼둔 사용자에게도 발송되는
+  // 사고로 이어진다 — enqueue 시점이 아니라 발송 시점 기준으로 다시 걸러야 한다.
+  const { data: allSubs } = await supabase
+    .from('alert_subscriptions')
+    .select('is_active, notify_new, notify_deadline, push_tokens(token)')
+  const subByToken = new Map<string, { is_active: boolean; notify_new: boolean; notify_deadline: boolean }>()
+  for (const s of allSubs ?? []) {
+    const token = (s as { push_tokens?: { token?: string } }).push_tokens?.token
+    if (token) subByToken.set(token, s as { is_active: boolean; notify_new: boolean; notify_deadline: boolean })
+  }
+
   let totalSent = 0
   const processedMsgIds: number[] = []
 
   for (const msg of messages) {
     const payload = msg.message
-    const tokens: string[] = payload.target_tokens || []
+    const requestedTokens: string[] = payload.target_tokens || []
+    const tokens = requestedTokens.filter((t) => {
+      const sub = subByToken.get(t)
+      if (!sub?.is_active) return false
+      return payload.type === 'deadline_reminder' ? sub.notify_deadline : sub.notify_new
+    })
 
     const title = payload.type === 'new_event'
       ? `ㅅㄱㅌㅁㅇ - ${payload.location_region} 새 일정`
