@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useRef } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, RefreshControl, Animated,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, RefreshControl, Animated, Alert,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
@@ -12,7 +12,8 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardList, useBoardSettings, PAGE_SIZE } from '@/hooks/useBoard'
 import { wideContent } from '@/constants/layout'
-import type { BoardPost } from '@/lib/board'
+import { report, type BoardPost } from '@/lib/board'
+import { blockAuthor } from '@/lib/boardIdentity'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 /**
@@ -40,6 +41,28 @@ export default function BoardListScreen() {
 
   const hot = settings?.hot_upvotes ?? 10
   const cold = settings?.cold_downvotes ?? 10
+
+  // 글 목록에서 길게 눌러 작성자를 차단한다(애플 1.2 요건). 이 기기에서만 해당 작성자의
+  // 글·댓글을 걸러 보이지 않게 하는 것과 별개로, 차단 자체가 운영자 신고로도 접수되어야
+  // 한다 — 애플이 "blocking should also notify the developer"라고 명시(2026-08-04 반려
+  // 재확인). 신고와 완전히 분리해뒀던 걸 여기서 합친다.
+  const handleBlock = (post: BoardPost) => {
+    Alert.alert(
+      `'${post.nickname}' 차단`,
+      '이 작성자의 글·댓글이 이 기기에서 더 이상 보이지 않습니다. 운영자에게도 신고로 접수됩니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '차단', style: 'destructive',
+          onPress: async () => {
+            await blockAuthor(post.owner_token, post.nickname)
+            await report('post', post.id, '사용자 차단')
+            refetch()
+          },
+        },
+      ]
+    )
+  }
 
   // 글쓰기 FAB — 목록을 스크롤하면 아이콘만 남고 "글쓰기" 글자는 접힌다.
   // 맨 위로 돌아오면 다시 펼쳐진다(오너 지시, Material 확장 FAB의 표준 동작).
@@ -109,7 +132,8 @@ export default function BoardListScreen() {
         >
           {posts.map((p) => (
             <PostRow key={p.id} post={p} hot={hot} cold={cold} styles={styles} colors={colors}
-              onPress={() => router.push(`/board/${p.id}`)} />
+              onPress={() => router.push(`/board/${p.id}`)}
+              onLongPress={() => handleBlock(p)} />
           ))}
 
           <Pager page={page} pageCount={pageCount} onChange={setPage} styles={styles} colors={colors} />
@@ -139,7 +163,7 @@ export default function BoardListScreen() {
 }
 
 function PostRow({
-  post, hot, cold, styles, colors, onPress,
+  post, hot, cold, styles, colors, onPress, onLongPress,
 }: {
   post: BoardPost
   hot: number
@@ -147,13 +171,14 @@ function PostRow({
   styles: ReturnType<typeof makeStyles>
   colors: AppColors
   onPress: () => void
+  onLongPress: () => void
 }) {
   const isHot = post.upvotes >= hot
   const isCold = post.downvotes >= cold
   const hasImage = !!post.image_urls?.length
 
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.row} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
       <View style={styles.rowTitleLine}>
         <Text
           style={[styles.rowTitle, isHot && styles.rowTitleHot, isCold && styles.rowTitleCold]}

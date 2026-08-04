@@ -20,9 +20,10 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
 import {
-  vote, deletePost, createComment, updateComment, deleteComment, markViewed,
+  vote, deletePost, createComment, updateComment, deleteComment, markViewed, report,
 } from '@/lib/board'
 import { getLastNickname } from '@/lib/reviewIdentity'
+import { blockAuthor } from '@/lib/boardIdentity'
 import { wideContent } from '@/constants/layout'
 import type { BoardComment } from '@/lib/board'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
@@ -38,7 +39,7 @@ export default function BoardPostScreen() {
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
-  const { post, comments, myVote, isMine, myCommentIds, loading, refetch } = useBoardPost(id)
+  const { post, postBlocked, comments, myVote, isMine, myCommentIds, loading, refetch } = useBoardPost(id)
 
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
 
@@ -144,6 +145,31 @@ export default function BoardPostScreen() {
     ])
   }
 
+  // 작성자 차단(애플 1.2 요건) — 이 기기에서만 해당 작성자의 글·댓글을 가린다. 차단 자체가
+  // 운영자 신고로도 접수돼야 한다는 게 애플의 명시 요구라(2026-08-04 반려 재확인,
+  // "blocking should also notify the developer"), 신고와 분리해뒀던 걸 여기서 합친다.
+  const handleBlockAuthor = (
+    targetNickname: string, ownerToken: string, andGoBack: boolean,
+    targetType: 'post' | 'comment', targetId: string
+  ) => {
+    Alert.alert(
+      `'${targetNickname}' 차단`,
+      '이 작성자의 글·댓글이 이 기기에서 더 이상 보이지 않습니다. 운영자에게도 신고로 접수됩니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '차단', style: 'destructive',
+          onPress: async () => {
+            await blockAuthor(ownerToken, targetNickname)
+            await report(targetType, targetId, '사용자 차단')
+            if (andGoBack) router.back()
+            else refetch()
+          },
+        },
+      ]
+    )
+  }
+
   const submitComment = async () => {
     const text = draft.trim()
     if (!text || sending) return
@@ -241,6 +267,19 @@ export default function BoardPostScreen() {
     )
   }
 
+  if (postBlocked) {
+    return (
+      <View style={styles.container}>
+        <TopBar showBack onLogoPress={() => router.replace('/board')} />
+        <View style={styles.center}>
+          <Ionicons name="eye-off-outline" size={28} color={colors.textTertiary} />
+          <Text style={styles.emptyText}>차단한 사용자의 글이에요</Text>
+          <Text style={styles.emptySub}>메뉴의 차단 목록에서 해제하면 다시 볼 수 있습니다.</Text>
+        </View>
+      </View>
+    )
+  }
+
   // 원댓글 아래에 답글을 붙여 보여준다(대댓글은 한 단계까지).
   const roots = comments.filter((c) => !c.parent_id)
   const repliesOf = (pid: string) => comments.filter((c) => c.parent_id === pid)
@@ -280,6 +319,9 @@ export default function BoardPostScreen() {
                 </>
               ) : (
                 <>
+                  <TouchableOpacity onPress={() => handleBlockAuthor(post.nickname, post.owner_token, true, 'post', id)} hitSlop={8}>
+                    <Text style={styles.metaAct}>차단</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity onPress={() => setReportTarget({ type: 'post', id })} hitSlop={8}>
                     <Text style={styles.metaAct}>신고</Text>
                   </TouchableOpacity>
@@ -358,6 +400,7 @@ export default function BoardPostScreen() {
               onEdit={() => { setEditing(c); setDraft(c.content) }}
               onDelete={() => removeComment(c)}
               onReport={() => setReportTarget({ type: 'comment', id: c.id })}
+              onBlock={() => handleBlockAuthor(c.nickname, c.owner_token, false, 'comment', c.id)}
             />
             {repliesOf(c.id).map((r) => (
               <CommentRow
@@ -366,6 +409,7 @@ export default function BoardPostScreen() {
                 onEdit={() => { setEditing(r); setDraft(r.content) }}
                 onDelete={() => removeComment(r)}
                 onReport={() => setReportTarget({ type: 'comment', id: r.id })}
+                onBlock={() => handleBlockAuthor(r.nickname, r.owner_token, false, 'comment', r.id)}
               />
             ))}
           </View>
@@ -569,7 +613,7 @@ function makeReplyModalStyles(colors: AppColors) {
 }
 
 function CommentRow({
-  c, reply = false, mine, styles, onReply, onEdit, onDelete, onReport, onLayout,
+  c, reply = false, mine, styles, onReply, onEdit, onDelete, onReport, onBlock, onLayout,
 }: {
   c: BoardComment
   reply?: boolean
@@ -579,6 +623,7 @@ function CommentRow({
   onEdit: () => void
   onDelete: () => void
   onReport: () => void
+  onBlock: () => void
   /** 답글의 부모 안에서의 세로 위치 */
   onLayout?: (y: number) => void
 }) {
@@ -602,9 +647,14 @@ function CommentRow({
               </TouchableOpacity>
             </>
           ) : (
-            <TouchableOpacity onPress={onReport} hitSlop={8}>
-              <Text style={styles.commentMetaAct}>신고</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity onPress={onBlock} hitSlop={8}>
+                <Text style={styles.commentMetaAct}>차단</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onReport} hitSlop={8}>
+                <Text style={styles.commentMetaAct}>신고</Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </View>
