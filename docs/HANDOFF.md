@@ -1,4 +1,4 @@
-# 이어받기 문서 (2026-08-06)
+# 이어받기 문서 (2026-08-07)
 
 > 세션이 끊겨도 바로 이어서 작업할 수 있게 남긴다. 새 세션은 이 문서부터 읽는다.
 > 이전(8/1) 버전 내용은 게시판 UI 세부사항이었고 전부 병합·완료되어 이 문서에서 들어냈다 —
@@ -9,9 +9,28 @@
 ## 1. 지금 무엇을 하고 있었나 — 애플 심사 대응
 
 **iOS 앱스토어 심사가 진행형이다.** Submission ID `0f2d0cbb-44a8-4f18-9166-b9a764ce0ab2`,
-Guideline 1.2(UGC) 로 세 번 반려된 뒤, **build 7을 방금(2026-08-06) 재제출했고 현재
-"Waiting for Review" 상태다.** 다음 세션은 여기서부터: **App Store Connect에 결과가
-와 있는지부터 확인할 것.**
+Guideline 1.2(UGC)로 세 번 반려 → build 7 → **purpose string 문제로 4번째 반려**
+→ **build 8을 2026-08-07 00:12(KST) 재제출, 현재 "Waiting for Review" 상태다.**
+다음 세션은 여기서부터: **App Store Connect에 결과가 와 있는지부터 확인할 것.**
+
+### 4번째 반려 (2026-08-06 21:28) — Guideline 1.2 아님, 자동 분석 건
+
+- 반려 사유: `NSMicrophoneUsageDescription`의 목적 문구가 플레이스홀더
+  (`"Allow $(PRODUCT_NAME) to access your microphone"`)라 불충분. **사람 리뷰 전
+  자동 스캔 단계에서 걸린 것**이라 1.2 UGC 언급은 아예 없었다 → build 7의 UGC
+  대응 자체는 리뷰어에게 전달된 것으로 보인다.
+- **원인**: `expo-image-picker` config plugin이 prebuild 때 카메라·마이크 usage
+  description을 기본 영문 문구로 자동 삽입. 사진첩 문구만 한글로 채워뒀고 나머지
+  둘은 손대지 않은 상태였다.
+- **앱은 이 둘을 안 쓴다** — `lib/boardImage.ts:46`의 `launchImageLibraryAsync`(사진첩)
+  하나뿐이고 `launchCameraAsync`도, 녹음 관련 패키지도 없다.
+- **조치(build 8)**: 문구를 채우는 대신 **두 키를 제거**(애플 안내 2번 선택지).
+  - `ios/app/Info.plist`에서 `NSCamera`/`NSMicrophoneUsageDescription` 삭제
+  - `app.json`의 expo-image-picker 플러그인에 `cameraPermission: false`,
+    `microphonePermission: false` → prebuild 재실행해도 다시 안 들어옴 (커밋 `b5c177d`)
+  - archive 산출물의 Info.plist를 직접 열어 두 키 부재 + `CFBundleVersion 8` 확인 후 업로드
+  - **카메라 키도 같이 지운 이유**: 같은 플레이스홀더 + 미사용이라 다음 자동 스캔에
+    또 걸릴 게 뻔했다. 애플은 마이크만 지적했지만 한 번에 정리.
 
 ### 반려 히스토리 요약
 
@@ -130,10 +149,19 @@ operation is: DELETE") — 재제출 액션 자체는 **브라우저(App Store C
 
 ## 5. App Store Connect UI 사용법 (여러 번 반복해서 확인된 것)
 
-- **회신 입력창**은 버전이 "Rejected" 상태일 때만 뜬다. 제출 상세 페이지
-  (`/distribution/reviewsubmissions/details/{submissionId}`) 맨 아래
-  "Reply to App Review" 버튼 → 모달에서 작성(4000자 제한) → Reply. **"심사 업데이트"를
-  누르면 상태가 바뀌면서 이 창이 잠긴다 — 회신을 남기려면 재제출 "전에" 할 것.**
+- **★ 작업 순서는 반드시 "회신 먼저 → 그다음 빌드 제출"이다(오너 지시, 2026-08-07).**
+  재제출을 먼저 해버리면 회신을 못 남기고, 실제로 그것 때문에 심사자가 우리 설명을
+  못 본 적이 있다.
+- **회신 입력창**은 버전이 "Rejected"(제출이 `UNRESOLVED_ISSUES`) 상태일 때만 뜬다.
+  제출 상세 페이지(`/distribution/reviewsubmissions/details/{submissionId}`) 맨 아래
+  "앱 심사에 회신" 버튼 → 모달에서 작성(4000자 제한) → 회신.
+  - **잠기는 시점은 "심사 업데이트"를 누를 때다.** 2026-08-07에 실측: 빌드를 8로
+    교체하고 **저장**까지 해서 버전 상태가 "제출 준비 중"으로 바뀐 뒤에도 회신창은
+    그대로 살아 있었다(제출 자체는 `UNRESOLVED_ISSUES` 유지). 순서를 어겼더라도
+    "심사 업데이트" 전이면 회신 가능 — 다만 위 원칙대로 회신부터 하는 게 안전하다.
+  - 상태 확인은 브라우저보다 API가 빠르다:
+    `GET /v1/apps/{id}/reviewSubmissions?limit=10` → `state` 필드
+    (`sort` 파라미터는 이 엔드포인트에서 400 에러가 난다).
 - **빌드 교체**: 버전 페이지(`/distribution/ios/version/inflight`) → Build 섹션 →
   기존 빌드 행에 마우스 올리면 빨간 "−" 아이콘 → 클릭해서 제거 → "Add Build" → 새
   빌드 선택 → Done → 페이지 상단 **Save**(중요, 안 누르면 반영 안 됨) → 상태가
@@ -195,9 +223,12 @@ select queue_length, total_messages from pgmq.metrics('push_notifications');
 
 ## 9. 다음 세션에서 바로 할 일
 
-1. **App Store Connect에서 build 7 심사 결과 확인부터.** 통과했으면 게시판 콘텐츠
-   채우기·정식 출시로 넘어가면 되고, 또 반려됐으면 **이번엔 리뷰어 첨부 스크린샷을
-   가장 먼저 확인**해서 build 7이 실제로 반영된 화면인지부터 볼 것.
+1. **App Store Connect에서 build 8 심사 결과 확인부터.** 통과했으면 게시판 콘텐츠
+   채우기·정식 출시로 넘어가면 되고, 또 반려됐으면 **리뷰어 첨부 스크린샷을 가장 먼저
+   확인**할 것. 자동 분석 반려면 스크린샷 없이 반려 문구에 어떤 키가 문제인지 그대로
+   적혀 온다.
+   - build 8 제출 시 이미 처리해둔 것: 애플에 영문 회신 전송(원인·조치 설명),
+     App Review 메모에 "2026-08-07 재제출 (build 8)" 문단 추가(기존 build 7 문단 유지).
 2. 통과 후: 이용약관 페이지(`app/app/terms.tsx`)에 이미 게시판 조항 반영해뒀는지
    재확인, 스크린 레코딩(구글드라이브 링크`1BCc2W7CcX83w9pBnIAQoFCVP_t7q-JN8`)이
    build 7 화면과 실제로 일치하는지 필요시 재촬영.
