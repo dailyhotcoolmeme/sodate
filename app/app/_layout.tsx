@@ -110,6 +110,7 @@ export default function RootLayout() {
         <Stack.Screen name="board/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="board/write" options={{ headerShown: false }} />
         <Stack.Screen name="board/mine" options={{ headerShown: false }} />
+        <Stack.Screen name="board/blocked" options={{ headerShown: false }} />
         <Stack.Screen name="favorites/index" options={{ headerShown: false }} />
         <Stack.Screen name="alerts" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />

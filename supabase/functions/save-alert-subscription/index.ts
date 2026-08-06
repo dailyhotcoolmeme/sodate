@@ -20,6 +20,8 @@ serve(async (req) => {
     company_ids?: string[]
     notify_new?: boolean
     notify_deadline?: boolean
+    /** true면 조건은 무시하고 이 push_token의 구독을 끈다(알림 해제 버튼) */
+    unsubscribe?: boolean
   }
   try {
     body = await req.json()
@@ -27,7 +29,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 })
   }
 
-  const { token, regions, max_price, themes, hashtags, company_ids, notify_new, notify_deadline } = body
+  const { token, regions, max_price, themes, hashtags, company_ids, notify_new, notify_deadline, unsubscribe } = body
   if (!token) {
     return new Response(JSON.stringify({ error: 'token is required' }), { status: 400 })
   }
@@ -56,7 +58,7 @@ serve(async (req) => {
         company_ids: company_ids ?? null,
         notify_new: notify_new ?? true,
         notify_deadline: notify_deadline ?? true,
-        is_active: true,
+        is_active: !unsubscribe,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'push_token_id' }

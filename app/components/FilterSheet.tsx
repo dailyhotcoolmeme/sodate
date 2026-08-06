@@ -53,6 +53,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
     companies,
     recentFilters,
     toggleRegion,
+    setRegionsBulk,
     setDateRange,
     setMaxPrice,
     toggleHashtag,
@@ -187,6 +188,8 @@ export default function FilterSheet({ visible, onClose }: Props) {
     groupRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, gap: 8 },
     groupRowLabel: { width: 60, paddingLeft: 10, paddingTop: 7, fontSize: 13, fontWeight: '700', color: colors.textSecondary },
     groupRowLabelTop: { width: 60, paddingTop: 6, fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+    // 지역 군 라벨(강남권 등)을 누르면 그 안의 칩이 한번에 선택된다(알림 설정과 동일, 2026-08-02 오너 지시).
+    groupRowLabelActive: { color: colors.primary },
     groupRowChips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     searchInput: {
       backgroundColor: colors.surfaceHigh,
@@ -289,11 +292,17 @@ export default function FilterSheet({ visible, onClose }: Props) {
           <Section title="지역" styles={styles}>
             {groupedRegions.map((g, gi) => {
               const showParent = !!g.parent && (gi === 0 || groupedRegions[gi - 1].parent !== g.parent)
+              const groupIds = g.items.map((r) => r.id)
+              const groupAllOn = groupIds.length > 0 && groupIds.every((id) => regions.includes(id))
               return (
                 <View key={g.key}>
                   {showParent && <Text style={styles.groupTop}>{g.parent}</Text>}
                   <View style={styles.groupRow}>
-                    <Text style={g.parent ? styles.groupRowLabel : styles.groupRowLabelTop}>{g.key}</Text>
+                    <TouchableOpacity onPress={() => setRegionsBulk(groupIds, !groupAllOn)} hitSlop={6}>
+                      <Text style={[g.parent ? styles.groupRowLabel : styles.groupRowLabelTop, groupAllOn && styles.groupRowLabelActive]}>
+                        {g.key}
+                      </Text>
+                    </TouchableOpacity>
                     <View style={styles.groupRowChips}>
                       {g.items.map((r) => (
                         <Chip

@@ -192,8 +192,11 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
           const hasM = event.price_male != null || !!event.price_detail?.male || !!event.age_male
           const hasF = event.price_female != null || !!event.price_detail?.female || !!event.age_female
           if (!hasM && !hasF) return null
-          const soldM = event.seats_left_male != null && event.seats_left_male <= 0
-          const soldF = event.seats_left_female != null && event.seats_left_female <= 0
+          // 이벤트 전체가 마감이면 성별 좌석 데이터와 상관없이 둘 다 마감으로 본다
+          // (크롤러가 is_closed는 갱신해도 seats_left_male/female은 안 갱신한 경우가 있어,
+          //  마감 배지는 뜨는데 성별 가격엔 취소선이 안 붙는 불일치가 있었다 — 2026-08-02 오너 지적)
+          const soldM = event.is_closed || (event.seats_left_male != null && event.seats_left_male <= 0)
+          const soldF = event.is_closed || (event.seats_left_female != null && event.seats_left_female <= 0)
           return (
             <View style={styles.genderBlock}>
               {hasM && (

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getMyPostIds, getMyCommentIds, getMyVotes } from '@/lib/boardIdentity'
+import { getMyPostIds, getMyCommentIds, getMyVotes, getBlockedAuthors } from '@/lib/boardIdentity'
 import type { BoardPost, BoardComment, BoardSettings } from '@/lib/board'
 
 /**
@@ -10,7 +10,11 @@ import type { BoardPost, BoardComment, BoardSettings } from '@/lib/board'
  * 전체 건수를 함께 받아 페이지 수를 계산한다.
  *
  * '내 것' 판단은 기기에 저장한 id 목록으로 한다(lib/boardIdentity.ts).
- * owner_token 은 익명성 때문에 앱에 내려주지 않는다.
+ *
+ * owner_token(기기 시크릿의 해시)은 작성자 차단(뮤트) 기준으로 쓰기 위해 목록·상세에
+ * 함께 받아온다(2026-08 애플 1.2 대응, 오너 승인). 원래 기기값으로 되돌릴 수 없는
+ * 해시라 이 값만으로 실제 신원이 드러나지는 않지만, 같은 기기가 쓴 글·닉네임끼리는
+ * 서로 연결해 볼 수 있게 된다는 점은 의도된 트레이드오프다.
  */
 
 export const PAGE_SIZE = 20
@@ -36,7 +40,7 @@ export function useBoardList(page: number, search = '') {
     let q = supabase
       .from('board_posts')
       .select(
-        'id,nickname,title,content,image_urls,upvotes,downvotes,comment_count,image_hidden,created_at',
+        'id,nickname,title,content,image_urls,upvotes,downvotes,comment_count,image_hidden,owner_token,created_at',
         { count: 'exact' }
       )
       .eq('is_active', true)
@@ -50,8 +54,11 @@ export function useBoardList(page: number, search = '') {
 
     q.order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1)
-      .then(({ data, count }) => {
-        setPosts((data as unknown as BoardPost[]) ?? [])
+      .then(async ({ data, count }) => {
+        const blocked = await getBlockedAuthors()
+        const blockedKeys = new Set(blocked.map((b) => b.key))
+        const rows = (data as unknown as BoardPost[]) ?? []
+        setPosts(blockedKeys.size ? rows.filter((p) => !blockedKeys.has(p.owner_token)) : rows)
         setTotal(count ?? 0)
         setLoading(false)
       }, () => setLoading(false))
@@ -67,6 +74,7 @@ export function useBoardList(page: number, search = '') {
 
 export function useBoardPost(id: string) {
   const [post, setPost] = useState<BoardPost | null>(null)
+  const [postBlocked, setPostBlocked] = useState(false)
   const [comments, setComments] = useState<BoardComment[]>([])
   const [myVote, setMyVote] = useState<0 | 1 | -1>(0)
   const [isMine, setIsMine] = useState(false)
@@ -79,15 +87,20 @@ export function useBoardPost(id: string) {
     try {
       const [{ data: p }, { data: c }] = await Promise.all([
         supabase.from('board_posts')
-          .select('id,nickname,title,content,image_urls,upvotes,downvotes,comment_count,image_hidden,is_active,created_at,updated_at')
+          .select('id,nickname,title,content,image_urls,upvotes,downvotes,comment_count,image_hidden,owner_token,is_active,created_at,updated_at')
           .eq('id', id).maybeSingle(),
         supabase.from('board_comments')
-          .select('id,post_id,parent_id,nickname,content,created_at,updated_at')
+          .select('id,post_id,parent_id,nickname,content,owner_token,created_at,updated_at')
           .eq('post_id', id).eq('is_active', true)
           .order('created_at', { ascending: true }),
       ])
-      setPost((p as unknown as BoardPost) ?? null)
-      setComments((c as unknown as BoardComment[]) ?? [])
+      const blocked = await getBlockedAuthors()
+      const blockedKeys = new Set(blocked.map((b) => b.key))
+      const postRow = (p as unknown as BoardPost) ?? null
+      setPost(postRow)
+      setPostBlocked(!!postRow && blockedKeys.has(postRow.owner_token))
+      const commentRows = (c as unknown as BoardComment[]) ?? []
+      setComments(blockedKeys.size ? commentRows.filter((cm) => !blockedKeys.has(cm.owner_token)) : commentRows)
 
       const [mine, myComments, votes] = await Promise.all([
         getMyPostIds(), getMyCommentIds(), getMyVotes(),
@@ -102,7 +115,7 @@ export function useBoardPost(id: string) {
 
   useEffect(() => { load() }, [load])
 
-  return { post, comments, myVote, isMine, myCommentIds, loading, refetch: load, setMyVote }
+  return { post, postBlocked, comments, myVote, isMine, myCommentIds, loading, refetch: load, setMyVote }
 }
 
 /** 내가 쓴 글 (햄버거 → 내가 쓴 글) */

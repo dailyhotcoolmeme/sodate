@@ -17,14 +17,15 @@ const THUMB = 88
 // 광고 단위 ID는 @/lib/ads 에서 중앙 관리 (미설정 시 자동 테스트 광고 폴백)
 // 요청 시점에 계산 — 모듈 로드 시점엔 Updates.channel이 아직 없을 수 있다
 
-export default function AdListItem() {
+export default function AdListItem({ slot = 'feed' }: { slot?: string }) {
   const colors = useColors()
   const [ad, setAd] = useState<NativeAd | null>(null)
 
   useEffect(() => {
     let mounted = true
     let loaded: NativeAd | null = null
-    // 어떤 광고 단위로 나갔는지 남긴다 — 테스트 ID로 새는 실행을 구분하기 위함
+    // 게시판 등 다른 슬롯도 당장은 피드와 같은 광고 단위를 재사용한다(리포트는 slot으로 구분).
+    // AdMob에서 게시판 전용 네이티브 광고 단위를 만들면 @/lib/ads 에 추가해 이 슬롯만 바꿔 끼우면 된다.
     const unitId = getFeedNativeAdUnitId()
     NativeAd.createForAdRequest(unitId)
       .then((nativeAd) => {
@@ -34,14 +35,14 @@ export default function AdListItem() {
         } else {
           nativeAd.destroy()
         }
-        track('ad_load_success', { properties: { slot: 'feed', platform: Platform.OS, unit: unitId } })
+        track('ad_load_success', { properties: { slot, platform: Platform.OS, unit: unitId } })
       })
       .catch((e) => {
         // 슬롯은 비워두고 앱은 그대로 돌아간다. 다만 예전처럼 조용히 삼키지는 않는다 —
         // 실패 사실과 사유를 남겨야 출시 후에 "광고가 왜 안 나오는지"를 알 수 있다.
         track('ad_load_fail', {
           properties: {
-            slot: 'feed',
+            slot,
             platform: Platform.OS,
             unit: unitId,
             code: e?.code ?? null,
@@ -53,7 +54,7 @@ export default function AdListItem() {
       mounted = false
       loaded?.destroy()
     }
-  }, [])
+  }, [slot])
 
   const styles = useMemo(() => StyleSheet.create({
     // 둥근 테두리는 일반 RN View가 담당 (NativeAdView는 네이티브뷰라 borderRadius 클리핑이 안 됨)

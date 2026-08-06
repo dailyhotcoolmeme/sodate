@@ -11,7 +11,6 @@ import {
   Animated,
   PanResponder,
   Dimensions,
-  ActivityIndicator,
   Keyboard,
   Platform,
   type KeyboardEvent,

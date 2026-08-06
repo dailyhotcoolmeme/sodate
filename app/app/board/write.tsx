@@ -9,11 +9,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { supabase } from '@/lib/supabase'
-import { createPost, updatePost } from '@/lib/board'
+import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardEditor, BoardEditorInput } from '@/components/BoardEditor'
 import { MAX_IMAGES } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
+import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
 import { wideContent } from '@/constants/layout'
 
 const TITLE_MAX = 60
@@ -54,27 +54,42 @@ export default function BoardWriteScreen() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [toolbarH, setToolbarH] = useState(0)
+  const [agreed, setAgreed] = useState(false)
+  // 화면 진입 시점에 이미 동의돼 있었는지 — 체크박스 자체를 보여줄지 말지는 이 값으로만
+  // 정한다. `agreed`로 정하면 지금 막 체크하는 순간 조건이 바뀌어 체크박스 줄 전체가
+  // 사라져 버린다(2026-08-03 오너 지적 — 체크하자마자 글이 없어짐).
+  const [initiallyAgreed, setInitiallyAgreed] = useState(false)
+  const [agreedLoaded, setAgreedLoaded] = useState(false)
   const editor = useBoardEditor(images, setImages)
 
   useEffect(() => {
     getLastNickname().then((n) => n && setNickname((cur) => cur || n))
   }, [])
 
+  // 최초 게시물 등록 전 약관 동의 확인(애플 1.2, UGC 동의 절차). 한 번 동의하면
+  // 기기에 남아 다시 묻지 않는다 — 수정 화면에서는 이미 동의한 뒤라 묻지 않는다.
+  useEffect(() => {
+    if (isEdit) { setAgreedLoaded(true); return }
+    getTermsAgreed().then((v) => { setAgreed(v); setInitiallyAgreed(v); setAgreedLoaded(true) })
+  }, [isEdit])
+
   useEffect(() => {
     if (!id) return
-    supabase.from('board_posts').select('nickname,title,content,image_urls').eq('id', id).maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setNickname((data as any).nickname ?? '')
-          setTitle((data as any).title ?? '')
-          setContent((data as any).content ?? '')
-          setImages((data as any).image_urls ?? [])
-        }
-        setLoading(false)
-      }, () => setLoading(false))
+    getPostForEdit(id).then((r) => {
+      if ('post' in r) {
+        setNickname(r.post.nickname ?? '')
+        setTitle(r.post.title ?? '')
+        setContent(r.post.content ?? '')
+        setImages(r.post.image_urls ?? [])
+      } else {
+        Alert.alert('알림', r.error)
+      }
+      setLoading(false)
+    })
   }, [id])
 
-  const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && content.trim().length > 0
+  const needsAgreement = !isEdit && agreedLoaded && !agreed
+  const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && content.trim().length > 0 && !needsAgreement
 
   // 쓰던 게 있으면 닫기 전에 물어본다
   const dirty = title.trim().length > 0 || content.trim().length > 0 || images.length > 0
@@ -94,6 +109,7 @@ export default function BoardWriteScreen() {
       : await createPost({ nickname: nickname.trim(), title: title.trim(), content: content.trim(), imageUrls: images })
     setSaving(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
+    if (!isEdit) await setTermsAgreed()
     router.back()
   }
 
@@ -171,6 +187,29 @@ export default function BoardWriteScreen() {
         <Text style={styles.notice}>
           욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
         </Text>
+
+        {!isEdit && agreedLoaded && !initiallyAgreed && (
+          <View style={styles.agreeRow}>
+            <TouchableOpacity
+              style={styles.agreeCheck}
+              onPress={() => setAgreed((v) => !v)}
+              hitSlop={8}
+            >
+              <Ionicons
+                name={agreed ? 'checkbox' : 'square-outline'}
+                size={20}
+                color={agreed ? colors.primary : colors.textTertiary}
+              />
+            </TouchableOpacity>
+            <Text style={styles.agreeText}>
+              게시물 관련{' '}
+              <Text style={styles.agreeLink} onPress={() => router.push('/terms')}>
+                이용약관
+              </Text>
+              에 동의합니다. (무관용 원칙, 신고 접수 후 24시간 내 조치)
+            </Text>
+          </View>
+        )}
       </KeyboardAwareScrollView>
 
       {/* 사진 첨부 — 화면 맨 아랫줄. 키보드가 올라오면 그 위에 붙는다.
@@ -224,6 +263,14 @@ function makeStyles(colors: AppColors) {
     counter: { fontSize: 11, color: colors.textTertiary, textAlign: 'right', marginTop: 5 },
     hint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 5 },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
+
+    agreeRow: {
+      flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+      backgroundColor: colors.surfaceHigh, borderRadius: 12, padding: 12,
+    },
+    agreeCheck: { paddingTop: 1 },
+    agreeText: { flex: 1, fontSize: 12.5, color: colors.textSecondary, lineHeight: 18 },
+    agreeLink: { color: colors.primary, fontWeight: '700' },
 
     toolbar: {
       flexDirection: 'row', alignItems: 'center',

@@ -82,6 +82,10 @@ export default function HomeScreen() {
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
   const [showFab, setShowFab] = useState(false)
   const flatListRef = useRef<FlatList>(null)
+  // 지역·나이대 칩 줄 — 스크롤하면 접히고 맨 위로 돌아오면 펼쳐진다.
+  // 게시판 글쓰기 FAB와 같은 scrollY<=8 기준(2026-08-02 오너 확정, 옵션 E).
+  const chipsAnim = useRef(new Animated.Value(1)).current
+  const chipsExpandedRef = useRef(true)
   const router = useRouter()
   // 다른 페이지의 톱바 필터 버튼 → '/?openFilter=1' 로 진입 시 필터 시트 자동 오픈
   const { openFilter } = useLocalSearchParams<{ openFilter?: string }>()
@@ -527,9 +531,15 @@ export default function HomeScreen() {
   }
 
   const onScroll = useCallback((e: any) => {
-    setShowFab(e.nativeEvent.contentOffset.y > 300)
-    if (Platform.OS === 'android') setAndroidScrollY(e.nativeEvent.contentOffset.y)
-  }, [])
+    const y = e.nativeEvent.contentOffset.y
+    setShowFab(y > 300)
+    if (Platform.OS === 'android') setAndroidScrollY(y)
+    const expand = y <= 8
+    if (expand !== chipsExpandedRef.current) {
+      chipsExpandedRef.current = expand
+      Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
+    }
+  }, [chipsAnim])
 
   const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
     track(isCurrent ? 'event_favorite_remove' : 'event_favorite_add', {
@@ -633,7 +643,14 @@ export default function HomeScreen() {
         onLogoPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
       />
 
-      {/* ── 지역 빠른 탭 ── */}
+      {/* ── 지역 빠른 탭 + 나이대 칩 — 스크롤하면 접힘(옵션 E) ── */}
+      <Animated.View
+        style={{
+          height: chipsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 72] }),
+          opacity: chipsAnim,
+          overflow: 'hidden',
+        }}
+      >
       <View style={styles.regionScroll}>
       <ScrollView
         horizontal
@@ -695,6 +712,7 @@ export default function HomeScreen() {
         ))}
       </ScrollView>
       </View>
+      </Animated.View>
 
       {/* ── 활성 필터 칩 + 초기화 ── */}
       {activeChips.length > 0 && (

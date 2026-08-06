@@ -9,7 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator, RefreshControl
+  RefreshControl
 } from 'react-native'
 import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'

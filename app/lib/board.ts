@@ -67,6 +67,15 @@ export async function createPost(p: {
   return { id: r.post?.id }
 }
 
+/** 수정 화면 진입 시 글 불러오기. RLS(is_active만 허용)를 우회해 서버가 소유권만 확인하고
+ *  내려준다 — 신고로 숨김된 내 글도 수정할 수 있어야 하기 때문(2026-08 애플 심사 대응). */
+export async function getPostForEdit(postId: string): Promise<
+  { post: { nickname: string; title: string; content: string; image_urls: string[] | null } } | { error: string }
+> {
+  const r = await call({ action: 'getPost', postId })
+  return 'error' in r ? r : { post: r.post }
+}
+
 export async function updatePost(p: {
   postId: string
   title?: string

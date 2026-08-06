@@ -186,6 +186,21 @@ serve(async (req) => {
       return json({ post: data })
     }
 
+    // ── 글 조회(수정 화면용) ──
+    // 앱은 보통 RLS로 직접 읽지만(hooks/useBoard.ts), RLS는 is_active인 글만 보여준다.
+    // 신고 누적으로 숨김 처리된 내 글은 본인도 못 읽어와 수정 화면이 빈 채로 뜨고
+    // "등록" 버튼이 영원히 안 눌리는 문제가 있었다(2026-08 애플 심사 2.1 반려).
+    // 소유권만 확인하면 되므로 여기서 서비스 롤로 대신 읽어준다.
+    if (action === 'getPost') {
+      const id = String(body.postId ?? '')
+      const { data } = await supabase.from('board_posts')
+        .select('nickname,title,content,image_urls,owner_token').eq('id', id).maybeSingle()
+      if (!data) return json({ error: '글을 찾을 수 없습니다.' }, 404)
+      if (data.owner_token !== hash) return json({ error: '본인이 쓴 것만 수정할 수 있어요.' }, 403)
+      const { owner_token: _omit, ...post } = data
+      return json({ post })
+    }
+
     // ── 글 수정 ──
     if (action === 'updatePost') {
       const id = String(body.postId ?? '')

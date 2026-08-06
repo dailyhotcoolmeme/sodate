@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, Modal, StyleSheet, Platform } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, usePathname } from 'expo-router'
@@ -28,7 +28,10 @@ export default function TopBar({
   // ⚠️ 심사 통과 전까지 '커뮤니티' 글자가 보이는 형태를 유지할 것 — 아이콘만 남기면
   //    심사자가 눌러보지 않고, 눌러보지 않은 기능은 없는 것으로 본다(docs/BOARD_SPEC.md).
   segment?: 'event' | 'board'
-  /** pageSheet 모달 안에서 쓸 때. 시트가 이미 상태바 아래에서 시작해 위 여백이 필요 없다 */
+  /** pageSheet 모달 안에서 쓸 때. iOS는 시트가 이미 상태바 아래에서 시작해 위 여백이 필요 없다.
+   *  Android는 presentationStyle="pageSheet"가 무시되고 풀스크린으로 뜨므로(RN이 iOS 전용으로만
+   *  지원) 이 값과 무관하게 항상 insets.top을 준다 — 안 그러면 노치가 톱바를 가린다
+   *  (2026-08-02 오너 지적: FilterSheet에서 안드로이드 노치가 톱바를 가림). */
   noSafeTop?: boolean
   /**
    * 이 화면을 떠나는 이동(일정/게시판 전환, 로고) 직전에 불린다. 받은 함수를 부르면
@@ -126,6 +129,9 @@ export default function TopBar({
   const MENU: { label: string; icon: string; action: () => void; badge?: number }[] = [
     { label: '알림', icon: 'notifications-outline', action: () => router.push('/notifications'), badge: unread },
     firstItem,
+    ...(seg === 'board'
+      ? [{ label: '차단 목록', icon: 'eye-off-outline', action: () => router.push('/board/blocked') }]
+      : []),
     { label: '후기 모음', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
     { label: '관심 모임', icon: 'heart-outline', action: () => router.push('/favorites') },
     { label: '알림 설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
@@ -134,7 +140,7 @@ export default function TopBar({
   ]
 
   return (
-    <View style={[styles.wrap, { paddingTop: noSafeTop ? 0 : insets.top }]}>
+    <View style={[styles.wrap, { paddingTop: noSafeTop && Platform.OS === 'ios' ? 0 : insets.top }]}>
       <View style={styles.bar}>
         <View style={styles.left}>
           {showBack && (

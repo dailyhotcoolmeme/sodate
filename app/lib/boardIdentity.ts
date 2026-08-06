@@ -12,6 +12,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 const POST_IDS = 'sodate_board_my_posts'
 const COMMENT_IDS = 'sodate_board_my_comments'
 const VOTES = 'sodate_board_my_votes'
+const TERMS_AGREED = 'sodate_board_terms_agreed'
+const BLOCKED = 'sodate_board_blocked_authors'
 
 async function readList(key: string): Promise<string[]> {
   try {
@@ -68,6 +70,69 @@ export async function setMyVote(postId: string, value: 0 | 1 | -1): Promise<void
     if (value === 0) delete all[postId]
     else all[postId] = value
     await AsyncStorage.setItem(VOTES, JSON.stringify(all))
+  } catch {
+    // ignore
+  }
+}
+
+/** 이용약관(게시물 관련 조항) 동의 여부. 한 번 동의하면 기기에 남아 다시 묻지 않는다. */
+export async function getTermsAgreed(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(TERMS_AGREED)) === '1'
+  } catch {
+    return false
+  }
+}
+
+export async function setTermsAgreed(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TERMS_AGREED, '1')
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * 작성자 차단(뮤트) — 애플 1.2 요건. 서버가 글·댓글마다 내려주는 owner_token
+ * (기기 시크릿의 해시, 원래 값으로 되돌릴 수 없음)을 기준으로 같은 기기가 쓴
+ * 글·댓글을 전부 가린다. 닉네임은 목록에 보여주기 위해 함께 저장할 뿐, 판단
+ * 기준은 아니다(닉네임은 바뀔 수 있다).
+ */
+export type BlockedAuthor = { key: string; nickname: string }
+
+async function readBlocked(): Promise<BlockedAuthor[]> {
+  try {
+    const raw = await AsyncStorage.getItem(BLOCKED)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export const getBlockedAuthors = readBlocked
+
+export async function isBlockedAuthor(key: string | null | undefined): Promise<boolean> {
+  if (!key) return false
+  const list = await readBlocked()
+  return list.some((b) => b.key === key)
+}
+
+export async function blockAuthor(key: string, nickname: string): Promise<void> {
+  try {
+    const list = await readBlocked()
+    if (list.some((b) => b.key === key)) return
+    list.push({ key, nickname })
+    await AsyncStorage.setItem(BLOCKED, JSON.stringify(list))
+  } catch {
+    // ignore
+  }
+}
+
+export async function unblockAuthor(key: string): Promise<void> {
+  try {
+    const list = await readBlocked()
+    await AsyncStorage.setItem(BLOCKED, JSON.stringify(list.filter((b) => b.key !== key)))
   } catch {
     // ignore
   }
