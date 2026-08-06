@@ -20,7 +20,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sodate.app",
-      "buildNumber": "7",
+      "buildNumber": "8",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleDevelopmentRegion": "ko",
@@ -64,7 +64,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "게시판 글에 사진을 첨부할 때 사진첩에 접근합니다."
+          "photosPermission": "게시판 글에 사진을 첨부할 때 사진첩에 접근합니다.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ]
     ],
