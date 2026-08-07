@@ -52,7 +52,14 @@ export default function TopBar({
 
   // 톱바는 어느 화면에서나 같은 모양이어야 한다(2026-07-31 오너 지시).
   // 화면마다 넘겨주지 않아도 지금 경로를 보고 일정/게시판을 정한다.
-  const seg: 'event' | 'board' = segment ?? (pathname.startsWith('/board') ? 'board' : 'event')
+  const routeSeg: 'event' | 'board' = segment ?? (pathname.startsWith('/board') ? 'board' : 'event')
+  // router.replace 후 pathname이 실제로 바뀌기까지 한 박자 늦는다. 토글 value를 pathname에서만
+  // 읽으면 "눌렀다 → 다음 렌더에서 아직 안 바뀐 pathname으로 원위치 → 진짜 전환되면 다시 이동"
+  // 순서로 스위치가 한 번 왔다갔다 하는 게 보였다(2026-08-07 오너 지적). 눌렀을 때 목표 상태를
+  // 낙관적으로 먼저 반영해 전환을 기다리지 않게 한다. onBeforeLeave가 막아서 실제로 이동하지
+  // 않으면(글쓰기 중 이탈 확인 취소 등) 아예 세팅을 안 하므로 스위치는 제자리로 남는다.
+  const [optimisticSeg, setOptimisticSeg] = useState<'event' | 'board' | null>(null)
+  const seg: 'event' | 'board' = optimisticSeg ?? routeSeg
 
   /** 화면을 떠나는 이동. 화면이 막아둘 수 있다(글쓰기 등). */
   const leave = (go: () => void) => {
@@ -63,7 +70,10 @@ export default function TopBar({
   const goSegment = (to: 'event' | 'board') => {
     if (seg === to) return
     onBeforeNavigate?.()
-    leave(() => router.replace(to === 'board' ? '/board' : '/'))
+    leave(() => {
+      setOptimisticSeg(to)
+      router.replace(to === 'board' ? '/board' : '/')
+    })
   }
 
   const styles = useMemo(() => StyleSheet.create({
