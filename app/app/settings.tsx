@@ -16,8 +16,13 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import { useThemeStore } from '@/stores/themeStore'
+import * as Updates from 'expo-updates'
 
 const APP_VERSION = '1.0.0'
+// 2026-08-07: iOS build 8이 OTA 업데이트를 아예 못 받는 문제(채널 헤더 누락) 진단용.
+// 이 줄 자체가 화면에 안 뜬다면 그 사실 자체가 "이 기기가 OTA를 못 받는다"는 증거다.
+// 뜬다면 channel/업데이트ID 값으로 실제 수신 여부를 바로 확인할 수 있다.
+const updateInfo = `${Updates.channel ?? '없음(채널 미설정)'} · ${Updates.isEmbeddedLaunch ? '내장번들(OTA 미적용)' : (Updates.updateId ?? '').slice(0, 8)}`
 
 function SettingRow({
   iconName,
@@ -125,6 +130,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>앱 정보</Text>
         <SettingRow iconName="cube-outline" label="버전" value={APP_VERSION} />
+        <SettingRow iconName="cloud-outline" label="업데이트 상태" value={updateInfo} />
         <SettingRow
           iconName="information-circle-outline"
           label="소개팅모아 소개"

@@ -81,7 +81,10 @@
     "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/1b634f2b-480e-4108-b994-c92c3a0dc4b4",
-      "fallbackToCacheTimeout": 8000
+      "fallbackToCacheTimeout": 8000,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "locales": {
       "ko": "./locales/ko.json",
