@@ -92,6 +92,10 @@ export default function AdListItem({ slot = 'feed', variant = 'thumb' }: { slot?
     info: { flex: 1, gap: 3 },
 
     // ── wide 레이아웃(B안): 이미지를 카드 폭 전체로 ──
+    // NativeAdView(구글 네이티브뷰)는 직계 자식이 둘 이상이면 레이아웃을 제대로 못 잡는다
+    // (이미지가 왼쪽에 좁게, 오른쪽이 빈 채로 나옴 — 실기기 확인). thumb 레이아웃처럼
+    // 직계 자식을 하나(wideOuter)로 묶고 그 안에서 세로로 쌓는다.
+    wideOuter: { width: WIDE_WIDTH },
     wideMediaWrap: { position: 'relative', width: WIDE_WIDTH },
     wideMedia: { width: WIDE_WIDTH, height: WIDE_HEIGHT, backgroundColor: colors.surfaceHigh },
     wideBody: { padding: 12, gap: 3 },
@@ -137,34 +141,36 @@ export default function AdListItem({ slot = 'feed', variant = 'thumb' }: { slot?
     return (
       <View style={styles.card}>
         <NativeAdView nativeAd={ad} style={styles.nativeAdView}>
-          <View style={styles.wideMediaWrap}>
-            {media}
-            <View style={styles.adBadge}>
-              <Text style={styles.adBadgeText}>광고</Text>
+          <View style={styles.wideOuter}>
+            <View style={styles.wideMediaWrap}>
+              {media}
+              <View style={styles.adBadge}>
+                <Text style={styles.adBadgeText}>광고</Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.wideBody}>
-            <Text style={styles.advertiser} numberOfLines={1}>
-              {ad.advertiser || 'Sponsored'}
-            </Text>
-            <NativeAsset assetType={NativeAssetType.HEADLINE}>
-              <Text style={styles.headline} numberOfLines={1}>{ad.headline}</Text>
-            </NativeAsset>
-            <View style={styles.wideBottom}>
-              <View style={styles.wideTextCol}>
-                {!!ad.body && (
-                  <NativeAsset assetType={NativeAssetType.BODY}>
-                    <Text style={styles.body} numberOfLines={1}>{ad.body}</Text>
+            <View style={styles.wideBody}>
+              <Text style={styles.advertiser} numberOfLines={1}>
+                {ad.advertiser || 'Sponsored'}
+              </Text>
+              <NativeAsset assetType={NativeAssetType.HEADLINE}>
+                <Text style={styles.headline} numberOfLines={1}>{ad.headline}</Text>
+              </NativeAsset>
+              <View style={styles.wideBottom}>
+                <View style={styles.wideTextCol}>
+                  {!!ad.body && (
+                    <NativeAsset assetType={NativeAssetType.BODY}>
+                      <Text style={styles.body} numberOfLines={1}>{ad.body}</Text>
+                    </NativeAsset>
+                  )}
+                </View>
+                {!!ad.callToAction && (
+                  <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}>
+                    <View style={[styles.cta, styles.ctaTight]}>
+                      <Text style={styles.ctaText}>{ad.callToAction}</Text>
+                    </View>
                   </NativeAsset>
                 )}
               </View>
-              {!!ad.callToAction && (
-                <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}>
-                  <View style={[styles.cta, styles.ctaTight]}>
-                    <Text style={styles.ctaText}>{ad.callToAction}</Text>
-                  </View>
-                </NativeAsset>
-              )}
             </View>
           </View>
         </NativeAdView>
