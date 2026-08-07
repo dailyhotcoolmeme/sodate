@@ -138,7 +138,8 @@
 - **P4** `buildNumber`/`versionCode` 미설정(기본 1). 최초 제출은 무방하나 다음 빌드부터 충돌.
   → `eas.json`에 `"cli": {"appVersionSource": "remote"}` 권장.
 - **P5** GDPR/UMP 동의 코드 없음(`AdsConsent` grep 0건). 한국 단독 배포면 무관.
-  → **확인 필요**: 스토어 배포 국가를 한국으로 제한하는지.
+  → **결정됨(2026-08-07, 오너)**: iOS는 **전 세계(175개국)**, 안드로이드는 현재 제출분이
+    대한민국 1개(검토 통과 후 넓힐지 재논의). 전 세계 배포이므로 GDPR/UMP는 다시 검토 대상.
 - **P6** Gradle 메모리 설정이 휘발성 — `android/gradle.properties`는 prebuild마다 재생성됨.
   로컬 빌드 계속하면 `expo-build-properties`로 고정 필요(EAS 클라우드 빌드는 불필요).
   (2026-07-28: Metaspace 512MB로 `expo-updates:kspReleaseKotlin` OOM 발생 → 6GB/2GB로 상향)
@@ -183,6 +184,14 @@
 
 ## 📋 수동 확인 필요 (코드로 판단 불가)
 
+- 🔴 **iOS 판매 지역(Pricing and Availability → 사용 가능 여부) 설정 여부** —
+  **심사 승인만으로는 스토어에 안 올라간다.** 판매 지역이 비어 있으면 승인돼도
+  "This app was removed from sale from the App Store"로 남아 아무도 못 받는다.
+  API로 확인: `GET /v1/apps/{id}/appAvailabilityV2` 가 404면 **미설정**이다.
+  (2026-08-07 실제 사고: 최초 제출 때 설정을 누락해, 심사 통과 후에도 앱이 스토어에
+   안 나타났다. 원인은 이 문서 P5의 "확인 필요: 배포 국가"가 오너에게 질문되지 않은 채
+   미해결로 남은 것 → 미결 질문은 반드시 오너에게 되물을 것.)
+- 🔴 **Play 출시 국가 설정 여부** — 프로덕션 트랙에 국가가 지정돼 있어야 게시된다.
 - 스토어 스크린샷(iPhone 6.7"/6.5", Android) — 저장소에 없음, 별도 준비.
 - App Store Connect / Play Console 앱 등록, 연령등급 설문, Data Safety 폼 제출 여부.
 - `eas.json`의 `submit.production`이 빈 객체 — Apple Team ID/앱 특정 비밀번호,
