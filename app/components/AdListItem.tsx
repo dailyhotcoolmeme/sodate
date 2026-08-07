@@ -96,8 +96,11 @@ export default function AdListItem({ slot = 'feed', variant = 'thumb' }: { slot?
     // (이미지가 왼쪽에 좁게, 오른쪽이 빈 채로 나옴 — 실기기 확인). thumb 레이아웃처럼
     // 직계 자식을 하나(wideOuter)로 묶고 그 안에서 세로로 쌓는다.
     wideOuter: { width: WIDE_WIDTH },
-    wideMediaWrap: { position: 'relative', width: WIDE_WIDTH },
-    wideMedia: { width: WIDE_WIDTH, height: WIDE_HEIGHT, backgroundColor: colors.surfaceHigh },
+    // NativeMediaView는 style로 width/height를 줘도 자체 계산한 크기로 그려질 때가 있다
+    // (실기기에서 세로로 좁게 나옴 — 크기를 못 받는 것으로 재현). 크기가 고정된 래퍼 안에
+    // absolute로 꽉 채워서 NativeMediaView 자신의 크기 계산을 무시하게 만든다.
+    wideMediaWrap: { position: 'relative', width: WIDE_WIDTH, height: WIDE_HEIGHT, overflow: 'hidden' },
+    wideMedia: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.surfaceHigh },
     wideBody: { padding: 12, gap: 3 },
     wideBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
     wideTextCol: { flex: 1, gap: 2 },
