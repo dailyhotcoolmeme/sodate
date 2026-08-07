@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet, Platform } from 'react-native'
+import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native'
 import {
   NativeAd,
   NativeAdView,
@@ -17,6 +17,11 @@ import { track } from '@/lib/analytics'
 // 'wide'=이미지를 카드 폭 전체로 키운 형태. 어느 쪽이든 120 기준은 충족한다.
 const THUMB = 120
 const WIDE_HEIGHT = 168
+// NativeMediaView(구글 네이티브뷰)는 '100%' 같은 퍼센트 width를 못 받는다 — 내용 크기만큼만
+// 잡히고 height는 그대로 강제돼 세로로 길쭉해진다(실기기에서 확인됨). 카드 좌우 여백(16×2)을
+// 뺀 실제 픽셀 값을 직접 계산해서 넘긴다.
+const CARD_MARGIN = 16
+const WIDE_WIDTH = Dimensions.get('window').width - CARD_MARGIN * 2
 
 type Variant = 'thumb' | 'wide'
 
@@ -87,8 +92,8 @@ export default function AdListItem({ slot = 'feed', variant = 'thumb' }: { slot?
     info: { flex: 1, gap: 3 },
 
     // ── wide 레이아웃(B안): 이미지를 카드 폭 전체로 ──
-    wideMediaWrap: { position: 'relative' },
-    wideMedia: { width: '100%', height: WIDE_HEIGHT, backgroundColor: colors.surfaceHigh },
+    wideMediaWrap: { position: 'relative', width: WIDE_WIDTH },
+    wideMedia: { width: WIDE_WIDTH, height: WIDE_HEIGHT, backgroundColor: colors.surfaceHigh },
     wideBody: { padding: 12, gap: 3 },
     wideBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
     wideTextCol: { flex: 1, gap: 2 },

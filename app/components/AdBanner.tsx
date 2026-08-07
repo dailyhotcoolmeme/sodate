@@ -147,16 +147,10 @@ export default function AdBanner({ variant = 'thumb' }: { variant?: Variant }) {
               <Text style={styles.body} numberOfLines={1}>{ad.body}</Text>
             </NativeAsset>
           )}
-          {variant === 'text' && !!ad.callToAction && (
-            <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}>
-              <View style={styles.cta}>
-                <Text style={styles.ctaText}>{ad.callToAction}</Text>
-              </View>
-            </NativeAsset>
-          )}
         </View>
 
-        {variant === 'thumb' && !!ad.callToAction && (
+        {/* 두 변형 모두 CTA는 info 옆에 나란히(세로로 안 쌓음) — text 변형이 이미지만 빠진 형태가 되게 */}
+        {!!ad.callToAction && (
           <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}>
             <View style={[styles.cta, styles.ctaInline]}>
               <Text style={styles.ctaText}>{ad.callToAction}</Text>
