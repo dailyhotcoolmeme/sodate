@@ -57,7 +57,7 @@ const FIRST_AD_AFTER_CARD = 1
 const AD_INTERVAL_CARD = 3
 type ListRow =
   | { type: 'event'; event: import('@/lib/supabase').EventWithCompany }
-  | { type: 'ad'; key: string }
+  | { type: 'ad'; key: string; adIndex: number }
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets()
@@ -619,18 +619,19 @@ export default function HomeScreen() {
     const firstAfter = viewMode === 'card' ? FIRST_AD_AFTER_CARD : FIRST_AD_AFTER
     const interval = viewMode === 'card' ? AD_INTERVAL_CARD : AD_INTERVAL
     const FIRST_IDX = firstAfter - 1
+    let adIndex = 0
     events.forEach((ev, i) => {
       rows.push({ type: 'event', event: ev })
       // 첫 광고는 firstAfter번째 뒤, 이후는 그로부터 interval 간격. 마지막 항목 뒤에는 안 넣음.
       const isAdSlot = i >= FIRST_IDX && (i - FIRST_IDX) % interval === 0
       if (isAdSlot && i < events.length - 1) {
-        rows.push({ type: 'ad', key: `ad-${i}` })
+        rows.push({ type: 'ad', key: `ad-${i}`, adIndex: adIndex++ })
       }
     })
     // 필터 결과가 interval보다 짧으면 위 로직이 광고를 하나도 못 넣음
     // → 결과가 2개 이상인데 광고가 없으면 결과 끝에 광고 1개 보장(수익 누락 방지)
     if (events.length >= 2 && !rows.some((r) => r.type === 'ad')) {
-      rows.push({ type: 'ad', key: 'ad-tail' })
+      rows.push({ type: 'ad', key: 'ad-tail', adIndex: adIndex++ })
     }
     return rows
   }, [events, viewMode])
@@ -794,7 +795,7 @@ export default function HomeScreen() {
           scrollEventThrottle={100}
           data={listData}
           renderItem={({ item }) => {
-            if (item.type === 'ad') return <AdListItem />
+            if (item.type === 'ad') return <AdListItem variant={item.adIndex % 2 === 0 ? 'thumb' : 'wide'} />
             const ev = item.event
             return viewMode === 'card' ? (
               <EventCard

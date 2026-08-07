@@ -12,16 +12,20 @@ import { useColors } from '@/hooks/useColors'
 import { getDetailNativeAdUnitId } from '@/lib/ads'
 import { track } from '@/lib/analytics'
 
-const ICON = 44
+// 구글 정책: 네이티브 광고 미디어 뷰의 가로·세로가 120 미만이면 수익화 대상에서 제외될 수 있음.
+// 'thumb'는 120으로 키운 이미지형, 'text'는 이미지를 아예 안 그려서 그 기준 자체가 적용되지 않는 형태.
+const THUMB = 120
+
+type Variant = 'text' | 'thumb'
 
 // 광고 단위 ID는 @/lib/ads 에서 중앙 관리 (미설정 시 자동 테스트 광고 폴백)
 // 요청 시점에 계산 — 모듈 로드 시점엔 Updates.channel이 아직 없을 수 있다
 
 /**
- * 상세페이지 신청 버튼 바로 위에 들어가는 컴팩트 가로형 네이티브 광고.
+ * 상세페이지 신청 버튼 위에 들어가는 컴팩트 네이티브 광고.
  * CTA(신청하기)와 헷갈리지 않도록 외곽선형 + 회색 톤 + "광고" 배지로 명확히 구분한다.
  */
-export default function AdBanner() {
+export default function AdBanner({ variant = 'thumb' }: { variant?: Variant }) {
   const colors = useColors()
   const [ad, setAd] = useState<NativeAd | null>(null)
 
@@ -38,7 +42,7 @@ export default function AdBanner() {
         } else {
           nativeAd.destroy()
         }
-        track('ad_load_success', { properties: { slot: 'detail', platform: Platform.OS, unit: unitId } })
+        track('ad_load_success', { properties: { slot: 'detail', platform: Platform.OS, unit: unitId, variant } })
       })
       .catch((e) => {
         // 조용히 삼키면 출시 후 광고가 안 나와도 알 수가 없다 — 사유를 남긴다
@@ -47,6 +51,7 @@ export default function AdBanner() {
             slot: 'detail',
             platform: Platform.OS,
             unit: unitId,
+            variant,
             code: e?.code ?? null,
             message: String(e?.message ?? e).slice(0, 200),
           },
@@ -56,7 +61,7 @@ export default function AdBanner() {
       mounted = false
       loaded?.destroy()
     }
-  }, [])
+  }, [variant])
 
   const styles = useMemo(() => StyleSheet.create({
     // 외곽선형 카드 — primary 신청버튼과 색/형태로 확실히 구분
@@ -76,18 +81,24 @@ export default function AdBanner() {
       padding: 12,
       gap: 10,
     },
-    icon: { width: ICON, height: ICON, borderRadius: 8, backgroundColor: colors.surface },
-    info: { flex: 1, gap: 2 },
+    icon: { width: THUMB, height: THUMB, borderRadius: 10, backgroundColor: colors.surface },
+    info: { flex: 1, gap: 3 },
     advertiser: { fontSize: 10, color: colors.textTertiary, fontWeight: '600' },
     headline: { fontSize: 13, color: colors.textPrimary, fontWeight: '700', lineHeight: 18 },
     body: { fontSize: 11, color: colors.textSecondary },
     cta: {
-      alignSelf: 'center',
+      alignSelf: 'flex-start',
+      marginTop: 6,
       borderWidth: 1,
       borderColor: colors.textTertiary,
       borderRadius: 8,
       paddingHorizontal: 12,
       paddingVertical: 7,
+    },
+    // text 변형은 이미지가 없어 카드가 좁으니 CTA를 헤드라인 옆으로 붙인다
+    ctaInline: {
+      alignSelf: 'center',
+      marginTop: 0,
     },
     ctaText: { fontSize: 12, color: colors.textSecondary, fontWeight: '700' },
     adBadge: {
@@ -113,12 +124,15 @@ export default function AdBanner() {
       </View>
       <NativeAdView nativeAd={ad} style={styles.nativeAdView}>
         <View style={styles.inner}>
-        {ad.icon?.url ? (
-          <Image source={{ uri: ad.icon.url }} style={styles.icon} contentFit="cover" />
-        ) : ad.mediaContent ? (
-          <NativeMediaView style={styles.icon} resizeMode="cover" />
-        ) : (
-          <View style={styles.icon} />
+        {/* text 변형은 이미지 자체를 그리지 않는다 — 구글의 미디어 뷰 최소크기 기준(120) 대상이 아니게 된다 */}
+        {variant === 'thumb' && (
+          ad.icon?.url ? (
+            <Image source={{ uri: ad.icon.url }} style={styles.icon} contentFit="cover" />
+          ) : ad.mediaContent ? (
+            <NativeMediaView style={styles.icon} resizeMode="cover" />
+          ) : (
+            <View style={styles.icon} />
+          )
         )}
 
         <View style={styles.info}>
@@ -126,18 +140,25 @@ export default function AdBanner() {
             {ad.advertiser || 'Sponsored'}
           </Text>
           <NativeAsset assetType={NativeAssetType.HEADLINE}>
-            <Text style={styles.headline} numberOfLines={1}>{ad.headline}</Text>
+            <Text style={styles.headline} numberOfLines={variant === 'thumb' ? 2 : 1}>{ad.headline}</Text>
           </NativeAsset>
           {!!ad.body && (
             <NativeAsset assetType={NativeAssetType.BODY}>
               <Text style={styles.body} numberOfLines={1}>{ad.body}</Text>
             </NativeAsset>
           )}
+          {variant === 'text' && !!ad.callToAction && (
+            <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}>
+              <View style={styles.cta}>
+                <Text style={styles.ctaText}>{ad.callToAction}</Text>
+              </View>
+            </NativeAsset>
+          )}
         </View>
 
-        {!!ad.callToAction && (
+        {variant === 'thumb' && !!ad.callToAction && (
           <NativeAsset assetType={NativeAssetType.CALL_TO_ACTION}>
-            <View style={styles.cta}>
+            <View style={[styles.cta, styles.ctaInline]}>
               <Text style={styles.ctaText}>{ad.callToAction}</Text>
             </View>
           </NativeAsset>

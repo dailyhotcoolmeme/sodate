@@ -519,7 +519,7 @@ export default function EventDetailScreen() {
         {event.descImages && event.descImages.length > 0 && (
           <View style={styles.descSection}>
             {/* 상세 이미지가 길어 하단 광고가 안 보일 수 있어 설명 시작 위에도 광고 노출 */}
-            <AdBanner />
+            <AdBanner variant="text" />
             {/* 상세설명이 길어 하단 신청버튼을 찾기 어려워, 설명 위에도 신청 버튼 배치 */}
             {renderCta()}
             <Text style={styles.sectionLabel}>상세 설명</Text>
@@ -550,7 +550,7 @@ export default function EventDetailScreen() {
         )}
 
         {/* 신청 버튼 위 광고 (CTA와 구분되는 외곽선형 + '광고' 배지) */}
-        <AdBanner />
+        <AdBanner variant="thumb" />
 
         {/* 신청 버튼 (마감 시 회색 비활성) */}
         {renderCta()}
