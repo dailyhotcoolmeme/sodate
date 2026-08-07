@@ -138,8 +138,10 @@
 - **P4** `buildNumber`/`versionCode` 미설정(기본 1). 최초 제출은 무방하나 다음 빌드부터 충돌.
   → `eas.json`에 `"cli": {"appVersionSource": "remote"}` 권장.
 - **P5** GDPR/UMP 동의 코드 없음(`AdsConsent` grep 0건). 한국 단독 배포면 무관.
-  → **결정됨(2026-08-07, 오너)**: iOS는 **전 세계(175개국)**, 안드로이드는 현재 제출분이
-    대한민국 1개(검토 통과 후 넓힐지 재논의). 전 세계 배포이므로 GDPR/UMP는 다시 검토 대상.
+  → **결정됨(2026-08-07, 오너)**: **iOS·안드로이드 모두 대한민국 단독 배포.**
+    iOS는 판매 지역을 대한민국 1개로 설정하고 "신규 국가 자동 추가"도 껐다
+    (`availableInNewTerritories: false`). 한국 단독이므로 **GDPR/UMP는 해당 없음**.
+    나중에 해외로 넓힌다면 그때 UMP 동의 구현이 선행돼야 한다.
 - **P6** Gradle 메모리 설정이 휘발성 — `android/gradle.properties`는 prebuild마다 재생성됨.
   로컬 빌드 계속하면 `expo-build-properties`로 고정 필요(EAS 클라우드 빌드는 불필요).
   (2026-07-28: Metaspace 512MB로 `expo-updates:kspReleaseKotlin` OOM 발생 → 6GB/2GB로 상향)
