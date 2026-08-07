@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase, type EventWithCompany } from '@/lib/supabase'
-import { useFilterStore } from '@/stores/filterStore'
+import { useFilterStore, useFilterHydrated } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { kstDowHour, timeSlotOf } from '@/constants/filters'
@@ -12,6 +13,38 @@ import { kstDowHour, timeSlotOf } from '@/constants/filters'
 // (마침 그날 Supabase Disk IO 예산 경고 메일도 받아 한 번에 다 끌어오는 걸 피하는 게 유리).
 const PAGE_SIZE = 60
 
+// 2026-08-07: select('*')가 피드 카드에서 안 쓰는 필드(특히 description — 평균 1,300자,
+// 최대 6,000자 크롤 텍스트)까지 매번 끌고 와서 페이지당 응답이 258KB였다. 카드가 실제로
+// 렌더에 쓰는 필드만 나열하니 51KB(-80%)로 줄었다(실측). 상세 페이지는 useEventDetail이
+// 별도로 전체 컬럼을 다시 가져오니 여기서 빠진 필드가 있어도 상세 화면엔 영향 없다.
+const FEED_COLUMNS =
+  'id, company_id, title, thumbnail_urls, event_date, location_region, ' +
+  'price_male, price_female, price_detail, age_male, age_female, theme, hashtags, ' +
+  'is_closed, seats_left_male, seats_left_female, source_url, companies!inner(id, name, slug)'
+
+// 2026-08-07: 앱을 새로 열 때마다 첫 화면이 빈 스피너로 시작했다. 마지막으로 본 첫 페이지를
+// 기기에 저장해뒀다가, 같은 필터 조합으로 다시 열면 그 캐시를 즉시 보여주고(스피너 생략)
+// 뒤에서 조용히 최신 데이터로 갱신한다. 필터가 하나라도 다르면 캐시를 안 쓴다.
+const CACHE_KEY = 'sodate-events-cache-v1'
+const CACHE_MAX_AGE_MS = 10 * 60 * 1000 // 10분 — 가격 변동·마감 등 실시간성 때문에 그 이상은 안 믿는다
+
+async function readEventsCache(key: string): Promise<EventWithCompany[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { key: string; savedAt: number; events: EventWithCompany[] }
+    if (parsed.key !== key) return null
+    if (Date.now() - parsed.savedAt > CACHE_MAX_AGE_MS) return null
+    return parsed.events
+  } catch {
+    return null
+  }
+}
+
+function writeEventsCache(key: string, events: EventWithCompany[]) {
+  AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ key, savedAt: Date.now(), events })).catch(() => {})
+}
+
 export function useEvents() {
   const [events, setEvents] = useState<EventWithCompany[]>([])
   const [loading, setLoading] = useState(true)
@@ -19,16 +52,23 @@ export function useEvents() {
   const [hasMore, setHasMore] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const pageRef = useRef(0)
+  const didInitialLoad = useRef(false)
 
+  const hydrated = useFilterHydrated()
   const { regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed } = useFilterStore()
   const { myAge, myGender } = useProfileStore()
+
+  // 캐시를 구분하는 키 — buildQuery·applyClientFilters가 실제로 참조하는 필터 전부를 담는다.
+  const cacheKey = useMemo(() => JSON.stringify({
+    regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge,
+  }), [regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge])
 
   const buildQuery = useCallback((from: number, to: number) => {
     let query = supabase
       .from('events')
-      // 피드는 companies.name만 사용 → 조인 최소화(불필요한 description 등 미포함, 페이로드↓)
+      // 피드는 카드 렌더에 쓰는 필드만(위 FEED_COLUMNS 주석 참고)
       // companies!inner + app_visible: 앱 숨김 처리한 업체(admin 토글)의 이벤트는 완전 제외
-      .select('*, companies!inner(id, name, slug)')
+      .select(FEED_COLUMNS)
       .eq('is_active', true)
       .eq('companies.app_visible', true)
       // 마감(is_closed) 이벤트도 기본은 목록 노출(카드 흐림+마감배지). '마감제외' 켜면 숨김.
@@ -128,8 +168,10 @@ export function useEvents() {
     })
   }, [days, timeSlots])
 
-  const fetchEvents = useCallback(async () => {
-    setLoading(true)
+  // opts.silent: 화면엔 이미 캐시된 목록이 보이는 상태에서 뒤에서 조용히 최신화할 때 씀
+  // (스피너를 다시 띄우지 않고, 실패해도 이미 보이는 화면을 에러로 덮지 않음).
+  const fetchEvents = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true)
     setError(null)
     pageRef.current = 0
 
@@ -139,12 +181,13 @@ export function useEvents() {
       const rows = applyClientFilters((data ?? []) as EventWithCompany[])
       setEvents(rows)
       setHasMore((data ?? []).length === PAGE_SIZE)
+      writeEventsCache(cacheKey, rows)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : '알 수 없는 오류')
+      if (!opts?.silent) setError(e instanceof Error ? e.message : '알 수 없는 오류')
     } finally {
       setLoading(false)
     }
-  }, [buildQuery, applyClientFilters])
+  }, [buildQuery, applyClientFilters, cacheKey])
 
   const loadMore = useCallback(async () => {
     if (loading || loadingMore || !hasMore) return
@@ -167,8 +210,32 @@ export function useEvents() {
   }, [buildQuery, applyClientFilters, loading, loadingMore, hasMore])
 
   useEffect(() => {
+    // 필터(AsyncStorage persist)가 아직 안 불러와진 상태에서 쏘면 기본값(전체)으로 한 번,
+    // 하이드레이션 완료 후 실제 값으로 또 한 번 — 매번 앱을 켤 때마다 요청이 두 번 나갔다.
+    // 하이드레이션 끝날 때까지 기다렸다가 그때 딱 한 번만 쏜다.
+    if (!hydrated) return
+
+    if (!didInitialLoad.current) {
+      didInitialLoad.current = true
+      let cancelled = false
+      ;(async () => {
+        const cached = await readEventsCache(cacheKey)
+        if (cancelled) return
+        if (cached) {
+          // 캐시 즉시 표시(스피너 없이) + 뒤에서 조용히 최신화
+          setEvents(cached)
+          setLoading(false)
+          fetchEvents({ silent: true })
+        } else {
+          fetchEvents()
+        }
+      })()
+      return () => { cancelled = true }
+    }
+
+    // 최초 로드 이후 필터가 바뀌어서 다시 도는 경우는 기존과 동일하게 동작
     fetchEvents()
-  }, [fetchEvents])
+  }, [hydrated, fetchEvents, cacheKey])
 
   return { events, loading, loadingMore, hasMore, error, refetch: fetchEvents, loadMore }
 }
