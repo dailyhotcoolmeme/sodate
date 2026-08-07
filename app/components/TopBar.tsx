@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, Modal, StyleSheet, Platform } from 'react-native'
+import { View, Text, TouchableOpacity, Modal, StyleSheet, Platform, Switch } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, usePathname } from 'expo-router'
@@ -25,8 +25,8 @@ export default function TopBar({
   onLogoPress?: () => void
   onBeforeNavigate?: () => void // 메뉴 이동 직전(예: 열린 모달 닫기)
   // 일정 ↔ 게시판 전환. 지금 있는 화면에 따라 알아서 정해지므로 보통 안 넘겨도 된다.
-  // ⚠️ 심사 통과 전까지 '커뮤니티' 글자가 보이는 형태를 유지할 것 — 아이콘만 남기면
-  //    심사자가 눌러보지 않고, 눌러보지 않은 기능은 없는 것으로 본다(docs/BOARD_SPEC.md).
+  // 심사 통과 후 토글로 교체함(2026-08-07, 오너 지시 — docs/BOARD_SPEC.md에 "통과 후에는
+  // 자유롭게 다듬어도 된다"고 이미 명시돼 있었음).
   segment?: 'event' | 'board'
   /** pageSheet 모달 안에서 쓸 때. iOS는 시트가 이미 상태바 아래에서 시작해 위 여백이 필요 없다.
    *  Android는 presentationStyle="pageSheet"가 무시되고 풀스크린으로 뜨므로(RN이 iOS 전용으로만
@@ -83,24 +83,19 @@ export default function TopBar({
     // 소개팅|커뮤니티 알약(글자 14)과 덩치를 맞춘다. 원본 1042x231 = 4.51:1 이라
     // 높이 24 에 맞는 폭은 108 이다(2026-07-31 오너 지적).
     logoWordmark: { width: 108, height: 24 },
-    // 일정 ↔ 게시판 전환. 로고와 아이콘 사이에서 남는 폭을 쓰되, 좁은 화면에서는
+    // 일정 ↔ 게시판 전환. 예전엔 '소개팅|커뮤니티' 글자 알약이었는데(심사 중엔 심사자가
+    // 눌러보게 하려고 일부러 글자를 남겨뒀었다 — docs/BOARD_SPEC.md), 통과 후 토글로 교체.
+    // 켜짐=커뮤니티, 꺼짐=소개팅. 로고와 아이콘 사이에서 남는 폭을 쓰되, 좁은 화면에서는
     // 로고가 먼저 줄어들도록 로고에 flexShrink 를 뒀다.
-    segWrap: {
-      flexDirection: 'row', borderRadius: 999, overflow: 'hidden',
-      borderWidth: 1, borderColor: colors.border, marginHorizontal: 6, flexShrink: 0,
-    },
-    segBtn: { paddingHorizontal: 14, paddingVertical: 6, justifyContent: 'center' },
-    segBtnOn: { backgroundColor: colors.primary },
-    // lineHeight 를 명시해야 글자가 알약 안에서 위아래 가운데에 앉는다.
-    segText: { fontSize: 14, lineHeight: 18, fontWeight: '600', color: colors.textSecondary },
-    segTextOn: { color: '#fff', fontWeight: '800' },
+    segSwitch: { marginHorizontal: 6, flexShrink: 0 },
     iconBtn: { padding: 6, borderRadius: 8 },
-    filterBadge: {
-      position: 'absolute', top: 0, right: 0, minWidth: 15, height: 15,
+    rightIcons: { flexDirection: 'row', alignItems: 'center' },
+    bellBadge: {
+      position: 'absolute', top: 2, right: 2, minWidth: 15, height: 15,
       paddingHorizontal: 3, borderRadius: 8, backgroundColor: colors.primary,
       alignItems: 'center', justifyContent: 'center',
     },
-    filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+    bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.12)' },
     menuCard: {
       position: 'absolute', right: 12, minWidth: 168,
@@ -114,10 +109,6 @@ export default function TopBar({
       backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
     },
     menuBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-    menuDot: {
-      position: 'absolute', top: 5, right: 4,
-      width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary,
-    },
     menuItemText: { fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
   }), [colors])
 
@@ -127,7 +118,6 @@ export default function TopBar({
     : { label: '내가 쓴 후기', icon: 'create-outline', action: () => router.push({ pathname: '/reviews', params: { tab: 'mine' } }) }
 
   const MENU: { label: string; icon: string; action: () => void; badge?: number }[] = [
-    { label: '알림', icon: 'notifications-outline', action: () => router.push('/notifications'), badge: unread },
     firstItem,
     ...(seg === 'board'
       ? [{ label: '차단 목록', icon: 'eye-off-outline', action: () => router.push('/board/blocked') }]
@@ -161,30 +151,36 @@ export default function TopBar({
           </TouchableOpacity>
         </View>
 
-        <View style={styles.segWrap}>
+        <Switch
+          value={seg === 'board'}
+          onValueChange={(v) => goSegment(v ? 'board' : 'event')}
+          trackColor={{ true: colors.primary, false: colors.border }}
+          thumbColor="#fff"
+          style={styles.segSwitch}
+          accessibilityRole="switch"
+          accessibilityLabel="일정·커뮤니티 전환"
+          accessibilityHint="켜면 커뮤니티, 끄면 소개팅 일정 화면으로 이동합니다"
+          accessibilityState={{ checked: seg === 'board' }}
+        />
+
+        <View style={styles.rightIcons}>
           <TouchableOpacity
-            style={[styles.segBtn, seg === 'event' && styles.segBtnOn]}
-            onPress={() => goSegment('event')}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: seg === 'event' }}
+            style={styles.iconBtn}
+            onPress={() => { onBeforeNavigate?.(); router.push('/notifications') }}
+            hitSlop={8}
           >
-            <Text style={[styles.segText, seg === 'event' && styles.segTextOn]}>소개팅</Text>
+            <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+            {unread > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unread > 99 ? '99+' : unread}</Text>
+              </View>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segBtn, seg === 'board' && styles.segBtnOn]}
-            onPress={() => goSegment('board')}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: seg === 'board' }}
-          >
-            <Text style={[styles.segText, seg === 'board' && styles.segTextOn]}>커뮤니티</Text>
+
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setMenuVisible(true)} hitSlop={8}>
+            <Ionicons name="menu" size={26} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity style={styles.iconBtn} onPress={() => setMenuVisible(true)}>
-          <Ionicons name="menu" size={26} color={colors.textPrimary} />
-          {/* 안 읽은 알림이 있으면 점만 찍는다. 숫자는 메뉴 안 '알림' 줄에서 보여준다. */}
-          {unread > 0 && <View style={styles.menuDot} />}
-        </TouchableOpacity>
       </View>
 
       <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
