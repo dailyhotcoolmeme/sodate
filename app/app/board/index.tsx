@@ -294,7 +294,9 @@ function makeStyles(colors: AppColors) {
       borderBottomWidth: 1, borderBottomColor: colors.divider, gap: 3,
     },
     rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-    rowTitle: { flexShrink: 1, fontSize: 14.5, color: colors.textPrimary },
+    // lineHeight 명시 필수 — 없으면 이모지가 일반 글자보다 위아래로 커서 iOS에서 잘려 보인다
+    // (안드로이드에서 넣은 이모지가 아이폰에서 잘리던 문제, 2026-08-08 오너 지적).
+    rowTitle: { flexShrink: 1, fontSize: 14.5, lineHeight: 20, color: colors.textPrimary },
     // 추천이 많으면 굵게, 비추가 많으면 흐리게(오너 확정). 흐려질 뿐 지워지지 않는다.
     rowTitleHot: { fontWeight: '800' },
     rowTitleCold: { color: colors.textTertiary },

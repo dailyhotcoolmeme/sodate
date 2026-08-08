@@ -686,7 +686,8 @@ function makeStyles(colors: AppColors) {
 
     head: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12, gap: 5,
       borderBottomWidth: 1, borderBottomColor: colors.divider },
-    title: { fontSize: 18, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.3 },
+    // lineHeight 명시 필수 — 이모지가 잘려 보이는 문제(rowTitle과 동일 원인, 목록 쪽 주석 참고)
+    title: { fontSize: 18, fontWeight: '800', lineHeight: 25, color: colors.textPrimary, letterSpacing: -0.3 },
     meta: { fontSize: 12, lineHeight: 17, color: colors.textTertiary },
     metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
     metaActions: { flexDirection: 'row', gap: 12 },

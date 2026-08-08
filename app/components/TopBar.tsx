@@ -97,7 +97,10 @@ export default function TopBar({
     // 눌러보게 하려고 일부러 글자를 남겨뒀었다 — docs/BOARD_SPEC.md), 통과 후 토글로 교체.
     // 켜짐=커뮤니티, 꺼짐=소개팅. 로고와 아이콘 사이에서 남는 폭을 쓰되, 좁은 화면에서는
     // 로고가 먼저 줄어들도록 로고에 flexShrink 를 뒀다.
-    segSwitch: { marginHorizontal: 6, flexShrink: 0 },
+    // RN Switch가 iOS에서 실제 스위치보다 측정 높이를 크게 잡는 경우가 있어(알려진 이슈),
+    // alignItems:'center'로도 같은 줄의 로고·아이콘보다 위로 붕 뜨게 보였다(2026-08-08
+    // 오너 지적). iOS만 살짝 아래로 내려 맞춘다.
+    segSwitch: { marginHorizontal: 6, flexShrink: 0, marginTop: Platform.OS === 'ios' ? 4 : 0 },
     iconBtn: { padding: 6, borderRadius: 8 },
     rightIcons: { flexDirection: 'row', alignItems: 'center' },
     bellBadge: {
