@@ -94,7 +94,11 @@ export default function RootLayout() {
       >
         <Stack.Screen
           name="index"
-          options={{ headerShown: false }}
+          // 소개팅↔커뮤니티는 SwipeSegment가 자체 슬라이드 인 애니메이션을 직접 그린다.
+          // 네이티브 스택 기본 전환(cross-fade 등)까지 겹치면 화면 가장자리에 이전 화면이
+          // 잠깐 비쳐 보여 버그처럼 보였다(2026-08-08 오너 지적) — 기본 전환을 꺼서 SwipeSegment
+          // 효과만 보이게 함.
+          options={{ headerShown: false, animation: 'none' }}
         />
         <Stack.Screen
           name="event/[id]"
@@ -105,8 +109,9 @@ export default function RootLayout() {
           options={{ headerShown: false }}
         />
         <Stack.Screen name="reviews/index" options={{ headerShown: false }} />
-        {/* 게시판. 등록하지 않으면 기본 헤더에 'board/index' 같은 경로가 그대로 뜬다. */}
-        <Stack.Screen name="board/index" options={{ headerShown: false }} />
+        {/* 게시판. 등록하지 않으면 기본 헤더에 'board/index' 같은 경로가 그대로 뜬다.
+            animation:'none' 이유는 위 index 주석 참고(SwipeSegment와 전환이 겹치던 것). */}
+        <Stack.Screen name="board/index" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="board/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="board/write" options={{ headerShown: false }} />
         <Stack.Screen name="board/mine" options={{ headerShown: false }} />

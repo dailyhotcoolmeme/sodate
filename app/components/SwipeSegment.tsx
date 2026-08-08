@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { PanResponder, StyleSheet, Dimensions, Animated } from 'react-native'
 import { useRouter } from 'expo-router'
+import { useColors } from '@/hooks/useColors'
 
 // 소개팅 ↔ 커뮤니티 화면을 좌우 스와이프로 전환한다. 톱바 토글과 같은 router.replace를
 // 쓰므로, 스와이프로 화면이 바뀌면 새 화면의 톱바가 pathname을 보고 토글도 알아서 맞춰진다
@@ -27,15 +28,19 @@ let pendingEnterFrom: 'left' | 'right' | null = null
 
 export default function SwipeSegment({ current, children }: { current: 'event' | 'board'; children: React.ReactNode }) {
   const router = useRouter()
+  const colors = useColors()
   const captured = useRef(false)
 
   // 마운트 시점에 딱 한 번 읽고 바로 비운다. 스와이프로 도착했으면 반대쪽에서 슬쩍
   // 들어오는 시작 위치를, 아니면(토글·딥링크·직접 진입) 0(제자리)을 초기값으로 삼는다.
+  // ⚠️ 부호는 "보이는 틈이 어느 쪽에 생기는지"와 반대다 — content가 +쪽으로 밀려있으면
+  // 아직 못 채운 반대쪽(-쪽, 화면 왼쪽)에 틈이 보인다. 2026-08-08 오너가 "왼쪽에 살짝
+  // 버그처럼 보인다, 오른쪽으로 옮겨봐라"고 지적 → 부호를 반전(틈이 오른쪽에 생기게).
   const translateX = useRef(new Animated.Value((() => {
     const from = pendingEnterFrom
     pendingEnterFrom = null
-    if (from === 'right') return ENTER_OFFSET
-    if (from === 'left') return -ENTER_OFFSET
+    if (from === 'right') return -ENTER_OFFSET
+    if (from === 'left') return ENTER_OFFSET
     return 0
   })())).current
 
@@ -48,6 +53,10 @@ export default function SwipeSegment({ current, children }: { current: 'event' |
     // 마운트 시 1회만 — translateX는 useRef라 안정적, exhaustive-deps 불필요
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 슬라이드 중 아직 안 채워진 쪽으로 배경이 비쳐 보이던 것(오너 지적: "버그처럼 보인다")을
+  // 막기 위해 화면 배경색으로 뒤를 채운다.
+  const fillStyle = useMemo(() => [styles.fill, { backgroundColor: colors.background }], [colors])
 
   const panResponder = useRef(
     PanResponder.create({
@@ -74,7 +83,7 @@ export default function SwipeSegment({ current, children }: { current: 'event' |
   ).current
 
   return (
-    <Animated.View style={[styles.fill, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
+    <Animated.View style={[fillStyle, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
       {children}
     </Animated.View>
   )
