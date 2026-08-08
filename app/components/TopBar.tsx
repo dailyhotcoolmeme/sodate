@@ -100,7 +100,7 @@ export default function TopBar({
     // RN Switch가 iOS에서 실제 스위치보다 측정 높이를 크게 잡는 경우가 있어(알려진 이슈),
     // alignItems:'center'로도 같은 줄의 로고·아이콘보다 위로 붕 뜨게 보였다(2026-08-08
     // 오너 지적). iOS만 살짝 아래로 내려 맞춘다.
-    segSwitch: { marginHorizontal: 6, flexShrink: 0, marginTop: Platform.OS === 'ios' ? 4 : 0 },
+    segSwitch: { marginHorizontal: 6, flexShrink: 0, marginTop: Platform.OS === 'ios' ? 7 : 0 },
     iconBtn: { padding: 6, borderRadius: 8 },
     rightIcons: { flexDirection: 'row', alignItems: 'center' },
     bellBadge: {
