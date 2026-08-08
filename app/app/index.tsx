@@ -35,6 +35,7 @@ import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { DAY_OPTIONS, TIME_SLOTS } from '@/constants/filters'
 import { useCompanies } from '@/hooks/useCompanies'
 import TopBar from '@/components/TopBar'
+import SwipeSegment from '@/components/SwipeSegment'
 import { useFilterStore, useFilterHydrated, type FilterState } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { track } from '@/lib/analytics'
@@ -637,6 +638,7 @@ export default function HomeScreen() {
   }, [events, viewMode])
 
   return (
+    <SwipeSegment current="event">
     <View style={styles.container}>
       {/* ── 공용 톱바 ── */}
       <TopBar
@@ -859,5 +861,6 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
     </View>
+    </SwipeSegment>
   )
 }
