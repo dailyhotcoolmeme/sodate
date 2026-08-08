@@ -1,5 +1,5 @@
-import React, { useRef } from 'react'
-import { View, PanResponder, StyleSheet, Dimensions } from 'react-native'
+import React, { useEffect, useRef } from 'react'
+import { PanResponder, StyleSheet, Dimensions, Animated } from 'react-native'
 import { useRouter } from 'expo-router'
 
 // 소개팅 ↔ 커뮤니티 화면을 좌우 스와이프로 전환한다. 톱바 토글과 같은 router.replace를
@@ -12,11 +12,42 @@ import { useRouter } from 'expo-router'
 // ScrollView 기반 페이저보다 오작동(스크롤/탭이 스와이프에 먹히는 것) 위험이 낮다.
 const MIN_DX = 12          // 이 정도는 움직여야 스와이프 후보로 본다(손떨림 방지)
 const DIRECTION_RATIO = 1.8 // 가로가 세로보다 이만큼은 커야 스와이프로 확정
-const RELEASE_THRESHOLD = Dimensions.get('window').width * 0.22 // 화면폭의 22% 넘게 밀어야 전환
+const SCREEN_WIDTH = Dimensions.get('window').width
+const RELEASE_THRESHOLD = SCREEN_WIDTH * 0.22 // 화면폭의 22% 넘게 밀어야 전환
+// "넘어간다"는 느낌만 살짝 주는 슬라이드 인 폭 — 화면폭 전체로 하면 굼떠 보여서 일부만
+// (2026-08-08 오너 요청: 전환 시 살짝 효과).
+const ENTER_OFFSET = SCREEN_WIDTH * 0.18
+const ENTER_DURATION = 200
+
+// router.replace는 화면을 통째로 새로 마운트한다(같은 컴포넌트 인스턴스가 이어지지 않음).
+// "이 화면이 스와이프로 막 도착한 건지, 토글/직접 진입인지"를 다음 마운트에 넘기려고
+// 모듈 전역 변수를 쓴다 — 스와이프 순간에만 세팅하고 다음 마운트가 즉시 읽어서 비운다.
+// 앱 프로세스 안에서만 유효, 재시작하면 자연히 null.
+let pendingEnterFrom: 'left' | 'right' | null = null
 
 export default function SwipeSegment({ current, children }: { current: 'event' | 'board'; children: React.ReactNode }) {
   const router = useRouter()
   const captured = useRef(false)
+
+  // 마운트 시점에 딱 한 번 읽고 바로 비운다. 스와이프로 도착했으면 반대쪽에서 슬쩍
+  // 들어오는 시작 위치를, 아니면(토글·딥링크·직접 진입) 0(제자리)을 초기값으로 삼는다.
+  const translateX = useRef(new Animated.Value((() => {
+    const from = pendingEnterFrom
+    pendingEnterFrom = null
+    if (from === 'right') return ENTER_OFFSET
+    if (from === 'left') return -ENTER_OFFSET
+    return 0
+  })())).current
+
+  useEffect(() => {
+    Animated.timing(translateX, {
+      toValue: 0,
+      duration: ENTER_DURATION,
+      useNativeDriver: true,
+    }).start()
+    // 마운트 시 1회만 — translateX는 useRef라 안정적, exhaustive-deps 불필요
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const panResponder = useRef(
     PanResponder.create({
@@ -31,8 +62,10 @@ export default function SwipeSegment({ current, children }: { current: 'event' |
         if (!captured.current) return
         captured.current = false
         if (g.dx <= -RELEASE_THRESHOLD && current === 'event') {
+          pendingEnterFrom = 'right' // 다음(커뮤니티) 화면은 오른쪽에서 들어온다
           router.replace('/board')
         } else if (g.dx >= RELEASE_THRESHOLD && current === 'board') {
+          pendingEnterFrom = 'left' // 다음(소개팅) 화면은 왼쪽에서 들어온다
           router.replace('/')
         }
       },
@@ -41,9 +74,9 @@ export default function SwipeSegment({ current, children }: { current: 'event' |
   ).current
 
   return (
-    <View style={styles.fill} {...panResponder.panHandlers}>
+    <Animated.View style={[styles.fill, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
       {children}
-    </View>
+    </Animated.View>
   )
 }
 
