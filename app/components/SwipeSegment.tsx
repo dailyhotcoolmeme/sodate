@@ -11,8 +11,11 @@ import { useColors } from '@/hooks/useColors'
 // 탭이나 세로 스크롤(리스트 아이템 선택, 피드/게시글 스크롤)은 이 조건을 만족 못 해
 // capture가 계속 false를 반환 → 원래 자식(FlatList/버튼)이 터치를 그대로 받는다.
 // ScrollView 기반 페이저보다 오작동(스크롤/탭이 스와이프에 먹히는 것) 위험이 낮다.
-const MIN_DX = 12          // 이 정도는 움직여야 스와이프 후보로 본다(손떨림 방지)
-const DIRECTION_RATIO = 1.8 // 가로가 세로보다 이만큼은 커야 스와이프로 확정
+// 2026-08-09 오너 지적: 피드에서 탭이 가끔 안 눌린다 — 기준이 낮아서 평범한 탭의
+// 손가락 미세 움직임(몇 px)까지 스와이프 후보로 잡혀 터치가 가로채였다(실제로 화면이
+// 안 넘어가도, 탭 자체는 이미 죽어버림). 기준을 확 올려서 진짜 스와이프만 반응하게.
+const MIN_DX = 24          // 이 정도는 움직여야 스와이프 후보로 본다(탭 손떨림 방지)
+const DIRECTION_RATIO = 2.2 // 가로가 세로보다 이만큼은 커야 스와이프로 확정
 const SCREEN_WIDTH = Dimensions.get('window').width
 const RELEASE_THRESHOLD = SCREEN_WIDTH * 0.22 // 화면폭의 22% 넘게 밀어야 전환
 // "넘어간다"는 느낌만 살짝 주는 슬라이드 인 폭 — 화면폭 전체로 하면 굼떠 보여서 일부만
