@@ -37,6 +37,13 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
 
   const raw = params.path
   const segments = Array.isArray(raw) ? raw.join('/') : String(raw ?? '')
+  // 상위 경로 이동 차단. startsWith 검사만 두면 'rest/v1/../../auth/v1/admin/users' 가
+  // 통과한 뒤 fetch 가 URL 을 정규화하면서 service_role 키를 실은 채 Auth Admin API 로
+  // 갈 수 있다(2026-08-13 보안 감사). 인코딩된 형태(%2e%2e)까지 함께 막는다.
+  const decoded = (() => { try { return decodeURIComponent(segments) } catch { return segments } })()
+  if (decoded.includes('..') || decoded.includes('\\')) {
+    return json({ error: 'forbidden_path' }, 403)
+  }
   if (!ALLOWED_PREFIXES.some((p) => segments.startsWith(p))) {
     return json({ error: 'forbidden_path' }, 403)
   }

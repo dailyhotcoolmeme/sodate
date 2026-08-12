@@ -94,9 +94,6 @@ export default function EventDetailScreen() {
   const colors = useColors()
   const styles = useMemo(() => StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
-    header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-    backBtn: { paddingVertical: 4, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 2 },
-    backText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -118,7 +115,9 @@ export default function EventDetailScreen() {
       justifyContent: 'center',
     },
     imagePlaceholderText: { fontSize: 64 },
-    content: { padding: 20 },
+    // 좌측 시작 위치만 다른 페이지들과 통일(16px). 위쪽 20은 그대로 — 여긴 TopBar 바로 아래가
+    // 아니라 히어로 이미지 바로 아래라 "TopBar~제목 간격" 비교 대상이 아니다(2026-08-12).
+    content: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 20 },
     titleRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -323,6 +322,9 @@ export default function EventDetailScreen() {
   // 상세설명 접기/펼치기 (기본 접힘) + 실제 콘텐츠 높이(더보기 노출 판단)
   const [descExpanded, setDescExpanded] = useState(false)
   const [descContentH, setDescContentH] = useState(0)
+  // 참석자 명단 이미지(파이낸스라운지 등 노션 기반 업체만 값이 있음) 접기/펼치기
+  const [attendeeExpanded, setAttendeeExpanded] = useState(false)
+  const [attendeeContentH, setAttendeeContentH] = useState(0)
 
   const loadMyReviewIds = useCallback(() => {
     getMyReviewIds().then(setMyReviewIds)
@@ -514,6 +516,28 @@ export default function EventDetailScreen() {
           })()}
         </View>
 
+
+        {/* 참석자 명단 이미지 — 크롤러가 원본(노션 등)에서 R2로 재호스팅한 값이 있을 때만 노출 */}
+        {event.attendee_image_url && (
+          <View style={styles.descSection}>
+            <Text style={styles.sectionLabel}>참석자 현황</Text>
+            <View style={{ maxHeight: attendeeExpanded ? undefined : DESC_COLLAPSED_H, overflow: 'hidden' }}>
+              <View onLayout={(e) => setAttendeeContentH(e.nativeEvent.layout.height)}>
+                <DescImage uri={event.attendee_image_url} first last />
+              </View>
+            </View>
+            {attendeeContentH > DESC_COLLAPSED_H + 40 && (
+              <TouchableOpacity
+                style={styles.descMoreBtn}
+                onPress={() => setAttendeeExpanded((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.descMoreText}>{attendeeExpanded ? '접기' : '참석자 현황 더보기'}</Text>
+                <Ionicons name={attendeeExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* 상세 설명 — 업체/일정별로 등록된 이미지 유형으로만 표시. 이미지 없으면 섹션 숨김(크롤 텍스트는 미노출) */}
         {event.descImages && event.descImages.length > 0 && (

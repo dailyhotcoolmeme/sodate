@@ -14,6 +14,7 @@ import {
   Platform,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useLocalSearchParams } from 'expo-router'
 import * as Notifications from 'expo-notifications'
 import * as Device from 'expo-device'
 import Constants from 'expo-constants'
@@ -26,6 +27,8 @@ import { useCompanies } from '@/hooks/useCompanies'
 import { REGION_GROUP_ORDER, regionGroupKey, TAG_GROUP_ORDER, tagGroupKey } from '@/constants/chipGroups'
 import { supabase } from '@/lib/supabase'
 import { track } from '@/lib/analytics'
+import { useCollapseStore } from '@/stores/collapseStore'
+import CollapsibleSection from '@/components/CollapsibleSection'
 
 const ALERT_SETTINGS_KEY = 'sodate-alert-settings'
 
@@ -54,7 +57,8 @@ export default function AlertsScreen() {
     },
     summaryEmptyText: { fontSize: 13, color: colors.textTertiary },
     scroll: { flex: 1 },
-    content: { padding: 16, paddingBottom: 40 },
+    // 제목 위쪽 여백을 다른 페이지들과 통일(8px) — 여기만 16이라 위쪽 시작 위치가 어긋나 있었다(2026-08-12).
+    content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
     sectionTitle: {
       color: colors.textPrimary,
       fontSize: 16,
@@ -71,6 +75,9 @@ export default function AlertsScreen() {
     },
     sectionTitleInline: { color: colors.textPrimary, fontSize: 16, fontWeight: '700' },
     selectAllText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+    toggleAllRow: { alignItems: 'flex-end', marginBottom: 8 },
+    toggleAllText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+    sectionActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
     // 지역/태그 군: 서울 등 상위 라벨(한 줄), 그 아래 각 군은 [좌측 라벨 | 우측 칩] 행
     groupTop: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginTop: 14, marginBottom: 2 },
     groupRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, gap: 8 },
@@ -126,6 +133,18 @@ export default function AlertsScreen() {
   const hashtagOptions = useHashtags()
   const companyOptions = useCompanies()
 
+  // 섹션별 접기·펼치기 — 기기에 저장돼 다음에 열어도 마지막 상태 유지(오너 지시 2026-08-12).
+  const sectionExpanded = useCollapseStore((s) => s.expanded)
+  const toggleSection = useCollapseStore((s) => s.toggle)
+  const setManyExpanded = useCollapseStore((s) => s.setMany)
+  const sectionKeys = useMemo(() => {
+    const keys = ['region', 'hashtag']
+    if (companyOptions.length > 0) keys.push('company')
+    return keys.map((k) => `alerts:${k}`)
+  }, [companyOptions.length])
+  const allExpanded = sectionKeys.length > 0 && sectionKeys.every((k) => sectionExpanded[k])
+  const toggleAllSections = () => setManyExpanded(sectionKeys, !allExpanded)
+
   // 지역/태그 칩을 '군(群)'으로 묶어 표시(향후 크롤 값도 분류기가 자동 분류)
   const groupedRegions = useMemo(() => {
     const buckets: Record<string, RegionOption[]> = {}
@@ -141,8 +160,9 @@ export default function AlertsScreen() {
   const [selectedRegions, setSelectedRegions] = useState<string[]>([])
   const [selectedHashtags, setSelectedHashtags] = useState<string[]>([])
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
-  const [notifyNew, setNotifyNew] = useState(true)
-  const [notifyDeadline, setNotifyDeadline] = useState(true)
+  // 신규 진입 시 기본은 꺼짐 — 사용자가 직접 켜야 한다(오너 지시 2026-08-11).
+  const [notifyNew, setNotifyNew] = useState(false)
+  const [notifyDeadline, setNotifyDeadline] = useState(false)
   const [saving, setSaving] = useState(false)
   const [unsubscribing, setUnsubscribing] = useState(false)
   const [loadingExisting, setLoadingExisting] = useState(true)
@@ -161,8 +181,8 @@ export default function AlertsScreen() {
           const regions = saved.regions ?? []
           const hashtags = saved.hashtags ?? []
           const companies = saved.company_ids ?? []
-          const nNew = saved.notify_new ?? true
-          const nDeadline = saved.notify_deadline ?? true
+          const nNew = saved.notify_new ?? false
+          const nDeadline = saved.notify_deadline ?? false
           setSelectedRegions(regions)
           setSelectedHashtags(hashtags)
           setSelectedCompanies(companies)
@@ -174,6 +194,17 @@ export default function AlertsScreen() {
       setLoadingExisting(false)
     })
   }, [])
+
+  // 업체 상세에서 '알림 받기'로 넘어온 경우 그 업체를 미리 골라 둔다. 저장은 사용자가
+  // 직접 눌러야 한다 — 넘어오자마자 저장해 버리면 본인이 뭘 켰는지 모르게 된다.
+  // (예전엔 업체 상세 버튼이 기기에만 표시를 남기고 서버에는 아무것도 안 보내서,
+  //  구독한 줄 알지만 푸시가 영영 안 오는 상태였다. 2026-08-13 감사)
+  const { company: presetCompany } = useLocalSearchParams<{ company?: string }>()
+  React.useEffect(() => {
+    if (!presetCompany || loadingExisting) return
+    setSelectedCompanies((prev) => (prev.includes(presetCompany) ? prev : [...prev, presetCompany]))
+    setNotifyNew(true)
+  }, [presetCompany, loadingExisting])
 
   const toggleRegion = (id: string) => {
     setSelectedRegions((prev) =>
@@ -270,9 +301,9 @@ export default function AlertsScreen() {
       setSavedSummary({
         regions: selectedRegions, hashtags: selectedHashtags, companies: selectedCompanies, notifyNew, notifyDeadline,
       })
-      Alert.alert('저장 완료', describeSummary({
-        regions: selectedRegions, hashtags: selectedHashtags, companies: selectedCompanies, notifyNew, notifyDeadline,
-      }, regionOptions, companyOptions))
+      // 팝업엔 조건을 전부 나열하지 않는다 — 조건이 많으면 팝업이 지저분해진다(오너 지시).
+      // 자세한 조건은 저장 후 상단 요약 박스에서 확인.
+      Alert.alert('저장 완료', '알림이 설정되었습니다.')
     } catch (e) {
       console.error('알림 설정 저장 실패:', e)
       Alert.alert('오류', '저장 중 문제가 발생했습니다. 다시 시도해주세요.')
@@ -282,11 +313,12 @@ export default function AlertsScreen() {
   }
 
   // 알림 해제 — 서버 구독 행을 비활성화한다(match-subscriptions가 is_active=true만 본다).
-  // 편집 중인 선택값은 그대로 둔다 — 다시 켜고 싶으면 저장만 누르면 되게.
+  // 필터칩 선택 상태도 같이 초기화한다 — 해제했는데 칩 색이 그대로 남아있으면
+  // 여전히 켜져 있는 것처럼 보여 혼란스럽다(오너 지시 2026-08-11).
   const handleUnsubscribe = () => {
     Alert.alert(
       '알림 해제',
-      '저장된 알림 설정을 끌까요? 다시 켜려면 조건을 선택하고 저장하면 됩니다.',
+      '저장된 알림 설정을 끌까요? 조건 선택도 함께 초기화됩니다.',
       [
         { text: '취소', style: 'cancel' },
         { text: '해제', style: 'destructive', onPress: doUnsubscribe },
@@ -301,21 +333,40 @@ export default function AlertsScreen() {
         Alert.alert('시뮬레이터 제한', '실제 기기에서만 가능합니다.')
         return
       }
-      const { status } = await Notifications.getPermissionsAsync()
-      if (status === 'granted') {
+      // ⚠️ 알림 권한이 꺼져 있어도 서버 구독은 반드시 해제해야 한다. 예전에는 권한이
+      //    granted 일 때만 서버에 알리고 아니면 기기 저장값만 지운 뒤 성공 처리했다.
+      //    그러면 서버 구독은 is_active=true 로 살아 있어서, 나중에 OS 알림을 다시 켜는
+      //    순간 "해제했다고 믿었던" 푸시가 다시 왔다. 게다가 화면에서는 이미 설정이
+      //    사라져 해제 버튼조차 없어 끌 방법이 없었다(2026-08-13 감사).
+      //    토큰은 권한과 무관하게 발급되므로 그대로 요청한다.
+      let serverCleared = false
+      try {
         const tokenResult = await Notifications.getExpoPushTokenAsync({
           projectId: Constants.expoConfig?.extra?.eas?.projectId,
-        })
-        await supabase.functions.invoke('register-push-token', {
-          body: { token: tokenResult.data, platform: Platform.OS },
         })
         const { error } = await supabase.functions.invoke('save-alert-subscription', {
           body: { token: tokenResult.data, unsubscribe: true },
         })
         if (error) throw error
+        serverCleared = true
+      } catch (e) {
+        // 토큰을 못 받는 경우(권한 거부 상태의 일부 기기 등)까지 실패로 몰면 사용자가
+        // 화면에서 설정을 지울 수조차 없다. 기기 쪽은 지우되 사실대로 알린다.
+        console.error('서버 구독 해제 실패:', e)
+      }
+      if (!serverCleared) {
+        Alert.alert(
+          '일부만 해제되었습니다',
+          '이 기기의 알림 설정은 지웠지만 서버 구독 해제에 실패했습니다. 네트워크가 연결된 상태에서 다시 한 번 해제해 주세요.'
+        )
       }
       await AsyncStorage.removeItem(ALERT_SETTINGS_KEY)
       setSavedSummary(null)
+      setSelectedRegions([])
+      setSelectedHashtags([])
+      setSelectedCompanies([])
+      setNotifyNew(false)
+      setNotifyDeadline(false)
       track('alert_unsubscribe')
     } catch (e) {
       console.error('알림 해제 실패:', e)
@@ -351,7 +402,7 @@ export default function AlertsScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.summaryText}>
-            {describeSummary(savedSummary, regionOptions, companyOptions)}
+            {describeSummaryCompact(savedSummary, regionOptions, companyOptions)}
           </Text>
         </View>
       ) : (
@@ -360,96 +411,117 @@ export default function AlertsScreen() {
         </View>
       )}
 
-      <View style={styles.sectionHead}>
-        <Text style={styles.sectionTitleInline}>관심 지역</Text>
-        <TouchableOpacity
-          onPress={() =>
-            setSelectedRegions(
-              regionOptions.length > 0 && selectedRegions.length === regionOptions.length
-                ? []
-                : regionOptions.map((r) => r.id)
-            )
-          }
-          hitSlop={8}
-        >
-          <Text style={styles.selectAllText}>
-            {regionOptions.length > 0 && selectedRegions.length === regionOptions.length ? '선택해제' : '전체선택'}
-          </Text>
+      {/* 전체 접기/펼치기 — 섹션이 많아 리스트가 길어지는 걸 완화(오너 지시 2026-08-12) */}
+      <View style={styles.toggleAllRow}>
+        <TouchableOpacity onPress={toggleAllSections} hitSlop={8}>
+          <Text style={styles.toggleAllText}>{allExpanded ? '전체 접기' : '전체 펼치기'}</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.hint}>선택하지 않으면 전국 알림을 받습니다</Text>
-      {groupedRegions.map((g, gi) => {
-        const showParent = !!g.parent && (gi === 0 || groupedRegions[gi - 1].parent !== g.parent)
-        const groupIds = g.items.map((r) => r.id)
-        const groupAllOn = groupIds.length > 0 && groupIds.every((id) => selectedRegions.includes(id))
-        return (
-          <View key={g.key}>
-            {showParent && <Text style={styles.groupTop}>{g.parent}</Text>}
-            <View style={styles.groupRow}>
-              <TouchableOpacity onPress={() => toggleRegionGroup(groupIds)} hitSlop={6}>
-                <Text style={[g.parent ? styles.groupRowLabel : styles.groupRowLabelTop, groupAllOn && styles.groupRowLabelActive]}>
-                  {g.key}
-                </Text>
-              </TouchableOpacity>
-              <View style={styles.groupRowChips}>
-                {g.items.map((region) => (
-                  <TouchableOpacity
-                    key={region.id}
-                    style={[styles.chip, selectedRegions.includes(region.id) && styles.chipSelected]}
-                    onPress={() => toggleRegion(region.id)}
-                  >
-                    <Text style={[styles.chipText, selectedRegions.includes(region.id) && styles.chipTextSelected]}>
-                      {region.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+
+      <CollapsibleSection
+        title="관심 지역"
+        expanded={!!sectionExpanded['alerts:region']}
+        onToggle={() => toggleSection('alerts:region')}
+      >
+        <View style={styles.sectionActionRow}>
+          <Text style={styles.hint}>선택하지 않으면 전국 알림을 받습니다</Text>
+          <TouchableOpacity
+            onPress={() =>
+              setSelectedRegions(
+                regionOptions.length > 0 && selectedRegions.length === regionOptions.length
+                  ? []
+                  : regionOptions.map((r) => r.id)
+              )
+            }
+            hitSlop={8}
+          >
+            <Text style={styles.selectAllText}>
+              {regionOptions.length > 0 && selectedRegions.length === regionOptions.length ? '선택해제' : '전체선택'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {groupedRegions.map((g, gi) => {
+          const showParent = !!g.parent && (gi === 0 || groupedRegions[gi - 1].parent !== g.parent)
+          const groupIds = g.items.map((r) => r.id)
+          const groupAllOn = groupIds.length > 0 && groupIds.every((id) => selectedRegions.includes(id))
+          return (
+            <View key={g.key}>
+              {showParent && <Text style={styles.groupTop}>{g.parent}</Text>}
+              <View style={styles.groupRow}>
+                <TouchableOpacity onPress={() => toggleRegionGroup(groupIds)} hitSlop={6}>
+                  <Text style={[g.parent ? styles.groupRowLabel : styles.groupRowLabelTop, groupAllOn && styles.groupRowLabelActive]}>
+                    {g.key}
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.groupRowChips}>
+                  {g.items.map((region) => (
+                    <TouchableOpacity
+                      key={region.id}
+                      style={[styles.chip, selectedRegions.includes(region.id) && styles.chipSelected]}
+                      onPress={() => toggleRegion(region.id)}
+                    >
+                      <Text style={[styles.chipText, selectedRegions.includes(region.id) && styles.chipTextSelected]}>
+                        {region.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             </View>
-          </View>
-        )
-      })}
+          )
+        })}
+      </CollapsibleSection>
 
-      <View style={styles.sectionHead}>
-        <Text style={styles.sectionTitleInline}>관심 태그</Text>
-        <TouchableOpacity
-          onPress={() =>
-            setSelectedHashtags(
-              hashtagOptions.length > 0 && selectedHashtags.length === hashtagOptions.length
-                ? []
-                : [...hashtagOptions]
-            )
-          }
-          hitSlop={8}
-        >
-          <Text style={styles.selectAllText}>
-            {hashtagOptions.length > 0 && selectedHashtags.length === hashtagOptions.length ? '선택해제' : '전체선택'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.hint}>선택하지 않으면 모든 태그 알림을 받습니다</Text>
-      {groupedTags.map((g) => (
-        <View key={g.key} style={styles.groupRow}>
-          <Text style={styles.groupRowLabelTop}>{g.key}</Text>
-          <View style={styles.groupRowChips}>
-            {g.items.map((tag) => (
-              <TouchableOpacity
-                key={tag}
-                style={[styles.chip, selectedHashtags.includes(tag) && styles.chipSelected]}
-                onPress={() => toggleHashtag(tag)}
-              >
-                <Text style={[styles.chipText, selectedHashtags.includes(tag) && styles.chipTextSelected]}>
-                  {tag}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+      <CollapsibleSection
+        title="관심 태그"
+        expanded={!!sectionExpanded['alerts:hashtag']}
+        onToggle={() => toggleSection('alerts:hashtag')}
+      >
+        <View style={styles.sectionActionRow}>
+          <Text style={styles.hint}>선택하지 않으면 모든 태그 알림을 받습니다</Text>
+          <TouchableOpacity
+            onPress={() =>
+              setSelectedHashtags(
+                hashtagOptions.length > 0 && selectedHashtags.length === hashtagOptions.length
+                  ? []
+                  : [...hashtagOptions]
+              )
+            }
+            hitSlop={8}
+          >
+            <Text style={styles.selectAllText}>
+              {hashtagOptions.length > 0 && selectedHashtags.length === hashtagOptions.length ? '선택해제' : '전체선택'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      ))}
+        {groupedTags.map((g) => (
+          <View key={g.key} style={styles.groupRow}>
+            <Text style={styles.groupRowLabelTop}>{g.key}</Text>
+            <View style={styles.groupRowChips}>
+              {g.items.map((tag) => (
+                <TouchableOpacity
+                  key={tag}
+                  style={[styles.chip, selectedHashtags.includes(tag) && styles.chipSelected]}
+                  onPress={() => toggleHashtag(tag)}
+                >
+                  <Text style={[styles.chipText, selectedHashtags.includes(tag) && styles.chipTextSelected]}>
+                    {tag}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ))}
+      </CollapsibleSection>
 
       {companyOptions.length > 0 && (
-        <>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitleInline}>관심 업체</Text>
+        <CollapsibleSection
+          title="관심 업체"
+          expanded={!!sectionExpanded['alerts:company']}
+          onToggle={() => toggleSection('alerts:company')}
+        >
+          <View style={styles.sectionActionRow}>
+            <Text style={styles.hint}>선택하지 않으면 모든 업체 알림을 받습니다</Text>
             <TouchableOpacity
               onPress={() =>
                 setSelectedCompanies(
@@ -465,7 +537,6 @@ export default function AlertsScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.hint}>선택하지 않으면 모든 업체 알림을 받습니다</Text>
           <View style={styles.chipRow}>
             {companyOptions.map((c) => (
               <TouchableOpacity
@@ -479,14 +550,14 @@ export default function AlertsScreen() {
               </TouchableOpacity>
             ))}
           </View>
-        </>
+        </CollapsibleSection>
       )}
 
       <Text style={styles.sectionTitle}>알림 종류</Text>
       <View style={styles.row}>
         <View>
           <Text style={styles.label}>새 일정 알림</Text>
-          <Text style={styles.subLabel}>조건에 맞는 새 소개팅이 등록되면 알림</Text>
+          <Text style={styles.subLabel}>조건에 맞는 새 소개팅이 등록되면 알림 (매일 오전 8시·오후 8시)</Text>
         </View>
         <Switch
           value={notifyNew}
@@ -498,7 +569,7 @@ export default function AlertsScreen() {
       <View style={styles.row}>
         <View>
           <Text style={styles.label}>마감 임박 알림 (D-1)</Text>
-          <Text style={styles.subLabel}>관심 일정 마감 하루 전 알림</Text>
+          <Text style={styles.subLabel}>관심 일정 마감 하루 전 알림 (매일 오후 8시경)</Text>
         </View>
         <Switch
           value={notifyDeadline}
@@ -522,19 +593,22 @@ export default function AlertsScreen() {
   )
 }
 
-/** 저장 완료 팝업과 상단 요약에 같이 쓴다 — 문구가 서로 어긋나지 않게. */
-function describeSummary(
+/** 상단 "현재 알림 설정" 요약 — 조건(지역+태그+업체)이 많으면 전부 나열하지 않고
+ * "OO 외 N개 조건"으로 압축한다(오너 지시: 조건 많을 때 지저분해 보임 방지). */
+function describeSummaryCompact(
   s: { regions: string[]; hashtags: string[]; companies: string[]; notifyNew: boolean; notifyDeadline: boolean },
   regionOptions: RegionOption[],
   companyOptions: { id: string; name: string }[]
 ): string {
-  const regionLabels = s.regions.length
-    ? s.regions.map((id) => regionOptions.find((r) => r.id === id)?.label ?? id).join(', ')
-    : '전국(지역 조건 없음)'
-  const tagLabels = s.hashtags.length ? s.hashtags.join(', ') : '전체(태그 조건 없음)'
-  const companyLabels = s.companies.length
-    ? s.companies.map((id) => companyOptions.find((c) => c.id === id)?.name ?? id).join(', ')
-    : '전체(업체 조건 없음)'
-  const types = [s.notifyNew && '새 일정', s.notifyDeadline && '마감 임박(D-1)'].filter(Boolean).join(', ') || '없음'
-  return `지역: ${regionLabels}\n태그: ${tagLabels}\n업체: ${companyLabels}\n알림 종류: ${types}`
+  const regionLabels = s.regions.map((id) => regionOptions.find((r) => r.id === id)?.label ?? id)
+  const companyLabels = s.companies.map((id) => companyOptions.find((c) => c.id === id)?.name ?? id)
+  const allConditions = [...regionLabels, ...s.hashtags, ...companyLabels]
+
+  const conditionText =
+    allConditions.length === 0 ? '전체(조건 없음)'
+    : allConditions.length === 1 ? allConditions[0]
+    : `${allConditions[0]} 외 ${allConditions.length - 1}개 조건`
+
+  const types = [s.notifyNew && '새 일정', s.notifyDeadline && '마감 임박'].filter(Boolean).join('·') || '없음'
+  return `${conditionText} · ${types} 알림`
 }

@@ -7,7 +7,7 @@ export function useFilter() {
 
   const activeFilterCount = [
     store.regions.length > 0 ? 1 : 0,
-    store.dateRange !== 'all' ? 1 : 0,
+    store.dateStart || store.dateEnd ? 1 : 0,
     store.maxPrice !== null ? 1 : 0,
     store.themes.length > 0 ? 1 : 0,
     store.hashtags.length > 0 ? 1 : 0,
@@ -24,13 +24,10 @@ export function useFilter() {
     (id) => THEMES.find((t) => t.id === id)?.label ?? id
   )
 
+  const fmtDate = (d: string) => d.slice(5).replace('-', '.')
   const dateRangeLabel =
-    store.dateRange === 'today'
-      ? '오늘'
-      : store.dateRange === 'week'
-      ? '1주일'
-      : store.dateRange === 'month'
-      ? '1달'
+    store.dateStart && store.dateEnd
+      ? `${fmtDate(store.dateStart)}~${fmtDate(store.dateEnd)}`
       : '전체'
 
   const ageGroupLabels = store.ageGroups.map(

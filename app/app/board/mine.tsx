@@ -105,7 +105,9 @@ export default function MyPostsScreen() {
                 {c.post_title ?? '삭제된 글'}
               </Text>
               <View style={styles.titleLine}>
-                <Text style={styles.commentBody} numberOfLines={2}>{c.content}</Text>
+                <Text style={styles.commentBody} numberOfLines={2}>
+                  {c.is_secret && '🔒 '}{c.content || '(비밀 댓글)'}
+                </Text>
                 {!c.is_active && <Text style={styles.hidden}>숨김</Text>}
               </View>
               <Text style={styles.meta}>{formatDate(c.created_at)}</Text>

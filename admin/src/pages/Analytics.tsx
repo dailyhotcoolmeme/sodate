@@ -14,6 +14,50 @@ const PERIOD_OPTIONS = [
 
 const COLORS = ['#ec4899', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 
+// 이벤트 종류를 사람이 읽는 말로. 앱 lib/analytics.ts 의 AnalyticsEventType 과 짝이다.
+// 여기 없는 값이 들어오면(새 이벤트를 앱에만 추가한 경우) 원래 키를 그대로 보여준다.
+const EVENT_LABELS: Record<string, string> = {
+  app_open: '앱 실행',
+  screen_view: '화면 이동',
+  event_impression: '일정 노출',
+  event_view: '일정 상세 조회',
+  event_apply_click: '신청 클릭',
+  event_favorite_add: '찜 추가',
+  event_favorite_remove: '찜 해제',
+  alert_subscribe: '알림 구독',
+  alert_unsubscribe: '알림 구독 해제',
+  filter_apply: '필터 적용',
+  filter_reset: '필터 초기화',
+  sort_change: '정렬 변경',
+  company_view: '업체 상세 조회',
+  review_view: '후기 조회',
+  review_click: '후기 클릭',
+  participant_stats_view: '참가자 정보 조회',
+  ad_sdk_init: '광고 SDK 초기화',
+  ad_slot_mount: '광고 영역 표시',
+  ad_request_start: '광고 요청',
+  ad_load_success: '광고 로드 성공',
+  ad_load_fail: '광고 로드 실패',
+}
+const eventLabel = (key: string) => EVENT_LABELS[key] ?? key.replace(/_/g, ' ')
+
+/** 나이대 필터 값(25_30)을 '25~30세'로 */
+const ageLabel = (key: string) => {
+  const m = key.match(/^(\d+)_(\d+)$/)
+  return m ? `${m[1]}~${m[2]}세` : key
+}
+
+// 정렬 값 → 앱 화면에 실제로 쓰는 문구(app/index.tsx SORT_OPTIONS)와 같게.
+// deadline·created 는 지금 앱 화면엔 없지만 예전 기록이 남아 있어 같이 둔다.
+const SORT_LABELS: Record<string, string> = {
+  date: '날짜순',
+  price_low: '가격 낮은순',
+  price_high: '가격 높은순',
+  deadline: '마감 임박순',
+  created: '최신 등록순',
+}
+const sortLabel = (key: string) => SORT_LABELS[key] ?? key
+
 export default function Analytics() {
   const [period, setPeriod] = useState(30)
   const [data, setData] = useState<any>(null)
@@ -24,89 +68,38 @@ export default function Analytics() {
     load()
   }, [period])
 
+  /**
+   * 집계는 DB에서 한다(admin_analytics RPC).
+   *
+   * ⚠️ 예전에는 analytics_events 를 통째로 받아 브라우저에서 셌는데, PostgREST 가
+   *    한 번에 1000행만 돌려준다. 최근 30일이 9천 건이 넘어가면서 실제로는 임의의
+   *    1000건만 보고 모든 숫자를 계산하고 있었다(2026-08-12 실측·확인).
+   *    행을 끌어오지 말고 DB가 세서 내려주게 바꿨다 — 몇 건이 쌓여도 정확하다.
+   */
   async function load() {
     setLoading(true)
-    const since = new Date(Date.now() - period * 864e5).toISOString()
+    const { data: agg, error } = await supabase.rpc('admin_analytics', { p_days: period })
+    if (error || !agg) { setData(null); setLoading(false); return }
 
-    const { data: rows } = await supabase
-      .from('analytics_events')
-      .select('event_type, event_id, company_id, device_id, platform, properties, created_at')
-      .gte('created_at', since)
-
-    if (!rows) { setLoading(false); return }
-
-    // 전환 퍼널
-    const counts: Record<string, number> = {}
-    for (const r of rows) counts[r.event_type] = (counts[r.event_type] ?? 0) + 1
-
+    const counts: Record<string, number> = agg.counts ?? {}
     const funnel = [
       { name: '앱 실행', value: counts['app_open'] ?? 0 },
-      { name: '이벤트 조회', value: counts['event_view'] ?? 0 },
+      { name: '일정 조회', value: counts['event_view'] ?? 0 },
       { name: '신청 클릭', value: counts['event_apply_click'] ?? 0 },
     ]
+    const platformData = Object.entries(agg.platforms ?? {})
+      .map(([name, value]) => ({ name, value: value as number }))
 
-    // 플랫폼 비율
-    const platforms: Record<string, number> = {}
-    for (const r of rows) if (r.platform) platforms[r.platform] = (platforms[r.platform] ?? 0) + 1
-    const platformData = Object.entries(platforms).map(([name, value]) => ({ name, value }))
-
-    // 인기 지역 (filter_apply에서 region 추출)
-    const regionCount: Record<string, number> = {}
-    for (const r of rows) {
-      if (r.event_type === 'filter_apply' && r.properties?.region && r.properties.region !== 'all') {
-        const reg = r.properties.region
-        regionCount[reg] = (regionCount[reg] ?? 0) + 1
-      }
-    }
-    const regionData = Object.entries(regionCount)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 8)
-      .map(([name, value]) => ({ name, value }))
-
-    // 인기 테마
-    const themeCount: Record<string, number> = {}
-    for (const r of rows) {
-      if (r.event_type === 'filter_apply' && r.properties?.theme) {
-        const t = r.properties.theme
-        themeCount[t] = (themeCount[t] ?? 0) + 1
-      }
-    }
-    const themeData = Object.entries(themeCount)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 6)
-      .map(([name, value]) => ({ name, value }))
-
-    // 업체별 성과
-    const companyStats: Record<string, { name: string; view: number; apply: number; favorite: number }> = {}
-    const { data: companies } = await supabase.from('companies').select('id, name')
-    const companyMap: Record<string, string> = {}
-    for (const c of companies ?? []) companyMap[c.id] = c.name
-
-    for (const r of rows) {
-      if (!r.company_id) continue
-      const name = companyMap[r.company_id] ?? r.company_id.slice(0, 8)
-      if (!companyStats[r.company_id]) companyStats[r.company_id] = { name, view: 0, apply: 0, favorite: 0 }
-      if (r.event_type === 'event_view') companyStats[r.company_id].view++
-      if (r.event_type === 'event_apply_click') companyStats[r.company_id].apply++
-      if (r.event_type === 'event_favorite_add') companyStats[r.company_id].favorite++
-    }
-    const companyData = Object.values(companyStats)
-      .sort((a, b) => b.view - a.view)
-
-    // 정렬 사용 패턴
-    const sortCount: Record<string, number> = {}
-    for (const r of rows) {
-      if (r.event_type === 'sort_change' && r.properties?.sort_by) {
-        const s = r.properties.sort_by
-        sortCount[s] = (sortCount[s] ?? 0) + 1
-      }
-    }
-    const sortData = Object.entries(sortCount).map(([name, value]) => ({ name, value }))
-
-    // 고유 기기 수
-    const devices = new Set(rows.map((r) => r.device_id)).size
-
-    setData({ funnel, platformData, regionData, themeData, companyData, sortData, counts, devices })
+    setData({
+      funnel,
+      platformData,
+      regionData: agg.regions ?? [],
+      ageData: (agg.ages ?? []).map((a: any) => ({ ...a, name: ageLabel(a.name) })),
+      companyData: agg.companies ?? [],
+      sortData: (agg.sorts ?? []).map((s: any) => ({ ...s, name: sortLabel(s.name) })),
+      counts,
+      devices: agg.devices ?? 0,
+    })
     setLoading(false)
   }
 
@@ -282,10 +275,12 @@ export default function Analytics() {
         <div className="space-y-6">
           {/* 인기 테마 */}
           <div className="grid grid-cols-2 gap-4">
+            {/* 예전엔 '인기 테마'였는데 테마 필터가 앱에서 사라져 늘 빈 그래프였다.
+                대신 계속 쌓이는데 볼 곳이 없던 나이대 필터를 보여준다(2026-08-12). */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h2 className="text-sm font-semibold text-gray-700 mb-4">인기 테마 (필터 기준)</h2>
+              <h2 className="text-sm font-semibold text-gray-700 mb-4">인기 나이대 (필터 기준)</h2>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={data.themeData}>
+                <BarChart data={data.ageData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
@@ -315,7 +310,7 @@ export default function Analytics() {
                 .sort(([, a], [, b]) => (b as number) - (a as number))
                 .map(([key, val]) => (
                   <div key={key} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
-                    <span className="text-xs text-gray-600">{key.replace(/_/g, ' ')}</span>
+                    <span className="text-xs text-gray-600" title={key}>{eventLabel(key)}</span>
                     <span className="text-sm font-bold text-gray-900">{(val as number).toLocaleString()}</span>
                   </div>
                 ))}

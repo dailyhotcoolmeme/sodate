@@ -38,15 +38,27 @@ export function useRegions(): RegionOption[] {
     })
     // 2) DB 최신 조회 → 갱신 + 캐시 저장
     ;(async () => {
-      const { data } = await supabase
-        .from('events')
-        .select('location_region')
-        .eq('is_active', true)
-        .gte('event_date', new Date().toISOString())
-      if (!alive || !data) return
+      // PostgREST 는 한 번에 1000행까지만 준다. 활성·미래 일정이 그 근처(2026-08-13
+      // 기준 997건)라 곧 넘어가는데, 넘는 순간 뒤쪽에만 있는 지역이 칩에서 통째로
+      // 사라진다(정렬도 지정 안 해 어느 행이 잘릴지 비결정적). useHashtags 와 같은
+      // 방식으로 끝까지 나눠 받는다.
+      const PAGE = 1000
+      const rows: { location_region?: string }[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data } = await supabase
+          .from('events')
+          .select('location_region')
+          .eq('is_active', true)
+          .gte('event_date', new Date().toISOString())
+          .range(from, from + PAGE - 1)
+        if (!alive) return
+        if (data) rows.push(...(data as { location_region?: string }[]))
+        if (!data || data.length < PAGE) break
+      }
+      if (!rows.length) return
       const counts: Record<string, number> = {}
-      for (const e of data) {
-        const r = (e as { location_region?: string }).location_region
+      for (const e of rows) {
+        const r = e.location_region
         if (r && r !== '미정') counts[r] = (counts[r] ?? 0) + 1
       }
       const sorted = Object.entries(counts)

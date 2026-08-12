@@ -44,23 +44,42 @@ export function useReviews(companyId: string | null, limit = 10) {
   return { reviews, loading, error, refetch: fetchReviews }
 }
 
-export function useAllReviews(limit = 500) {
+/**
+ * 후기 모아보기 — 전체를 나눠 받는다.
+ *
+ * ⚠️ 예전에는 `.limit(500)` 하나로 끝냈는데, 조건에 맞는 후기가 702건(2026-08-13 실측)이라
+ *    202건이 조용히 잘렸다. 게다가 published_at DESC 는 PostgreSQL 기본이 NULLS FIRST 라
+ *    published_at 이 없는 인스타 후기가 앞을 다 차지하고, 날짜가 있는 블로그·유튜브 후기가
+ *    남은 자리만 나눠 가져 오래된 후기는 화면에서 도달할 방법이 없었다. 탭 배지 개수도
+ *    잘린 목록으로 세어 실제와 달랐다.
+ */
+export function useAllReviews() {
   const [reviews, setReviews] = useState<(ReviewRow & { companies: { name: string; slug: string } | null })[]>([])
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(() => {
-    supabase
-      .from('reviews')
-      .select('*, companies(name, slug)')
-      .eq('is_active', true)
-      .or(KEEP_WITHOUT_DATE)
-      .order('published_at', { ascending: false })
-      .limit(limit)
-      .then(({ data }) => {
-        setReviews((data ?? []) as any)
+    const PAGE = 1000
+    ;(async () => {
+      try {
+        const rows: any[] = []
+        for (let from = 0; ; from += PAGE) {
+          const { data } = await supabase
+            .from('reviews')
+            .select('*, companies(name, slug)')
+            .eq('is_active', true)
+            .or(KEEP_WITHOUT_DATE)
+            .order('published_at', { ascending: false, nullsFirst: false })
+            .order('created_at', { ascending: false })
+            .range(from, from + PAGE - 1)
+          if (data) rows.push(...data)
+          if (!data || data.length < PAGE) break
+        }
+        setReviews(rows as any)
+      } finally {
         setLoading(false)
-      }, () => setLoading(false))
-  }, [limit])
+      }
+    })()
+  }, [])
 
   useEffect(() => {
     load()

@@ -35,12 +35,16 @@ ALLOWED_DOMAINS: set[str] = {
     'flipo.co.kr',
     'www.flipo.co.kr',
     'lovecommunity.imweb.me',
+    'app.notion.com',                 # 파이낸스라운지: 별도 사이트 없이 노션 페이지로 일정 공지
 }
 
 # 이벤트 source_url로 허용할 도메인 (아웃링크 대상)
 OUTLINK_ALLOWED_DOMAINS: set[str] = ALLOWED_DOMAINS | {
     'booking.naver.com',
     'toss.im',
+    'www.instagram.com',              # 파이낸스라운지·오프더레코드: 신청은 인스타 DM(사이트 없음)
+    'docs.google.com',                 # 유니브리지소셜: 신청은 바이오의 구글폼
+    'forms.gle',
 }
 
 # 개인정보성 패턴 — 크롤링 금지

@@ -18,16 +18,11 @@ jest.mock('expo-image', () => ({
 // outlink mock
 jest.mock('@/lib/outlink', () => ({ openOutlink: jest.fn() }))
 
-// @/constants/colors mock
-jest.mock('@/constants/colors', () => ({
-  Colors: {
-    surface: '#1A1A1A',
-    surfaceHigh: '#2A2A2A',
-    primary: '#FF6B9D',
-    textPrimary: '#FFFFFF',
-    textSecondary: '#999999',
-  },
-}))
+// 색상은 목킹하지 않는다. 예전에는 단일 `Colors` 객체를 목으로 넣었는데, 다크/라이트
+// 테마가 들어오면서 실제 모듈이 DarkColors/LightColors 를 내보내도록 바뀌었다. 목이
+// 옛 이름 그대로라 themeStore 의 colors 가 undefined 가 됐고, 렌더가 전부 터졌다.
+// (스위트 자체가 로드조차 안 되던 상태라 이 사실이 드러나지 않았다 — 2026-08-13)
+// constants/colors 는 상수만 있는 순수 모듈이라 목이 필요 없다.
 
 const futureDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString()
 const nearDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
@@ -59,6 +54,7 @@ const mockEvent: EventWithCompany = {
   thumbnail_urls: ['https://example.com/img.jpg'],
   participant_stats: null,
   image_type_id: null,
+  attendee_image_url: null,
   source_url: 'https://frip.co.kr/event/1',
   is_active: true,
   is_closed: false,
@@ -97,30 +93,29 @@ describe('EventCard', () => {
     expect(getByText('프립')).toBeTruthy()
   })
 
+  // 지역 앞의 📍 는 아이콘 컴포넌트로 바뀌었다 — 글자에는 지역명만 남는다.
   it('지역 정보가 렌더링된다', () => {
     const { getByText } = render(<EventCard event={mockEvent} />)
-    expect(getByText('📍 강남')).toBeTruthy()
+    expect(getByText('강남')).toBeTruthy()
   })
 
-  it('남성 가격이 렌더링된다', () => {
-    const { getByText } = render(<EventCard event={mockEvent} />)
-    expect(getByText('남 40,000원')).toBeTruthy()
+  // 가격은 PriceTierValue 가 그린다. '남/여' 라벨과 금액이 각각 다른 Text 로 나뉘어
+  // 예전처럼 '남 40,000원' 한 덩어리로는 안 잡힌다.
+  it('남녀 가격이 렌더링된다', () => {
+    const { getAllByText } = render(<EventCard event={mockEvent} />)
+    expect(getAllByText(/40,000/).length).toBeGreaterThan(0)
+    expect(getAllByText(/35,000/).length).toBeGreaterThan(0)
   })
 
-  it('여성 가격이 렌더링된다', () => {
-    const { getByText } = render(<EventCard event={mockEvent} />)
-    expect(getByText('여 35,000원')).toBeTruthy()
-  })
-
-  it('테마 태그가 렌더링된다', () => {
-    const { getByText } = render(<EventCard event={mockEvent} />)
-    expect(getByText('와인')).toBeTruthy()
-    expect(getByText('로테이션')).toBeTruthy()
+  // 테마는 ThemeBadge 가 대표 테마 하나만 배지로 보여준다(전부 나열하지 않는다).
+  it('테마 배지가 렌더링된다', () => {
+    const { getAllByText } = render(<EventCard event={mockEvent} />)
+    expect(getAllByText(/와인|로테이션/).length).toBeGreaterThan(0)
   })
 
   it('신청하기 버튼 탭 시 openOutlink가 source_url로 호출된다', () => {
     const { getByText } = render(<EventCard event={mockEvent} />)
-    fireEvent.press(getByText('신청하기 →'))
+    fireEvent.press(getByText(/신청하기/))
     expect(outlink.openOutlink).toHaveBeenCalledWith('https://frip.co.kr/event/1')
   })
 
@@ -135,10 +130,11 @@ describe('EventCard', () => {
     expect(queryByText(/D-/)).toBeNull()
   })
 
-  it('thumbnail_urls가 없으면 플레이스홀더가 렌더링된다', () => {
+  // 썸네일이 없으면 이모지 대신 지역명을 얹은 자리표시자가 그려진다.
+  it('thumbnail_urls가 없어도 카드가 정상 렌더링된다', () => {
     const noThumb = { ...mockEvent, thumbnail_urls: [] }
     const { getByText } = render(<EventCard event={noThumb} />)
-    expect(getByText('💑')).toBeTruthy()
+    expect(getByText(mockEvent.title!)).toBeTruthy()
   })
 
   it('companies가 null이면 업체 배지가 없다', () => {

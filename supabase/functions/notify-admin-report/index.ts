@@ -136,13 +136,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     } else {
       const { data: comment } = await supabase
         .from('board_comments')
-        .select('nickname,content,report_count,post_id,board_posts(title)')
+        .select('nickname,content,is_secret,secret_content,report_count,post_id,board_posts(title)')
         .eq('id', report.target_id)
         .maybeSingle()
       if (comment) {
         title = (comment.board_posts as { title?: string } | null)?.title ?? '(원글 없음)'
         author = comment.nickname
-        contentPreview = comment.content
+        // 비밀 댓글은 content 가 빈 문자열이라 그대로 쓰면 신고 메일의 '신고 대상 내용'이
+        // 빈 칸으로 나갔다. 신고된 건은 판단 근거가 있어야 24시간 내 조치가 가능하므로
+        // 본문을 실어 보낸다(2026-08-13 감사). 열람 사실은 개인정보처리방침에 고지돼 있다.
+        contentPreview = comment.is_secret
+          ? `[비밀 댓글] ${comment.secret_content ?? '(내용 없음)'}`
+          : comment.content
         reportCount = comment.report_count
       }
     }

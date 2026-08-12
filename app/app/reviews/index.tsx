@@ -124,7 +124,7 @@ function AggReviewRow({
 
 export default function ReviewsScreen() {
   const insets = useSafeAreaInsets()
-  const { reviews, loading, refetch } = useAllReviews(500)
+  const { reviews, loading, refetch } = useAllReviews()
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const colors = useColors()

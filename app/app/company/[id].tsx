@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useCompany } from '@/hooks/useCompany'
 import { openOutlink } from '@/lib/outlink'
-import { useAlertStore } from '@/stores/alertStore'
 import { useColors } from '@/hooks/useColors'
 import EventCard from '@/components/EventCard'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
@@ -33,7 +32,6 @@ export default function CompanyDetailScreen() {
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { isSubscribed, subscribe, unsubscribe } = useAlertStore()
   const colors = useColors()
   const styles = useMemo(() => StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
@@ -53,7 +51,11 @@ export default function CompanyDetailScreen() {
     header: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      padding: 20,
+      // 좌우/위쪽 시작 위치를 다른 페이지 제목들과 통일 — 이 헤더는 TopBar 바로 아래라
+      // 위쪽 여백도 비교 대상(8px). 아래쪽은 로고와의 균형을 위해 기존 20 유지(2026-08-12).
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 20,
       gap: 16,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
@@ -171,7 +173,6 @@ export default function CompanyDetailScreen() {
   }
 
   const { company, events } = data
-  const subscribed = isSubscribed(company.id)
 
   return (
     <View style={styles.screen}>
@@ -226,24 +227,14 @@ export default function CompanyDetailScreen() {
             <Text style={styles.actionBtnOutlineText}>인스타그램</Text>
           </TouchableOpacity>
         )}
+        {/* 알림 설정 화면으로 보낸다. 예전에는 이 버튼이 기기에만 표시를 남기고 서버에는
+            아무것도 보내지 않아, 'ON'으로 바뀌는 걸 보고 구독했다고 믿지만 푸시는 영영
+            오지 않았다(2026-08-13 감사). 실제 구독은 alert_subscriptions 한 곳에서만 다룬다. */}
         <TouchableOpacity
-          style={[
-            styles.actionBtn,
-            subscribed ? styles.actionBtnActive : styles.actionBtnOutline,
-          ]}
-          onPress={() =>
-            subscribed ? unsubscribe(company.id) : subscribe(company.id)
-          }
+          style={[styles.actionBtn, styles.actionBtnOutline]}
+          onPress={() => router.push(`/alerts?company=${company.id}`)}
         >
-          <Text
-            style={
-              subscribed
-                ? styles.actionBtnActiveText
-                : styles.actionBtnOutlineText
-            }
-          >
-            {subscribed ? '● 알림 ON' : '○ 알림'}
-          </Text>
+          <Text style={styles.actionBtnOutlineText}>알림 받기</Text>
         </TouchableOpacity>
       </View>
 

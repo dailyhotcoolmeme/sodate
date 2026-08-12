@@ -24,9 +24,19 @@ serve(async (_req) => {
   // "그 순간"의 대상자 스냅샷이라, 그 뒤 사용자가 알림을 끄더라도 메시지엔 그대로 남아있다.
   // 큐가 밀리면(2026-08-03 실측: 최대 34시간·13건 적체) 이미 꺼둔 사용자에게도 발송되는
   // 사고로 이어진다 — enqueue 시점이 아니라 발송 시점 기준으로 다시 걸러야 한다.
-  const { data: allSubs } = await supabase
-    .from('alert_subscriptions')
-    .select('is_active, notify_new, notify_deadline, push_tokens(token)')
+  // ⚠️ 1000행 상한에 걸리면 그 밖의 토큰은 아래 subByToken 에 없어서 sub?.is_active 가
+  //    undefined 가 되고, 정상 구독자인데 필터에서 탈락해 푸시를 못 받는다. 나눠 받는다.
+  //    (2026-08-13 감사 — match-subscriptions 와 같은 계열의 문제)
+  const SUB_PAGE = 1000
+  const allSubs: any[] = []
+  for (let from = 0; ; from += SUB_PAGE) {
+    const { data } = await supabase
+      .from('alert_subscriptions')
+      .select('is_active, notify_new, notify_deadline, push_tokens(token)')
+      .range(from, from + SUB_PAGE - 1)
+    if (data) allSubs.push(...data)
+    if (!data || data.length < SUB_PAGE) break
+  }
   const subByToken = new Map<string, { is_active: boolean; notify_new: boolean; notify_deadline: boolean }>()
   for (const s of allSubs ?? []) {
     const token = (s as { push_tokens?: { token?: string } }).push_tokens?.token

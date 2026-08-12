@@ -33,16 +33,26 @@ serve(async (req) => {
   }
 
   // 이벤트 조건에 맞는 활성 구독자 조회
-  const query = supabase
-    .from('alert_subscriptions')
-    .select('*, push_tokens(token)')
-    .eq('is_active', true)
-
-  const { data: subscriptions } = await (
-    isDeadlineReminder
-      ? query.eq('notify_deadline', true)
-      : query.eq('notify_new', true)
-  )
+  //
+  // ⚠️ PostgREST 는 한 번에 1000행까지만 준다. 예전에는 그대로 한 번만 조회해서,
+  //    구독자가 1000명을 넘는 순간 그 뒤 사람들은 에러도 없이 매칭 대상에서 통째로
+  //    빠졌다 — "일부 사용자만 푸시가 안 온다"는 재현 안 되는 버그가 된다(2026-08-13 감사).
+  const PAGE = 1000
+  const subscriptions: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const query = supabase
+      .from('alert_subscriptions')
+      .select('*, push_tokens(token)')
+      .eq('is_active', true)
+      .range(from, from + PAGE - 1)
+    const { data } = await (
+      isDeadlineReminder
+        ? query.eq('notify_deadline', true)
+        : query.eq('notify_new', true)
+    )
+    if (data) subscriptions.push(...data)
+    if (!data || data.length < PAGE) break
+  }
 
   if (!subscriptions || subscriptions.length === 0) {
     return new Response(JSON.stringify({ queued: 0 }), { status: 200 })

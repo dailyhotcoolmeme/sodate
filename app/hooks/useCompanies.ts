@@ -25,19 +25,26 @@ export function useCompanies(): CompanyOption[] {
     // 2) DB 최신 조회 → 갱신 + 캐시 저장
     ;(async () => {
       // companies!inner + app_visible: 앱 숨김 업체는 필터 칩에도 안 나오게 제외
-      let data: any = null
+      // 1000행 상한에 걸리면 뒤쪽에만 있는 업체가 칩에서 사라진다(useRegions 와 같은 이유).
+      const PAGE = 1000
+      const data: any[] = []
       try {
-        const res = await supabase
-          .from('events')
-          .select('company_id, companies!inner(name)')
-          .eq('is_active', true)
-          .eq('companies.app_visible', true)
-          .gte('event_date', new Date().toISOString())
-        data = res.data
+        for (let from = 0; ; from += PAGE) {
+          const res = await supabase
+            .from('events')
+            .select('company_id, companies!inner(name)')
+            .eq('is_active', true)
+            .eq('companies.app_visible', true)
+            .gte('event_date', new Date().toISOString())
+            .range(from, from + PAGE - 1)
+          if (!alive) return
+          if (res.data) data.push(...res.data)
+          if (!res.data || res.data.length < PAGE) break
+        }
       } catch {
         return // 네트워크 실패 시 캐시된 목록 유지(unhandled rejection 방지)
       }
-      if (!alive || !data) return
+      if (!alive || !data.length) return
       const counts: Record<string, { name: string; n: number }> = {}
       for (const e of data as { company_id: string; companies: { name?: string } | null }[]) {
         if (!e.company_id) continue

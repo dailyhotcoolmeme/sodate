@@ -32,6 +32,7 @@ class EventModel(BaseModel):
     price_detail: Optional[dict] = None
     source_url: str
     is_closed: bool = False
+    attendee_image_url: Optional[str] = None    # 참석자 명단 이미지(R2 재호스팅된 공개 URL)
 
     @field_validator('thumbnail_urls')
     @classmethod

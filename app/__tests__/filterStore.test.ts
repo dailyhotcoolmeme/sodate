@@ -18,7 +18,8 @@ describe('filterStore', () => {
   it('기본값이 올바르게 설정된다', () => {
     const state = useFilterStore.getState()
     expect(state.regions).toEqual([])
-    expect(state.dateRange).toBe('all')
+    expect(state.dateStart).toBeNull()
+    expect(state.dateEnd).toBeNull()
     expect(state.maxPrice).toBeNull()
     expect(state.themes).toEqual([])
     expect(state.sortBy).toBe('date')
@@ -46,9 +47,10 @@ describe('filterStore', () => {
   })
 
   // --- setDateRange ---
-  it('setDateRange 호출 시 dateRange가 변경된다', () => {
-    useFilterStore.getState().setDateRange('week')
-    expect(useFilterStore.getState().dateRange).toBe('week')
+  it('setDateRange 호출 시 dateStart/dateEnd가 변경된다', () => {
+    useFilterStore.getState().setDateRange('2026-08-15', '2026-08-20')
+    expect(useFilterStore.getState().dateStart).toBe('2026-08-15')
+    expect(useFilterStore.getState().dateEnd).toBe('2026-08-20')
   })
 
   // --- setMaxPrice ---
@@ -93,14 +95,15 @@ describe('filterStore', () => {
   // --- resetFilters ---
   it('resetFilters 호출 시 모든 필터가 기본값으로 돌아간다', () => {
     useFilterStore.getState().toggleRegion('홍대')
-    useFilterStore.getState().setDateRange('week')
+    useFilterStore.getState().setDateRange('2026-08-15', '2026-08-20')
     useFilterStore.getState().setMaxPrice(50000)
     useFilterStore.getState().toggleTheme('와인')
     useFilterStore.getState().setSortBy('deadline')
     useFilterStore.getState().resetFilters()
     const state = useFilterStore.getState()
     expect(state.regions).toEqual([])
-    expect(state.dateRange).toBe('all')
+    expect(state.dateStart).toBeNull()
+    expect(state.dateEnd).toBeNull()
     expect(state.maxPrice).toBeNull()
     expect(state.themes).toEqual([])
     expect(state.sortBy).toBe('date')
@@ -138,7 +141,8 @@ describe('filterStore', () => {
     const snapshot: FilterSnapshot = {
       id: 'snap-1',
       regions: ['이태원'],
-      dateRange: 'month',
+      dateStart: '2026-08-01',
+      dateEnd: '2026-08-31',
       maxPrice: 30000,
       themes: ['파티'],
       savedAt: Date.now(),
@@ -146,7 +150,8 @@ describe('filterStore', () => {
     useFilterStore.getState().applyRecentFilter(snapshot)
     const state = useFilterStore.getState()
     expect(state.regions).toContain('이태원')
-    expect(state.dateRange).toBe('month')
+    expect(state.dateStart).toBe('2026-08-01')
+    expect(state.dateEnd).toBe('2026-08-31')
     expect(state.maxPrice).toBe(30000)
     expect(state.themes).toContain('파티')
   })

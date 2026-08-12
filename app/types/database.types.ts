@@ -114,6 +114,7 @@ export interface Database {
           is_active: boolean
           participant_stats: ParticipantStats | null
           image_type_id: string | null
+          attendee_image_url: string | null
           crawled_at: string
           created_at: string
           updated_at: string
@@ -148,6 +149,7 @@ export interface Database {
           is_active?: boolean
           participant_stats?: ParticipantStats | null
           image_type_id?: string | null
+          attendee_image_url?: string | null
           crawled_at?: string
           created_at?: string
           updated_at?: string
@@ -182,6 +184,7 @@ export interface Database {
           is_active?: boolean
           participant_stats?: ParticipantStats | null
           image_type_id?: string | null
+          attendee_image_url?: string | null
           crawled_at?: string
           created_at?: string
           updated_at?: string
@@ -311,6 +314,7 @@ export interface Database {
           content: string
           image_urls: string[] | null
           owner_token: string
+          tag_id: string | null
           upvotes: number
           downvotes: number
           comment_count: number
@@ -325,14 +329,27 @@ export interface Database {
         Insert: Record<string, unknown>
         Update: Record<string, unknown>
       }
+      board_tags: {
+        Row: {
+          id: string
+          label: string
+          sort_order: number
+          is_active: boolean
+          created_at: string
+        }
+        Insert: Record<string, unknown>
+        Update: Record<string, unknown>
+      }
       board_comments: {
         Row: {
           id: string
           post_id: string
           parent_id: string | null
           nickname: string
+          /** 비밀 댓글이면 빈 문자열. 실제 본문은 secret_content 에 있고 앱은 읽을 권한이 없다. */
           content: string
           owner_token: string
+          is_secret: boolean
           report_count: number
           is_active: boolean
           created_at: string

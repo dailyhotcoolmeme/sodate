@@ -14,6 +14,7 @@ const COMMENT_IDS = 'sodate_board_my_comments'
 const VOTES = 'sodate_board_my_votes'
 const TERMS_AGREED = 'sodate_board_terms_agreed'
 const BLOCKED = 'sodate_board_blocked_authors'
+const SEEN_COMMENT_IDS = 'sodate_board_seen_comment_ids'
 
 async function readList(key: string): Promise<string[]> {
   try {
@@ -53,6 +54,28 @@ export const removeMyPostId = (id: string) => removeFrom(POST_IDS, id)
 export const getMyCommentIds = () => readList(COMMENT_IDS)
 export const addMyCommentId = (id: string) => addTo(COMMENT_IDS, id)
 export const removeMyCommentId = (id: string) => removeFrom(COMMENT_IDS, id)
+
+/**
+ * 내 글에 달린 댓글 중 "읽음" 처리한 id 목록 — 목록 화면 상단 새 댓글 띠(2026-08-12)가
+ * 무엇을 새로 보여줄지 판단하는 기준. 서버에 읽음 상태를 두지 않고 기기에만 남긴다
+ * (푸시 없이 앱 안에서만 보이면 된다는 오너 지시).
+ */
+export const getSeenCommentIds = () => readList(SEEN_COMMENT_IDS)
+
+export async function markCommentsSeen(ids: string[]): Promise<void> {
+  if (!ids.length) return
+  try {
+    const list = await readList(SEEN_COMMENT_IDS)
+    const set = new Set(list)
+    let changed = false
+    for (const id of ids) {
+      if (!set.has(id)) { set.add(id); changed = true }
+    }
+    if (changed) await AsyncStorage.setItem(SEEN_COMMENT_IDS, JSON.stringify(Array.from(set)))
+  } catch {
+    // ignore
+  }
+}
 
 /** 글마다 내가 누른 추천·비추. 0은 누르지 않은 상태. */
 export async function getMyVotes(): Promise<Record<string, 1 | -1>> {

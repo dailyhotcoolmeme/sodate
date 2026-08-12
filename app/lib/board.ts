@@ -1,4 +1,4 @@
-import { supabase, type BoardPostRow, type BoardCommentRow, type BoardSettingsRow } from '@/lib/supabase'
+import { supabase, type BoardPostRow, type BoardCommentRow, type BoardSettingsRow, type BoardTagRow } from '@/lib/supabase'
 import { getOrCreateToken, setLastNickname } from '@/lib/reviewIdentity'
 import {
   addMyPostId, removeMyPostId, addMyCommentId, removeMyCommentId, setMyVote,
@@ -15,6 +15,7 @@ import {
 export type BoardPost = BoardPostRow
 export type BoardComment = BoardCommentRow
 export type BoardSettings = BoardSettingsRow
+export type BoardTag = BoardTagRow
 
 /** 서버가 내려주는 에러 문구를 그대로 보여준다(사용자가 이해할 수 있게 쓰여 있다). */
 async function extractError(error: any, data: any): Promise<string | null> {
@@ -58,6 +59,8 @@ export async function createPost(p: {
   title: string
   content: string
   imageUrls?: string[]
+  /** 말머리 id. 안 고르면 undefined — 서버는 "선택 안 함"으로 처리한다. */
+  tagId?: string | null
 }): Promise<{ id: string } | { error: string }> {
   const r = await call({ action: 'createPost', ...p })
   if ('error' in r) return r
@@ -70,7 +73,14 @@ export async function createPost(p: {
 /** 수정 화면 진입 시 글 불러오기. RLS(is_active만 허용)를 우회해 서버가 소유권만 확인하고
  *  내려준다 — 신고로 숨김된 내 글도 수정할 수 있어야 하기 때문(2026-08 애플 심사 대응). */
 export async function getPostForEdit(postId: string): Promise<
-  { post: { nickname: string; title: string; content: string; image_urls: string[] | null } } | { error: string }
+  {
+    post: {
+      nickname: string; title: string; content: string; image_urls: string[] | null
+      tag_id: string | null
+      /** 지금은 비활성화됐을 수 있는 말머리도 수정 화면엔 '현재 선택'으로 보여줘야 해서 같이 온다 */
+      tag_label: string | null
+    }
+  } | { error: string }
 > {
   const r = await call({ action: 'getPost', postId })
   return 'error' in r ? r : { post: r.post }
@@ -81,6 +91,8 @@ export async function updatePost(p: {
   title?: string
   content?: string
   imageUrls?: string[]
+  /** 'tagId' 키 자체를 안 보내면 말머리를 그대로 두고, null 을 보내면 없앤다. */
+  tagId?: string | null
 }): Promise<{ ok: true } | { error: string }> {
   const r = await call({ action: 'updatePost', ...p })
   return 'error' in r ? r : { ok: true }
@@ -99,12 +111,28 @@ export async function createComment(p: {
   parentId?: string | null
   nickname: string
   content: string
+  /** 비밀 댓글 — 글쓴이·본인·(대댓글이면) 원 댓글 작성자만 볼 수 있다 */
+  isSecret?: boolean
 }): Promise<{ id: string } | { error: string }> {
   const r = await call({ action: 'createComment', ...p })
   if ('error' in r) return r
   await setLastNickname(p.nickname)
   if (r.comment?.id) await addMyCommentId(r.comment.id)
   return { id: r.comment?.id }
+}
+
+/**
+ * 비밀 댓글 본문 가져오기. 앱은 secret_content 를 직접 읽을 권한이 없어서
+ * 서버가 기기 해시로 자격을 확인한 뒤 볼 수 있는 것만 내려준다.
+ * 글 단위(postId)나 댓글 id 목록(commentIds) 중 하나로 요청한다.
+ * 실패하면 빈 객체 — 본문이 안 보일 뿐 화면은 정상 동작해야 한다.
+ */
+export async function fetchSecretComments(
+  p: { postId: string } | { commentIds: string[] }
+): Promise<Record<string, string>> {
+  const r = await call({ action: 'secretComments', ...p })
+  if ('error' in r || !r?.contents) return {}
+  return r.contents as Record<string, string>
 }
 
 export async function updateComment(

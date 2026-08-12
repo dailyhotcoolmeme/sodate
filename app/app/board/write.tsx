@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react'
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native'
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView } from 'react-native'
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
@@ -10,6 +10,7 @@ import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { createPost, updatePost, getPostForEdit } from '@/lib/board'
+import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput } from '@/components/BoardEditor'
 import { MAX_IMAGES } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
@@ -21,6 +22,8 @@ const CONTENT_MAX = 10000
 
 /** 커서와 키보드(도구줄 포함) 사이에 둘 여유 */
 const CARET_GAP = 8
+
+type TagOption = { id: string; label: string }
 
 /**
  * 글쓰기 · 수정. `?id=` 가 있으면 수정 모드.
@@ -51,6 +54,20 @@ export default function BoardWriteScreen() {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [images, setImages] = useState<string[]>([])
+  // 말머리 — admin(board_tags)에서 등록한 것 중 사용 중인 것만 선택지로 보여준다
+  // (2026-08-12 오너 지시). 선택은 필수가 아니다.
+  const boardTags = useBoardTags()
+  const [tagId, setTagId] = useState<string | null>(null)
+  const [tagPickerOpen, setTagPickerOpen] = useState(false)
+  // 수정 화면 진입 시점의 말머리가 이미 비활성화됐을 수 있다 — 그래도 '지금 선택된 것'은
+  // 보여줘야 하니 라벨을 따로 들고 있는다(선택지 목록엔 없지만 항목 하나로 얹어준다).
+  const [editingTag, setEditingTag] = useState<{ id: string; label: string } | null>(null)
+  const tagOptions: TagOption[] = useMemo(() => {
+    const base = boardTags.map((t) => ({ id: t.id, label: t.label }))
+    if (!editingTag || base.some((t) => t.id === editingTag.id)) return base
+    return [...base, editingTag]
+  }, [boardTags, editingTag])
+  const selectedTagLabel = tagId ? (tagOptions.find((t) => t.id === tagId)?.label ?? '선택 안함') : '선택 안함'
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [toolbarH, setToolbarH] = useState(0)
@@ -81,6 +98,10 @@ export default function BoardWriteScreen() {
         setTitle(r.post.title ?? '')
         setContent(r.post.content ?? '')
         setImages(r.post.image_urls ?? [])
+        setTagId(r.post.tag_id ?? null)
+        if (r.post.tag_id && r.post.tag_label) {
+          setEditingTag({ id: r.post.tag_id, label: r.post.tag_label })
+        }
       } else {
         Alert.alert('알림', r.error)
       }
@@ -105,8 +126,8 @@ export default function BoardWriteScreen() {
     if (!canSave || saving) return
     setSaving(true)
     const r = isEdit
-      ? await updatePost({ postId: id!, title: title.trim(), content: content.trim(), imageUrls: images })
-      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: content.trim(), imageUrls: images })
+      ? await updatePost({ postId: id!, title: title.trim(), content: content.trim(), imageUrls: images, tagId })
+      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: content.trim(), imageUrls: images, tagId })
     setSaving(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
     if (!isEdit) await setTermsAgreed()
@@ -145,19 +166,42 @@ export default function BoardWriteScreen() {
         // 비켜준다. 이보다 크게 잡으면 필요 없이 화면이 밀려 올라간다.
         bottomOffset={toolbarH + CARET_GAP}
       >
-        <View>
-          <Text style={styles.label}>닉네임</Text>
-          <TextInput
-            style={styles.input}
-            value={nickname}
-            onChangeText={setNickname}
-            placeholder="2~20자"
-            placeholderTextColor={colors.textTertiary}
-            maxLength={20}
-            editable={!isEdit}
-          />
-          {isEdit && <Text style={styles.hint}>닉네임은 수정할 수 없습니다</Text>}
+        {/* 닉네임 · 말머리 — 한 줄에 둘 다 들어갈 폭이 남아서 같이 배치한다(2026-08-12 오너 지시).
+            말머리는 종류가 늘어도 줄을 안 차지하게 콤보박스(선택 시 목록 팝업)로 고른다. */}
+        <View style={styles.topRow}>
+          <View style={styles.nickCol}>
+            <Text style={styles.label}>닉네임</Text>
+            <TextInput
+              style={styles.input}
+              value={nickname}
+              onChangeText={setNickname}
+              placeholder="2~20자"
+              placeholderTextColor={colors.textTertiary}
+              maxLength={20}
+              editable={!isEdit}
+            />
+            {isEdit && <Text style={styles.hint}>닉네임은 수정할 수 없습니다</Text>}
+          </View>
+
+          {(boardTags.length > 0 || editingTag) && (
+            <View style={styles.tagCol}>
+              <Text style={styles.label}>말머리</Text>
+              <TouchableOpacity style={styles.select} onPress={() => setTagPickerOpen(true)} activeOpacity={0.75}>
+                <Text style={styles.selectText} numberOfLines={1}>{selectedTagLabel}</Text>
+                <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
+
+        <TagPickerModal
+          visible={tagPickerOpen}
+          tags={tagOptions}
+          selectedId={tagId}
+          colors={colors}
+          onSelect={(v) => { setTagId(v); setTagPickerOpen(false) }}
+          onClose={() => setTagPickerOpen(false)}
+        />
 
         <View>
           <Text style={styles.label}>제목</Text>
@@ -238,6 +282,64 @@ export default function BoardWriteScreen() {
   )
 }
 
+/** 말머리 콤보박스 팝업 — 목록이 짧아 시트가 아니라 화면 가운데 카드로 둔다(답글 팝업과 같은 방식). */
+function TagPickerModal({
+  visible, tags, selectedId, colors, onSelect, onClose,
+}: {
+  visible: boolean
+  tags: TagOption[]
+  selectedId: string | null
+  colors: AppColors
+  onSelect: (id: string | null) => void
+  onClose: () => void
+}) {
+  const styles = useMemo(() => makeTagPickerStyles(colors), [colors])
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={styles.card}>
+          <Text style={styles.title}>말머리 선택</Text>
+          <ScrollView style={styles.list} bounces={false}>
+            <TouchableOpacity style={styles.item} onPress={() => onSelect(null)} activeOpacity={0.7}>
+              <Text style={[styles.itemText, selectedId === null && styles.itemTextOn]}>선택 안함</Text>
+              {selectedId === null && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+            </TouchableOpacity>
+            {tags.map((t) => (
+              <TouchableOpacity key={t.id} style={styles.item} onPress={() => onSelect(t.id)} activeOpacity={0.7}>
+                <Text style={[styles.itemText, selectedId === t.id && styles.itemTextOn]} numberOfLines={1}>
+                  {t.label}
+                </Text>
+                {selectedId === t.id && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function makeTagPickerStyles(colors: AppColors) {
+  return StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+    card: {
+      width: '100%', maxWidth: 360, maxHeight: '70%', borderRadius: 16, backgroundColor: colors.surface,
+      borderWidth: 1, borderColor: colors.border, paddingTop: 16, paddingBottom: 6,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16,
+      elevation: 12,
+    },
+    title: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, paddingHorizontal: 16, paddingBottom: 8 },
+    list: { paddingHorizontal: 6 },
+    item: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 10, paddingVertical: 13, borderRadius: 10,
+    },
+    itemText: { fontSize: 15, color: colors.textPrimary },
+    itemTextOn: { color: colors.primary, fontWeight: '700' },
+  })
+}
+
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -261,6 +363,16 @@ function makeStyles(colors: AppColors) {
       borderWidth: 1, borderColor: colors.border,
     },
     counter: { fontSize: 11, color: colors.textTertiary, textAlign: 'right', marginTop: 5 },
+    topRow: { flexDirection: 'row', gap: 10 },
+    nickCol: { flex: 1 },
+    tagCol: { flex: 1 },
+    select: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      backgroundColor: colors.surfaceHigh, borderRadius: 12,
+      paddingHorizontal: 14, paddingVertical: 12,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    selectText: { flex: 1, fontSize: 15, color: colors.textPrimary },
     hint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 5 },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 

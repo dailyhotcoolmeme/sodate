@@ -1,8 +1,11 @@
 import React, { useMemo, useState, useCallback, useRef } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, RefreshControl, Animated, Alert,
+  View, Text, StyleSheet, TouchableOpacity, TextInput, RefreshControl, Animated, Alert,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native'
+// 검색칸이 목록 맨 아래에 있어서, 포커스하면 키보드 위로 따라 올라와야 한다
+// (RN 기본 ScrollView 는 안드로이드에서 이걸 안 해준다, 2026-08-12 오너 지적).
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -11,10 +14,13 @@ import SwipeSegment from '@/components/SwipeSegment'
 import AppSpinner from '@/components/AppSpinner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { useBoardList, useBoardSettings, PAGE_SIZE } from '@/hooks/useBoard'
+import {
+  useBoardList, useBoardSettings, useMyPostNewComments, PAGE_SIZE,
+  type MyPostNewCommentGroup, type BoardPostWithTag,
+} from '@/hooks/useBoard'
 import { wideContent } from '@/constants/layout'
-import { report, type BoardPost } from '@/lib/board'
-import { blockAuthor } from '@/lib/boardIdentity'
+import { report } from '@/lib/board'
+import { blockAuthor, markCommentsSeen } from '@/lib/boardIdentity'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 /**
@@ -34,11 +40,25 @@ export default function BoardListScreen() {
 
   const settings = useBoardSettings()
   const { posts, total, loading, pageCount, refetch } = useBoardList(page, search)
+  // 내 글에 달린 새 댓글 — 목록 위 띠(2026-08-12 오너 지시). 푸시 없이 앱에서만 보인다.
+  const { groups: newCommentGroups, refetch: refetchNewComments } = useMyPostNewComments()
+  const [newCommentExpanded, setNewCommentExpanded] = useState(false)
+  const newCommentTotal = newCommentGroups.reduce((sum, g) => sum + g.count, 0)
+  const refetchAll = useCallback(() => { refetch(); refetchNewComments() }, [refetch, refetchNewComments])
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
-  const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
+  const { refreshing, onRefresh } = useRefreshIndicator(loading, refetchAll)
 
   // 글을 쓰고 돌아오면 목록이 최신이어야 한다.
-  useFocusEffect(useCallback(() => { refetch() }, [refetch]))
+  useFocusEffect(useCallback(() => { refetchAll() }, [refetchAll]))
+
+  // 새 댓글 목록에서 글을 누르면: 읽음 처리하고 그 글의 댓글 위치로 이동한다.
+  // 새 댓글이 딱 1개면 펼칠 필요 없이 눌렀을 때 바로 그 글로 간다(오너 지시).
+  const openNewComment = (g: MyPostNewCommentGroup) => {
+    markCommentsSeen(g.commentIds)
+    setNewCommentExpanded(false)
+    router.push(`/board/${g.postId}?commentId=${g.commentIds[0]}`)
+    refetchNewComments()
+  }
 
   const hot = settings?.hot_upvotes ?? 10
   const cold = settings?.cold_downvotes ?? 10
@@ -47,7 +67,7 @@ export default function BoardListScreen() {
   // 글·댓글을 걸러 보이지 않게 하는 것과 별개로, 차단 자체가 운영자 신고로도 접수되어야
   // 한다 — 애플이 "blocking should also notify the developer"라고 명시(2026-08-04 반려
   // 재확인). 신고와 완전히 분리해뒀던 걸 여기서 합친다.
-  const handleBlock = (post: BoardPost) => {
+  const handleBlock = (post: BoardPostWithTag) => {
     Alert.alert(
       `'${post.nickname}' 차단`,
       '이 작성자의 글·댓글이 이 기기에서 더 이상 보이지 않습니다. 운영자에게도 신고로 접수됩니다.',
@@ -77,16 +97,9 @@ export default function BoardListScreen() {
     }
   }
 
-  return (
-    <SwipeSegment current="board">
-    <View style={styles.container}>
-      <TopBar
-        segment="board"
-        onLogoPress={() => { setPage(0); refetch() }}
-      />
-
-      {/* 검색줄은 항상 보인다. 톱바 돋보기로 여닫던 방식이었는데, 톱바를 메뉴 하나로
-          줄이면서 이리로 옮겼다(2026-07-31 오너 확정). */}
+  // 검색줄 — 목록 맨 아래(페이지 번호보다 아래)와, 검색 결과가 0건일 때 둘 다에서 쓴다.
+  const renderSearchRow = () => (
+    <>
       <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={17} color={colors.textTertiary} />
           <TextInput
@@ -107,11 +120,63 @@ export default function BoardListScreen() {
             </TouchableOpacity>
           )}
       </View>
-
       {!!search && (
         <Text style={styles.searchInfo}>
           &lsquo;{search}&rsquo; 검색 결과 {total}건
         </Text>
+      )}
+    </>
+  )
+
+  return (
+    <SwipeSegment current="board">
+    <View style={styles.container}>
+      <TopBar
+        segment="board"
+        onLogoPress={() => { setPage(0); refetchAll() }}
+      />
+
+      {/* 내 글에 달린 새 댓글 띠 — 검색줄이 있던 자리를 대신 차지한다. 검색줄은 그
+          아래로 내렸다(2026-08-12 오너 지시). 댓글이 없으면 이 줄 자체가 없다. */}
+      {newCommentTotal > 0 && (
+        newCommentTotal === 1 ? (
+          <TouchableOpacity
+            style={styles.newCommentRow}
+            onPress={() => openNewComment(newCommentGroups[0])}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chatbubble-ellipses" size={15} color={colors.primary} />
+            <Text style={styles.newCommentText}>새로운 댓글 +1개</Text>
+            <Ionicons name="chevron-forward" size={15} color={colors.textTertiary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.newCommentWrap}>
+            <TouchableOpacity
+              style={styles.newCommentHeader}
+              onPress={() => setNewCommentExpanded((v) => !v)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chatbubble-ellipses" size={15} color={colors.primary} />
+              <Text style={styles.newCommentText}>새로운 댓글 +{newCommentTotal}개</Text>
+              <Ionicons name={newCommentExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={colors.textTertiary} />
+            </TouchableOpacity>
+            {newCommentExpanded && (
+              <View style={styles.newCommentList}>
+                {newCommentGroups.map((g) => (
+                  <TouchableOpacity
+                    key={g.postId}
+                    style={styles.newCommentItem}
+                    onPress={() => openNewComment(g)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.newCommentItemTitle} numberOfLines={1}>{g.postTitle}</Text>
+                    <Text style={styles.newCommentItemCount}>+{g.count}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )
       )}
 
       {loading && posts.length === 0 ? (
@@ -123,23 +188,40 @@ export default function BoardListScreen() {
             {search ? '검색 결과가 없어요' : '아직 글이 없어요'}
           </Text>
           {!search && <Text style={styles.emptySub}>첫 글을 남겨보세요!</Text>}
+          {/* 검색 결과가 없을 때도 검색어를 지우거나 다시 검색할 수 있어야 한다. */}
+          {search && <View style={styles.emptySearchRow}>{renderSearchRow()}</View>}
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 90 }]}
+        <KeyboardAwareScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[wideContent, { flexGrow: 1, paddingBottom: insets.bottom + 90 }]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           onScroll={onListScroll}
           scrollEventThrottle={16}
         >
-          {posts.map((p) => (
-            <PostRow key={p.id} post={p} hot={hot} cold={cold} styles={styles} colors={colors}
-              onPress={() => router.push(`/board/${p.id}`)}
-              onLongPress={() => handleBlock(p)} />
-          ))}
+          <View>
+            {posts.map((p) => (
+              <PostRow key={p.id} post={p} hot={hot} cold={cold} styles={styles} colors={colors}
+                onPress={() => router.push(`/board/${p.id}`)}
+                onLongPress={() => handleBlock(p)} />
+            ))}
 
-          <Pager page={page} pageCount={pageCount} onChange={setPage} styles={styles} colors={colors} />
-        </ScrollView>
+            <Pager page={page} pageCount={pageCount} onChange={setPage} styles={styles} colors={colors} />
+          </View>
+
+          {/* 피드가 한 페이지(20개)를 안 채워 페이지 번호가 없을 때는 이 spacer 가
+              남는 세로 공간을 다 먹어서, 검색줄이 화면 맨 아래(글쓰기 버튼과 같은
+              줄)까지 밀려 내려간다. 피드가 늘어나 스크롤이 생기면 spacer 가 압축돼
+              검색줄은 페이지 번호 바로 아래로 자연스럽게 붙는다(2026-08-12 오너 지시). */}
+          <View style={{ flex: 1 }} />
+
+          {/* 검색줄 — 목록 맨 아래, 페이지 번호보다도 아래에 둔다(2026-08-12 오너 지시.
+              톱바 바로 아래였던 걸 여기로 내렸다). */}
+          {renderSearchRow()}
+        </KeyboardAwareScrollView>
       )}
 
       {/* 글쓰기 — 목록 위에 떠 있다. 스크롤하면 아이콘만 남는다. */}
@@ -168,7 +250,7 @@ export default function BoardListScreen() {
 function PostRow({
   post, hot, cold, styles, colors, onPress, onLongPress,
 }: {
-  post: BoardPost
+  post: BoardPostWithTag
   hot: number
   cold: number
   styles: ReturnType<typeof makeStyles>
@@ -179,6 +261,7 @@ function PostRow({
   const isHot = post.upvotes >= hot
   const isCold = post.downvotes >= cold
   const hasImage = !!post.image_urls?.length
+  const tagLabel = post.board_tags?.label
 
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
@@ -187,6 +270,8 @@ function PostRow({
           style={[styles.rowTitle, isHot && styles.rowTitleHot, isCold && styles.rowTitleCold]}
           numberOfLines={1}
         >
+          {/* 말머리 — admin(board_tags)에서 등록한 문자열을 그대로 붙인다(2026-08-12). */}
+          {!!tagLabel && <Text style={styles.rowTag}>{tagLabel} </Text>}
           {post.title}
         </Text>
         {hasImage && (
@@ -279,6 +364,7 @@ function makeStyles(colors: AppColors) {
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 60 },
     emptyText: { fontSize: 15, color: colors.textSecondary, marginTop: 4 },
     emptySub: { fontSize: 13, color: colors.textTertiary },
+    emptySearchRow: { alignSelf: 'stretch', marginTop: 12 },
 
     searchRow: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -289,6 +375,29 @@ function makeStyles(colors: AppColors) {
     searchClear: { fontSize: 12, color: colors.textSecondary },
     searchInfo: { fontSize: 12, color: colors.textSecondary, paddingHorizontal: 16, paddingBottom: 6 },
 
+    // 새 댓글이 1개뿐이면 이 자체가 눌리는 배너(펼침 없음).
+    newCommentRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 7,
+      marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 9,
+      backgroundColor: colors.primary + '14', borderRadius: 10,
+    },
+    // 2개 이상이면 펼침 목록을 담는 바깥 껍데기 — 마진·둥근 모서리는 여기서만 준다.
+    newCommentWrap: { marginHorizontal: 16, marginBottom: 8, borderRadius: 10, overflow: 'hidden' },
+    newCommentHeader: {
+      flexDirection: 'row', alignItems: 'center', gap: 7,
+      paddingHorizontal: 12, paddingVertical: 9,
+      backgroundColor: colors.primary + '14',
+    },
+    newCommentText: { flex: 1, fontSize: 13.5, fontWeight: '700', color: colors.primary },
+    newCommentList: { backgroundColor: colors.primary + '0a' },
+    newCommentItem: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      paddingHorizontal: 14, paddingVertical: 9,
+      borderTopWidth: 1, borderTopColor: colors.divider,
+    },
+    newCommentItemTitle: { flex: 1, fontSize: 13, color: colors.textPrimary },
+    newCommentItemCount: { fontSize: 12, fontWeight: '700', color: colors.primary },
+
     row: {
       paddingHorizontal: 16, paddingVertical: 11,
       borderBottomWidth: 1, borderBottomColor: colors.divider, gap: 3,
@@ -297,6 +406,7 @@ function makeStyles(colors: AppColors) {
     // lineHeight 명시 필수 — 없으면 이모지가 일반 글자보다 위아래로 커서 iOS에서 잘려 보인다
     // (안드로이드에서 넣은 이모지가 아이폰에서 잘리던 문제, 2026-08-08 오너 지적).
     rowTitle: { flexShrink: 1, fontSize: 14.5, lineHeight: 20, color: colors.textPrimary },
+    rowTag: { color: colors.primary, fontWeight: '800' },
     // 추천이 많으면 굵게, 비추가 많으면 흐리게(오너 확정). 흐려질 뿐 지워지지 않는다.
     rowTitleHot: { fontWeight: '800' },
     rowTitleCold: { color: colors.textTertiary },

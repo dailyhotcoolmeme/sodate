@@ -54,6 +54,9 @@ jobs:
           cd crawler
           pip install -r requirements.txt
           playwright install chromium --with-deps
+          # 파이낸스라운지(노션 페이지)는 번들 Chromium을 "호환 안 되는 브라우저"로 막아
+          # 실제 Chrome(channel='chrome')이 필요하다 — scrapers/finance_lounge.py 참고.
+          playwright install chrome --with-deps
 
       - name: Run crawlers
         env:

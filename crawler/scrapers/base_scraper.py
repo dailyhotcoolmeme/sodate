@@ -181,6 +181,12 @@ class BaseScraper(ABC):
             if not data.get('thumbnail_urls'):
                 data.pop('thumbnail_urls', None)
 
+            # 참석자 명단 이미지도 같은 이유로 None이면 upsert에서 제외(기존 값 보존).
+            # R2 재업로드가 일시적으로 실패해도 이미 있던 이미지를 지우지 않는다 —
+            # 실제 삭제는 아래 '지난 일정 정리'에서 R2 원본과 함께 명시적으로만 한다.
+            if data.get('attendee_image_url') is None:
+                data.pop('attendee_image_url', None)
+
             # 테마는 구분하지 않는다 — 전부 소개팅. 스크래퍼가 뭘 넣든 일괄 고정.
             data['theme'] = ['소개팅']
 
@@ -257,6 +263,20 @@ class BaseScraper(ABC):
         # 하루 여유를 둬서 당일 밤 일정이 시간대 오차로 지워지는 걸 막는다. verified는 보존.
         try:
             cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+            # 행을 지우기 전에 attendee_image_url을 먼저 확보해야 한다 — 지운 뒤엔 값을
+            # 조회할 방법이 없어 R2에 원본 이미지만 영원히 남는다(2026-08-11).
+            stale_rows = (
+                self.supabase.table('events')
+                .select('id,attendee_image_url')
+                .eq('company_id', company_id)
+                .eq('verified', False)
+                .lt('event_date', cutoff)
+                .execute()
+            ).data or []
+            for row in stale_rows:
+                if row.get('attendee_image_url'):
+                    from utils.r2_client import delete_by_public_url
+                    delete_by_public_url(row['attendee_image_url'])
             past = (
                 self.supabase.table('events')
                 .delete()

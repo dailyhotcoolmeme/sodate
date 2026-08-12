@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
-  Platform,
   TextInput,
 } from 'react-native'
 import { useColors } from '@/hooks/useColors'
@@ -19,19 +18,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { DAY_OPTIONS, TIME_SLOTS } from '@/constants/filters'
 import { useFilterStore, type FilterSnapshot } from '@/stores/filterStore'
+import { useCollapseStore } from '@/stores/collapseStore'
+import CollapsibleSection from '@/components/CollapsibleSection'
+import DateRangeCalendar from '@/components/DateRangeCalendar'
 
 interface Props {
   visible: boolean
   onClose: () => void
 }
-
-const DATE_RANGES: { id: 'all' | 'today' | 'week' | 'month'; label: string }[] =
-  [
-    { id: 'all', label: '전체' },
-    { id: 'today', label: '오늘' },
-    { id: 'week', label: '1주일' },
-    { id: 'month', label: '1달' },
-  ]
 
 const PRICE_OPTIONS: { value: number | null; label: string }[] = [
   { value: null, label: '제한 없음' },
@@ -44,7 +38,8 @@ const PRICE_OPTIONS: { value: number | null; label: string }[] = [
 export default function FilterSheet({ visible, onClose }: Props) {
   const {
     regions,
-    dateRange,
+    dateStart,
+    dateEnd,
     maxPrice,
     hashtags,
     ageGroups,
@@ -72,6 +67,18 @@ export default function FilterSheet({ visible, onClose }: Props) {
   const hashtagOptions = useHashtags()
   const [hashtagQuery, setHashtagQuery] = useState('')
 
+  // 섹션별 접기·펼치기 — 기기에 저장돼 다음에 열어도 마지막 상태 유지(오너 지시 2026-08-12).
+  const sectionExpanded = useCollapseStore((s) => s.expanded)
+  const toggleSection = useCollapseStore((s) => s.toggle)
+  const setManyExpanded = useCollapseStore((s) => s.setMany)
+  const sectionKeys = useMemo(() => {
+    const keys = ['region', 'age', 'hashtag', 'day', 'time', 'date', 'price']
+    if (companyOptions.length > 0) keys.push('company')
+    return keys.map((k) => `filter:${k}`)
+  }, [companyOptions.length])
+  const allExpanded = sectionKeys.length > 0 && sectionKeys.every((k) => sectionExpanded[k])
+  const toggleAllSections = () => setManyExpanded(sectionKeys, !allExpanded)
+
   // 검색어로 후보 필터링 + 선택된 태그는 항상 위에 노출
   const filteredHashtags = useMemo(() => {
     const q = hashtagQuery.trim().replace(/^#/, '').toLowerCase()
@@ -95,6 +102,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
     for (const t of filteredHashtags) (buckets[tagGroupKey(t)] ??= []).push(t)
     return TAG_GROUP_ORDER.filter((k) => buckets[k]?.length).map((k) => ({ key: k, items: buckets[k] }))
   }, [filteredHashtags])
+
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
@@ -114,6 +122,12 @@ export default function FilterSheet({ visible, onClose }: Props) {
       fontWeight: '700',
       color: colors.textPrimary,
     },
+    toggleAllRow: {
+      alignItems: 'flex-end',
+      paddingTop: 12,
+      paddingBottom: 4,
+    },
+    toggleAllText: { fontSize: 13, fontWeight: '700', color: colors.primary },
     applyBar: {
       position: 'absolute',
       left: 0,
@@ -158,7 +172,6 @@ export default function FilterSheet({ visible, onClose }: Props) {
       fontWeight: '800',
     },
     section: {
-      paddingHorizontal: 20,
       paddingVertical: 16,
       borderBottomWidth: 1,
       borderBottomColor: colors.divider,
@@ -259,8 +272,15 @@ export default function FilterSheet({ visible, onClose }: Props) {
           <Text style={styles.headerTitle}>필터</Text>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 96 }}>
-          {/* 최근 필터 */}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 96 }}>
+          {/* 전체 접기/펼치기 — 섹션이 많아 리스트가 길어지는 걸 완화(오너 지시 2026-08-12) */}
+          <View style={styles.toggleAllRow}>
+            <TouchableOpacity onPress={toggleAllSections} hitSlop={8}>
+              <Text style={styles.toggleAllText}>{allExpanded ? '전체 접기' : '전체 펼치기'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 최근 필터 — 가로 스크롤 한 줄이라 접기 대상에서 제외 */}
           {recentFilters.length > 0 && (
             <Section title="최근 필터" styles={styles}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -277,8 +297,8 @@ export default function FilterSheet({ visible, onClose }: Props) {
                       <Text style={styles.recentChipText}>
                         {f.regions && f.regions.length > 0 ? f.regions.join(', ') : '전체'}
                         {f.themes.length > 0 ? ` · ${f.themes[0]}` : ''}
-                        {f.dateRange !== 'all'
-                          ? ` · ${f.dateRange === 'today' ? '오늘' : f.dateRange === 'week' ? '1주일' : '1달'}`
+                        {f.dateStart && f.dateEnd
+                          ? ` · ${f.dateStart.slice(5).replace('-', '.')}~${f.dateEnd.slice(5).replace('-', '.')}`
                           : ''}
                       </Text>
                     </TouchableOpacity>
@@ -289,7 +309,11 @@ export default function FilterSheet({ visible, onClose }: Props) {
           )}
 
           {/* 지역 */}
-          <Section title="지역" styles={styles}>
+          <CollapsibleSection
+            title="지역"
+            expanded={!!sectionExpanded['filter:region']}
+            onToggle={() => toggleSection('filter:region')}
+          >
             {groupedRegions.map((g, gi) => {
               const showParent = !!g.parent && (gi === 0 || groupedRegions[gi - 1].parent !== g.parent)
               const groupIds = g.items.map((r) => r.id)
@@ -318,28 +342,33 @@ export default function FilterSheet({ visible, onClose }: Props) {
                 </View>
               )
             })}
-          </Section>
+          </CollapsibleSection>
 
           {/* 나이대 */}
-          <Section styles={styles}>
-            <View style={styles.groupRow}>
-              <Text style={styles.groupRowLabelTop}>나이대</Text>
-              <View style={styles.groupRowChips}>
-                {AGE_GROUP_FILTERS.map((a) => (
-                  <Chip
-                    key={a.id}
-                    label={a.label}
-                    selected={ageGroups.includes(a.id)}
-                    onPress={() => toggleAgeGroup(a.id)}
-                    styles={styles}
-                  />
-                ))}
-              </View>
+          <CollapsibleSection
+            title="나이대"
+            expanded={!!sectionExpanded['filter:age']}
+            onToggle={() => toggleSection('filter:age')}
+          >
+            <View style={styles.chipGrid}>
+              {AGE_GROUP_FILTERS.map((a) => (
+                <Chip
+                  key={a.id}
+                  label={a.label}
+                  selected={ageGroups.includes(a.id)}
+                  onPress={() => toggleAgeGroup(a.id)}
+                  styles={styles}
+                />
+              ))}
             </View>
-          </Section>
+          </CollapsibleSection>
 
           {/* 해시태그 */}
-          <Section title="해시태그" styles={styles}>
+          <CollapsibleSection
+            title="해시태그"
+            expanded={!!sectionExpanded['filter:hashtag']}
+            onToggle={() => toggleSection('filter:hashtag')}
+          >
             <TextInput
               style={styles.searchInput}
               placeholder="해시태그 검색 (예: 와인, 30대)"
@@ -365,99 +394,98 @@ export default function FilterSheet({ visible, onClose }: Props) {
                 </View>
               </View>
             ))}
-          </Section>
+          </CollapsibleSection>
 
           {/* 요일 */}
-          <Section styles={styles}>
-            <View style={styles.groupRow}>
-              <Text style={styles.groupRowLabelTop}>요일</Text>
-              <View style={styles.groupRowChips}>
-                {DAY_OPTIONS.map((d) => (
-                  <Chip
-                    key={d.id}
-                    label={d.label}
-                    selected={days.includes(d.id)}
-                    onPress={() => toggleDay(d.id)}
-                    styles={styles}
-                  />
-                ))}
-              </View>
+          <CollapsibleSection
+            title="요일"
+            expanded={!!sectionExpanded['filter:day']}
+            onToggle={() => toggleSection('filter:day')}
+          >
+            <View style={styles.chipGrid}>
+              {DAY_OPTIONS.map((d) => (
+                <Chip
+                  key={d.id}
+                  label={d.label}
+                  selected={days.includes(d.id)}
+                  onPress={() => toggleDay(d.id)}
+                  styles={styles}
+                />
+              ))}
             </View>
-          </Section>
+          </CollapsibleSection>
 
           {/* 시간대 */}
-          <Section styles={styles}>
-            <View style={styles.groupRow}>
-              <Text style={styles.groupRowLabelTop}>시간</Text>
-              <View style={styles.groupRowChips}>
-                {TIME_SLOTS.map((t) => (
-                  <Chip
-                    key={t.id}
-                    label={t.label}
-                    selected={timeSlots.includes(t.id)}
-                    onPress={() => toggleTimeSlot(t.id)}
-                    styles={styles}
-                  />
-                ))}
-              </View>
+          <CollapsibleSection
+            title="시간"
+            expanded={!!sectionExpanded['filter:time']}
+            onToggle={() => toggleSection('filter:time')}
+          >
+            <View style={styles.chipGrid}>
+              {TIME_SLOTS.map((t) => (
+                <Chip
+                  key={t.id}
+                  label={t.label}
+                  selected={timeSlots.includes(t.id)}
+                  onPress={() => toggleTimeSlot(t.id)}
+                  styles={styles}
+                />
+              ))}
             </View>
-          </Section>
+          </CollapsibleSection>
 
-          {/* 날짜 */}
-          <Section styles={styles}>
-            <View style={styles.groupRow}>
-              <Text style={styles.groupRowLabelTop}>날짜</Text>
-              <View style={styles.groupRowChips}>
-                {DATE_RANGES.map((d) => (
-                  <Chip
-                    key={d.id}
-                    label={d.label}
-                    selected={dateRange === d.id}
-                    onPress={() => setDateRange(d.id)}
-                    styles={styles}
-                  />
-                ))}
-              </View>
-            </View>
-          </Section>
+          {/* 기간 */}
+          <CollapsibleSection
+            title="기간"
+            expanded={!!sectionExpanded['filter:date']}
+            onToggle={() => toggleSection('filter:date')}
+          >
+            <DateRangeCalendar
+              startDate={dateStart}
+              endDate={dateEnd}
+              onChange={(s, e) => setDateRange(s, e)}
+            />
+          </CollapsibleSection>
 
           {/* 가격 */}
-          <Section styles={styles}>
-            <View style={styles.groupRow}>
-              <Text style={styles.groupRowLabelTop}>가격</Text>
-              <View style={styles.groupRowChips}>
-                {PRICE_OPTIONS.map((p) => (
+          <CollapsibleSection
+            title="가격"
+            expanded={!!sectionExpanded['filter:price']}
+            onToggle={() => toggleSection('filter:price')}
+          >
+            <View style={styles.chipGrid}>
+              {PRICE_OPTIONS.map((p) => (
+                <Chip
+                  key={String(p.value)}
+                  label={p.label}
+                  selected={maxPrice === p.value}
+                  onPress={() => setMaxPrice(p.value)}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          </CollapsibleSection>
+
+          {/* 업체 */}
+          {companyOptions.length > 0 && (
+            <CollapsibleSection
+              title="업체"
+              expanded={!!sectionExpanded['filter:company']}
+              onToggle={() => toggleSection('filter:company')}
+              last
+            >
+              <View style={styles.chipGrid}>
+                {companyOptions.map((c) => (
                   <Chip
-                    key={String(p.value)}
-                    label={p.label}
-                    selected={maxPrice === p.value}
-                    onPress={() => setMaxPrice(p.value)}
+                    key={c.id}
+                    label={c.name}
+                    selected={companies.includes(c.id)}
+                    onPress={() => toggleCompany(c.id)}
                     styles={styles}
                   />
                 ))}
               </View>
-            </View>
-          </Section>
-
-          {/* 업체 — 마지막 묶음이라 아래 구분선을 넣지 않는다. 바로 밑 초기화·적용하기
-              바에 이미 윗선이 있어 선이 두 줄로 겹쳐 보였다(2026-07-31 오너 지적). */}
-          {companyOptions.length > 0 && (
-            <Section styles={styles} last>
-              <View style={styles.groupRow}>
-                <Text style={styles.groupRowLabelTop}>업체</Text>
-                <View style={styles.groupRowChips}>
-                  {companyOptions.map((c) => (
-                    <Chip
-                      key={c.id}
-                      label={c.name}
-                      selected={companies.includes(c.id)}
-                      onPress={() => toggleCompany(c.id)}
-                      styles={styles}
-                    />
-                  ))}
-                </View>
-              </View>
-            </Section>
+            </CollapsibleSection>
           )}
 
           <View style={{ height: insets.bottom + 24 }} />

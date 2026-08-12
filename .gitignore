@@ -26,3 +26,7 @@ Thumbs.db
 
 # 애플 API 키·안드로이드 업로드 키스토어 (절대 커밋 금지)
 app/certs/
+
+# 인스타그램 로그인 세션(쿠키) — 비밀번호와 동급, 절대 커밋 금지
+crawler/.instagram_session.json
+crawler/.ig_chrome_profile/

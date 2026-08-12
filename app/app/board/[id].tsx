@@ -23,7 +23,7 @@ import {
   vote, deletePost, createComment, updateComment, deleteComment, markViewed, report,
 } from '@/lib/board'
 import { getLastNickname } from '@/lib/reviewIdentity'
-import { blockAuthor } from '@/lib/boardIdentity'
+import { blockAuthor, markCommentsSeen, getMyPostIds } from '@/lib/boardIdentity'
 import { wideContent } from '@/constants/layout'
 import type { BoardComment } from '@/lib/board'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
@@ -33,7 +33,7 @@ const COMPOSER_H = 38
 
 /** 글 상세 — 추천·비추, 댓글(대댓글 한 단계), 내 글이면 수정·삭제. */
 export default function BoardPostScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id, commentId } = useLocalSearchParams<{ id: string; commentId?: string }>()
   const router = useRouter()
   const colors = useColors()
   const insets = useSafeAreaInsets()
@@ -47,6 +47,8 @@ export default function BoardPostScreen() {
   const [voting, setVoting] = useState(false)
   const [nickname, setNickname] = useState('')
   const [draft, setDraft] = useState('')
+  // 비밀 댓글 — 동행 구할 때 연락처를 주고받아야 해서 넣었다(2026-08-12 오너 지시).
+  const [secret, setSecret] = useState(false)
   const [editing, setEditing] = useState<BoardComment | null>(null)
   const [sending, setSending] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'image'; id: string } | null>(null)
@@ -68,6 +70,7 @@ export default function BoardPostScreen() {
   const [replyModal, setReplyModal] = useState<BoardComment | null>(null)
   const [replyDraft, setReplyDraft] = useState('')
   const [replyNickname, setReplyNickname] = useState('')
+  const [replySecret, setReplySecret] = useState(false)
   const [replySending, setReplySending] = useState(false)
   // 목록(ScrollView) 실제 내용 길이·창 높이. 얼마나 밀 수 있는지, 밀 필요가
   // 있기는 한지 계산하는 데 쓴다. 억지로 여백을 만들어 늘리지 않는다 — 댓글이
@@ -103,15 +106,43 @@ export default function BoardPostScreen() {
     return () => willShow.remove()
   }, [scrollForKeyboard])
 
+  // 목록 화면 새 댓글 띠에서 넘어올 때 — 그 댓글 위치로 바로 이동한다(2026-08-12).
+  useEffect(() => { if (commentId) setScrollToId(commentId) }, [commentId])
+
+  /**
+   * 내 글을 열어서 댓글을 봤으면 그것으로 '읽음'이다.
+   *
+   * 예전에는 목록 상단 배너를 눌렀을 때만 읽음 처리해서, 목록에서 글 제목을 눌러
+   * 들어가 다 읽고 나와도 배너가 "새로운 댓글 +1개" 그대로 남아 있었다. 실제로는
+   * 대부분 제목을 눌러 들어가므로 배너가 영영 안 사라졌다(2026-08-13 감사).
+   */
+  useEffect(() => {
+    if (!id || !comments.length) return
+    let alive = true
+    ;(async () => {
+      const myPosts = await getMyPostIds()
+      if (!alive || !myPosts.includes(id)) return   // 내 글일 때만 셈에 들어간다
+      await markCommentsSeen(comments.map((c) => c.id))
+    })()
+    return () => { alive = false }
+  }, [id, comments])
+
   // 방금 쓰거나 수정한 댓글이 화면 밖에 있으면 그 자리로 옮겨간다(등록 후).
   // 목록이 새로 그려진 뒤에 옮겨간다. 위치를 아직 모르면 다음 그리기까지 기다린다.
+  // 다른 화면에서 막 넘어온 경우(commentId 딥링크)는 댓글 목록이 이제 막 그려지는
+  // 중이라 onLayout 이 늦게 잡힐 수 있어 한 번 더 재시도한다.
   useEffect(() => {
     if (!scrollToId) return
-    const y = commentY.current[scrollToId]
-    if (y == null) return
-    const maxScroll = Math.max(0, contentHeightRef.current - viewportHeightRef.current)
-    scrollRef.current?.scrollTo({ y: Math.min(Math.max(0, y - 80), maxScroll), animated: true })
-    setScrollToId(null)
+    const tryScroll = () => {
+      const y = commentY.current[scrollToId]
+      if (y == null) return false
+      const maxScroll = Math.max(0, contentHeightRef.current - viewportHeightRef.current)
+      scrollRef.current?.scrollTo({ y: Math.min(Math.max(0, y - 80), maxScroll), animated: true })
+      return true
+    }
+    if (tryScroll()) { setScrollToId(null); return }
+    const t = setTimeout(() => { if (tryScroll()) setScrollToId(null) }, 250)
+    return () => clearTimeout(t)
   }, [scrollToId, comments])
 
   // 닉네임은 가장 최근에 쓴 값을 물고 간다(후기 작성과 동일). 여기서 바꾸면
@@ -186,11 +217,12 @@ export default function BoardPostScreen() {
           parentId: null,
           nickname: nickname.trim(),
           content: text,
+          isSecret: secret,
         })
     setSending(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
     const wasEditing = !!editing
-    setDraft(''); setEditing(null)
+    setDraft(''); setEditing(null); setSecret(false)
     setComposing(false)   // 닉네임 칸은 등록 후 다시 접어 둔다(오너 지시)
     setCommentInputH(COMPOSER_H)
     if (wasEditing) {
@@ -211,6 +243,29 @@ export default function BoardPostScreen() {
     setReplyModal(c)
     setReplyDraft('')
     setReplyNickname(nickname)   // 마지막에 쓴 닉네임을 기본값으로
+    // 비밀 댓글에 답할 때는 답글도 비밀이 기본이다 — 연락처를 주고받는 흐름에서
+    // 답글만 공개로 나가면 그게 곧 사고다.
+    setReplySecret(c.is_secret)
+  }
+
+  /**
+   * 답글의 비밀 체크를 끌 때 — 비밀 댓글에 다는 답글이면 확인을 한 번 받는다.
+   * 여기서 실수로 풀면 주고받으려던 연락처가 그대로 공개된다(2026-08-12 오너 지시).
+   * 켜는 방향은 위험하지 않으니 그냥 켠다.
+   */
+  const toggleReplySecret = () => {
+    if (replySecret && replyModal?.is_secret) {
+      Alert.alert(
+        '모두에게 공개됩니다',
+        '이 답글은 비밀 댓글에 다는 답글입니다. 비밀을 끄면 연락처를 포함한 내용이 모든 사람에게 보입니다.',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '공개로 쓰기', style: 'destructive', onPress: () => setReplySecret(false) },
+        ]
+      )
+      return
+    }
+    setReplySecret((v) => !v)
   }
 
   const submitReply = async () => {
@@ -224,6 +279,7 @@ export default function BoardPostScreen() {
       parentId: replyModal.id,
       nickname: replyNickname.trim(),
       content: text,
+      isSecret: replySecret,
     })
     setReplySending(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
@@ -233,7 +289,15 @@ export default function BoardPostScreen() {
   }
 
   const removeComment = (c: BoardComment) => {
-    Alert.alert('댓글 삭제', '이 댓글을 삭제할까요?', [
+    // 원 댓글을 지우면 DB cascade 로 남이 단 답글까지 함께 사라진다. 그 사실을 안 알려주면
+    // 비밀 답글로 주고받던 연락처까지 통째로 날아간다(2026-08-13 감사).
+    const replyCount = comments.filter((x) => x.parent_id === c.id).length
+    Alert.alert(
+      '댓글 삭제',
+      replyCount > 0
+        ? `이 댓글에 달린 답글 ${replyCount}개도 함께 삭제됩니다. 삭제할까요?`
+        : '이 댓글을 삭제할까요?',
+      [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제', style: 'destructive',
@@ -243,7 +307,8 @@ export default function BoardPostScreen() {
           refetch()
         },
       },
-    ])
+      ]
+    )
   }
 
   if (loading && !post) {
@@ -281,7 +346,12 @@ export default function BoardPostScreen() {
   }
 
   // 원댓글 아래에 답글을 붙여 보여준다(대댓글은 한 단계까지).
-  const roots = comments.filter((c) => !c.parent_id)
+  //
+  // 원 댓글이 신고로 숨겨지거나 내가 그 작성자를 차단하면 원 댓글만 목록에서 빠지는데,
+  // 그 답글들은 살아 있어서 어디에도 안 붙어 통째로 사라졌다. "댓글 3"인데 1개만 보이는
+  // 상태가 됐다(2026-08-13 감사). 부모가 없는 답글은 최상위로 올려 보여준다.
+  const commentIdSet = new Set(comments.map((c) => c.id))
+  const roots = comments.filter((c) => !c.parent_id || !commentIdSet.has(c.parent_id))
   const repliesOf = (pid: string) => comments.filter((c) => c.parent_id === pid)
 
   return (
@@ -302,7 +372,10 @@ export default function BoardPostScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <View style={styles.head}>
-          <Text style={styles.title}>{post.title}</Text>
+          <Text style={styles.title}>
+            {!!post.board_tags?.label && <Text style={styles.titleTag}>{post.board_tags.label} </Text>}
+            {post.title}
+          </Text>
           {/* 수정·삭제는 닉네임·날짜와 같은 줄 오른쪽에 둔다(2026-07-31 오너 지시).
               글자 크기를 메타와 맞춰야 줄 높이가 흔들리지 않는다. */}
           <View style={styles.metaRow}>
@@ -395,8 +468,10 @@ export default function BoardPostScreen() {
           // 옮겨가야 한다(2026-08-01 조사).
           <View key={c.id} onLayout={(e) => { commentY.current[c.id] = e.nativeEvent.layout.y }}>
             <CommentRow
-              c={c} mine={myCommentIds.includes(c.id)} styles={styles}
-              onReply={() => openReply(c)}
+              c={c} mine={myCommentIds.includes(c.id)} styles={styles} colors={colors}
+              // 부모를 잃고 올라온 답글은 답글 표시를 유지한다(답글에는 다시 답글을 못 단다)
+              reply={!!c.parent_id}
+              onReply={c.parent_id ? undefined : () => openReply(c)}
               onEdit={() => { setEditing(c); setDraft(c.content) }}
               onDelete={() => removeComment(c)}
               onReport={() => setReportTarget({ type: 'comment', id: c.id })}
@@ -404,7 +479,7 @@ export default function BoardPostScreen() {
             />
             {repliesOf(c.id).map((r) => (
               <CommentRow
-                key={r.id} c={r} reply mine={myCommentIds.includes(r.id)} styles={styles}
+                key={r.id} c={r} reply mine={myCommentIds.includes(r.id)} styles={styles} colors={colors}
                 onLayout={(y) => { commentY.current[r.id] = (commentY.current[c.id] ?? 0) + y }}
                 onEdit={() => { setEditing(r); setDraft(r.content) }}
                 onDelete={() => removeComment(r)}
@@ -432,16 +507,41 @@ export default function BoardPostScreen() {
             </View>
           )}
           {/* 닉네임은 입력칸을 만졌을 때만 펼친다. 마지막에 쓴 값이 채워져 있어서
-              보통은 손댈 일이 없는데 늘 한 줄을 차지하고 있었다. */}
+              보통은 손댈 일이 없는데 늘 한 줄을 차지하고 있었다.
+              비밀 댓글 체크도 같은 줄에 둔다 — 늘 보이면 자리만 차지한다.
+              수정 중에는 비밀 여부를 바꿀 수 없다(이미 본 사람과 못 본 사람이 갈린다). */}
           {composing && (
-            <TextInput
-              style={styles.nickInput}
-              value={nickname}
-              onChangeText={setNickname}
-              placeholder="닉네임"
-              placeholderTextColor={colors.textTertiary}
-              maxLength={20}
-            />
+            <View style={styles.composeOptionRow}>
+              <TextInput
+                style={styles.nickInput}
+                value={nickname}
+                onChangeText={setNickname}
+                placeholder="닉네임"
+                placeholderTextColor={colors.textTertiary}
+                maxLength={20}
+              />
+              {!editing && (
+                <TouchableOpacity
+                  style={styles.secretToggle}
+                  onPress={() => setSecret((v) => !v)}
+                  hitSlop={6}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: secret }}
+                >
+                  <Ionicons
+                    name={secret ? 'checkbox' : 'square-outline'}
+                    size={18}
+                    color={secret ? colors.primary : colors.textTertiary}
+                  />
+                  <Text style={[styles.secretToggleText, secret && styles.secretToggleTextOn]}>비밀</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          {secret && !editing && (
+            <Text style={styles.secretHint}>
+              글쓴이와 나만 볼 수 있어요. 연락처를 남겨도 다른 사람에게는 보이지 않습니다.
+            </Text>
           )}
           <View style={styles.inputRow}>
             <TextInput
@@ -471,10 +571,12 @@ export default function BoardPostScreen() {
         target={replyModal}
         nickname={replyNickname}
         draft={replyDraft}
+        secret={replySecret}
         sending={replySending}
         colors={colors}
         onChangeNickname={setReplyNickname}
         onChangeDraft={setReplyDraft}
+        onToggleSecret={toggleReplySecret}
         onCancel={() => setReplyModal(null)}
         onSubmit={submitReply}
       />
@@ -499,15 +601,18 @@ export default function BoardPostScreen() {
  * 입력줄 위로 맞출 필요가 없다.
  */
 function ReplyModal({
-  target, nickname, draft, sending, colors, onChangeNickname, onChangeDraft, onCancel, onSubmit,
+  target, nickname, draft, secret, sending, colors,
+  onChangeNickname, onChangeDraft, onToggleSecret, onCancel, onSubmit,
 }: {
   target: BoardComment | null
   nickname: string
   draft: string
+  secret: boolean
   sending: boolean
   colors: AppColors
   onChangeNickname: (v: string) => void
   onChangeDraft: (v: string) => void
+  onToggleSecret: () => void
   onCancel: () => void
   onSubmit: () => void
 }) {
@@ -549,6 +654,23 @@ function ReplyModal({
             onFocus={() => setNickComposing(true)}
           />
           <View style={styles.actions}>
+            {/* 비밀 댓글에 답할 때는 기본으로 켜져 있다(openReply). 연락처를 주고받는
+                흐름에서 답글만 공개로 나가면 그게 곧 사고다. */}
+            <TouchableOpacity
+              style={styles.secretToggle}
+              onPress={onToggleSecret}
+              hitSlop={8}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: secret }}
+            >
+              <Ionicons
+                name={secret ? 'checkbox' : 'square-outline'}
+                size={18}
+                color={secret ? colors.primary : colors.textTertiary}
+              />
+              <Text style={[styles.secretToggleText, secret && styles.secretToggleTextOn]}>비밀</Text>
+            </TouchableOpacity>
+            <View style={{ flex: 1 }} />
             <TouchableOpacity style={styles.actionBtn} onPress={onCancel} hitSlop={8}>
               <Text style={styles.cancelText}>취소</Text>
             </TouchableOpacity>
@@ -599,8 +721,11 @@ function makeReplyModalStyles(colors: AppColors) {
       // 안드로이드 전용 속성이라 iOS는 그냥 무시한다.
       textAlignVertical: 'top',
     },
-    actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, paddingTop: 4 },
+    actions: { flexDirection: 'row', alignItems: 'center', gap: 20, paddingTop: 4 },
     actionBtn: { paddingVertical: 6, paddingHorizontal: 4 },
+    secretToggle: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6 },
+    secretToggleText: { fontSize: 13, color: colors.textSecondary },
+    secretToggleTextOn: { color: colors.primary, fontWeight: '700' },
     cancelText: { fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
     submitText: { fontSize: 14, color: colors.primary, fontWeight: '800' },
     submitTextOff: { color: colors.border },
@@ -613,12 +738,13 @@ function makeReplyModalStyles(colors: AppColors) {
 }
 
 function CommentRow({
-  c, reply = false, mine, styles, onReply, onEdit, onDelete, onReport, onBlock, onLayout,
+  c, reply = false, mine, styles, colors, onReply, onEdit, onDelete, onReport, onBlock, onLayout,
 }: {
   c: BoardComment
   reply?: boolean
   mine: boolean
   styles: ReturnType<typeof makeStyles>
+  colors: AppColors
   onReply?: () => void
   onEdit: () => void
   onDelete: () => void
@@ -627,6 +753,10 @@ function CommentRow({
   /** 답글의 부모 안에서의 세로 위치 */
   onLayout?: (y: number) => void
 }) {
+  // 비밀 댓글인데 본문이 비어 있으면 = 볼 자격이 없는 사람이다. 서버가 애초에
+  // 본문을 안 내려준다(화면에서만 가리는 게 아니다).
+  const locked = c.is_secret && !c.content
+
   return (
     <View
       style={[styles.comment, reply && styles.commentReply]}
@@ -658,9 +788,20 @@ function CommentRow({
           )}
         </View>
       </View>
-      <Text style={styles.commentBody}>{c.content}</Text>
-      {/* 답글에는 다시 답글을 달 수 없다(대댓글 한 단계) */}
-      {!reply && onReply && (
+      {locked ? (
+        <View style={styles.secretLockRow}>
+          <Ionicons name="lock-closed" size={13} color={colors.textTertiary} />
+          <Text style={styles.secretLockText}>비밀 댓글입니다</Text>
+        </View>
+      ) : (
+        <Text style={styles.commentBody}>
+          {c.is_secret && <Text style={styles.secretBadge}>🔒 </Text>}
+          {c.content}
+        </Text>
+      )}
+      {/* 답글에는 다시 답글을 달 수 없다(대댓글 한 단계).
+          내용을 못 보는 비밀 댓글에는 답글을 달 수 없게 한다 — 뭐에 답하는지 모른다. */}
+      {!reply && onReply && !locked && (
         <View style={styles.commentActions}>
           <TouchableOpacity onPress={onReply} hitSlop={6}>
             <Text style={styles.commentAct}>답글</Text>
@@ -684,10 +825,12 @@ function makeStyles(colors: AppColors) {
     emptyText: { fontSize: 15, color: colors.textSecondary },
     emptySub: { fontSize: 13, color: colors.textTertiary },
 
-    head: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12, gap: 5,
+    // 위쪽 여백을 다른 페이지 제목들과 통일(8px, 2026-08-12).
+    head: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, gap: 5,
       borderBottomWidth: 1, borderBottomColor: colors.divider },
     // lineHeight 명시 필수 — 이모지가 잘려 보이는 문제(rowTitle과 동일 원인, 목록 쪽 주석 참고)
     title: { fontSize: 18, fontWeight: '800', lineHeight: 25, color: colors.textPrimary, letterSpacing: -0.3 },
+    titleTag: { color: colors.primary },
     meta: { fontSize: 12, lineHeight: 17, color: colors.textTertiary },
     metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
     metaActions: { flexDirection: 'row', gap: 12 },
@@ -738,6 +881,10 @@ function makeStyles(colors: AppColors) {
     commentManage: { flexDirection: 'row', gap: 12 },
     commentMetaAct: { fontSize: 11.5, lineHeight: 16, color: colors.textSecondary },
     commentBody: { fontSize: 14, lineHeight: 21, color: colors.textPrimary },
+    // 볼 자격이 없는 비밀 댓글 — 자리만 남기고 내용은 서버가 아예 안 내려준다.
+    secretLockRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    secretLockText: { fontSize: 13.5, color: colors.textTertiary, fontStyle: 'italic' },
+    secretBadge: { fontSize: 12 },
     commentActions: { flexDirection: 'row', gap: 12, marginTop: 2 },
     commentAct: { fontSize: 12, color: colors.textSecondary },
     commentActDanger: { color: colors.error },
@@ -748,11 +895,17 @@ function makeStyles(colors: AppColors) {
     inputHintText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
     inputHintCancel: { fontSize: 12, color: colors.textSecondary },
     inputRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    // 닉네임 칸과 '비밀' 체크를 한 줄에 — 둘 다 입력칸을 만졌을 때만 나온다.
+    composeOptionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
     nickInput: {
-      alignSelf: 'flex-start', minWidth: 110, fontSize: 13, color: colors.textPrimary,
+      minWidth: 110, fontSize: 13, color: colors.textPrimary,
       backgroundColor: colors.surfaceHigh, borderRadius: 8,
-      paddingHorizontal: 10, paddingVertical: 7, marginBottom: 6,
+      paddingHorizontal: 10, paddingVertical: 7,
     },
+    secretToggle: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    secretToggleText: { fontSize: 13, color: colors.textSecondary },
+    secretToggleTextOn: { color: colors.primary, fontWeight: '700' },
+    secretHint: { fontSize: 11.5, lineHeight: 16, color: colors.textTertiary, marginBottom: 6 },
     // 한 줄일 때 입력칸과 등록 버튼의 높이가 정확히 같아야 한다. 높이는 여기서
     // 정하지 않고 JS 에서 직접 숫자로 준다(위 commentInputH) — CSS 최솟값에
     // 맡기면 iOS 가 내부 여백만큼 더 키워서 버튼과 안 맞았다.

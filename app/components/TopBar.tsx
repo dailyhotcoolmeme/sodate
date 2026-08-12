@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect } from 'react'
-import { View, Text, TouchableOpacity, Modal, StyleSheet, Platform, Switch } from 'react-native'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
+import { View, Text, TouchableOpacity, Modal, StyleSheet, Platform, Animated } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, usePathname } from 'expo-router'
@@ -7,6 +7,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useProfileSheetStore } from '@/stores/profileSheetStore'
+
+// 일정↔커뮤니티 토글 치수 — 바깥 테두리 높이(24)가 옆 "소개팅모아" 로고 높이(24)와
+// 정확히 같아야 한다(2026-08-12 오너 지시). 시스템 Switch는 iOS에서 51x31 고정이라
+// transform:scale로 흉내 내도 실측이 딱 안 맞아, 아예 자체 디자인 트랙+손잡이로 교체.
+const SEG_BORDER_H = 24
+const SEG_TRACK_W = 34
+const SEG_TRACK_H = 18
+const SEG_THUMB = 14
+const SEG_THUMB_INSET = 2
 
 /**
  * 공용 상단 톱바 — 모든 화면 공통.
@@ -76,6 +85,20 @@ export default function TopBar({
     })
   }
 
+  // 손잡이 슬라이드 애니메이션(디자인 토글)
+  const thumbAnim = useRef(new Animated.Value(seg === 'board' ? 1 : 0)).current
+  useEffect(() => {
+    Animated.timing(thumbAnim, {
+      toValue: seg === 'board' ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start()
+  }, [seg, thumbAnim])
+  const thumbTranslate = thumbAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [SEG_THUMB_INSET, SEG_TRACK_W - SEG_THUMB - SEG_THUMB_INSET],
+  })
+
   const styles = useMemo(() => StyleSheet.create({
     wrap: { backgroundColor: colors.background },
     bar: {
@@ -95,12 +118,25 @@ export default function TopBar({
     logoWordmark: { width: 108, height: 24 },
     // 일정 ↔ 게시판 전환. 예전엔 '소개팅|커뮤니티' 글자 알약이었는데(심사 중엔 심사자가
     // 눌러보게 하려고 일부러 글자를 남겨뒀었다 — docs/BOARD_SPEC.md), 통과 후 토글로 교체.
-    // 켜짐=커뮤니티, 꺼짐=소개팅. 로고와 아이콘 사이에서 남는 폭을 쓰되, 좁은 화면에서는
-    // 로고가 먼저 줄어들도록 로고에 flexShrink 를 뒀다.
-    // RN Switch가 iOS에서 실제 스위치보다 측정 높이를 크게 잡는 경우가 있어(알려진 이슈),
-    // alignItems:'center'로도 같은 줄의 로고·아이콘보다 위로 붕 뜨게 보였다(2026-08-08
-    // 오너 지적). iOS만 살짝 아래로 내려 맞춘다.
-    segSwitch: { marginHorizontal: 6, flexShrink: 0, marginTop: Platform.OS === 'ios' ? 7 : 0 },
+    // 켜짐=커뮤니티, 꺼짐=소개팅. 시스템 Switch는 iOS에서 정확한 높이 지정이 안 돼(51x31
+    // 고정, scale로만 흉내) 로고와 높이를 딱 맞추기 어려워 자체 디자인 트랙+손잡이로
+    // 교체했다(2026-08-12 오너 지시). 바깥 테두리 높이를 로고 높이(24)와 정확히 맞춤.
+    segSwitchWrap: {
+      height: SEG_BORDER_H,
+      marginLeft: 6, // 로고 글자와 테두리 사이 살짝 간격
+      borderWidth: 1.5, borderColor: colors.primary, borderRadius: SEG_BORDER_H / 2,
+      paddingHorizontal: 2, alignItems: 'center', justifyContent: 'center',
+    },
+    segTrack: {
+      width: SEG_TRACK_W, height: SEG_TRACK_H, borderRadius: SEG_TRACK_H / 2,
+    },
+    segThumb: {
+      position: 'absolute', top: (SEG_TRACK_H - SEG_THUMB) / 2,
+      width: SEG_THUMB, height: SEG_THUMB, borderRadius: SEG_THUMB / 2,
+      backgroundColor: '#fff',
+      shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 2, shadowOffset: { width: 0, height: 1 },
+      elevation: 2,
+    },
     iconBtn: { padding: 6, borderRadius: 8 },
     rightIcons: { flexDirection: 'row', alignItems: 'center' },
     bellBadge: {
@@ -130,15 +166,19 @@ export default function TopBar({
     ? { label: '내가 쓴 글', icon: 'create-outline', action: () => router.push('/board/mine') }
     : { label: '내가 쓴 후기', icon: 'create-outline', action: () => router.push({ pathname: '/reviews', params: { tab: 'mine' } }) }
 
+  // 메뉴는 지금 있는 쪽(일정/커뮤니티)에 필요한 것만 보여준다(2026-08-12 오너 지시).
+  // 후기 모음·관심 모임·알림 설정·내 정보는 전부 '모임' 쪽 기능이라 커뮤니티에서는 뺀다.
+  // '설정'은 앱 전체 설정이라 양쪽에 둔다.
   const MENU: { label: string; icon: string; action: () => void; badge?: number }[] = [
     firstItem,
     ...(seg === 'board'
       ? [{ label: '차단 목록', icon: 'eye-off-outline', action: () => router.push('/board/blocked') }]
-      : []),
-    { label: '후기 모음', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
-    { label: '관심 모임', icon: 'heart-outline', action: () => router.push('/favorites') },
-    { label: '알림 설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
-    { label: '내 정보', icon: 'person-outline', action: () => useProfileSheetStore.getState().openSheet() },
+      : [
+          { label: '후기 모음', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
+          { label: '관심 모임', icon: 'heart-outline', action: () => router.push('/favorites') },
+          { label: '알림 설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
+          { label: '내 정보', icon: 'person-outline', action: () => useProfileSheetStore.getState().openSheet() },
+        ]),
     { label: '설정', icon: 'settings-outline', action: () => router.push('/settings') },
   ]
 
@@ -162,19 +202,21 @@ export default function TopBar({
               accessibilityLabel="소개팅모아"
             />
           </TouchableOpacity>
-        </View>
 
-        <Switch
-          value={seg === 'board'}
-          onValueChange={(v) => goSegment(v ? 'board' : 'event')}
-          trackColor={{ true: colors.primary, false: colors.border }}
-          thumbColor="#fff"
-          style={styles.segSwitch}
-          accessibilityRole="switch"
-          accessibilityLabel="일정·커뮤니티 전환"
-          accessibilityHint="켜면 커뮤니티, 끄면 소개팅 일정 화면으로 이동합니다"
-          accessibilityState={{ checked: seg === 'board' }}
-        />
+          <View style={styles.segSwitchWrap}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => goSegment(seg === 'board' ? 'event' : 'board')}
+              style={[styles.segTrack, { backgroundColor: seg === 'board' ? colors.primary : colors.border }]}
+              accessibilityRole="switch"
+              accessibilityLabel="일정·커뮤니티 전환"
+              accessibilityHint="켜면 커뮤니티, 끄면 소개팅 일정 화면으로 이동합니다"
+              accessibilityState={{ checked: seg === 'board' }}
+            >
+              <Animated.View style={[styles.segThumb, { transform: [{ translateX: thumbTranslate }] }]} />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <View style={styles.rightIcons}>
           <TouchableOpacity

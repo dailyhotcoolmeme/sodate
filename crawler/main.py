@@ -27,6 +27,9 @@ from scrapers.yeongyul import YeongyulScraper
 from scrapers.twoyeonsi import TwoYeonsiScraper
 from scrapers.secretsalon import SecretSalonScraper
 from scrapers.lovecommunity import LovecommunityLoco
+from scrapers.finance_lounge import FinanceLoungeScraper
+from scrapers.otr_lounge import OtrLoungeScraper
+from scrapers.unibridge_social import UnibridgeSocialScraper
 from utils.logger import get_logger
 
 logger = get_logger('main')
@@ -43,6 +46,9 @@ SCRAPERS = [
     TwoYeonsiScraper,
     SecretSalonScraper,
     LovecommunityLoco,
+    FinanceLoungeScraper,
+    OtrLoungeScraper,
+    UnibridgeSocialScraper,
 ]
 
 # ⚠️(2026-07-24 오너 지적으로 폐기) discover_candidates.py 전담 방침이 있었으나

@@ -2,7 +2,7 @@
   "expo": {
     "name": "소개팅모아",
     "slug": "sodate",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "platforms": [
       "ios",
       "android"
@@ -20,7 +20,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sodate.app",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleDevelopmentRegion": "ko",

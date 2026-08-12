@@ -24,6 +24,9 @@ const ALLOWED_OUTLINK_DOMAINS = [
   'naver.com',
   'youtube.com',
   'youtu.be',
+  // 인스타 전용 업체(자체 사이트 없음, 2026-08-11) — 신청 링크가 구글폼인 유니브리지소셜용
+  'docs.google.com',
+  'forms.gle',
 ]
 
 export function isAllowedOutlink(url: string): boolean {

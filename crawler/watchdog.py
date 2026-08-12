@@ -368,6 +368,64 @@ def check_empty_crawls(sb) -> list[dict]:
                 'level': 'ERROR',
                 'msg': f"{comps.get(cid, cid)}: 최근 크롤이 0건인데 성공으로 기록됨 — 사이트 변경·파싱 깨짐 의심",
             })
+
+    # ⚠️ 여기에 status='failed'를 함께 보지 않아 생긴 사고(2026-08-13 전수조사):
+    #    워치독의 모든 점검이 'success'인 기록만 골라 보고 있었다. 그래서 크롤러가 아예
+    #    실패하면 워치독에게는 아무것도 안 보였다. 모드파티가 8/4 마지막 성공 이후 9일간
+    #    매 회차 실패했는데 알림이 한 번도 안 나갔고, 그동안 앞으로 일정 13건이 갱신 없이
+    #    그대로 노출됐다. '조용히 낡아가는' 것을 잡자고 만든 점검이 정작 가장 시끄러운
+    #    실패를 놓치고 있었다.
+    issues += check_failing_crawls(sb, comps)
+    return issues
+
+
+# 며칠씩 이어지는 실패만 오너에게 알린다. 한 번 튄 건 다음 회차에 대개 복구된다.
+FAIL_STREAK_HOURS = 24
+
+
+def check_failing_crawls(sb, comps: dict) -> list[dict]:
+    """연속으로 실패 중인 크롤러를 잡는다(마지막 성공 이후 경과 시간 기준)."""
+    issues: list[dict] = []
+    since = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
+    try:
+        logs = (
+            sb.table('crawl_logs')
+            .select('company_id,status,executed_at')
+            .gte('executed_at', since)
+            .order('executed_at', desc=True)
+            .limit(2000)
+            .execute()
+        ).data or []
+    except Exception as e:
+        return [{'level': 'WARN', 'msg': f'실패 크롤 점검 실패({str(e)[:60]})'}]
+
+    latest_any: dict = {}
+    latest_ok: dict = {}
+    for lg in logs:
+        cid = lg['company_id']
+        latest_any.setdefault(cid, lg)
+        if lg.get('status') == 'success':
+            latest_ok.setdefault(cid, lg)
+
+    now = datetime.now(timezone.utc)
+    for cid, lg in latest_any.items():
+        if lg.get('status') == 'success':
+            continue
+        ok = latest_ok.get(cid)
+        if ok:
+            gap = now - datetime.fromisoformat(ok['executed_at'].replace('Z', '+00:00'))
+            hours = int(gap.total_seconds() // 3600)
+            if hours < FAIL_STREAK_HOURS:
+                continue
+            detail = f'마지막 성공이 {hours // 24}일 {hours % 24}시간 전'
+        else:
+            detail = '최근 14일 내 성공 기록 없음'
+        issues.append({
+            'level': 'ERROR',
+            'action': 'owner',
+            'msg': f'{comps.get(cid, cid)}: 크롤이 계속 실패 중 — {detail}. '
+                   f'그동안 이 업체 일정은 갱신되지 않고 그대로 노출됩니다(사이트 변경·로그인 만료 의심)',
+        })
     return issues
 
 

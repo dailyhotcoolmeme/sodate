@@ -9,7 +9,9 @@ export default function TermsScreen() {
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    content: { padding: 20 },
+    // 좌측·위쪽 시작 위치를 다른 페이지 제목들과 통일(16px / 8px) — privacy/terms만
+    // 20이라 어긋나 있었다(2026-08-12, 오너 재지적으로 위쪽 여백도 함께 수정).
+    content: { paddingHorizontal: 16, paddingTop: 8 },
     title: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, marginBottom: 8 },
     date: { fontSize: 12, color: colors.textTertiary, marginBottom: 28 },
     sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginTop: 24, marginBottom: 8 },
@@ -22,7 +24,7 @@ export default function TermsScreen() {
       <TopBar showBack />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
         <Text style={styles.title}>이용약관</Text>
-        <Text style={styles.date}>시행일: 2026년 7월 20일</Text>
+        <Text style={styles.date}>시행일: 2026년 8월 13일 (직전 개정: 2026년 7월 20일)</Text>
 
         <Text style={styles.sectionTitle}>제1조 (목적)</Text>
         <Text style={styles.body}>
@@ -37,7 +39,7 @@ export default function TermsScreen() {
         <Text style={styles.sectionTitle}>제3조 (서비스 이용)</Text>
         <Text style={styles.bullet}>
           • 본 서비스는 별도의 회원가입 없이 이용할 수 있습니다.{'\n'}
-          • 이용자는 만 19세 이상이어야 합니다(청소년 이용불가). 각 소개팅의 실제 참가 연령 조건은 업체별로 다를 수 있습니다.{'\n'}
+          • 이용자는 만 19세 이상이어야 합니다(청소년 이용불가). 만 14세 미만 아동은 이용할 수 없으며, 서비스는 만 14세 미만임이 확인된 이용자의 정보를 지체 없이 파기합니다. 각 소개팅의 실제 참가 연령 조건은 업체별로 다를 수 있습니다.{'\n'}
           • 서비스는 iOS 및 Android 기기에서 무료로 이용할 수 있습니다.{'\n'}
           • 일부 기능(푸시 알림)은 기기 알림 권한 허용 시 이용 가능합니다.
         </Text>
@@ -68,6 +70,15 @@ export default function TermsScreen() {
           ③ 서비스는 부적절 표현 자동 필터링, 신고 기능, 특정 작성자 게시물 차단(뮤트) 기능을 제공하며, 신고가 접수되거나 아래 금지 내용에 해당하는 게시물은 사전 통지 없이 삭제 또는 노출 제한(블라인드)할 수 있습니다. 서비스는 부적절 게시물 신고에 대해 접수 후 24시간 이내에 조치하며, 불법·유해 게시물에 대해 무관용 원칙을 적용합니다.{'\n\n'}
           ④ 이용자는 게시물을 게시함으로써 서비스가 해당 게시물을 서비스 내에서 게시·노출하는 데 필요한 범위에서 이용할 수 있도록 허락합니다.{'\n\n'}
           ⑤ 게시판 글·댓글을 새로 등록할 때는 본 조에 대한 동의 절차를 거칩니다.
+        </Text>
+
+        <Text style={styles.sectionTitle}>제6조의3 (비밀 댓글 및 이용자 간 연락)</Text>
+        <Text style={styles.body}>
+          ① 커뮤니티의 비밀 댓글은 해당 댓글 작성자, 게시글 작성자, 답글인 경우 원 댓글 작성자만 내용을 볼 수 있는 기능입니다.{'\n\n'}
+          ② 이용자는 비밀 댓글에 연락 수단(전화번호, 메신저 아이디, SNS 계정 등)을 스스로 선택해 남길 수 있습니다. 서비스는 이를 요구하지 않으며, 남기지 않아도 서비스 이용에 제한이 없습니다.{'\n\n'}
+          ③ 비밀 댓글에 신고가 접수된 경우, 서비스는 신고 처리에 필요한 범위에서 해당 내용을 확인할 수 있습니다. 그 밖의 경우에는 열람하지 않습니다.{'\n\n'}
+          ④ 비밀 댓글의 내용은 개인정보처리방침이 정한 보유 기간이 지나면 자동으로 파기됩니다.{'\n\n'}
+          ⑤ 서비스는 이용자 간 연락·만남을 중개하지 않으며, 이용자가 서로 주고받은 연락처로 연락한 이후 발생하는 일체의 분쟁·피해에 대해 책임지지 않습니다. 이용자는 낯선 상대와 연락·만남을 진행할 때 스스로 주의를 기울여야 합니다. 다만, 서비스의 고의 또는 중대한 과실로 인한 손해의 경우에는 그러하지 아니합니다.
         </Text>
 
         <Text style={styles.sectionTitle}>제7조 (책임 한계)</Text>

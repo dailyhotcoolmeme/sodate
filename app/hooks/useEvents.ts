@@ -55,13 +55,13 @@ export function useEvents() {
   const didInitialLoad = useRef(false)
 
   const hydrated = useFilterHydrated()
-  const { regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed } = useFilterStore()
+  const { regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed } = useFilterStore()
   const { myAge, myGender } = useProfileStore()
 
   // 캐시를 구분하는 키 — buildQuery·applyClientFilters가 실제로 참조하는 필터 전부를 담는다.
   const cacheKey = useMemo(() => JSON.stringify({
-    regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge,
-  }), [regions, dateRange, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge])
+    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge,
+  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge])
 
   const buildQuery = useCallback((from: number, to: number) => {
     let query = supabase
@@ -91,20 +91,12 @@ export function useEvents() {
       query = query.or('is_closed.is.null,is_closed.eq.false')
     }
 
-    // 날짜 필터
-    const now = new Date()
-    if (dateRange === 'today') {
-      const end = new Date(now)
-      end.setHours(23, 59, 59, 999)
-      query = query.lte('event_date', end.toISOString())
-    } else if (dateRange === 'week') {
-      const end = new Date(now)
-      end.setDate(end.getDate() + 7)
-      query = query.lte('event_date', end.toISOString())
-    } else if (dateRange === 'month') {
-      const end = new Date(now)
-      end.setMonth(end.getMonth() + 1)
-      query = query.lte('event_date', end.toISOString())
+    // 날짜 필터 — 시작~종료 직접 지정(달력). 위쪽 하드 상한(오늘~+1달)과 AND로 겹쳐 더 좁은 쪽이 적용된다.
+    if (dateStart) {
+      query = query.gte('event_date', new Date(`${dateStart}T00:00:00`).toISOString())
+    }
+    if (dateEnd) {
+      query = query.lte('event_date', new Date(`${dateEnd}T23:59:59`).toISOString())
     }
 
     // 가격 필터
@@ -128,9 +120,12 @@ export function useEvents() {
     if (ageGroups.length > 0) {
       const buckets = AGE_GROUP_FILTERS.filter((a) => ageGroups.includes(a.id))
       if (buckets.length > 0) {
-        // 각 구간과 overlap: age_range_min <= 구간max AND (age_range_max >= 구간min OR null)
+        // 각 구간과 overlap: (age_range_min <= 구간max OR null) AND (age_range_max >= 구간min OR null)
+        // ⚠️ 양쪽 null 을 모두 허용해야 한다. 예전엔 age_range_max 의 null 만 처리해서,
+        //    나이 정보가 없는 일정(age_range_min IS NULL, 2026-08-13 기준 활성 998건 중 251건)이
+        //    나이대 칩을 하나라도 누르는 순간 전부 사라졌다. SQL 에서 NULL <= 25 는 참이 아니다.
         const orStr = buckets
-          .map((b) => `and(age_range_min.lte.${b.max},or(age_range_max.gte.${b.min},age_range_max.is.null))`)
+          .map((b) => `and(or(age_range_min.is.null,age_range_min.lte.${b.max}),or(age_range_max.gte.${b.min},age_range_max.is.null))`)
           .join(',')
         query = query.or(orStr)
       }
@@ -155,7 +150,7 @@ export function useEvents() {
     }
 
     return query.range(from, to)
-  }, [regions, dateRange, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge])
+  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge])
 
   // 요일·시간대는 KST 기준 클라이언트 필터 (서버에서 dow/hour 직접 못 거름)
   const applyClientFilters = useCallback((rows: EventWithCompany[]) => {
@@ -168,6 +163,37 @@ export function useEvents() {
     })
   }, [days, timeSlots])
 
+  const hasClientFilter = days.length > 0 || timeSlots.length > 0
+
+  /**
+   * 한 페이지(60건)를 받아 요일·시간대로 거르면 0건이 나오는 일이 흔하다. 목록은
+   * 날짜순이라 첫 페이지가 대략 하루치뿐이어서, "토요일"을 고르면 목요일·금요일만
+   * 들어 있는 첫 페이지가 통째로 걸러져 화면이 비었다. FlatList 는 데이터가 0건이면
+   * onEndReached 를 부르지 않으므로 다음 페이지를 영영 안 불러왔다 — 즉 요일·시간대
+   * 필터가 "결과 없음" 버튼처럼 동작했다(2026-08-13 감사, 토요일 일정은 실제 401건).
+   *
+   * 그래서 걸러낸 결과가 한 화면 분량이 될 때까지 서버 페이지를 이어서 당긴다.
+   * 필터가 없으면 예전처럼 한 페이지만 받는다.
+   */
+  const MAX_CHAINED_PAGES = 30   // 하드 상한(오늘~+1달)이 있어 이 안에서 끝난다. 무한루프 방지용.
+  const fetchFilteredPages = useCallback(async (startPage: number) => {
+    const collected: EventWithCompany[] = []
+    let page = startPage
+    let exhausted = false
+
+    for (let i = 0; i < MAX_CHAINED_PAGES; i++) {
+      const from = page * PAGE_SIZE
+      const { data, error: err } = await buildQuery(from, from + PAGE_SIZE - 1)
+      if (err) throw err
+      const raw = (data ?? []) as EventWithCompany[]
+      collected.push(...applyClientFilters(raw))
+      if (raw.length < PAGE_SIZE) { exhausted = true; break }
+      if (!hasClientFilter || collected.length >= PAGE_SIZE) break
+      page += 1
+    }
+    return { rows: collected, lastPage: page, exhausted }
+  }, [buildQuery, applyClientFilters, hasClientFilter])
+
   // opts.silent: 화면엔 이미 캐시된 목록이 보이는 상태에서 뒤에서 조용히 최신화할 때 씀
   // (스피너를 다시 띄우지 않고, 실패해도 이미 보이는 화면을 에러로 덮지 않음).
   const fetchEvents = useCallback(async (opts?: { silent?: boolean }) => {
@@ -176,38 +202,33 @@ export function useEvents() {
     pageRef.current = 0
 
     try {
-      const { data, error: err } = await buildQuery(0, PAGE_SIZE - 1)
-      if (err) throw err
-      const rows = applyClientFilters((data ?? []) as EventWithCompany[])
+      const { rows, lastPage, exhausted } = await fetchFilteredPages(0)
+      pageRef.current = lastPage
       setEvents(rows)
-      setHasMore((data ?? []).length === PAGE_SIZE)
+      setHasMore(!exhausted)
       writeEventsCache(cacheKey, rows)
     } catch (e: unknown) {
       if (!opts?.silent) setError(e instanceof Error ? e.message : '알 수 없는 오류')
     } finally {
       setLoading(false)
     }
-  }, [buildQuery, applyClientFilters, cacheKey])
+  }, [fetchFilteredPages, cacheKey])
 
   const loadMore = useCallback(async () => {
     if (loading || loadingMore || !hasMore) return
     setLoadingMore(true)
     try {
-      const nextPage = pageRef.current + 1
-      const from = nextPage * PAGE_SIZE
-      const { data, error: err } = await buildQuery(from, from + PAGE_SIZE - 1)
-      if (err) throw err
-      pageRef.current = nextPage
-      const rows = applyClientFilters((data ?? []) as EventWithCompany[])
+      const { rows, lastPage, exhausted } = await fetchFilteredPages(pageRef.current + 1)
+      pageRef.current = lastPage
       setEvents((prev) => [...prev, ...rows])
-      setHasMore((data ?? []).length === PAGE_SIZE)
+      setHasMore(!exhausted)
     } catch {
       // 추가 로드 실패는 조용히 무시(첫 페이지는 이미 보이는 상태 유지) — 스크롤 끝에서
       // 계속 시도하면 다음 onEndReached에서 재시도됨
     } finally {
       setLoadingMore(false)
     }
-  }, [buildQuery, applyClientFilters, loading, loadingMore, hasMore])
+  }, [fetchFilteredPages, loading, loadingMore, hasMore])
 
   useEffect(() => {
     // 필터(AsyncStorage persist)가 아직 안 불러와진 상태에서 쏘면 기본값(전체)으로 한 번,

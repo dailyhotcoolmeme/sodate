@@ -5,7 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 interface FilterSnapshot {
   id: string
   regions: string[]
-  dateRange: string
+  dateStart: string | null
+  dateEnd: string | null
   maxPrice: number | null
   themes: string[]
   hashtags?: string[]
@@ -14,7 +15,9 @@ interface FilterSnapshot {
 
 interface FilterState {
   regions: string[]
-  dateRange: 'all' | 'today' | 'week' | 'month'
+  // 관심 기간(날짜 범위) — 'YYYY-MM-DD', 미설정 시 null(기간 제한 없음).
+  dateStart: string | null
+  dateEnd: string | null
   maxPrice: number | null
   themes: string[]
   hashtags: string[]      // 해시태그 (예: '#와인') — OR 필터
@@ -28,7 +31,7 @@ interface FilterState {
 
   toggleRegion: (id: string) => void
   setRegionsBulk: (ids: string[], on: boolean) => void
-  setDateRange: (range: FilterState['dateRange']) => void
+  setDateRange: (start: string | null, end: string | null) => void
   setMaxPrice: (price: number | null) => void
   toggleTheme: (theme: string) => void
   toggleHashtag: (tag: string) => void
@@ -49,7 +52,8 @@ export const useFilterStore = create<FilterState>()(
   persist(
     (set, get) => ({
       regions: [],
-      dateRange: 'all',
+      dateStart: null,
+      dateEnd: null,
       maxPrice: null,
       themes: [],
       hashtags: [],
@@ -74,7 +78,7 @@ export const useFilterStore = create<FilterState>()(
             ? Array.from(new Set([...s.regions, ...ids]))
             : s.regions.filter((x) => !ids.includes(x)),
         })),
-      setDateRange: (dateRange) => set({ dateRange }),
+      setDateRange: (dateStart, dateEnd) => set({ dateStart, dateEnd }),
       setMaxPrice: (maxPrice) => set({ maxPrice }),
       toggleTheme: (theme) =>
         set((s) => ({
@@ -116,11 +120,12 @@ export const useFilterStore = create<FilterState>()(
       setExcludeClosed: (excludeClosed) => set({ excludeClosed }),
 
       saveRecentFilter: () => {
-        const { regions, dateRange, maxPrice, themes, hashtags, recentFilters } = get()
+        const { regions, dateStart, dateEnd, maxPrice, themes, hashtags, recentFilters } = get()
         const snapshot: FilterSnapshot = {
           id: Date.now().toString(),
           regions,
-          dateRange,
+          dateStart,
+          dateEnd,
           maxPrice,
           themes,
           hashtags,
@@ -133,7 +138,8 @@ export const useFilterStore = create<FilterState>()(
       applyRecentFilter: (snapshot) =>
         set({
           regions: snapshot.regions ?? [],
-          dateRange: snapshot.dateRange as FilterState['dateRange'],
+          dateStart: snapshot.dateStart ?? null,
+          dateEnd: snapshot.dateEnd ?? null,
           maxPrice: snapshot.maxPrice,
           themes: snapshot.themes,
           hashtags: snapshot.hashtags ?? [],
@@ -142,7 +148,8 @@ export const useFilterStore = create<FilterState>()(
       resetFilters: () =>
         set({
           regions: [],
-          dateRange: 'all',
+          dateStart: null,
+          dateEnd: null,
           maxPrice: null,
           themes: [],
           hashtags: [],
