@@ -15,6 +15,7 @@ from models.event import EventModel
 from utils.security import sanitize_text, extract_description_from_soup
 from utils.date_filter import is_within_one_month
 from utils.region import resolve_region
+from utils.imweb_options import parse_gender_tickets_html
 
 
 class ModpartyScraper(BaseScraper):
@@ -161,12 +162,18 @@ class ModpartyScraper(BaseScraper):
                         self._enrich_from_detail(
                             data, BeautifulSoup(detail_html or page.content(), 'html.parser')
                         )
-                        # 성별 실가격+매진: 예약위젯 옵션 AJAX(매진=대기신청도 가격 있음)
+                        # 성별 실가격+매진+티어(정가/얼리버드): 예약위젯 옵션 AJAX
                         gp = self._extract_gender_prices(page, idx)
                         if gp.get('남성'):
-                            data['price_male'], data['male_sold'] = gp['남성']
+                            data['price_male'] = gp['남성']['price']
+                            data['male_sold'] = gp['남성']['soldout']
+                            if gp['남성']['tiers']:
+                                data.setdefault('price_detail', {})['male'] = gp['남성']['tiers']
                         if gp.get('여성'):
-                            data['price_female'], data['female_sold'] = gp['여성']
+                            data['price_female'] = gp['여성']['price']
+                            data['female_sold'] = gp['여성']['soldout']
+                            if gp['여성']['tiers']:
+                                data.setdefault('price_detail', {})['female'] = gp['여성']['tiers']
                     except Exception as e:
                         self.logger.warning(f'모드파티 상품 idx={idx} 상세 수집 실패: {e}')
 
@@ -449,9 +456,19 @@ class ModpartyScraper(BaseScraper):
             return r or ''
 
     def _extract_gender_prices(self, page, idx: str) -> dict:
-        """예약위젯 옵션 AJAX 3단계(날짜→성별→성별선택)로 남/여 가격+매진(대기신청) 추출.
-        매진이어도 옵션은 '남성(대기신청) 79,000원' 형태로 살아있음 → 가격 확보 가능.
-        반환: {'남성': (price, soldout), '여성': (price, soldout)}"""
+        """예약위젯 옵션 AJAX 2단계(날짜 선택 즉시 성별+티어가 한 번에 나옴 — 예:
+        '여성(정상가) 69,000원 (품절)', '남성(얼리버드) 59,000원')로 표시가(정가 우선,
+        얼리버드·슈퍼얼리버드 등 프로모션은 제외)·매진(그 성별 티어가 전부 품절일 때만)·
+        티어상세(정가/얼리버드)를 추출한다.
+        ⚠️(2026-08-13, 오너 지적: 일산 돌싱 와인파티) 원래 날짜→성별→성별선택의 3단계로
+        오인해 짜여 있었는데, 실제로는 성별 선택 즉시 h2 응답에 남/여 각 티어(슈퍼얼리버드
+        ·얼리버드·정상가)가 가격·품절여부까지 전부 포함돼 나온다(3단계째 호출은 항상 빈
+        응답). 그 탓에 성별 라벨(대기/마감 문구)만으로 매진을 오판했고, 가격도 옵션에서
+        가장 먼저 매치되는 아무 숫자(대개 최저가인 얼리버드/슈퍼얼리버드)를 그대로 정가처럼
+        써왔다 — 정상가 79,000원인데 슈퍼얼리버드 49,000원이 표시되고, 전 티어 품절(사이트
+        SOLDOUT 배지)인데도 마감이 반영 안 됐다. utils/imweb_options.py 의 공용 규칙
+        (정가 우선 표시·전 티어 품절일 때만 마감)으로 다시 짰다.
+        반환: {'남성': {'price':P,'soldout':B,'tiers':dict|None}, '여성': {...}}"""
         out: dict = {}
         try:
             h1 = self._load_option_html(page, idx, [])
@@ -464,23 +481,13 @@ class ModpartyScraper(BaseScraper):
                 if '남성' in out and '여성' in out:
                     break
                 h2 = self._load_option_html(page, idx, [(oc1, vc, vn)])
-                oc2 = None
-                for m in re.finditer(r'_form_select_wrap_(O[0-9a-f]+)', h2):
-                    if m.group(1) != oc1:
-                        oc2 = m.group(1)
-                        break
-                if not oc2:
-                    continue
-                # '남성' 또는 '남성(대기신청)'/'여성(대기신청)' 등 접두 매칭
-                for gvc, gfull in re.findall(r"'(O[0-9a-f]{10,})',\s*'((?:남성|여성)[^']*)'", h2):
-                    gender = '남성' if gfull.startswith('남성') else '여성'
-                    if gender in out:
-                        continue
-                    soldout = ('대기' in gfull) or ('마감' in gfull)
-                    h3 = self._load_option_html(page, idx, [(oc1, vc, vn), (oc2, gvc, gfull)])
-                    pm = re.search(r'([1-9]\d?,\d{3}|[1-9]\d{4,6})\s*원', re.sub(r'\s+', ' ', h3))
-                    if pm:
-                        out[gender] = (int(pm.group(1).replace(',', '')), soldout)
+                parsed = parse_gender_tickets_html(h2)
+                if parsed['male'] and '남성' not in out:
+                    p, s = parsed['male']
+                    out['남성'] = {'price': p, 'soldout': s, 'tiers': parsed['male_tiers']}
+                if parsed['female'] and '여성' not in out:
+                    p, s = parsed['female']
+                    out['여성'] = {'price': p, 'soldout': s, 'tiers': parsed['female_tiers']}
             return out
         except Exception as e:
             self.logger.warning(f'모드파티 성별가격 추출 실패 idx={idx}: {str(e)[:60]}')
@@ -763,6 +770,7 @@ class ModpartyScraper(BaseScraper):
                         location_detail=data.get('location_detail'),
                         price_male=price_male,
                         price_female=price_female,
+                        price_detail=data.get('price_detail'),
                         gender_ratio=None,
                         source_url=unique_url,
                         thumbnail_urls=[img_url] if img_url else [],

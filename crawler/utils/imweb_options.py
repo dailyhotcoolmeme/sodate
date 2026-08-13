@@ -193,10 +193,38 @@ def gender_soldout_loco(page, idx: str, body_prefix: str = '') -> dict:
                     if pr is not None:
                         tickets.append((t, pr, '품절' in t or '마감' in t))
                 entry[gk] = _aggregate_base(tickets)
+                entry[f'{gk}_tiers'] = _tier_detail(tickets)
             out[key] = entry
         return out
     except Exception:
         return out
+
+
+def parse_gender_tickets_html(h2: str, item_selector: str = '.dropdown-item a, .dropdown-item span.blocked') -> dict:
+    """성별 선택지가 이미 다 펼쳐진 옵션 응답(h2)에서 남/여 표시가(정가 우선)·매진(그
+    성별 전 티어가 품절일 때만)·티어상세(정가/얼리버드)를 뽑는다. 날짜 옵션 코드 추출
+    방식이 사이트마다 달라(예: 모드파티는 changeCartSelectRequireOption 이 아니라
+    SITE_SHOP_DETAIL.selectRequireOption 을 쓴다) _OC_RE 로 1단계를 못 잡는 곳에서,
+    해당 사이트 전용 코드로 직접 h2 만 받아와 이 함수로 공통 규칙만 재사용할 때 쓴다.
+    반환: {'male': (price,soldout)|None, 'female': ..., 'male_tiers': dict|None, 'female_tiers': dict|None}
+    """
+    from bs4 import BeautifulSoup
+    male: list = []
+    female: list = []
+    for a in BeautifulSoup(h2, 'html.parser').select(item_selector):
+        t = re.sub(r'\s+', ' ', a.get_text(' ', strip=True))
+        pr = _price(t)
+        if pr is None:
+            continue
+        rec = (t, pr, '품절' in t or '마감' in t)
+        if '남성' in t:
+            male.append(rec)
+        elif '여성' in t:
+            female.append(rec)
+    return {
+        'male': _aggregate_base(male), 'female': _aggregate_base(female),
+        'male_tiers': _tier_detail(male), 'female_tiers': _tier_detail(female),
+    }
 
 
 def gender_soldout_by_label(page, idx: str, body_prefix: str = '',
@@ -206,33 +234,15 @@ def gender_soldout_by_label(page, idx: str, body_prefix: str = '',
     반환: { date_label(원문): {'male': (price, soldout)|None, 'female': (price, soldout)|None} }
     date_label 은 위젯 1단계 옵션 라벨 원문(업체가 같은 소스로 날짜 뽑으면 그대로 매칭).
     """
-    from bs4 import BeautifulSoup
     out: dict = {}
     try:
         h1 = _load_option(page, idx, [], body_prefix)
         dates = _OC_RE.findall(h1)
         if not dates:
             return out
-        grp1 = dates[0][0]
         for g1, v1, lab1 in dates:
             h2 = _load_option(page, idx, [(g1, v1, lab1)], body_prefix)
-            soup = BeautifulSoup(h2, 'html.parser')
-            male: list = []
-            female: list = []
-            for a in soup.select('.dropdown-item a, .dropdown-item span.blocked'):
-                t = re.sub(r'\s+', ' ', a.get_text(' ', strip=True))
-                pr = _price(t)
-                if pr is None:
-                    continue
-                rec = (t, pr, '품절' in t or '마감' in t)
-                if '남성' in t:
-                    male.append(rec)
-                elif '여성' in t:
-                    female.append(rec)
-            entry = {
-                'male': _aggregate_base(male), 'female': _aggregate_base(female),
-                'male_tiers': _tier_detail(male), 'female_tiers': _tier_detail(female),
-            }
+            entry = parse_gender_tickets_html(h2)
             if entry['male'] or entry['female']:
                 out[lab1] = entry
         return out
