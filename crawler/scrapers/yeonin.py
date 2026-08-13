@@ -110,6 +110,24 @@ class YeoninScraper(BaseScraper):
             self.logger.warning(f'옵션 조회 실패 (idx={idx}): {e}')
             return ''
 
+    def _fetch_thumbnail(self, idx: str) -> Optional[str]:
+        """상품 상세페이지(shop_view)의 og:image — 지역 상품(idx)의 대표 사진.
+        같은 idx 밑의 모든 날짜·시간 회차가 이 한 장을 공유한다(연인어때는 실제
+        사이트도 지역 상품 하나에 사진 한 장을 쓴다). 예전엔 옵션 API(load_option.cm)
+        로만 날짜·가격·나이를 뽑고 사진은 아예 시도하지 않아 피드·상세가 계속
+        비어 있었다(오너가 실제 사이트엔 사진이 있는 걸 보고 발견, 2026-08-13)."""
+        try:
+            r = httpx.get(
+                f'{self.BASE_URL}/shop_view',
+                params={'idx': idx},
+                headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'},
+                timeout=15, verify=False, follow_redirects=True)
+            og = BeautifulSoup(r.text, 'html.parser').find('meta', property='og:image')
+            return og['content'] if og and og.get('content') else None
+        except Exception as e:
+            self.logger.debug(f'썸네일 조회 실패 (idx={idx}): {e}')
+            return None
+
     @staticmethod
     def _sel_param(pairs) -> str:
         return ''.join(
@@ -226,6 +244,9 @@ class YeoninScraper(BaseScraper):
                 female = self._parse_slots(self._load_option(
                     idx, self._sel_param([(r0[0], r0[1]), gmap['여성']]))) if '여성' in gmap else {}
 
+                # 지역 상품(idx) 하나당 한 번만 조회 — 그 밑 모든 회차가 같은 사진을 쓴다.
+                thumb = self._fetch_thumbnail(idx)
+
                 for dt in sorted(set(male) | set(female)):
                     m, f = male.get(dt), female.get(dt)
                     age = (m or f).get('age')
@@ -246,7 +267,7 @@ class YeoninScraper(BaseScraper):
                         price_female=f['price'] if f else None,
                         gender_ratio=None,
                         source_url=f'{self.BASE_URL}/shop_view?idx={idx}#evt={dt.strftime("%Y%m%d%H%M")}',
-                        thumbnail_urls=[],
+                        thumbnail_urls=[thumb] if thumb else [],
                         theme=['일반'],
                         age_group_label=f'{age[0]}~{age[1]}세' if age else None,
                         # 앱 카드·상세가 실제로 보여주는 건 age_male/age_female 이다.
