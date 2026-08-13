@@ -46,6 +46,18 @@ interface FilterState {
   saveRecentFilter: () => void
   applyRecentFilter: (snapshot: FilterSnapshot) => void
   resetFilters: () => void
+  // FilterSheet 초안(draft)을 한 번에 커밋 — 아래 참고.
+  applyDraft: (draft: {
+    regions: string[]
+    dateStart: string | null
+    dateEnd: string | null
+    maxPrice: number | null
+    hashtags: string[]
+    ageGroups: string[]
+    days: number[]
+    timeSlots: string[]
+    companies: string[]
+  }) => void
 }
 
 export const useFilterStore = create<FilterState>()(
@@ -144,6 +156,14 @@ export const useFilterStore = create<FilterState>()(
           themes: snapshot.themes,
           hashtags: snapshot.hashtags ?? [],
         }),
+
+      // ⚠️(2026-08-13) FilterSheet 안의 칩을 누를 때마다 toggleRegion 등을 직접 호출해
+      // 이 스토어를 매번 커밋했었다. useEvents 가 이 스토어 값을 그대로 구독해 매번
+      // 새 네트워크 요청을 쐈다 — 칩 여러 개를 빠르게 누르면 그만큼 요청이 겹쳐 쏘아지고,
+      // 그중 하나라도 지연되면(특히 iOS 셀룰러) 시트가 멈춘 것처럼 보였다("적용하기"
+      // 버튼이 있는데도 실제론 매 탭마다 이미 적용되고 있었던 셈). 이제 FilterSheet는
+      // 로컬 draft만 만지다가 "적용하기"를 눌렀을 때 이걸로 한 번만 커밋한다.
+      applyDraft: (draft) => set(draft),
 
       resetFilters: () =>
         set({

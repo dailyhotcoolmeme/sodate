@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -35,31 +35,86 @@ const PRICE_OPTIONS: { value: number | null; label: string }[] = [
   { value: 100000, label: '10만원 이하' },
 ]
 
+// FilterSheet가 실제로 편집하는 필드들의 초안(draft) 타입 — 나머지(정렬 등)는 스토어를 안 거친다.
+type FilterDraft = {
+  regions: string[]
+  dateStart: string | null
+  dateEnd: string | null
+  maxPrice: number | null
+  hashtags: string[]
+  ageGroups: string[]
+  days: number[]
+  timeSlots: string[]
+  companies: string[]
+}
+
+function draftFromStore(s: ReturnType<typeof useFilterStore.getState>): FilterDraft {
+  return {
+    regions: s.regions,
+    dateStart: s.dateStart,
+    dateEnd: s.dateEnd,
+    maxPrice: s.maxPrice,
+    hashtags: s.hashtags,
+    ageGroups: s.ageGroups,
+    days: s.days,
+    timeSlots: s.timeSlots,
+    companies: s.companies,
+  }
+}
+
 export default function FilterSheet({ visible, onClose }: Props) {
-  const {
-    regions,
-    dateStart,
-    dateEnd,
-    maxPrice,
-    hashtags,
-    ageGroups,
-    days,
-    timeSlots,
-    companies,
-    recentFilters,
-    toggleRegion,
-    setRegionsBulk,
-    setDateRange,
-    setMaxPrice,
-    toggleHashtag,
-    toggleAgeGroup,
-    toggleDay,
-    toggleTimeSlot,
-    toggleCompany,
-    saveRecentFilter,
-    applyRecentFilter,
-    resetFilters,
-  } = useFilterStore()
+  const { recentFilters, saveRecentFilter, applyRecentFilter, resetFilters, applyDraft } = useFilterStore()
+
+  // ⚠️(2026-08-13, 오너 지적: 필터 시트 진입 시 한번씩 멈춤) 예전엔 칩을 누를 때마다
+  // 스토어를 바로 커밋했고, useEvents가 그 스토어를 구독해 칩 하나 누를 때마다 네트워크
+  // 요청을 새로 쐈다. 시트를 열어두고 칩을 여러 개 빠르게 누르면 그만큼 요청이 겹쳐
+  // 나갔고, 그중 하나라도 느려지면(iOS 셀룰러에서 흔함) UI가 멈춘 것처럼 보였다.
+  // 이제 시트 안에서는 이 로컬 draft만 바꾸고, "적용하기"를 눌렀을 때만 스토어에 커밋한다
+  // (그래야 진짜로 네트워크 요청도 그때 딱 한 번만 나간다). 시트를 열 때마다 스토어의
+  // 현재 값으로 draft를 다시 채운다 — 적용 없이 닫으면(스와이프·뒤로가기) 자동으로 취소됨.
+  const [draft, setDraft] = useState<FilterDraft>(() => draftFromStore(useFilterStore.getState()))
+  useEffect(() => {
+    if (visible) setDraft(draftFromStore(useFilterStore.getState()))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible])
+
+  const { regions, dateStart, dateEnd, maxPrice, hashtags, ageGroups, days, timeSlots, companies } = draft
+
+  const toggleRegion = (id: string) =>
+    setDraft((d) => ({
+      ...d,
+      regions: d.regions.includes(id) ? d.regions.filter((x) => x !== id) : [...d.regions, id],
+    }))
+  const setRegionsBulk = (ids: string[], on: boolean) =>
+    setDraft((d) => ({
+      ...d,
+      regions: on ? Array.from(new Set([...d.regions, ...ids])) : d.regions.filter((x) => !ids.includes(x)),
+    }))
+  const setDateRange = (s: string | null, e: string | null) => setDraft((d) => ({ ...d, dateStart: s, dateEnd: e }))
+  const setMaxPrice = (p: number | null) => setDraft((d) => ({ ...d, maxPrice: p }))
+  const toggleHashtag = (tag: string) =>
+    setDraft((d) => ({
+      ...d,
+      hashtags: d.hashtags.includes(tag) ? d.hashtags.filter((t) => t !== tag) : [...d.hashtags, tag],
+    }))
+  const toggleAgeGroup = (id: string) =>
+    setDraft((d) => ({
+      ...d,
+      ageGroups: d.ageGroups.includes(id) ? d.ageGroups.filter((x) => x !== id) : [...d.ageGroups, id],
+    }))
+  const toggleDay = (day: number) =>
+    setDraft((d) => ({ ...d, days: d.days.includes(day) ? d.days.filter((x) => x !== day) : [...d.days, day] }))
+  const toggleTimeSlot = (slot: string) =>
+    setDraft((d) => ({
+      ...d,
+      timeSlots: d.timeSlots.includes(slot) ? d.timeSlots.filter((x) => x !== slot) : [...d.timeSlots, slot],
+    }))
+  const toggleCompany = (id: string) =>
+    setDraft((d) => ({
+      ...d,
+      companies: d.companies.includes(id) ? d.companies.filter((x) => x !== id) : [...d.companies, id],
+    }))
+
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const regionOptions = useRegions()
@@ -252,8 +307,17 @@ export default function FilterSheet({ visible, onClose }: Props) {
   }), [colors, insets.top])
 
   const handleApply = () => {
+    applyDraft(draft)
     saveRecentFilter()
     onClose()
+  }
+
+  const handleReset = () => {
+    resetFilters()
+    setDraft({
+      regions: [], dateStart: null, dateEnd: null, maxPrice: null,
+      hashtags: [], ageGroups: [], days: [], timeSlots: [], companies: [],
+    })
   }
 
   return (
@@ -493,7 +557,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
 
         {/* 하단 플로팅 바 — 초기화 · 적용하기 한 줄, 동일 너비 */}
         <View style={[styles.applyBar, { paddingBottom: insets.bottom + 10 }]}>
-          <TouchableOpacity style={[styles.barBtn, styles.resetBtn]} onPress={resetFilters} activeOpacity={0.85}>
+          <TouchableOpacity style={[styles.barBtn, styles.resetBtn]} onPress={handleReset} activeOpacity={0.85}>
             <Text style={styles.resetBtnText}>초기화</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.barBtn, styles.applyFab]} onPress={handleApply} activeOpacity={0.85}>
