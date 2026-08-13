@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, RefreshControl, Modal, Pressable,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, RefreshControl, Modal, Pressable, Dimensions,
 } from 'react-native'
 // 키보드가 올라오면 '내용 영역 자체가 줄어든다'. 애플이 keyboard layout guide 로
 // 설명하는 방식이다 — 보던 자리는 그대로 있고 목록 끝까지 접근할 수 있다.
@@ -61,6 +61,40 @@ function PostImage({ uri, style }: { uri: string; style: any }) {
   )
 }
 
+// 화면 밖 이미지를 미리 불러올 여유 거리 — 한 화면 높이 정도 앞서 로드해서
+// 스크롤이 닿기 전에 이미 준비돼 있게 한다.
+const IMAGE_LAZY_BUFFER = 600
+
+/**
+ * 사진을 한꺼번에 다 열지 않고, 화면(뷰포트) 가까이 왔을 때만 실제로 불러온다
+ * (2026-08-13 오너 지시 — 갯수 제한을 10개로 늘리면서, 어차피 스크롤해야 보이는
+ * 아래쪽 사진들까지 진입 즉시 전부 내려받을 필요는 없다는 판단).
+ *
+ * RN에는 IntersectionObserver가 없어서 `measureInWindow`로 이 뷰의 현재 화면상
+ * 위치를 직접 재는 방식으로 흉내낸다 — 스크롤할 때마다(위 [id].tsx의 onScroll)
+ * scrollTick이 바뀌면 다시 재보고, 화면 버퍼 안에 들어오면 그때 실제 <PostImage>를
+ * 마운트한다. 한 번 로드된 뒤에는 다시 안 가린다(스크롤 왔다갔다해도 재요청 없음).
+ */
+function LazyPostImage({ uri, style, scrollTick }: { uri: string; style: any; scrollTick: number }) {
+  const wrapRef = useRef<any>(null)
+  const [near, setNear] = useState(false)
+
+  const check = useCallback(() => {
+    if (near) return
+    wrapRef.current?.measureInWindow?.((_x: number, y: number, _w: number, h: number) => {
+      const screenH = Dimensions.get('window').height
+      if (h > 0 && y < screenH + IMAGE_LAZY_BUFFER && y + h > -IMAGE_LAZY_BUFFER) setNear(true)
+    })
+  }, [near])
+
+  useEffect(check, [scrollTick, check])
+
+  if (!near) {
+    return <View ref={wrapRef} style={style} onLayout={check} />
+  }
+  return <PostImage uri={uri} style={style} />
+}
+
 /** 글 상세 — 추천·비추, 댓글(대댓글 한 단계), 내 글이면 수정·삭제. */
 export default function BoardPostScreen() {
   const { id, commentId } = useLocalSearchParams<{ id: string; commentId?: string }>()
@@ -107,6 +141,10 @@ export default function BoardPostScreen() {
   // 하나뿐인 글처럼 가릴 내용 자체가 없으면 밀 필요도 없다(2026-08-01 실측).
   const contentHeightRef = useRef(0)
   const viewportHeightRef = useRef(0)
+  // 사진 지연 로드(LazyPostImage)가 다시 재볼 시점을 알리는 값 — 스크롤마다 매번
+  // state를 갱신하면 리렌더가 너무 잦아지니 150ms 간격으로만 올린다.
+  const [scrollTick, setScrollTick] = useState(0)
+  const lastTickAtRef = useRef(0)
 
   /**
    * 댓글 입력줄을 누르면 가장 마지막 댓글이 보이도록 목록을 밀어 올린다.
@@ -411,7 +449,14 @@ export default function BoardPostScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y }}
+        onScroll={(e) => {
+          scrollY.current = e.nativeEvent.contentOffset.y
+          const now = Date.now()
+          if (now - lastTickAtRef.current > 150) {
+            lastTickAtRef.current = now
+            setScrollTick((t) => t + 1)
+          }
+        }}
         scrollEventThrottle={16}
         onContentSizeChange={(_w, h) => { contentHeightRef.current = h }}
         onLayout={(e) => { viewportHeightRef.current = e.nativeEvent.layout.height }}
@@ -493,7 +538,7 @@ export default function BoardPostScreen() {
               </View>
             ) : post.image_urls.map((u) => (
               <View key={u} style={styles.imageWrap}>
-                <PostImage uri={u} style={styles.image} />
+                <LazyPostImage uri={u} style={styles.image} scrollTick={scrollTick} />
               </View>
             ))}
           </View>

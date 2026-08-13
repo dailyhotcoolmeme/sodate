@@ -303,8 +303,9 @@ function PostRow({
           style={[styles.rowTitle, isHot && styles.rowTitleHot, isCold && styles.rowTitleCold, isRead && styles.rowTitleRead]}
           numberOfLines={1}
         >
-          {/* 말머리 — admin(board_tags)에서 등록한 문자열을 그대로 붙인다(2026-08-12). */}
-          {!!tagLabel && <Text style={styles.rowTag}>{tagLabel} </Text>}
+          {/* 말머리 — admin(board_tags)에서 등록한 문자열을 그대로 붙인다(2026-08-12).
+              읽은 글이면 말머리도 연한 핑크로 — 안 읽은 말머리들과 구분되게(2026-08-13 오너 지시). */}
+          {!!tagLabel && <Text style={[styles.rowTag, isRead && styles.rowTagRead]}>{tagLabel} </Text>}
           {post.title}
         </Text>
         {hasImage && (
@@ -569,6 +570,8 @@ function makeStyles(colors: AppColors) {
     // (안드로이드에서 넣은 이모지가 아이폰에서 잘리던 문제, 2026-08-08 오너 지적).
     rowTitle: { flexShrink: 1, fontSize: 14.5, lineHeight: 20, color: colors.textPrimary },
     rowTag: { color: colors.primary, fontWeight: '800' },
+    // 읽은 글의 말머리 — primary 핑크에 알파를 줘서 연하게(테마 무관, primary가 라이트/다크 동일).
+    rowTagRead: { color: `${colors.primary}80` },
     // 추천이 많으면 굵게, 비추가 많으면 흐리게(오너 확정). 흐려질 뿐 지워지지 않는다.
     rowTitleHot: { fontWeight: '800' },
     rowTitleCold: { color: colors.textTertiary },

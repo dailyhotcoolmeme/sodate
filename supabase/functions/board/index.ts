@@ -173,7 +173,12 @@ const NICK_MAX = 20
 // 필요) 외부(유튜브 앱/브라우저)에서 재생 — youtube.com/youtu.be 는 이미
 // 아웃링크 허용 목록에 있다(app/lib/security.ts). 다른 링크 종류(인스타 릴스·
 // 틱톡 등)는 공식 썸네일 API가 없어 1단계에서는 뺐다(오너 결정).
-const MAX_LINKS = 3
+// 오너 결정(2026-08-13): 유튜브 링크는 아웃링크라 서버 비용이 없어 갯수를 막지 않는다.
+// 신고·차단 등 admin 운영으로 스팸을 관리한다. 이 값은 화면에 보여주는 제한이 아니라
+// API 오남용(예: 앱을 거치지 않고 함수를 직접 호출)만 막는 안전판이다.
+const MAX_LINKS = 30
+// 사진 10장 + 움짤 여유분을 합친 서버 안전판(2026-08-13). lib/boardImage.ts의 MAX_IMAGES와 별개.
+const MAX_ATTACHED_IMAGES = 15
 function youtubeId(raw: string): string | null {
   try {
     const u = new URL(raw)
@@ -275,7 +280,9 @@ serve(async (req) => {
       const nick = String(body.nickname ?? '').trim()
       const title = String(body.title ?? '').trim()
       const content = String(body.content ?? '').trim()
-      const images: string[] = Array.isArray(body.imageUrls) ? body.imageUrls.slice(0, 5) : []
+      // 사진은 10장, 움짤(GIF)은 갯수 대신 5MB로만 제한한다(2026-08-13 오너 지시) —
+      // 여기 15는 그 둘을 합친 서버 안전판일 뿐, 화면에 보여주는 제한은 lib/boardImage.ts에 있다.
+      const images: string[] = Array.isArray(body.imageUrls) ? body.imageUrls.slice(0, MAX_ATTACHED_IMAGES) : []
       const linksResult = resolveLinks(body.linkUrls)
       if ('error' in linksResult) return json({ error: linksResult.error }, 400)
 
@@ -338,7 +345,7 @@ serve(async (req) => {
           return json({ error: `본문은 1~${CONTENT_MAX}자로 입력해주세요.` }, 400)
         patch.content = content
       }
-      if (Array.isArray(body.imageUrls)) patch.image_urls = body.imageUrls.slice(0, 5)
+      if (Array.isArray(body.imageUrls)) patch.image_urls = body.imageUrls.slice(0, MAX_ATTACHED_IMAGES)
       if (Array.isArray(body.linkUrls)) {
         const linksResult = resolveLinks(body.linkUrls)
         if ('error' in linksResult) return json({ error: linksResult.error }, 400)
@@ -548,7 +555,11 @@ serve(async (req) => {
       const [, mime, b64] = m
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
       if (bytes.length > 5 * 1024 * 1024) {
-        return json({ error: '이미지는 5MB 이하만 올릴 수 있습니다.' }, 400)
+        return json({
+          error: mime === 'image/gif'
+            ? '움짤(GIF)은 압축 없이 원본 그대로 올라가서 5MB 이하만 첨부할 수 있어요.'
+            : '이미지는 5MB 이하만 올릴 수 있습니다.',
+        }, 400)
       }
       const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : mime === 'image/gif' ? 'gif' : 'jpg'
       const key = `${hash.slice(0, 12)}/${crypto.randomUUID()}.${ext}`

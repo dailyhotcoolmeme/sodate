@@ -32,5 +32,3 @@ export function youtubeThumbnail(url: string): string | null {
   const id = youtubeId(url)
   return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null
 }
-
-export const MAX_LINKS = 3

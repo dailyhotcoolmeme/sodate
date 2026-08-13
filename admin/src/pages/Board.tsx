@@ -1,6 +1,6 @@
 import { useEffect, useState, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
-import { Flag, EyeOff, Eye, Trash2, ImageOff, ShieldBan, Plus, Lock, UserSearch, X } from 'lucide-react'
+import { Flag, EyeOff, Eye, Trash2, ImageOff, ShieldBan, Plus, Lock, UserSearch, X, Youtube } from 'lucide-react'
 
 /**
  * 게시판 관리 — 신고 대응이 핵심이다.
@@ -581,28 +581,54 @@ function UserActivityModal({
                 <p className="text-xs font-semibold text-gray-500 mb-2">작성한 글</p>
                 <div className="space-y-1.5">
                   {(activity?.posts ?? []).map((p) => (
-                    <div key={p.id} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-800 truncate">
-                          {tagLabel(p.tag_id) && <span className="text-pink-500 font-semibold">{tagLabel(p.tag_id)} </span>}
-                          {p.title}
-                        </p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">
-                          {new Date(p.created_at).toLocaleDateString('ko-KR')}
-                          {(p.report_count > 0 || p.content_report_count > 0) && (
-                            <span className="ml-1.5 text-red-500 font-medium">신고 {p.report_count}/{p.content_report_count}</span>
-                          )}
-                          {!p.is_active && <span className="ml-1.5 text-gray-400">(숨김)</span>}
-                        </p>
+                    <div key={p.id} className="border border-gray-100 rounded-lg px-3 py-2 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-800 truncate">
+                            {tagLabel(p.tag_id) && <span className="text-pink-500 font-semibold">{tagLabel(p.tag_id)} </span>}
+                            {p.title}
+                          </p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">
+                            {new Date(p.created_at).toLocaleDateString('ko-KR')}
+                            {(p.report_count > 0 || p.content_report_count > 0) && (
+                              <span className="ml-1.5 text-red-500 font-medium">신고 {p.report_count}/{p.content_report_count}</span>
+                            )}
+                            {!p.is_active && <span className="ml-1.5 text-gray-400">(숨김)</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => onTogglePost(p)} className="px-2 py-1 rounded-lg border border-gray-200 text-[11px] font-medium text-gray-600 hover:bg-gray-50">
+                            {p.is_active ? '숨김' : '노출'}
+                          </button>
+                          <button onClick={() => onRemovePost(p)} className="px-2 py-1 rounded-lg border border-red-200 text-[11px] font-medium text-red-600 hover:bg-red-50">
+                            삭제
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => onTogglePost(p)} className="px-2 py-1 rounded-lg border border-gray-200 text-[11px] font-medium text-gray-600 hover:bg-gray-50">
-                          {p.is_active ? '숨김' : '노출'}
-                        </button>
-                        <button onClick={() => onRemovePost(p)} className="px-2 py-1 rounded-lg border border-red-200 text-[11px] font-medium text-red-600 hover:bg-red-50">
-                          삭제
-                        </button>
-                      </div>
+                      {/* 사진은 썸네일, 유튜브는 링크로 — 신고 대응할 때 첨부를 눌러서 바로
+                          확인할 수 있어야 한다(2026-08-13 오너 지시). */}
+                      {(!!p.image_urls?.length || !!p.link_urls?.length) && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {p.image_urls?.map((u) => (
+                            <a
+                              key={u} href={u} target="_blank" rel="noreferrer"
+                              className="block w-12 h-12 rounded-md overflow-hidden border border-gray-200 shrink-0"
+                              title="눌러서 전체 보기"
+                            >
+                              <img src={u} alt="" className="w-full h-full object-cover" />
+                            </a>
+                          ))}
+                          {p.link_urls?.map((u) => (
+                            <a
+                              key={u} href={u} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 max-w-[160px] px-2 py-1 rounded-md border border-gray-200 text-[11px] text-red-500 hover:bg-red-50 truncate"
+                              title={u}
+                            >
+                              <Youtube size={12} className="shrink-0" /> <span className="truncate">{u}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                   {(activity?.posts.length ?? 0) === 0 && (

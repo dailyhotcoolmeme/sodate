@@ -29,10 +29,21 @@ function loadNative() {
   }
 }
 
-export const MAX_IMAGES = 5
+// 오너 결정(2026-08-13): 상세 화면에서 사진을 한꺼번에 다 열지 않고 스크롤에 맞춰
+// 순차로 불러오게 바꿨으니(board/[id].tsx의 LazyPostImage), 갯수를 5→10으로 늘려도
+// 화면 진입 즉시 10장이 한꺼번에 로드되지 않는다.
+export const MAX_IMAGES = 10
+export const GIF_MAX_BYTES = 5 * 1024 * 1024
+
+/**
+ * 움짤(GIF)은 사진과 달리 압축을 안 하고 원본 그대로 올라간다(아래 참고) — 그래서
+ * 첨부 도구줄에서 사진과 분리된 자리에 두고, 뱃지도 "갯수"가 아니라 "5MB"로
+ * 보여준다(오너 지시). 갯수 제한은 두지 않고 파일당 용량만 본다.
+ */
+export type PickMode = 'photo' | 'gif'
 
 /** 사진첩에서 고르고 → 줄이고 → 올린다. 취소하면 null. */
-export async function pickAndUpload(): Promise<{ url: string } | { error: string } | null> {
+export async function pickAndUpload(mode: PickMode = 'photo'): Promise<{ url: string } | { error: string } | null> {
   const native = loadNative()
   if (!native) {
     return { error: '사진 첨부는 다음 앱 업데이트부터 사용할 수 있어요.' }
@@ -60,9 +71,27 @@ export async function pickAndUpload(): Promise<{ url: string } | { error: string
     // 못 다룬다. 그래서 GIF만 리사이즈·재인코딩을 건너뛰고 원본 바이트를 그대로 올린다
     // (대신 압축이 안 되니 서버 5MB 제한에 원본 용량 그대로 걸린다).
     const isGif = asset.mimeType === 'image/gif' || /\.gif$/i.test(asset.uri)
+
+    // 버튼(사진/움짤)과 실제 고른 파일 종류가 어긋나면 헷갈리니 바로잡아 달라고 안내한다
+    // — 이래야 "사진 N/10" 카운트에 움짤이 섞이거나 그 반대인 상황이 안 생긴다.
+    if (mode === 'gif' && !isGif) {
+      return { error: '움짤(GIF) 파일만 여기로 올릴 수 있어요. 일반 사진은 사진 버튼을 이용해주세요.' }
+    }
+    if (mode === 'photo' && isGif) {
+      return { error: '움짤(GIF)은 아래 움짤 버튼으로 올려주세요.' }
+    }
+
     let dataUrl: string
     if (isGif) {
       if (!asset.base64) return { error: 'GIF를 처리하지 못했어요.' }
+      // 서버까지 보내고 나서야 용량 초과를 알면 느리고 헷갈린다 — 고르자마자 바로 알려준다.
+      const approxBytes = Math.ceil((asset.base64.length * 3) / 4)
+      if (approxBytes > GIF_MAX_BYTES) {
+        const mb = (approxBytes / (1024 * 1024)).toFixed(1)
+        return {
+          error: `움짤(GIF)은 압축 없이 원본 그대로 올라가서 5MB 이하만 첨부할 수 있어요. 지금 파일은 약 ${mb}MB입니다.`,
+        }
+      }
       dataUrl = `data:image/gif;base64,${asset.base64}`
     } else {
       const resized = await ImageManipulator.manipulateAsync(
@@ -98,3 +127,6 @@ export async function pickAndUpload(): Promise<{ url: string } | { error: string
     return { error: '사진을 올리지 못했어요.' }
   }
 }
+
+/** URL만 보고 움짤인지 구분한다 — 업로드된 R2 키가 실제 확장자를 그대로 담고 있어 가능. */
+export const isGifUrl = (url: string): boolean => /\.gif(\?|$)/i.test(url)

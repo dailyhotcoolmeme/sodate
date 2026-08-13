@@ -4,8 +4,8 @@ import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { pickAndUpload, MAX_IMAGES } from '@/lib/boardImage'
-import { youtubeId, youtubeThumbnail, MAX_LINKS } from '@/lib/youtube'
+import { pickAndUpload, MAX_IMAGES, isGifUrl } from '@/lib/boardImage'
+import { youtubeId, youtubeThumbnail } from '@/lib/youtube'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
 /**
@@ -20,14 +20,26 @@ import LoadingOverlay from '@/components/LoadingOverlay'
 export function useBoardEditor(images: string[], onChangeImages: (next: string[]) => void) {
   const inputRef = useRef<TextInput>(null)
   const [uploading, setUploading] = useState(false)
+  // 사진 10장 제한은 움짤을 빼고 센다 — 움짤은 갯수가 아니라 파일당 5MB로만
+  // 제한한다(2026-08-13 오너 지시). 별도 상태 없이 URL 확장자로 구분한다.
+  const photoCount = images.filter((u) => !isGifUrl(u)).length
 
   const addImage = async () => {
-    if (images.length >= MAX_IMAGES) {
+    if (photoCount >= MAX_IMAGES) {
       Alert.alert('알림', `사진은 ${MAX_IMAGES}장까지 올릴 수 있어요.`)
       return
     }
     setUploading(true)
-    const r = await pickAndUpload()
+    const r = await pickAndUpload('photo')
+    setUploading(false)
+    if (!r) return
+    if ('error' in r) { Alert.alert('알림', r.error); return }
+    onChangeImages([...images, r.url])
+  }
+
+  const addGif = async () => {
+    setUploading(true)
+    const r = await pickAndUpload('gif')
     setUploading(false)
     if (!r) return
     if ('error' in r) { Alert.alert('알림', r.error); return }
@@ -37,6 +49,8 @@ export function useBoardEditor(images: string[], onChangeImages: (next: string[]
   return {
     inputRef,
     addImage,
+    addGif,
+    photoCount,
     uploading,
     removeImage: (u: string) => onChangeImages(images.filter((x) => x !== u)),
   }
@@ -115,8 +129,11 @@ function makeStyles(colors: AppColors) {
 
 /**
  * 게시판 유튜브 링크 첨부(2026-08-13). 인앱 재생은 안 하고 외부(유튜브 앱/브라우저)에서
- * 재생 — 오너 결정으로 1단계는 유튜브만, 최대 3개. 썸네일은 img.youtube.com URL
- * 패턴으로 API 호출 없이 바로 만든다.
+ * 재생 — 오너 결정으로 1단계는 유튜브만. 썸네일은 img.youtube.com URL 패턴으로
+ * API 호출 없이 바로 만든다.
+ *
+ * 갯수 제한은 두지 않는다(2026-08-13 오너 지시) — 아웃링크라 서버 비용이 없고,
+ * 스팸 여부는 신고·차단 등 admin 운영으로 관리한다.
  */
 export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) => void) {
   const [modalVisible, setModalVisible] = useState(false)
@@ -124,10 +141,6 @@ export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) =
   const [error, setError] = useState<string | null>(null)
 
   const openAdd = () => {
-    if (links.length >= MAX_LINKS) {
-      Alert.alert('알림', `유튜브 링크는 ${MAX_LINKS}개까지 첨부할 수 있어요.`)
-      return
-    }
     setInput('')
     setError(null)
     setModalVisible(true)

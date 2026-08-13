@@ -13,7 +13,6 @@ import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import { MAX_IMAGES } from '@/lib/boardImage'
-import { MAX_LINKS } from '@/lib/youtube'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
 import { wideContent } from '@/constants/layout'
@@ -138,7 +137,7 @@ export default function BoardWriteScreen() {
     router.back()
   }
 
-  const full = images.length >= MAX_IMAGES
+  const full = editor.photoCount >= MAX_IMAGES
 
   return (
     <View style={styles.container}>
@@ -278,20 +277,30 @@ export default function BoardWriteScreen() {
           >
             <Ionicons name="image-outline" size={21} color={full ? colors.textTertiary : colors.textSecondary} />
             <Text style={[styles.toolText, full && styles.toolTextOff]}>
-              사진 {images.length}/{MAX_IMAGES}
+              사진 {editor.photoCount}/{MAX_IMAGES}
             </Text>
           </TouchableOpacity>
 
+          {/* 움짤(GIF) — 사진과 분리된 자리. 갯수가 아니라 파일당 용량으로만 제한해서
+              뱃지도 "N/10"이 아니라 "5MB"로 보여준다(2026-08-13 오너 지시). */}
+          <TouchableOpacity
+            style={styles.tool}
+            onPress={editor.addGif}
+            disabled={editor.uploading}
+            hitSlop={8}
+          >
+            <Ionicons name="film-outline" size={21} color={colors.textSecondary} />
+            <Text style={styles.toolText}>움짤 · 5MB</Text>
+          </TouchableOpacity>
+
+          {/* 유튜브 링크 — 갯수 제한 없음(2026-08-13 오너 지시, 스팸은 admin으로 관리) */}
           <TouchableOpacity
             style={styles.tool}
             onPress={linksApi.openAdd}
-            disabled={links.length >= MAX_LINKS}
             hitSlop={8}
           >
-            <Ionicons name="logo-youtube" size={21} color={links.length >= MAX_LINKS ? colors.textTertiary : colors.textSecondary} />
-            <Text style={[styles.toolText, links.length >= MAX_LINKS && styles.toolTextOff]}>
-              링크 {links.length}/{MAX_LINKS}
-            </Text>
+            <Ionicons name="logo-youtube" size={21} color={colors.textSecondary} />
+            <Text style={styles.toolText}>링크 {links.length}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardStickyView>
@@ -406,7 +415,8 @@ function makeStyles(colors: AppColors) {
     agreeLink: { color: colors.primary, fontWeight: '700' },
 
     toolbar: {
-      flexDirection: 'row', alignItems: 'center', gap: 18,
+      // 버튼이 사진·움짤·링크 3개로 늘어(2026-08-13) 좁은 화면에서도 안 밀리게 간격을 줄임.
+      flexDirection: 'row', alignItems: 'center', gap: 14,
       paddingHorizontal: 14, paddingTop: 8,
       backgroundColor: colors.surface,
       borderTopWidth: 1, borderTopColor: colors.divider,
