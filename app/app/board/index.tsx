@@ -315,7 +315,7 @@ function PostRow({
           <Ionicons name="play-circle-outline" size={16} color={colors.textSecondary} style={styles.rowIcon} />
         )}
         {post.comment_count > 0 && (
-          <Text style={styles.rowCount}>[{post.comment_count}]</Text>
+          <Text style={[styles.rowCount, isRead && styles.rowTagRead]}>[{post.comment_count}]</Text>
         )}
       </View>
       <View style={styles.rowMetaRow}>
