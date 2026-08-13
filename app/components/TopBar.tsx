@@ -211,7 +211,9 @@ export default function TopBar({
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => goSegment(seg === 'board' ? 'event' : 'board')}
-              style={[styles.segTrack, { backgroundColor: seg === 'board' ? colors.primary : colors.border }]}
+              // 커뮤니티(켜짐)는 진한 핑크(colors.primary), 모임 피드(꺼짐)는 무채색 회색 대신
+              // 연한 핑크로(2026-08-14 오너 지시) — 톱바 어디서나 핑크 톤 하나로 통일.
+              style={[styles.segTrack, { backgroundColor: seg === 'board' ? colors.primary : `${colors.primary}30` }]}
               accessibilityRole="switch"
               accessibilityLabel="일정·커뮤니티 전환"
               accessibilityHint="켜면 커뮤니티, 끄면 소개팅 일정 화면으로 이동합니다"
