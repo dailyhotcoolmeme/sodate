@@ -531,12 +531,21 @@ export default function HomeScreen() {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
   }
 
+  // ⚠️(2026-08-13, 오너 지적: 필터 2줄이 스크롤 중 불안정하게 깜빡임) 예전엔 임계값이
+  // y<=8 하나뿐이라 접힘/펼침 판정이 같은 선을 공유했다. 맨 위 근처에서 살짝만 흔들려도
+  // (관성 감속, iOS 오버스크롤 바운스, 이미지 로드로 인한 리스트 리레이아웃 등) 그 8px
+  // 선을 왔다갔다 넘나들어 애니메이션이 매번 새로 시작되며 깜빡였다. 접힘/펼침 임계값을
+  // 분리해 그 사이(9~59px)를 죽은 구간으로 둬서, 경계 근처의 자잘한 흔들림으로는 상태가
+  // 안 바뀌게 한다(펼치려면 8px 아래로, 접으려면 60px 넘게 — 확실히 한쪽으로 넘어가야 함).
+  const EXPAND_AT = 8
+  const COLLAPSE_AT = 60
   const onScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     setShowFab(y > 300)
     if (Platform.OS === 'android') setAndroidScrollY(y)
-    const expand = y <= 8
-    if (expand !== chipsExpandedRef.current) {
+    const wasExpanded = chipsExpandedRef.current
+    const expand = wasExpanded ? y <= COLLAPSE_AT : y <= EXPAND_AT
+    if (expand !== wasExpanded) {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
