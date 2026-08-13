@@ -69,7 +69,7 @@ export default function BoardPostScreen() {
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
-  const { post, postBlocked, comments, myVote, isMine, myCommentIds, loading, refetch } = useBoardPost(id)
+  const { post, postBlocked, comments, myVote, isMine, myCommentIds, loading, error, refetch } = useBoardPost(id)
 
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
 
@@ -346,6 +346,20 @@ export default function BoardPostScreen() {
       <View style={styles.container}>
         <TopBar showBack onLogoPress={() => router.replace('/board')} />
         <View style={styles.center}><AppSpinner /></View>
+      </View>
+    )
+  }
+
+  {/* 조회 자체가 실패한 경우("글 없음"과 구분 — 2026-08-13, board/index.tsx와 동일 이유) */}
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <TopBar showBack onLogoPress={() => router.replace('/board')} />
+        <View style={styles.center}>
+          <Ionicons name="construct-outline" size={32} color={colors.textTertiary} />
+          <Text style={styles.emptyText}>일시적인 점검 중입니다</Text>
+          <Text style={styles.emptySub}>잠시 후 다시 시도해주세요</Text>
+        </View>
       </View>
     )
   }

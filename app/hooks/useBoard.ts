@@ -54,6 +54,11 @@ export function useBoardList(page: number, search = '') {
   const [posts, setPosts] = useState<BoardPostWithTag[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  // ⚠️(2026-08-13) 예전엔 조회가 실패해도 posts=[] 그대로 두고 loading만 꺼서, 화면엔
+  // "아직 글이 없어요"가 떴다 — 진짜 빈 상태와 구분이 안 돼 게시판이 통째로 고장났는데
+  // (컬럼 rename 사고 2연타로 실제 겪음) 아무도 못 알아챘다. supabase-js는 DB 에러여도
+  // reject가 아니라 {data:null,error} 로 resolve하므로 성공 콜백 안에서 error를 봐야 한다.
+  const [error, setError] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -75,20 +80,26 @@ export function useBoardList(page: number, search = '') {
 
     q.order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1)
-      .then(async ({ data, count }) => {
+      .then(async ({ data, count, error: err }) => {
+        if (err) {
+          setError(true)
+          setLoading(false)
+          return
+        }
         const blocked = await getBlockedAuthors()
         const blockedKeys = new Set(blocked.map((b) => b.key))
         const rows = (data as unknown as BoardPostWithTag[]) ?? []
         setPosts(blockedKeys.size ? rows.filter((p) => !blockedKeys.has(p.owner_token)) : rows)
         setTotal(count ?? 0)
+        setError(false)
         setLoading(false)
-      }, () => setLoading(false))
+      }, () => { setError(true); setLoading(false) })
   }, [page, search])
 
   useEffect(() => { load() }, [load])
 
   return {
-    posts, total, loading, refetch: load,
+    posts, total, loading, error, refetch: load,
     pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
   }
 }
@@ -101,12 +112,14 @@ export function useBoardPost(id: string) {
   const [isMine, setIsMine] = useState(false)
   const [myCommentIds, setMyCommentIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  /** DB 조회 자체가 실패한 경우 — "글을 못 찾음"과 구분해야 한다(2026-08-13, 아래 참고). */
+  const [error, setError] = useState(false)
 
   const load = useCallback(async () => {
     if (!id) return
     setLoading(true)
     try {
-      const [{ data: p }, { data: c }] = await Promise.all([
+      const [{ data: p, error: pErr }, { data: c, error: cErr }] = await Promise.all([
         supabase.from('board_posts')
           .select('id,nickname,title,content,image_urls,link_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,content_hidden,owner_token,is_active,created_at,updated_at')
           .eq('id', id).maybeSingle(),
@@ -115,6 +128,13 @@ export function useBoardPost(id: string) {
           .eq('post_id', id).eq('is_active', true)
           .order('created_at', { ascending: true }),
       ])
+      // ⚠️ 조회 실패(컬럼 오류·권한 문제 등)를 "글이 없음"으로 오인하면 안 된다 —
+      // supabase-js는 DB 에러여도 reject가 아니라 {data:null,error}로 resolve한다.
+      if (pErr || cErr) {
+        setError(true)
+        return
+      }
+      setError(false)
       const blocked = await getBlockedAuthors()
       const blockedKeys = new Set(blocked.map((b) => b.key))
       const postRow = (p as unknown as BoardPostWithTag) ?? null
@@ -146,7 +166,7 @@ export function useBoardPost(id: string) {
 
   useEffect(() => { load() }, [load])
 
-  return { post, postBlocked, comments, myVote, isMine, myCommentIds, loading, refetch: load, setMyVote }
+  return { post, postBlocked, comments, myVote, isMine, myCommentIds, loading, error, refetch: load, setMyVote }
 }
 
 /** 내가 쓴 글 (햄버거 → 내가 쓴 글) */

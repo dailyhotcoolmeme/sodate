@@ -39,7 +39,7 @@ export default function BoardListScreen() {
   const [draft, setDraft] = useState('')
 
   const settings = useBoardSettings()
-  const { posts, total, loading, pageCount, refetch } = useBoardList(page, search)
+  const { posts, total, loading, error, pageCount, refetch } = useBoardList(page, search)
   // 내 글에 달린 새 댓글 — 목록 위 띠(2026-08-12 오너 지시). 푸시 없이 앱에서만 보인다.
   const { groups: newCommentGroups, refetch: refetchNewComments } = useMyPostNewComments()
   const [newCommentExpanded, setNewCommentExpanded] = useState(false)
@@ -181,6 +181,15 @@ export default function BoardListScreen() {
 
       {loading && posts.length === 0 ? (
         <View style={styles.center}><AppSpinner /></View>
+      ) : error ? (
+        // ⚠️(2026-08-13) 조회가 실패해도 예전엔 posts=[] 그대로라 "아직 글이 없어요"로
+        // 보였다 — 진짜 빈 상태와 구분이 안 돼 게시판이 통째로 고장나도 티가 안 났다
+        // (같은 날 컬럼 rename 사고로 두 번 겪음). 실패는 실패라고 분명히 알려준다.
+        <View style={styles.center}>
+          <Ionicons name="construct-outline" size={32} color={colors.textTertiary} />
+          <Text style={styles.emptyText}>일시적인 점검 중입니다</Text>
+          <Text style={styles.emptySub}>잠시 후 다시 시도해주세요</Text>
+        </View>
       ) : posts.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="chatbubbles-outline" size={32} color={colors.textTertiary} />
