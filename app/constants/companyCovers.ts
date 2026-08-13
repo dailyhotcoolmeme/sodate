@@ -23,7 +23,11 @@ export const COMPANY_COVERS: Record<string, string> = {
 export const DEFAULT_COVER = P('1545731939-9c302d5d27ed') // 깔끔한 라떼
 
 // 썸네일이 항상 로고라서 실제 사진이 없는 업체 — 이벤트 썸네일 무시하고 무조건 커버 사용
-export const ALWAYS_COVER = new Set<string>(['연인어때', '토크블라썸'])
+// ⚠️ 연인어때(2026-08-13, 상품 상세 og:image 크롤 추가)·토크블라썸(오너가 지정한
+// 브랜드 이미지를 DEFAULT_THUMBNAIL로 고정)은 더 이상 "사진 없는 업체"가 아니다 —
+// 여기 남겨두면 오너가 지정/크롤러가 받아온 이미지가 항상 이 커버에 가려 하나도 안
+// 보인다. 그래서 지금은 비워둠. 진짜 로고만 나오는 업체가 새로 생기면 여기 추가할 것.
+export const ALWAYS_COVER = new Set<string>([])
 
 export function coverFor(companyName?: string | null): string {
   if (companyName && COMPANY_COVERS[companyName]) return COMPANY_COVERS[companyName]
