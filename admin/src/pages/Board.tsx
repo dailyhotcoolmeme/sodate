@@ -14,14 +14,15 @@ interface Post {
   title: string
   content: string
   image_urls: string[] | null
+  link_urls: string[] | null
   tag_id: string | null
   upvotes: number
   downvotes: number
   comment_count: number
   report_count: number
-  image_report_count: number
+  content_report_count: number
   is_active: boolean
-  image_hidden: boolean
+  content_hidden: boolean
   created_at: string
 }
 
@@ -168,14 +169,15 @@ export default function Board() {
     setMsg(p.is_active ? '글을 숨겼습니다' : '글을 다시 노출했습니다')
   }
 
-  async function toggleImage(p: Post) {
-    const confirmMsg = p.image_hidden ? '이미지를 다시 노출할까요?' : '이미지를 가릴까요?'
+  /** 사진·유튜브 링크 등 첨부 전체를 한 번에 가림/복구(2026-08-13 일반화 — 이미지 전용이던 걸 확장) */
+  async function toggleContent(p: Post) {
+    const confirmMsg = p.content_hidden ? '첨부(사진·링크)를 다시 노출할까요?' : '첨부(사진·링크)를 가릴까요?'
     if (!window.confirm(confirmMsg)) return
     const { error } = await supabase.from('board_posts')
-      .update({ image_hidden: !p.image_hidden }).eq('id', p.id)
+      .update({ content_hidden: !p.content_hidden }).eq('id', p.id)
     if (error) { alert(`실패: ${error.message}`); return }
-    setPosts((prev) => prev.map((x) => x.id === p.id ? { ...x, image_hidden: !x.image_hidden } : x))
-    setMsg(p.image_hidden ? '이미지를 다시 노출했습니다' : '이미지를 가렸습니다')
+    setPosts((prev) => prev.map((x) => x.id === p.id ? { ...x, content_hidden: !x.content_hidden } : x))
+    setMsg(p.content_hidden ? '첨부를 다시 노출했습니다' : '첨부를 가렸습니다')
   }
 
   async function removePost(p: Post) {
@@ -240,16 +242,16 @@ export default function Board() {
   }
 
   const shownPosts = posts.filter((p) => {
-    if (tab === 'reported') return p.report_count > 0 || p.image_report_count > 0
-    if (tab === 'hidden') return !p.is_active || p.image_hidden
+    if (tab === 'reported') return p.report_count > 0 || p.content_report_count > 0
+    if (tab === 'hidden') return !p.is_active || p.content_hidden
     return true
   })
   const shownComments = tab === 'comments' ? comments : []
 
   const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: 'reported', label: '신고됨', count: posts.filter((p) => p.report_count > 0 || p.image_report_count > 0).length },
+    { key: 'reported', label: '신고됨', count: posts.filter((p) => p.report_count > 0 || p.content_report_count > 0).length },
     { key: 'all', label: '전체 글', count: posts.length },
-    { key: 'hidden', label: '숨김·가림', count: posts.filter((p) => !p.is_active || p.image_hidden).length },
+    { key: 'hidden', label: '숨김·가림', count: posts.filter((p) => !p.is_active || p.content_hidden).length },
     { key: 'comments', label: '댓글', count: comments.length },
     { key: 'tags', label: '말머리', count: tags.length },
   ]
@@ -429,15 +431,16 @@ export default function Board() {
                           {tagLabel(p.tag_id) && <span className="text-pink-500 font-semibold">{tagLabel(p.tag_id)} </span>}
                           {p.title}
                           {!!p.image_urls?.length && <span className="ml-1 text-gray-400">[사진 {p.image_urls.length}]</span>}
+                          {!!p.link_urls?.length && <span className="ml-1 text-gray-400">[링크 {p.link_urls.length}]</span>}
                         </p>
                       </button>
                     </td>
                     <td className="px-3 py-3 text-center text-xs text-gray-600">{p.upvotes} / {p.downvotes}</td>
                     <td className="px-3 py-3 text-center text-xs text-gray-600">{p.comment_count}</td>
                     <td className="px-3 py-3 text-center">
-                      {p.report_count > 0 || p.image_report_count > 0 ? (
+                      {p.report_count > 0 || p.content_report_count > 0 ? (
                         <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-semibold">
-                          <Flag size={11} /> {p.report_count} / {p.image_report_count}
+                          <Flag size={11} /> {p.report_count} / {p.content_report_count}
                         </span>
                       ) : <span className="text-gray-300 text-xs">0 / 0</span>}
                     </td>
@@ -451,9 +454,9 @@ export default function Board() {
                         <button onClick={() => togglePost(p)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
                           {p.is_active ? <><EyeOff size={12} /> 숨김</> : <><Eye size={12} /> 노출</>}
                         </button>
-                        {!!p.image_urls?.length && (
-                          <button onClick={() => toggleImage(p)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
-                            <ImageOff size={12} /> {p.image_hidden ? '사진 복구' : '사진 가림'}
+                        {(!!p.image_urls?.length || !!p.link_urls?.length) && (
+                          <button onClick={() => toggleContent(p)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                            <ImageOff size={12} /> {p.content_hidden ? '첨부 복구' : '첨부 가림'}
                           </button>
                         )}
                         <button onClick={() => viewUserActivity('post', p.id)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
@@ -476,7 +479,7 @@ export default function Board() {
                               <div key={r.id} className="flex items-start gap-2 text-xs text-gray-700">
                                 <Flag size={12} className="text-red-400 mt-0.5 shrink-0" />
                                 <span className="shrink-0 text-gray-400">
-                                  {r.target_type === 'image' ? '사진' : r.target_type === 'comment' ? '댓글' : '글'}
+                                  {r.target_type === 'content' ? '첨부' : r.target_type === 'comment' ? '댓글' : '글'}
                                 </span>
                                 <span className="flex-1">{r.reason || '(사유 없음)'}</span>
                                 <span className="text-gray-400 whitespace-nowrap">
@@ -539,7 +542,7 @@ function UserActivityModal({
   onToggleComment: (c: Comment) => void
   onRemoveComment: (c: Comment) => void
 }) {
-  const reportedPosts = activity?.posts.filter((p) => p.report_count > 0 || p.image_report_count > 0).length ?? 0
+  const reportedPosts = activity?.posts.filter((p) => p.report_count > 0 || p.content_report_count > 0).length ?? 0
   const reportedComments = activity?.comments.filter((c) => c.report_count > 0).length ?? 0
 
   return (
@@ -586,8 +589,8 @@ function UserActivityModal({
                         </p>
                         <p className="text-[11px] text-gray-400 mt-0.5">
                           {new Date(p.created_at).toLocaleDateString('ko-KR')}
-                          {(p.report_count > 0 || p.image_report_count > 0) && (
-                            <span className="ml-1.5 text-red-500 font-medium">신고 {p.report_count}/{p.image_report_count}</span>
+                          {(p.report_count > 0 || p.content_report_count > 0) && (
+                            <span className="ml-1.5 text-red-500 font-medium">신고 {p.report_count}/{p.content_report_count}</span>
                           )}
                           {!p.is_active && <span className="ml-1.5 text-gray-400">(숨김)</span>}
                         </p>
