@@ -167,6 +167,7 @@ class LovecastingScraper(BaseScraper):
                     card_containers.append(parent)
 
         seen_dates: set[str] = set()
+        thumb_cache: dict[str, Optional[str]] = {}
 
         for card in card_containers:
             card_text = card.get_text(separator='\n', strip=True)
@@ -270,13 +271,18 @@ class LovecastingScraper(BaseScraper):
                 body=card_text,
             )
 
-            # 썸네일
+            # 썸네일 — 목록 카드 안의 첫 이미지는 실제 사진이 아니라 사이트 전체가
+            # 재사용하는 'noname.png'(빨간 원 "1:1 문의하기" 안내 배지)였다(2026-08-13,
+            # 오너가 앱에서 모든 일정에 이 배지만 뜨는 걸 발견). 목록 카드에는 진짜
+            # 사진이 아예 없고, 개별 글 본문(post_url)에만 있어서 거기서 따로 가져온다.
+            # 카드마다 같은 post_url 이 반복될 수 있어(날짜만 다른 회차) 캐싱한다.
             thumbnail_url = None
-            img = card.find('img')
-            if img:
-                src = img.get('src', '') or img.get('data-src', '')
-                if src and not any(s in src.lower() for s in ['logo', 'icon', 'gravatar']):
-                    thumbnail_url = src if src.startswith('http') else urljoin(self.BASE_URL, src)
+            if post_url != category_url:
+                if post_url in thumb_cache:
+                    thumbnail_url = thumb_cache[post_url]
+                else:
+                    thumbnail_url = self._fetch_thumbnail(post_url)
+                    thumb_cache[post_url] = thumbnail_url
 
             title = sanitize_text(f'[러브캐스팅] {title_text}', 80)
             unique_url = f'{post_url}#evt={date_key}'
@@ -343,7 +349,7 @@ class LovecastingScraper(BaseScraper):
                     if not src:
                         continue
                     low = src.lower()
-                    if any(skip in low for skip in ['logo', 'icon', 'facebook', 'gravatar', '.gif']):
+                    if any(skip in low for skip in ['logo', 'icon', 'facebook', 'gravatar', '.gif', 'noname']):
                         continue
                     if 'wp-content/uploads' in src or 'cdn' in src:
                         thumb = src if src.startswith('http') else urljoin(self.BASE_URL, src)
@@ -572,18 +578,20 @@ class LovecastingScraper(BaseScraper):
             content_text = soup.get_text(separator='\n')
 
             # 썸네일: OG 이미지 우선, 그 다음 첫 번째 이미지
+            # ('noname.png' 는 사이트 전체가 재사용하는 "1:1 문의하기" 배지라 제외 —
+            #  _extract_cards_from_soup 에서 실제로 이걸 물어온 사고가 있었다, 2026-08-13)
             thumbnail_url = None
             og_img = soup.select_one('meta[property="og:image"]')
-            if og_img and og_img.get('content'):
+            if og_img and og_img.get('content') and 'noname' not in og_img['content']:
                 thumbnail_url = og_img['content']
             else:
-                img = soup.select_one(
+                for img in soup.select(
                     'article img, .elementor-post img, .wp-post-image, .entry-content img'
-                )
-                if img:
+                ):
                     src = img.get('src', '')
-                    if src:
+                    if src and 'noname' not in src.lower():
                         thumbnail_url = src if src.startswith('http') else urljoin(self.BASE_URL, src)
+                        break
 
             return self._parse_content(post_title, content_text, url, thumbnail_url)
         except Exception as e:
