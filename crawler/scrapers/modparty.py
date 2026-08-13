@@ -537,6 +537,15 @@ class ModpartyScraper(BaseScraper):
             detail_text = (data.get('detail_text') or '')
             desc = data.get('desc') or ''
             img_url = data.get('img')
+            # 목록 페이지의 지연 로딩(lazy-load) 이미지는 뷰포트에 안 걸리면 실제 사진
+            # 대신 1x1 placeholder_image.cm 을 그대로 물고 있다. 상세페이지 보강
+            # (_enrich_from_detail)이 개별 상품마다 실패할 수 있는데(타임아웃 등, 위
+            # 128-144행에서 warning만 남기고 계속 진행), 그 경우 이 placeholder 가
+            # 그대로 thumbnail_urls 에 저장됐다(2026-08-13, 오너가 앱에서 실제로
+            # 빈 이미지를 발견해 확인 — 압구정 2030 와인파티·청담 돌싱 와인파티).
+            # 저장 직전에 한 번 더 걸러 나쁜 URL이 DB에 들어가지 않게 한다.
+            if img_url and 'placeholder' in img_url:
+                img_url = None
             url = data.get('url') or f'{self.BASE_URL}/shop_view/?idx={idx}'
 
             # 제목: 목록 텍스트의 유의미한 첫 줄 우선, 없으면 상세 og:title
