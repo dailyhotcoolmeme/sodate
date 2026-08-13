@@ -1,10 +1,12 @@
 """모드파티 (modparty.co.kr) 스크래퍼 — imweb 쇼핑 기반, 로그인 필요"""
+import json
 import os
 import re
 import time
 from datetime import datetime, timedelta
 from typing import Optional
 
+import httpx
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 
@@ -116,13 +118,20 @@ class ModpartyScraper(BaseScraper):
                     except Exception as e:
                         self.logger.warning(f'모드파티 목록 수집 실패({list_url}): {e}')
 
-                # ── 일정 정본 = booking_counts. 한 달 내 일정 있는 상품만 대상 ──
-                future_prods = self._future_booking_prods()
-                self.logger.info(f'모드파티 미래 일정 상품 {len(future_prods)}개 (booking_counts 기준)')
-                for idx in future_prods:
-                    product_data.setdefault(idx, {
-                        'url': f'{self.BASE_URL}/shop_view/?idx={idx}', 'text': '', 'img': None,
-                    })
+                # ── 대상 상품 = 목록에 걸린 전체 상품 ──
+                # ⚠️(2026-08-13) 예전엔 "booking_counts(모드파티 자체 Supabase)에 예약이
+                #    있는 상품만" 걸렀는데, 그 Supabase 프로젝트가 통째로 사라져
+                #    (lqxfkqxrtjnqozqmwzlp.supabase.co, 공개 DNS에서도 NXDOMAIN 확인 —
+                #    실시간 위젯 스크립트까지 그 도메인에서 받아오다 보니 위젯 자체가
+                #    브라우저에서도 로드 실패, HTML 폴백인 booking-date-config 도 같이
+                #    무력화됐다) future_prods 가 매번 0개로 집계돼 9일간 크롤이 통째로
+                #    비었다. 사전 필터를 걸 다른 안전한 방법이 없어, 목록에 걸린 상품은
+                #    전부 상세페이지까지 열어 보고(_enrich_from_detail 이 본문에서 직접
+                #    날짜·좌석을 뽑는다) 실제로 한 달 내 일정이 있는지는 _build_events
+                #    에서 판정한다. 상품 수만큼 상세 조회가 늘어 크롤 시간이 길어지지만,
+                #    "일정이 전부 안 보이는 것"보다는 낫다.
+                future_prods = set(product_data.keys()) | self._future_booking_prods()
+                self.logger.info(f'모드파티 대상 상품 {len(future_prods)}개 (목록 전체)')
 
                 # ── 대상 상품 상세페이지에서 제목/이미지/본문/가격 보강 ──
                 for idx in future_prods:
@@ -130,10 +139,28 @@ class ModpartyScraper(BaseScraper):
                     if not data:
                         continue
                     try:
-                        page.goto(data['url'].split('#')[0], timeout=15000)
+                        detail_url = data['url'].split('#')[0]
+                        # 제목·이미지·본문·날짜별 좌석은 전부 서버가 완성해서 내려주는
+                        # 정적 HTML이라 JS 실행이 필요 없다(2026-08-13 실측 — 순수 HTTP
+                        # 로는 idx=248의 두 날짜가 항상 다 나오는데, Playwright 렌더는
+                        # 죽은 실시간 위젯 스크립트가 계속 재시도하는 여파로 렌더가 밀려
+                        # 대기시간(2500~6000ms)에 따라 날짜가 들쭉날쭉 잡혔다). 순수
+                        # httpx 로 안정적으로 받는다. 페이지 이동 자체는 아래 성별
+                        # 가격 조회(_extract_gender_prices)가 같은 세션 컨텍스트에서
+                        # /shop/load_option.cm 을 상대경로로 호출하므로 그대로 둔다.
+                        try:
+                            detail_html = httpx.get(
+                                detail_url, timeout=15, verify=False, follow_redirects=True,
+                                headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'},
+                            ).text
+                        except Exception:
+                            detail_html = None
+                        page.goto(detail_url, timeout=15000)
                         page.wait_for_load_state('domcontentloaded', timeout=8000)
-                        page.wait_for_timeout(2500)  # 예약위젯 로드 대기
-                        self._enrich_from_detail(data, BeautifulSoup(page.content(), 'html.parser'))
+                        page.wait_for_timeout(1500)
+                        self._enrich_from_detail(
+                            data, BeautifulSoup(detail_html or page.content(), 'html.parser')
+                        )
                         # 성별 실가격+매진: 예약위젯 옵션 AJAX(매진=대기신청도 가격 있음)
                         gp = self._extract_gender_prices(page, idx)
                         if gp.get('남성'):
@@ -509,15 +536,46 @@ class ModpartyScraper(BaseScraper):
                     data['price'] = val
                     break
 
-        # 날짜별 좌석/품절: 예약위젯의 "7월 10일(금) : 남 13/16 여 12/16" 파싱
+        # 날짜별 좌석/품절: "7월 10일(금) : 남 13/16 여 12/16" 또는 콜론 없이
+        # "8월 15일 (토)남 12/14여 10/14" 형태(상품마다 문구가 다르다 — 콜론 선택적).
+        # 예약위젯(실시간 남/여 인원)은 죽은 Supabase 도메인에 의존해 더 이상 렌더링되지
+        # 않아 본문 텍스트(body_text)엔 이 숫자가 없다 — 대신 서버가 SEO용으로 심어둔
+        # JSON-LD(schema.org Product) description 필드엔 위젯과 무관하게 항상 들어있다.
+        # 날짜 항목들이 구분자 없이 그대로 이어붙어("...여 12/168월 15일...") 있어
+        # 좌석수 자릿수를 1~2자리로 제한해야 다음 날짜의 월(月) 숫자를 삼키지 않는다.
+        ld_desc = ''
+        for tag in soup.find_all('script', type='application/ld+json'):
+            try:
+                ld = json.loads(tag.string or tag.get_text())
+            except Exception:
+                continue
+            if isinstance(ld, dict) and ld.get('@type') == 'Product':
+                ld_desc = ld.get('description', '') or ''
+                if not data.get('price'):
+                    offer_price = (ld.get('offers') or {}).get('price')
+                    if offer_price:
+                        data['price'] = int(offer_price)
+                break
+
         seats = {}
-        for m in re.finditer(r'(\d{1,2})월\s*(\d{1,2})일[^:：]*[:：]\s*남\s*(\d+)\s*/\s*(\d+)\s*여\s*(\d+)\s*/\s*(\d+)', body_text):
+        for m in re.finditer(
+            r'(\d{1,2})월\s*(\d{1,2})일[^:：남]*[:：]?\s*남\s*(\d{1,3})\s*/\s*(\d{1,2})\s*여\s*(\d{1,3})\s*/\s*(\d{1,2})',
+            ld_desc or body_text,
+        ):
             mo, d = int(m.group(1)), int(m.group(2))
             seats[(mo, d)] = {
                 'male': (int(m.group(3)), int(m.group(4))),
                 'female': (int(m.group(5)), int(m.group(6))),
             }
         data['seats'] = seats
+
+        # 좌석수(남/여) 문구가 아예 없는 상품(예: 커피 살롱류)도 상세페이지 상단
+        # 날짜 배지("8/16(일) 8/23 (일)")는 항상 뜬다 — 좌석 정보 없이도 일정 자체는
+        # 살려서 이벤트로 만들 수 있게 별도로 모아둔다(_build_events 에서 seats 와 합집합).
+        badge_dates = set()
+        for m in re.finditer(r'(\d{1,2})/(\d{1,2})\s*\([일월화수목금토]\)', body_text):
+            badge_dates.add((int(m.group(1)), int(m.group(2))))
+        data['badge_dates'] = badge_dates
 
         # 나이(년생)는 메인 이미지(og:image)에서 OCR 워커로 1회 추출(KV 캐시)
         if data.get('img') and not data.get('age_ocr'):
@@ -616,7 +674,29 @@ class ModpartyScraper(BaseScraper):
 
             title = sanitize_text(f'[모드파티] {title_line}', 80)
 
-            for date_code in self._booking_counts.get(idx, {}):
+            # 일정 정본 — 예전엔 모드파티 자체 Supabase(booking_counts) 하나만 봤는데,
+            # 그 프로젝트가 통째로 사라져(2026-08-13 확인: lqxfkqxrtjnqozqmwzlp.supabase.co
+            # 가 공개 DNS에서도 NXDOMAIN — 실시간 위젯 스크립트까지 그 도메인에서 받아오다보니
+            # 위젯 자체가 브라우저에서도 로드 실패, booking-date-config HTML 폴백도 같이
+            # 무력화됨) 미래 상품이 0개로 집계되며 9일간 크롤이 통째로 비었다. 상품 상세
+            # 본문에 박힌 "8월 14일(금) : 남 14/16 여 12/16" 문구(_enrich_from_detail 이
+            # 이미 seats 로 파싱해 두고 있었다 — Supabase 와 무관하게 그 자체로 날짜 정본이
+            # 될 수 있는데 안 쓰고 있었다)를 이제 같이 날짜 소스로 합친다. 둘 다 있으면
+            # 중복 없이 합집합, Supabase 가 살아나도 그대로 같이 쓸 수 있다.
+            seat_date_codes = {
+                f'{mo:02d}{d:02d}' for (mo, d) in (data.get('seats') or {}).keys()
+            }
+            # 좌석수 문구 자체가 없는 상품(커피 살롱 등)은 날짜 배지만으로 일정을 살린다.
+            badge_date_codes = {
+                f'{mo:02d}{d:02d}' for (mo, d) in (data.get('badge_dates') or set())
+            }
+            all_date_codes = (
+                seat_date_codes
+                | set(self._booking_counts.get(idx, {}).keys())
+                | badge_date_codes
+            )
+
+            for date_code in all_date_codes:
                 event_date = self._parse_date_code(date_code)
                 if not event_date or not is_within_one_month(event_date):
                     continue
@@ -634,8 +714,10 @@ class ModpartyScraper(BaseScraper):
                     event_date = event_date.replace(hour=19, minute=0)  # 저녁 파티 기본
                     self.logger.warning(f'모드파티 idx={idx} 시간 파싱 실패(19:00 기본): {data.get("time_text")}')
 
-                # 좌석·품절: 상품페이지 "남 X/Y 여 X/Y"(날짜별) 우선, 없으면 booking_counts
-                row = self._booking_counts[idx][date_code]
+                # 좌석·품절: 상품페이지 "남 X/Y 여 X/Y"(날짜별) 우선, 없으면 booking_counts.
+                # date_code 가 seats 쪽에서만 왔을 수 있어(booking_counts 는 지금 항상 비어
+                # 있다) 직접 인덱싱하면 KeyError — 없으면 빈 dict(아래 seat 블록이 채운다).
+                row = self._booking_counts.get(idx, {}).get(date_code, {})
                 bc_male = row.get('male_count', 0) or 0
                 bc_female = row.get('female_count', 0) or 0
                 seat = (data.get('seats') or {}).get((event_date.month, event_date.day))
