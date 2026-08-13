@@ -1,10 +1,9 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react'
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, RefreshControl, Animated, Alert,
+  Modal, Pressable, ScrollView,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native'
-// 검색칸이 목록 맨 아래에 있어서, 포커스하면 키보드 위로 따라 올라와야 한다
-// (RN 기본 ScrollView 는 안드로이드에서 이걸 안 해준다, 2026-08-12 오너 지적).
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
@@ -21,6 +20,7 @@ import {
 import { wideContent } from '@/constants/layout'
 import { report } from '@/lib/board'
 import { blockAuthor, markCommentsSeen } from '@/lib/boardIdentity'
+import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/boardSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 /**
@@ -36,7 +36,9 @@ export default function BoardListScreen() {
 
   const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
-  const [draft, setDraft] = useState('')
+  // 검색칸이 목록 맨 아래에 있던 걸 톱바 돋보기 아이콘 → 팝업 방식으로 옮겼다
+  // (2026-08-13 오너 지시). 최근 검색어는 기기에 저장(lib/boardSearchHistory).
+  const [searchModalVisible, setSearchModalVisible] = useState(false)
 
   const settings = useBoardSettings()
   const { posts, total, loading, error, pageCount, refetch } = useBoardList(page, search)
@@ -97,35 +99,26 @@ export default function BoardListScreen() {
     }
   }
 
-  // 검색줄 — 목록 맨 아래(페이지 번호보다 아래)와, 검색 결과가 0건일 때 둘 다에서 쓴다.
-  const renderSearchRow = () => (
-    <>
-      <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={17} color={colors.textTertiary} />
-          <TextInput
-            style={styles.searchInput}
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="제목·본문 검색"
-            placeholderTextColor={colors.textTertiary}
-            returnKeyType="search"
-            onSubmitEditing={() => { setPage(0); setSearch(draft) }}
-          />
-          {(draft.length > 0 || search.length > 0) && (
-            <TouchableOpacity
-              onPress={() => { setDraft(''); setSearch(''); setPage(0) }}
-              hitSlop={8}
-            >
-              <Text style={styles.searchClear}>지우기</Text>
-            </TouchableOpacity>
-          )}
-      </View>
-      {!!search && (
-        <Text style={styles.searchInfo}>
-          &lsquo;{search}&rsquo; 검색 결과 {total}건
-        </Text>
-      )}
-    </>
+  // 검색 팝업에서 검색을 실행했을 때 — 최근 검색어에 남기고 실제 검색을 적용한다.
+  const runSearch = (term: string) => {
+    setPage(0)
+    setSearch(term)
+    addRecentSearch(term)
+  }
+  const clearSearch = () => { setSearch(''); setPage(0) }
+
+  // 검색이 걸려 있을 때 목록 위에 보이는 슬림한 안내줄 — 검색칸 자체는 톱바 돋보기
+  // → 팝업으로 옮겼지만(2026-08-13), 지금 검색 중이라는 사실과 지우기는 목록에서도
+  // 바로 보여야 한다.
+  const renderActiveSearchBar = () => (
+    <View style={styles.searchInfoRow}>
+      <Text style={styles.searchInfo} numberOfLines={1}>
+        &lsquo;{search}&rsquo; 검색 결과 {total}건
+      </Text>
+      <TouchableOpacity onPress={clearSearch} hitSlop={8}>
+        <Text style={styles.searchClear}>지우기</Text>
+      </TouchableOpacity>
+    </View>
   )
 
   return (
@@ -134,6 +127,7 @@ export default function BoardListScreen() {
       <TopBar
         segment="board"
         onLogoPress={() => { setPage(0); refetchAll() }}
+        onSearchPress={() => setSearchModalVisible(true)}
       />
 
       {/* 내 글에 달린 새 댓글 띠 — 검색줄이 있던 자리를 대신 차지한다. 검색줄은 그
@@ -192,13 +186,12 @@ export default function BoardListScreen() {
         </View>
       ) : posts.length === 0 ? (
         <View style={styles.center}>
+          {search && <View style={styles.emptySearchRow}>{renderActiveSearchBar()}</View>}
           <Ionicons name="chatbubbles-outline" size={32} color={colors.textTertiary} />
           <Text style={styles.emptyText}>
             {search ? '검색 결과가 없어요' : '아직 글이 없어요'}
           </Text>
           {!search && <Text style={styles.emptySub}>첫 글을 남겨보세요!</Text>}
-          {/* 검색 결과가 없을 때도 검색어를 지우거나 다시 검색할 수 있어야 한다. */}
-          {search && <View style={styles.emptySearchRow}>{renderSearchRow()}</View>}
         </View>
       ) : (
         <KeyboardAwareScrollView
@@ -211,6 +204,8 @@ export default function BoardListScreen() {
           onScroll={onListScroll}
           scrollEventThrottle={16}
         >
+          {search && renderActiveSearchBar()}
+
           <View>
             {posts.map((p) => (
               <PostRow key={p.id} post={p} hot={hot} cold={cold} styles={styles} colors={colors}
@@ -220,18 +215,15 @@ export default function BoardListScreen() {
 
             <Pager page={page} pageCount={pageCount} onChange={setPage} styles={styles} colors={colors} />
           </View>
-
-          {/* 피드가 한 페이지(20개)를 안 채워 페이지 번호가 없을 때는 이 spacer 가
-              남는 세로 공간을 다 먹어서, 검색줄이 화면 맨 아래(글쓰기 버튼과 같은
-              줄)까지 밀려 내려간다. 피드가 늘어나 스크롤이 생기면 spacer 가 압축돼
-              검색줄은 페이지 번호 바로 아래로 자연스럽게 붙는다(2026-08-12 오너 지시). */}
-          <View style={{ flex: 1 }} />
-
-          {/* 검색줄 — 목록 맨 아래, 페이지 번호보다도 아래에 둔다(2026-08-12 오너 지시.
-              톱바 바로 아래였던 걸 여기로 내렸다). */}
-          {renderSearchRow()}
         </KeyboardAwareScrollView>
       )}
+
+      <BoardSearchModal
+        visible={searchModalVisible}
+        onClose={() => setSearchModalVisible(false)}
+        onSearch={runSearch}
+        colors={colors}
+      />
 
       {/* 글쓰기 — 목록 위에 떠 있다. 스크롤하면 아이콘만 남는다. */}
       <TouchableOpacity
@@ -312,6 +304,124 @@ function PostRow({
   )
 }
 
+/**
+ * 게시판 검색 팝업(2026-08-13, 톱바 돋보기 → 여기). 최근 검색어는 기기에 저장돼
+ * 있다가 탭하면 바로 그 단어로 재검색, 개별/전체 삭제도 여기서 한다.
+ */
+function BoardSearchModal({
+  visible, onClose, onSearch, colors,
+}: {
+  visible: boolean
+  onClose: () => void
+  onSearch: (term: string) => void
+  colors: AppColors
+}) {
+  const styles = useMemo(() => makeSearchModalStyles(colors), [colors])
+  const [draft, setDraft] = useState('')
+  const [recent, setRecent] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!visible) return
+    setDraft('')
+    getRecentSearches().then(setRecent)
+  }, [visible])
+
+  const submit = (term: string) => {
+    const t = term.trim()
+    if (!t) return
+    onSearch(t)
+    onClose()
+  }
+
+  const removeOne = async (term: string) => {
+    await removeRecentSearch(term)
+    setRecent((prev) => prev.filter((v) => v !== term))
+  }
+
+  const clearAll = async () => {
+    await clearRecentSearches()
+    setRecent([])
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={styles.card}>
+          <View style={styles.inputRow}>
+            <Ionicons name="search-outline" size={18} color={colors.textTertiary} />
+            <TextInput
+              style={styles.input}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="제목·본문 검색"
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="search"
+              autoFocus
+              onSubmitEditing={() => submit(draft)}
+            />
+            {draft.length > 0 && (
+              <TouchableOpacity onPress={() => setDraft('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={17} color={colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {recent.length > 0 && (
+            <>
+              <View style={styles.recentHeader}>
+                <Text style={styles.recentTitle}>최근 검색어</Text>
+                <TouchableOpacity onPress={clearAll} hitSlop={6}>
+                  <Text style={styles.clearAll}>전체 삭제</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.recentList} keyboardShouldPersistTaps="handled" bounces={false}>
+                {recent.map((term) => (
+                  <View key={term} style={styles.recentRow}>
+                    <TouchableOpacity style={styles.recentTermBtn} onPress={() => submit(term)} activeOpacity={0.7}>
+                      <Ionicons name="time-outline" size={14} color={colors.textTertiary} />
+                      <Text style={styles.recentTerm} numberOfLines={1}>{term}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => removeOne(term)} hitSlop={8}>
+                      <Ionicons name="close" size={16} color={colors.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function makeSearchModalStyles(colors: AppColors) {
+  return StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'flex-start', padding: 16, paddingTop: 80 },
+    card: {
+      width: '100%', maxWidth: 420, maxHeight: '70%', borderRadius: 16, backgroundColor: colors.surface,
+      borderWidth: 1, borderColor: colors.border, padding: 14, gap: 10,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16,
+      elevation: 12,
+    },
+    inputRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      backgroundColor: colors.surfaceHigh, borderRadius: 12,
+      paddingHorizontal: 12, paddingVertical: 10,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    input: { flex: 1, fontSize: 15, color: colors.textPrimary, padding: 0 },
+    recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 },
+    recentTitle: { fontSize: 12.5, fontWeight: '700', color: colors.textSecondary },
+    clearAll: { fontSize: 12, color: colors.textTertiary },
+    recentList: { flexGrow: 0 },
+    recentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+    recentTermBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    recentTerm: { flex: 1, fontSize: 14, color: colors.textPrimary },
+  })
+}
+
 /** 연도 2자리-월-일(요일) 시:분:초 — 오너 지시(2026-08-01). */
 function formatWhen(iso: string): string {
   const d = new Date(iso)
@@ -379,14 +489,14 @@ function makeStyles(colors: AppColors) {
     emptySub: { fontSize: 13, color: colors.textTertiary },
     emptySearchRow: { alignSelf: 'stretch', marginTop: 12 },
 
-    searchRow: {
-      flexDirection: 'row', alignItems: 'center', gap: 8,
-      marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 9,
-      backgroundColor: colors.surfaceHigh, borderRadius: 10,
+    // 검색 중 안내줄 — 톱바 돋보기(팝업)로 검색칸 자체는 옮겼지만(2026-08-13), 지금
+    // 검색 중이라는 사실과 지우기는 목록 위에서도 바로 보여야 한다.
+    searchInfoRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+      marginHorizontal: 16, marginBottom: 8,
     },
-    searchInput: { flex: 1, fontSize: 14, color: colors.textPrimary, padding: 0 },
+    searchInfo: { flex: 1, fontSize: 12, color: colors.textSecondary },
     searchClear: { fontSize: 12, color: colors.textSecondary },
-    searchInfo: { fontSize: 12, color: colors.textSecondary, paddingHorizontal: 16, paddingBottom: 6 },
 
     // 새 댓글이 1개뿐이면 이 자체가 눌리는 배너(펼침 없음).
     newCommentRow: {

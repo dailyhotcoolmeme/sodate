@@ -29,6 +29,7 @@ export default function TopBar({
   segment,
   noSafeTop = false,
   onBeforeLeave,
+  onSearchPress,
 }: {
   showBack?: boolean
   onLogoPress?: () => void
@@ -47,6 +48,9 @@ export default function TopBar({
    * 이동하고, 안 부르면 그대로 머문다. 글쓰기처럼 쓰던 게 날아가는 화면에서 쓴다.
    */
   onBeforeLeave?: (proceed: () => void) => void
+  /** 주면 벨 아이콘 왼쪽에 돋보기 아이콘이 뜬다(2026-08-13, 지금은 게시판 목록 검색
+   *  팝업 전용). 화면마다 다른 동작이라 TopBar가 직접 검색 상태를 갖지 않고 호출부에 위임. */
+  onSearchPress?: () => void
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -219,6 +223,12 @@ export default function TopBar({
         </View>
 
         <View style={styles.rightIcons}>
+          {!!onSearchPress && (
+            <TouchableOpacity style={styles.iconBtn} onPress={onSearchPress} hitSlop={8}>
+              <Ionicons name="search-outline" size={22} color={colors.textPrimary} />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={() => { onBeforeNavigate?.(); router.push('/notifications') }}
