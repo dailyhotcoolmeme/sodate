@@ -316,7 +316,12 @@ function BoardSearchModal({
   onSearch: (term: string) => void
   colors: AppColors
 }) {
-  const styles = useMemo(() => makeSearchModalStyles(colors), [colors])
+  // ⚠️(2026-08-13 오너 지적) 팝업이 톱바에 너무 딱 붙어 보였다 — 고정값 80px로만
+  // 띄웠더니 노치·다이나믹 아일랜드가 있는 기기(insets.top이 47~59px)에서는 톱바
+  // 실제 높이(insets.top + 바 안쪽 높이 약 46px)보다 짧아 팝업이 톱바 밑단과 겹치거나
+  // 거의 붙어 보였다. 안전영역을 반영해 톱바 바로 아래에 여백을 두고 뜨게 한다.
+  const insets = useSafeAreaInsets()
+  const styles = useMemo(() => makeSearchModalStyles(colors, insets.top), [colors, insets.top])
   const [draft, setDraft] = useState('')
   const [recent, setRecent] = useState<string[]>([])
 
@@ -396,9 +401,12 @@ function BoardSearchModal({
   )
 }
 
-function makeSearchModalStyles(colors: AppColors) {
+function makeSearchModalStyles(colors: AppColors, topInset: number) {
+  // 톱바 실제 높이 = insets.top(안전영역) + 바 안쪽 높이(위아래 패딩 10+10 + 가장 큰
+  // 아이콘 26 ≈ 46). 그 아래 시각적 여백(14px)까지 더해 톱바에 안 붙게 띄운다.
+  const topOffset = topInset + 46 + 14
   return StyleSheet.create({
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'flex-start', padding: 16, paddingTop: 80 },
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'flex-start', padding: 16, paddingTop: topOffset },
     card: {
       width: '100%', maxWidth: 420, maxHeight: '70%', borderRadius: 16, backgroundColor: colors.surface,
       borderWidth: 1, borderColor: colors.border, padding: 14, gap: 10,
