@@ -159,6 +159,8 @@ export default function Board() {
   }
 
   async function togglePost(p: Post) {
+    const confirmMsg = p.is_active ? `'${p.title}' 글을 숨길까요?` : `'${p.title}' 글을 다시 노출할까요?`
+    if (!window.confirm(confirmMsg)) return
     const { error } = await supabase.from('board_posts')
       .update({ is_active: !p.is_active }).eq('id', p.id)
     if (error) { alert(`실패: ${error.message}`); return }
@@ -167,6 +169,8 @@ export default function Board() {
   }
 
   async function toggleImage(p: Post) {
+    const confirmMsg = p.image_hidden ? '이미지를 다시 노출할까요?' : '이미지를 가릴까요?'
+    if (!window.confirm(confirmMsg)) return
     const { error } = await supabase.from('board_posts')
       .update({ image_hidden: !p.image_hidden }).eq('id', p.id)
     if (error) { alert(`실패: ${error.message}`); return }
@@ -183,6 +187,8 @@ export default function Board() {
   }
 
   async function toggleComment(c: Comment) {
+    const confirmMsg = c.is_active ? '이 댓글을 숨길까요?' : '이 댓글을 다시 노출할까요?'
+    if (!window.confirm(confirmMsg)) return
     const { error } = await supabase.from('board_comments')
       .update({ is_active: !c.is_active }).eq('id', c.id)
     if (error) { alert(`실패: ${error.message}`); return }
