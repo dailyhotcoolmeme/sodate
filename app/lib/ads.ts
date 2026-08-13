@@ -33,6 +33,11 @@ const REAL = {
     ios: 'ca-app-pub-2792582436871752/8391070415',
     android: 'ca-app-pub-2792582436871752/1087295469',
   },
+  // 게시판 목록 맨 아래(페이지 번호 밑) — 유일한 배너 광고 슬롯(2026-08-13)
+  boardBanner: {
+    ios: 'ca-app-pub-2792582436871752/5220516558',
+    android: 'ca-app-pub-2792582436871752/6725169912',
+  },
 } as const
 
 // 테스트 광고를 쓸지 판정한다.
@@ -73,3 +78,5 @@ function resolve(real: { ios: string; android: string }, test: string): string {
 export const getFeedNativeAdUnitId = () => resolve(REAL.feedNative, TestIds.NATIVE)
 /** 이벤트 상세 신청 버튼 위 네이티브 광고 단위 ID */
 export const getDetailNativeAdUnitId = () => resolve(REAL.detailNative, TestIds.NATIVE)
+/** 게시판 목록 맨 아래(페이지 번호 밑) 배너 광고 단위 ID */
+export const getBoardBannerAdUnitId = () => resolve(REAL.boardBanner, TestIds.BANNER)

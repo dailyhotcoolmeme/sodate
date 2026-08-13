@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import SwipeSegment from '@/components/SwipeSegment'
 import AppSpinner from '@/components/AppSpinner'
+import BoardBannerAd from '@/components/BoardBannerAd'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import {
@@ -214,6 +215,9 @@ export default function BoardListScreen() {
             ))}
 
             <Pager page={page} pageCount={pageCount} onChange={setPage} styles={styles} colors={colors} />
+
+            {/* 페이지 번호 밑 배너 광고(2026-08-13 오너 지시) */}
+            <BoardBannerAd />
           </View>
         </KeyboardAwareScrollView>
       )}
