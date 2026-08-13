@@ -1,10 +1,11 @@
 import React, { useMemo, useRef, useState } from 'react'
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native'
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Modal, Pressable } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { pickAndUpload, MAX_IMAGES } from '@/lib/boardImage'
+import { youtubeId, youtubeThumbnail, MAX_LINKS } from '@/lib/youtube'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
 /**
@@ -109,5 +110,141 @@ function makeStyles(colors: AppColors) {
       alignItems: 'center', justifyContent: 'center',
     },
 
+  })
+}
+
+/**
+ * 게시판 유튜브 링크 첨부(2026-08-13). 인앱 재생은 안 하고 외부(유튜브 앱/브라우저)에서
+ * 재생 — 오너 결정으로 1단계는 유튜브만, 최대 3개. 썸네일은 img.youtube.com URL
+ * 패턴으로 API 호출 없이 바로 만든다.
+ */
+export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) => void) {
+  const [modalVisible, setModalVisible] = useState(false)
+  const [input, setInput] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const openAdd = () => {
+    if (links.length >= MAX_LINKS) {
+      Alert.alert('알림', `유튜브 링크는 ${MAX_LINKS}개까지 첨부할 수 있어요.`)
+      return
+    }
+    setInput('')
+    setError(null)
+    setModalVisible(true)
+  }
+  const confirmAdd = () => {
+    const url = input.trim()
+    if (!youtubeId(url)) {
+      setError('유튜브 링크만 첨부할 수 있어요. (youtube.com, youtu.be)')
+      return
+    }
+    if (!links.includes(url)) onChangeLinks([...links, url])
+    setModalVisible(false)
+  }
+
+  return {
+    modalVisible, input, setInput, error, openAdd, confirmAdd,
+    cancel: () => setModalVisible(false),
+    removeLink: (u: string) => onChangeLinks(links.filter((x) => x !== u)),
+  }
+}
+
+export type BoardLinksApi = ReturnType<typeof useBoardLinks>
+
+/** 첨부된 링크를 이미지 썸네일과 같은 자리에 재생 배지 붙여 보여준다. */
+export function BoardLinkChips({ api, links }: { api: BoardLinksApi; links: string[] }) {
+  const colors = useColors()
+  const styles = useMemo(() => makeLinkStyles(colors), [colors])
+  if (links.length === 0) return null
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
+      {links.map((u) => (
+        <View key={u} style={styles.thumbWrap}>
+          <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.thumb} contentFit="cover" />
+          <View style={styles.playBadge}>
+            <Ionicons name="play" size={12} color="#fff" />
+          </View>
+          <TouchableOpacity style={styles.thumbX} onPress={() => api.removeLink(u)} hitSlop={6}>
+            <Ionicons name="close" size={13} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      ))}
+    </ScrollView>
+  )
+}
+
+/** 유튜브 URL 붙여넣기 팝업 — write.tsx의 말머리 선택 팝업과 같은 방식(화면 가운데 카드). */
+export function LinkInputModal({ api }: { api: BoardLinksApi }) {
+  const colors = useColors()
+  const styles = useMemo(() => makeLinkStyles(colors), [colors])
+  return (
+    <Modal visible={api.modalVisible} transparent animationType="fade" onRequestClose={api.cancel} statusBarTranslucent>
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={api.cancel} />
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>유튜브 링크 추가</Text>
+          <TextInput
+            style={styles.modalInput}
+            value={api.input}
+            onChangeText={api.setInput}
+            placeholder="https://youtube.com/watch?v=..."
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          {!!api.error && <Text style={styles.modalError}>{api.error}</Text>}
+          <View style={styles.modalBtnRow}>
+            <TouchableOpacity style={styles.modalBtn} onPress={api.cancel} activeOpacity={0.75}>
+              <Text style={styles.modalBtnText}>취소</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalBtn, styles.modalBtnPrimary]} onPress={api.confirmAdd} activeOpacity={0.85}>
+              <Text style={[styles.modalBtnText, styles.modalBtnTextPrimary]}>추가</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function makeLinkStyles(colors: AppColors) {
+  return StyleSheet.create({
+    thumbs: { gap: 8, paddingVertical: 2 },
+    thumbWrap: { position: 'relative' },
+    thumb: { width: 76, height: 76, borderRadius: 8, backgroundColor: colors.surfaceHigh },
+    playBadge: {
+      position: 'absolute', right: 4, bottom: 4,
+      width: 20, height: 20, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.72)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    thumbX: {
+      position: 'absolute', top: -5, right: -5,
+      width: 21, height: 21, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.72)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+    modalCard: {
+      width: '100%', maxWidth: 360, borderRadius: 16, backgroundColor: colors.surface,
+      borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16,
+      elevation: 12,
+    },
+    modalTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+    modalInput: {
+      backgroundColor: colors.surfaceHigh, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.textPrimary,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    modalError: { fontSize: 12, color: colors.error },
+    modalBtnRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+    modalBtn: {
+      flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center',
+      backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
+    },
+    modalBtnPrimary: { backgroundColor: colors.primary, borderColor: colors.primary },
+    modalBtnText: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+    modalBtnTextPrimary: { color: '#fff' },
   })
 }

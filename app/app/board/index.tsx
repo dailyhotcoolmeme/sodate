@@ -261,6 +261,7 @@ function PostRow({
   const isHot = post.upvotes >= hot
   const isCold = post.downvotes >= cold
   const hasImage = !!post.image_urls?.length
+  const hasLink = !!post.link_urls?.length
   const tagLabel = post.board_tags?.label
 
   return (
@@ -276,6 +277,9 @@ function PostRow({
         </Text>
         {hasImage && (
           <Ionicons name="image-outline" size={16} color={colors.textSecondary} style={styles.rowIcon} />
+        )}
+        {hasLink && (
+          <Ionicons name="play-circle-outline" size={16} color={colors.textSecondary} style={styles.rowIcon} />
         )}
         {post.comment_count > 0 && (
           <Text style={styles.rowCount}>[{post.comment_count}]</Text>

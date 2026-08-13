@@ -168,6 +168,43 @@ const COMMENT_MAX = 1000
 const NICK_MIN = 2
 const NICK_MAX = 20
 
+// ── 게시글 첨부 유튜브 링크(2026-08-13) ─────────────────────────────────
+// 인앱 재생은 안 하고(WebView·영상플레이어 미설치, 넣으려면 새 네이티브 빌드
+// 필요) 외부(유튜브 앱/브라우저)에서 재생 — youtube.com/youtu.be 는 이미
+// 아웃링크 허용 목록에 있다(app/lib/security.ts). 다른 링크 종류(인스타 릴스·
+// 틱톡 등)는 공식 썸네일 API가 없어 1단계에서는 뺐다(오너 결정).
+const MAX_LINKS = 3
+function youtubeId(raw: string): string | null {
+  try {
+    const u = new URL(raw)
+    const host = u.hostname.replace(/^www\./, '').replace(/^m\./, '')
+    if (host === 'youtu.be') {
+      const id = u.pathname.slice(1)
+      return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null
+    }
+    if (host === 'youtube.com') {
+      if (u.pathname === '/watch') {
+        const id = u.searchParams.get('v') ?? ''
+        return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null
+      }
+      const m = u.pathname.match(/^\/(?:shorts|embed)\/([A-Za-z0-9_-]{11})/)
+      return m ? m[1] : null
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+/** linkUrls 원본을 검증 — 하나라도 유튜브가 아니면 에러 문구를 돌려준다. */
+function resolveLinks(raw: unknown): { links: string[] } | { error: string } {
+  if (!Array.isArray(raw)) return { links: [] }
+  const links = raw.map((u) => String(u).trim()).filter(Boolean).slice(0, MAX_LINKS)
+  for (const u of links) {
+    if (!youtubeId(u)) return { error: '유튜브 링크만 첨부할 수 있어요.' }
+  }
+  return { links }
+}
+
 async function sha256(input: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
@@ -239,6 +276,8 @@ serve(async (req) => {
       const title = String(body.title ?? '').trim()
       const content = String(body.content ?? '').trim()
       const images: string[] = Array.isArray(body.imageUrls) ? body.imageUrls.slice(0, 5) : []
+      const linksResult = resolveLinks(body.linkUrls)
+      if ('error' in linksResult) return json({ error: linksResult.error }, 400)
 
       if (nick.length < NICK_MIN || nick.length > NICK_MAX)
         return json({ error: `닉네임은 ${NICK_MIN}~${NICK_MAX}자로 입력해주세요.` }, 400)
@@ -256,6 +295,7 @@ serve(async (req) => {
       const { data, error } = await supabase.from('board_posts').insert({
         nickname: nick, title, content, owner_token: hash,
         image_urls: images.length ? images : null,
+        link_urls: linksResult.links.length ? linksResult.links : null,
         tag_id: tagResult.tagId,
       }).select('id').single()
       if (error) return json({ error: error.message }, 500)
@@ -270,7 +310,7 @@ serve(async (req) => {
     if (action === 'getPost') {
       const id = String(body.postId ?? '')
       const { data } = await supabase.from('board_posts')
-        .select('nickname,title,content,image_urls,tag_id,board_tags(label),owner_token').eq('id', id).maybeSingle()
+        .select('nickname,title,content,image_urls,link_urls,tag_id,board_tags(label),owner_token').eq('id', id).maybeSingle()
       if (!data) return json({ error: '글을 찾을 수 없습니다.' }, 404)
       if (data.owner_token !== hash) return json({ error: '본인이 쓴 것만 수정할 수 있어요.' }, 403)
       // 지금은 비활성화된 말머리라도 수정 화면에 '현재 선택'으로 보여줘야 하니 라벨을 같이 준다.
@@ -299,6 +339,11 @@ serve(async (req) => {
         patch.content = content
       }
       if (Array.isArray(body.imageUrls)) patch.image_urls = body.imageUrls.slice(0, 5)
+      if (Array.isArray(body.linkUrls)) {
+        const linksResult = resolveLinks(body.linkUrls)
+        if ('error' in linksResult) return json({ error: linksResult.error }, 400)
+        patch.link_urls = linksResult.links.length ? linksResult.links : null
+      }
       // 'tagId' in body 로 확인 — 말머리를 없애는 것(null)과 아예 안 건드리는 것(undefined)을
       // 구분해야 한다. undefined면 이 요청에서 말머리는 그대로 둔다.
       if ('tagId' in body) {
@@ -493,14 +538,17 @@ serve(async (req) => {
     // 여기로 받으면 차단된 기기를 먼저 걸러내고(위 board_blocks 검사) 크기·형식도 본다.
     if (action === 'uploadImage') {
       const dataUrl = String(body.dataUrl ?? '')
-      const m = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/)
+      // gif 추가(2026-08-13) — 정지사진과 달리 클라이언트에서 리사이즈·재인코딩을 안 하고
+      // 원본 그대로 보낸다(움짤 압축용 애니메이션 GIF 처리 모듈이 없어, 다시 구우면
+      // 움직임이 사라진다). 그래서 원본 용량 그대로 5MB 제한에 걸린다.
+      const m = dataUrl.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,(.+)$/)
       if (!m) return json({ error: '지원하지 않는 이미지 형식입니다.' }, 400)
       const [, mime, b64] = m
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
       if (bytes.length > 5 * 1024 * 1024) {
         return json({ error: '이미지는 5MB 이하만 올릴 수 있습니다.' }, 400)
       }
-      const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg'
+      const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : mime === 'image/gif' ? 'gif' : 'jpg'
       const key = `${hash.slice(0, 12)}/${crypto.randomUUID()}.${ext}`
       const { error } = await supabase.storage.from('board-images')
         .upload(key, bytes, { contentType: mime, upsert: false })

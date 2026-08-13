@@ -9,6 +9,7 @@ import { getOrCreateToken } from '@/lib/reviewIdentity'
  *
  * 올리기 전에 긴 변 1280 으로 줄이고 jpeg 로 다시 굽는다. 요즘 폰 사진은 한 장에
  * 5MB 를 넘기기 일쑤라 그대로 보내면 업로드가 오래 걸리고 서버 한도에 걸린다.
+ * GIF만 예외 — 재인코딩하면 애니메이션이 사라져서 원본을 그대로 올린다(2026-08-13).
  *
  * ⚠️ 사진 선택은 네이티브 모듈이라 새 빌드가 있어야 동작한다. 모듈을 파일 맨 위에서
  *    불러오면 예전 빌드에서는 화면 자체가 열리지 않으므로, 누를 때 불러온다.
@@ -43,27 +44,41 @@ export async function pickAndUpload(): Promise<{ url: string } | { error: string
     return { error: '사진 접근을 허용해야 첨부할 수 있어요. 설정에서 권한을 켜주세요.' }
   }
 
+  // base64: true — GIF는 원본 그대로 올려야 해서(아래) 리사이즈 전에 원본 바이트가 필요하다.
   const picked = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     quality: 1,
     allowsMultipleSelection: false,
+    base64: true,
   })
   if (picked.canceled || !picked.assets?.length) return null
 
   try {
     const asset = picked.assets[0]
-    const resized = await ImageManipulator.manipulateAsync(
-      asset.uri,
-      [{ resize: { width: 1280 } }],
-      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-    )
-    if (!resized.base64) return { error: '사진을 처리하지 못했어요.' }
+    // ⚠️(2026-08-13) GIF는 ImageManipulator를 거치면(정지사진용 리사이즈+JPEG 재인코딩)
+    // 애니메이션이 통째로 사라져 정지 프레임 한 장만 남는다 — 이 모듈은 애니메이션 GIF를
+    // 못 다룬다. 그래서 GIF만 리사이즈·재인코딩을 건너뛰고 원본 바이트를 그대로 올린다
+    // (대신 압축이 안 되니 서버 5MB 제한에 원본 용량 그대로 걸린다).
+    const isGif = asset.mimeType === 'image/gif' || /\.gif$/i.test(asset.uri)
+    let dataUrl: string
+    if (isGif) {
+      if (!asset.base64) return { error: 'GIF를 처리하지 못했어요.' }
+      dataUrl = `data:image/gif;base64,${asset.base64}`
+    } else {
+      const resized = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1280 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      )
+      if (!resized.base64) return { error: '사진을 처리하지 못했어요.' }
+      dataUrl = `data:image/jpeg;base64,${resized.base64}`
+    }
 
     const ownerToken = await getOrCreateToken()
     const { data, error } = await supabase.functions.invoke('board', {
       body: {
         action: 'uploadImage',
-        dataUrl: `data:image/jpeg;base64,${resized.base64}`,
+        dataUrl,
         ownerToken,
       },
     })

@@ -25,6 +25,8 @@ import {
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { blockAuthor, markCommentsSeen, getMyPostIds } from '@/lib/boardIdentity'
 import { wideContent } from '@/constants/layout'
+import { openOutlink } from '@/lib/outlink'
+import { youtubeThumbnail } from '@/lib/youtube'
 import type { BoardComment } from '@/lib/board'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
@@ -412,6 +414,19 @@ export default function BoardPostScreen() {
         <View style={styles.postBody}>
           <Text style={styles.bodyText} selectable>{post.content}</Text>
         </View>
+
+        {!!post.link_urls?.length && (
+          <View style={styles.images}>
+            {post.link_urls.map((u) => (
+              <TouchableOpacity key={u} style={styles.imageWrap} onPress={() => openOutlink(u)} activeOpacity={0.85}>
+                <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.image} contentFit="cover" />
+                <View style={styles.linkPlayBadge}>
+                  <Ionicons name="play" size={22} color="#fff" />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {!!post.image_urls?.length && (
           <View style={styles.images}>
@@ -852,6 +867,12 @@ function makeStyles(colors: AppColors) {
     },
     imageBlockedText: { color: colors.textPrimary, fontSize: 13, fontWeight: '700' },
     imageBlockedSub: { color: colors.textTertiary, fontSize: 11.5 },
+    // 유튜브 링크 썸네일 위 재생 배지 — 탭하면 외부(유튜브 앱/브라우저)에서 재생(인앱 재생 아님).
+    linkPlayBadge: {
+      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+      alignItems: 'center', justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.25)',
+    },
 
     votes: { flexDirection: 'row', justifyContent: 'center', gap: 10, paddingVertical: 14 },
     voteBtn: {

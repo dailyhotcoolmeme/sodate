@@ -313,6 +313,7 @@ export interface Database {
           title: string
           content: string
           image_urls: string[] | null
+          link_urls: string[] | null
           owner_token: string
           tag_id: string | null
           upvotes: number

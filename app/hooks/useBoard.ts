@@ -61,7 +61,7 @@ export function useBoardList(page: number, search = '') {
     let q = supabase
       .from('board_posts')
       .select(
-        'id,nickname,title,content,image_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,image_hidden,owner_token,created_at',
+        'id,nickname,title,content,image_urls,link_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,image_hidden,owner_token,created_at',
         { count: 'exact' }
       )
       .eq('is_active', true)
@@ -108,7 +108,7 @@ export function useBoardPost(id: string) {
     try {
       const [{ data: p }, { data: c }] = await Promise.all([
         supabase.from('board_posts')
-          .select('id,nickname,title,content,image_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,image_hidden,owner_token,is_active,created_at,updated_at')
+          .select('id,nickname,title,content,image_urls,link_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,image_hidden,owner_token,is_active,created_at,updated_at')
           .eq('id', id).maybeSingle(),
         supabase.from('board_comments')
           .select('id,post_id,parent_id,nickname,content,owner_token,is_secret,created_at,updated_at')

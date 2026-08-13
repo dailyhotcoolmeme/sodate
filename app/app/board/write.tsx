@@ -11,8 +11,9 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardTags } from '@/hooks/useBoard'
-import { useBoardEditor, BoardEditorInput } from '@/components/BoardEditor'
+import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import { MAX_IMAGES } from '@/lib/boardImage'
+import { MAX_LINKS } from '@/lib/youtube'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
 import { wideContent } from '@/constants/layout'
@@ -54,6 +55,7 @@ export default function BoardWriteScreen() {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [images, setImages] = useState<string[]>([])
+  const [links, setLinks] = useState<string[]>([])
   // 말머리 — admin(board_tags)에서 등록한 것 중 사용 중인 것만 선택지로 보여준다
   // (2026-08-12 오너 지시). 선택은 필수가 아니다.
   const boardTags = useBoardTags()
@@ -78,6 +80,7 @@ export default function BoardWriteScreen() {
   const [initiallyAgreed, setInitiallyAgreed] = useState(false)
   const [agreedLoaded, setAgreedLoaded] = useState(false)
   const editor = useBoardEditor(images, setImages)
+  const linksApi = useBoardLinks(links, setLinks)
 
   useEffect(() => {
     getLastNickname().then((n) => n && setNickname((cur) => cur || n))
@@ -98,6 +101,7 @@ export default function BoardWriteScreen() {
         setTitle(r.post.title ?? '')
         setContent(r.post.content ?? '')
         setImages(r.post.image_urls ?? [])
+        setLinks(r.post.link_urls ?? [])
         setTagId(r.post.tag_id ?? null)
         if (r.post.tag_id && r.post.tag_label) {
           setEditingTag({ id: r.post.tag_id, label: r.post.tag_label })
@@ -113,7 +117,7 @@ export default function BoardWriteScreen() {
   const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && content.trim().length > 0 && !needsAgreement
 
   // 쓰던 게 있으면 닫기 전에 물어본다
-  const dirty = title.trim().length > 0 || content.trim().length > 0 || images.length > 0
+  const dirty = title.trim().length > 0 || content.trim().length > 0 || images.length > 0 || links.length > 0
   const close = () => {
     if (!dirty) { router.back(); return }
     Alert.alert('작성 중인 글이 있어요', '지금 나가면 쓰던 내용이 사라집니다.', [
@@ -126,8 +130,8 @@ export default function BoardWriteScreen() {
     if (!canSave || saving) return
     setSaving(true)
     const r = isEdit
-      ? await updatePost({ postId: id!, title: title.trim(), content: content.trim(), imageUrls: images, tagId })
-      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: content.trim(), imageUrls: images, tagId })
+      ? await updatePost({ postId: id!, title: title.trim(), content: content.trim(), imageUrls: images, linkUrls: links, tagId })
+      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: content.trim(), imageUrls: images, linkUrls: links, tagId })
     setSaving(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
     if (!isEdit) await setTermsAgreed()
@@ -226,6 +230,9 @@ export default function BoardWriteScreen() {
             maxLength={CONTENT_MAX}
             placeholder="내용을 입력하세요"
           />
+          <View style={{ marginTop: 8 }}>
+            <BoardLinkChips api={linksApi} links={links} />
+          </View>
         </View>
 
         <Text style={styles.notice}>
@@ -274,8 +281,22 @@ export default function BoardWriteScreen() {
               사진 {images.length}/{MAX_IMAGES}
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tool}
+            onPress={linksApi.openAdd}
+            disabled={links.length >= MAX_LINKS}
+            hitSlop={8}
+          >
+            <Ionicons name="logo-youtube" size={21} color={links.length >= MAX_LINKS ? colors.textTertiary : colors.textSecondary} />
+            <Text style={[styles.toolText, links.length >= MAX_LINKS && styles.toolTextOff]}>
+              링크 {links.length}/{MAX_LINKS}
+            </Text>
+          </TouchableOpacity>
         </View>
       </KeyboardStickyView>
+
+      <LinkInputModal api={linksApi} />
 
       <LoadingOverlay visible={saving || loading} />
     </View>
@@ -385,7 +406,7 @@ function makeStyles(colors: AppColors) {
     agreeLink: { color: colors.primary, fontWeight: '700' },
 
     toolbar: {
-      flexDirection: 'row', alignItems: 'center',
+      flexDirection: 'row', alignItems: 'center', gap: 18,
       paddingHorizontal: 14, paddingTop: 8,
       backgroundColor: colors.surface,
       borderTopWidth: 1, borderTopColor: colors.divider,
