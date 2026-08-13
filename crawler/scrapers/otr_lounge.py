@@ -14,6 +14,9 @@ from utils.security import sanitize_text
 from utils.region import resolve_region
 
 PROFILE_URL = 'https://www.instagram.com/otr.lounge_/'
+# 바이오 텍스트만 파싱해 회차별 실제 사진이 없어 피드 썸네일·상세 상단 이미지가
+# 비어 있었다. 업체 로고를 기본 썸네일로 고정한다(오너 지시 2026-08-13).
+DEFAULT_THUMBNAIL = 'https://sodate-admin.pages.dev/media/thumbnails/otr-lounge/logo-thumb.webp'
 
 # "8.14 20:00 을지로 (마감)" / "8.17 13:00 종로" / "8.17 16:30 종로"
 _SCHEDULE_RE = re.compile(
@@ -68,6 +71,7 @@ class OtrLoungeScraper(BaseScraper):
                     location_region=region,
                     source_url=f'{PROFILE_URL}#{frag}',
                     is_closed=is_closed,
+                    thumbnail_urls=[DEFAULT_THUMBNAIL],
                 ))
             except Exception as e:
                 self.logger.warning(f'오프더레코드 이벤트 생성 실패 {line!r}: {e}')

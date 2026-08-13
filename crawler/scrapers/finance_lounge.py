@@ -27,6 +27,10 @@ from utils.r2_client import upload_bytes
 
 NOTION_URL = 'https://app.notion.com/p/36116a6b5cf6802fbdf7f5671bf6dd93'
 INSTAGRAM_URL = 'https://www.instagram.com/finance.lounge2030/'
+# 노션 일정 텍스트에 사진이 없어(참석자 명단 이미지는 attendee_image_url로 별도 저장)
+# 피드 썸네일·상세 상단 이미지가 비어 있었다. 업체 로고를 기본 썸네일로 고정한다
+# (오너 지시 2026-08-13).
+DEFAULT_THUMBNAIL = 'https://sodate-admin.pages.dev/media/thumbnails/finance-lounge/logo-thumb.webp'
 
 # "8.12 20시 용산 (20대+심층대화 특집, ...)" / "8.14 20시 삼성(마감)" / "8.20 20시반 용산"
 _SCHEDULE_RE = re.compile(
@@ -150,6 +154,7 @@ class FinanceLoungeScraper(BaseScraper):
                     age_male=age_male,
                     age_female=age_female,
                     attendee_image_url=attendee_image_url,
+                    thumbnail_urls=[DEFAULT_THUMBNAIL],
                 ))
             except Exception as e:
                 self.logger.warning(f'파이낸스라운지 이벤트 생성 실패 {text!r}: {e}')
