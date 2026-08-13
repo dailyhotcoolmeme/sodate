@@ -197,7 +197,7 @@ export default function BoardListScreen() {
       ) : (
         <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[wideContent, { flexGrow: 1, paddingBottom: insets.bottom + 90 }]}
+          contentContainerStyle={[wideContent, { flexGrow: 1, paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -229,24 +229,33 @@ export default function BoardListScreen() {
         colors={colors}
       />
 
-      {/* 글쓰기 — 목록 위에 떠 있다. 스크롤하면 아이콘만 남는다. */}
-      <TouchableOpacity
-        style={[styles.writeBtn, { bottom: insets.bottom + 18 }]}
-        onPress={() => router.push('/board/write')}
-        activeOpacity={0.85}
+      {/* 글쓰기 — 목록 위에 떠 있다. 스크롤하면 아이콘만 남는다.
+          ⚠️(2026-08-13 오너 지적) 안드로이드에서 배너 광고(네이티브 뷰)가 RN 뷰 쌓임 순서를
+          무시하고 이 버튼 위에 그려져 버튼이 광고 밑에 깔려 보였다 — 바깥 View에
+          renderToHardwareTextureAndroid를 줘서 별도 레이어로 띄우면 항상 위에 그려진다
+          (iOS는 원래 문제없어 영향 없음, 이 prop이 TouchableOpacity 타입엔 없어 View로 감쌈). */}
+      <View
+        style={[styles.writeBtnAbs, { bottom: insets.bottom + 18 }]}
+        renderToHardwareTextureAndroid
       >
-        <Ionicons name="pencil" size={17} color="#fff" />
-        <Animated.View
-          style={{
-            opacity: fabAnim,
-            maxWidth: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 80] }),
-            marginLeft: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 6] }),
-            overflow: 'hidden',
-          }}
+        <TouchableOpacity
+          style={styles.writeBtn}
+          onPress={() => router.push('/board/write')}
+          activeOpacity={0.85}
         >
-          <Text style={styles.writeBtnText} numberOfLines={1}>글쓰기</Text>
-        </Animated.View>
-      </TouchableOpacity>
+          <Ionicons name="pencil" size={17} color="#fff" />
+          <Animated.View
+            style={{
+              opacity: fabAnim,
+              maxWidth: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 80] }),
+              marginLeft: fabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 6] }),
+              overflow: 'hidden',
+            }}
+          >
+            <Text style={styles.writeBtnText} numberOfLines={1}>글쓰기</Text>
+          </Animated.View>
+        </TouchableOpacity>
+      </View>
     </View>
     </SwipeSegment>
   )
@@ -558,8 +567,10 @@ function makeStyles(colors: AppColors) {
     pgTextOn: { color: '#fff', fontWeight: '800' },
     pgTextOff: { color: colors.textTertiary, opacity: 0.4 },
 
+    // 위치(absolute)는 renderToHardwareTextureAndroid를 받는 바깥 View가 담당.
+    writeBtnAbs: { position: 'absolute', right: 18 },
     writeBtn: {
-      position: 'absolute', right: 18, flexDirection: 'row', alignItems: 'center',
+      flexDirection: 'row', alignItems: 'center',
       paddingHorizontal: 16, paddingVertical: 12, borderRadius: 999,
       backgroundColor: colors.primary,
       shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
