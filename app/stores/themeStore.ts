@@ -12,8 +12,8 @@ interface ThemeStore {
 }
 
 export const useThemeStore = create<ThemeStore>((set, get) => ({
-  isDark: true,
-  colors: DarkColors,
+  isDark: false,
+  colors: LightColors,
   toggle: () => {
     const next = !get().isDark
     set({ isDark: next, colors: next ? DarkColors : LightColors })
@@ -21,7 +21,8 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
   },
   load: async () => {
     const saved = await AsyncStorage.getItem(THEME_KEY)
-    const isDark = saved !== 'light'
+    // 기본값 = 화이트모드. 저장된 값이 명시적으로 'dark'일 때만 다크모드.
+    const isDark = saved === 'dark'
     set({ isDark, colors: isDark ? DarkColors : LightColors })
   },
 }))
