@@ -131,6 +131,12 @@ export default function BoardPostScreen() {
   // 댓글이 짧은 글에서 계속 어긋났다(빈 공간이 남거나 엉뚱한 자리에서 멈춤,
   // 2026-08-01). mlbpark 등 실제 커뮤니티가 쓰는 방식대로 팝업 안에 "OOO님에게
   // 답글" 표시 + 입력칸을 두면 목록을 움직일 필요 자체가 없다(오너 지시).
+  // 글 삭제·차단·댓글 삭제 — 규칙(등록·수정·삭제는 전부 화면 전체 중앙 스피너)에서
+  // 빠져 있던 세 곳(2026-08-14 오너 지적 — 댓글 등록 스피너가 버튼 근처처럼 보인다고
+  // 전수조사 요청, 조사해보니 이 셋은 로딩 표시 자체가 아예 없었다).
+  const [deletingPost, setDeletingPost] = useState(false)
+  const [blockingAuthor, setBlockingAuthor] = useState(false)
+  const [deletingComment, setDeletingComment] = useState(false)
   const [replyModal, setReplyModal] = useState<BoardComment | null>(null)
   const [replyDraft, setReplyDraft] = useState('')
   const [replyNickname, setReplyNickname] = useState('')
@@ -238,7 +244,9 @@ export default function BoardPostScreen() {
       {
         text: '삭제', style: 'destructive',
         onPress: async () => {
+          setDeletingPost(true)
           const r = await deletePost(id)
+          setDeletingPost(false)
           if ('error' in r) { Alert.alert('알림', r.error); return }
           router.back()
         },
@@ -261,8 +269,10 @@ export default function BoardPostScreen() {
         {
           text: '차단', style: 'destructive',
           onPress: async () => {
+            setBlockingAuthor(true)
             await blockAuthor(ownerToken, targetNickname)
             await report(targetType, targetId, '사용자 차단')
+            setBlockingAuthor(false)
             if (andGoBack) router.back()
             else refetch()
           },
@@ -372,7 +382,9 @@ export default function BoardPostScreen() {
       {
         text: '삭제', style: 'destructive',
         onPress: async () => {
+          setDeletingComment(true)
           const r = await deleteComment(c.id)
+          setDeletingComment(false)
           if ('error' in r) { Alert.alert('알림', r.error); return }
           refetch()
         },
@@ -676,7 +688,7 @@ export default function BoardPostScreen() {
       </View>
       </KeyboardAvoidingView>
 
-      <LoadingOverlay visible={sending || voting} />
+      <LoadingOverlay visible={sending || voting || deletingPost || blockingAuthor || deletingComment || replySending} />
 
       <ReplyModal
         target={replyModal}

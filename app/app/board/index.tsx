@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import SwipeSegment from '@/components/SwipeSegment'
 import AppSpinner from '@/components/AppSpinner'
+import LoadingOverlay from '@/components/LoadingOverlay'
 import BoardBannerAd from '@/components/BoardBannerAd'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
@@ -87,6 +88,9 @@ export default function BoardListScreen() {
   // 글·댓글을 걸러 보이지 않게 하는 것과 별개로, 차단 자체가 운영자 신고로도 접수되어야
   // 한다 — 애플이 "blocking should also notify the developer"라고 명시(2026-08-04 반려
   // 재확인). 신고와 완전히 분리해뒀던 걸 여기서 합친다.
+  // 등록·수정·삭제는 전부 화면 전체 중앙 스피너가 규칙인데 이 화면엔 로딩 표시
+  // 자체가 없었다(2026-08-14 전수조사에서 발견).
+  const [blocking, setBlocking] = useState(false)
   const handleBlock = (post: BoardPostWithTag) => {
     Alert.alert(
       `'${post.nickname}' 차단`,
@@ -96,8 +100,10 @@ export default function BoardListScreen() {
         {
           text: '차단', style: 'destructive',
           onPress: async () => {
+            setBlocking(true)
             await blockAuthor(post.owner_token, post.nickname)
             await report('post', post.id, '사용자 차단')
+            setBlocking(false)
             refetch()
           },
         },
@@ -273,6 +279,8 @@ export default function BoardListScreen() {
           </Animated.View>
         </TouchableOpacity>
       </View>
+
+      <LoadingOverlay visible={blocking} />
     </View>
     </SwipeSegment>
   )
