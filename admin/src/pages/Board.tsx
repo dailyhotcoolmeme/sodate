@@ -1,6 +1,6 @@
 import { useEffect, useState, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
-import { Flag, EyeOff, Eye, Trash2, ImageOff, ShieldBan, Plus, Lock } from 'lucide-react'
+import { Flag, EyeOff, Eye, Trash2, ImageOff, ShieldBan, Plus, Lock, UserSearch, X } from 'lucide-react'
 
 /**
  * 게시판 관리 — 신고 대응이 핵심이다.
@@ -46,6 +46,9 @@ interface Comment {
   created_at: string
 }
 
+/** 목록·모달 공용 카드에서 owner_token 이 필요할 때만 쓰는 최소 타입(화면엔 안 보여줌) */
+type WithToken = { owner_token: string }
+
 interface Report {
   id: string
   target_type: string
@@ -68,6 +71,10 @@ export default function Board() {
   const [msg, setMsg] = useState('')
   /** 신고된 비밀 댓글 중 관리자가 열어본 것의 본문 (id → 내용) */
   const [revealed, setRevealed] = useState<Record<string, string>>({})
+  /** 사용자(기기)별 활동 보기 — 위험한 사용자인지 전체 이력을 보고 판단하려면
+   *  글 하나·댓글 하나만으로는 안 된다(2026-08-13 오너 지시). */
+  const [userActivity, setUserActivity] = useState<{ token: string; posts: Post[]; comments: Comment[] } | null>(null)
+  const [userActivityLoading, setUserActivityLoading] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -189,17 +196,46 @@ export default function Board() {
     setComments((prev) => prev.filter((x) => x.id !== c.id))
   }
 
-  /** 기기 차단 — 애플 1.2 필수 요건. owner_token 은 화면에 보여주지 않고 값만 넘긴다. */
-  async function blockAuthor(kind: 'post' | 'comment', id: string) {
-    if (!window.confirm('이 작성자의 기기를 차단할까요? 이후 글·댓글을 쓸 수 없게 됩니다.')) return
-    const table = kind === 'post' ? 'board_posts' : 'board_comments'
-    const { data } = await supabase.from(table).select('owner_token').eq('id', id).maybeSingle()
-    const token = (data as any)?.owner_token
-    if (!token) { alert('작성자를 찾을 수 없습니다'); return }
+  /** 기기 차단 — 애플 1.2 필수 요건. owner_token 은 화면에 보여주지 않고 값만 넘긴다.
+   *  ⚠️ 차단은 "쓰기"만 막는다(board Edge Function이 action 처리 전에 board_blocks를
+   *  먼저 검사 — supabase/functions/board/index.ts). 글 목록·상세 읽기는 RLS가
+   *  is_active만 보므로 board_blocks와 무관하게 그대로 된다. 즉 차단된 사용자도
+   *  커뮤니티는 계속 볼 수 있고 글·댓글·추천만 못 쓴다(오너 확인 2026-08-13, 의도된 동작). */
+  async function blockToken(token: string) {
+    if (!window.confirm('이 작성자의 기기를 차단할까요? 커뮤니티 열람은 계속 되고, 글·댓글·추천만 못 쓰게 됩니다.')) return
     const { error } = await supabase.from('board_blocks')
       .upsert({ owner_token: token, reason: '관리자 차단' }, { onConflict: 'owner_token' })
     if (error) { alert(`실패: ${error.message}`); return }
     setMsg('차단했습니다')
+  }
+
+  async function blockAuthor(kind: 'post' | 'comment', id: string) {
+    const table = kind === 'post' ? 'board_posts' : 'board_comments'
+    const { data } = await supabase.from(table).select('owner_token').eq('id', id).maybeSingle()
+    const token = (data as WithToken | null)?.owner_token
+    if (!token) { alert('작성자를 찾을 수 없습니다'); return }
+    await blockToken(token)
+  }
+
+  /**
+   * 이 사용자(기기)가 쓴 다른 글·댓글을 전부 모아 보여준다 — 위험한 사용자인지는
+   * 글·댓글 하나만 보고는 판단이 안 되므로(2026-08-13 오너 지시), 신고 이력·전체
+   * 작성 패턴을 한 번에 보고 차단 여부를 정할 수 있게 한다.
+   */
+  async function viewUserActivity(kind: 'post' | 'comment', id: string) {
+    const table = kind === 'post' ? 'board_posts' : 'board_comments'
+    const { data } = await supabase.from(table).select('owner_token').eq('id', id).maybeSingle()
+    const token = (data as WithToken | null)?.owner_token
+    if (!token) { alert('작성자를 찾을 수 없습니다'); return }
+    setUserActivityLoading(true)
+    const [{ data: p }, { data: c }] = await Promise.all([
+      supabase.from('board_posts').select('*').eq('owner_token', token).order('created_at', { ascending: false }),
+      supabase.from('board_comments')
+        .select('id,post_id,parent_id,nickname,content,is_secret,report_count,is_active,created_at')
+        .eq('owner_token', token).order('created_at', { ascending: false }),
+    ])
+    setUserActivity({ token, posts: (p as Post[]) ?? [], comments: (c as Comment[]) ?? [] })
+    setUserActivityLoading(false)
   }
 
   const shownPosts = posts.filter((p) => {
@@ -299,7 +335,7 @@ export default function Board() {
         </div>
       ) : tab === 'comments' ? (
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-          <table className="w-full min-w-[840px] table-fixed text-sm">
+          <table className="w-full min-w-[920px] table-fixed text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="px-3 py-3 text-left font-medium w-[120px]">닉네임</th>
@@ -307,7 +343,7 @@ export default function Board() {
                 <th className="px-3 py-3 text-center font-medium w-[80px]">신고수</th>
                 <th className="px-3 py-3 text-center font-medium w-[86px]">노출</th>
                 <th className="px-3 py-3 text-left font-medium w-[110px]">작성일</th>
-                <th className="px-3 py-3 text-center font-medium w-[180px]">액션</th>
+                <th className="px-3 py-3 text-center font-medium w-[260px]">액션</th>
               </tr>
             </thead>
             <tbody>
@@ -351,6 +387,9 @@ export default function Board() {
                       <button onClick={() => toggleComment(c)} className="px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
                         {c.is_active ? '숨김' : '노출'}
                       </button>
+                      <button onClick={() => viewUserActivity('comment', c.id)} className="px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                        활동 보기
+                      </button>
                       <button onClick={() => blockAuthor('comment', c.id)} className="px-2 py-1 rounded-lg border border-orange-200 text-xs font-medium text-orange-600 hover:bg-orange-50">
                         차단
                       </button>
@@ -369,7 +408,7 @@ export default function Board() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-          <table className="w-full min-w-[980px] table-fixed text-sm">
+          <table className="w-full min-w-[1040px] table-fixed text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="px-3 py-3 text-left font-medium w-[120px]">닉네임</th>
@@ -378,7 +417,7 @@ export default function Board() {
                 <th className="px-3 py-3 text-center font-medium w-[70px]">댓글</th>
                 <th className="px-3 py-3 text-center font-medium w-[110px]">신고(글/사진)</th>
                 <th className="px-3 py-3 text-center font-medium w-[86px]">노출</th>
-                <th className="px-3 py-3 text-center font-medium w-[240px]">액션</th>
+                <th className="px-3 py-3 text-center font-medium w-[300px]">액션</th>
               </tr>
             </thead>
             <tbody>
@@ -419,6 +458,9 @@ export default function Board() {
                             <ImageOff size={12} /> {p.image_hidden ? '사진 복구' : '사진 가림'}
                           </button>
                         )}
+                        <button onClick={() => viewUserActivity('post', p.id)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                          <UserSearch size={12} /> 활동 보기
+                        </button>
                         <button onClick={() => blockAuthor('post', p.id)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-orange-200 text-xs font-medium text-orange-600 hover:bg-orange-50">
                           <ShieldBan size={12} /> 차단
                         </button>
@@ -465,6 +507,147 @@ export default function Board() {
           </table>
         </div>
       )}
+
+      {(userActivity || userActivityLoading) && (
+        <UserActivityModal
+          activity={userActivity}
+          loading={userActivityLoading}
+          tagLabel={tagLabel}
+          onClose={() => setUserActivity(null)}
+          onBlock={() => userActivity && blockToken(userActivity.token)}
+          onTogglePost={togglePost}
+          onRemovePost={removePost}
+          onToggleComment={toggleComment}
+          onRemoveComment={removeComment}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * 사용자(기기)별 활동 모음 — 위험한 사용자인지 글·댓글 하나만 보고는 판단이 안 돼서
+ * (2026-08-13 오너 지시) 신고 이력을 포함한 전체 작성 이력을 한 화면에서 보고,
+ * 그 자리에서 바로 숨김·삭제·차단까지 할 수 있게 한다. owner_token 원문은
+ * 화면에 안 띄운다(기존 blockAuthor 규칙과 동일).
+ */
+function UserActivityModal({
+  activity, loading, tagLabel, onClose, onBlock, onTogglePost, onRemovePost, onToggleComment, onRemoveComment,
+}: {
+  activity: { token: string; posts: Post[]; comments: Comment[] } | null
+  loading: boolean
+  tagLabel: (id: string | null) => string | null
+  onClose: () => void
+  onBlock: () => void
+  onTogglePost: (p: Post) => void
+  onRemovePost: (p: Post) => void
+  onToggleComment: (c: Comment) => void
+  onRemoveComment: (c: Comment) => void
+}) {
+  const reportedPosts = activity?.posts.filter((p) => p.report_count > 0 || p.image_report_count > 0).length ?? 0
+  const reportedComments = activity?.comments.filter((c) => c.report_count > 0).length ?? 0
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">이 사용자의 활동</h2>
+            {activity && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                글 {activity.posts.length}개(신고 {reportedPosts}) · 댓글 {activity.comments.length}개(신고 {reportedComments})
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {activity && (
+              <button
+                onClick={onBlock}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-orange-200 text-xs font-medium text-orange-600 hover:bg-orange-50"
+              >
+                <ShieldBan size={13} /> 이 사용자 차단
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          {loading ? (
+            <p className="text-gray-400 text-sm py-8 text-center">불러오는 중...</p>
+          ) : (
+            <>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-2">작성한 글</p>
+                <div className="space-y-1.5">
+                  {(activity?.posts ?? []).map((p) => (
+                    <div key={p.id} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-800 truncate">
+                          {tagLabel(p.tag_id) && <span className="text-pink-500 font-semibold">{tagLabel(p.tag_id)} </span>}
+                          {p.title}
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {new Date(p.created_at).toLocaleDateString('ko-KR')}
+                          {(p.report_count > 0 || p.image_report_count > 0) && (
+                            <span className="ml-1.5 text-red-500 font-medium">신고 {p.report_count}/{p.image_report_count}</span>
+                          )}
+                          {!p.is_active && <span className="ml-1.5 text-gray-400">(숨김)</span>}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => onTogglePost(p)} className="px-2 py-1 rounded-lg border border-gray-200 text-[11px] font-medium text-gray-600 hover:bg-gray-50">
+                          {p.is_active ? '숨김' : '노출'}
+                        </button>
+                        <button onClick={() => onRemovePost(p)} className="px-2 py-1 rounded-lg border border-red-200 text-[11px] font-medium text-red-600 hover:bg-red-50">
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {(activity?.posts.length ?? 0) === 0 && (
+                    <p className="text-center text-gray-300 text-xs py-4">작성한 글이 없습니다.</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-2">작성한 댓글</p>
+                <div className="space-y-1.5">
+                  {(activity?.comments ?? []).map((c) => (
+                    <div key={c.id} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-800 truncate">
+                          {c.parent_id ? '↳ ' : ''}
+                          {c.is_secret ? <span className="text-amber-700">(비밀댓글)</span> : c.content}
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {new Date(c.created_at).toLocaleDateString('ko-KR')}
+                          {c.report_count > 0 && <span className="ml-1.5 text-red-500 font-medium">신고 {c.report_count}</span>}
+                          {!c.is_active && <span className="ml-1.5 text-gray-400">(숨김)</span>}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => onToggleComment(c)} className="px-2 py-1 rounded-lg border border-gray-200 text-[11px] font-medium text-gray-600 hover:bg-gray-50">
+                          {c.is_active ? '숨김' : '노출'}
+                        </button>
+                        <button onClick={() => onRemoveComment(c)} className="px-2 py-1 rounded-lg border border-red-200 text-[11px] font-medium text-red-600 hover:bg-red-50">
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {(activity?.comments.length ?? 0) === 0 && (
+                    <p className="text-center text-gray-300 text-xs py-4">작성한 댓글이 없습니다.</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
