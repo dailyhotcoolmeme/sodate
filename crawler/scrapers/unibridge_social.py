@@ -19,6 +19,9 @@ from utils.security import sanitize_text
 from utils.region import resolve_region
 
 PROFILE_URL = 'https://www.instagram.com/unibridge_social/'
+# 이 업체는 회차별 실제 사진이 없어(구글폼 텍스트 문항만 파싱) 피드 썸네일·상세 상단
+# 이미지가 전부 비어 있었다. 업체 로고를 기본 썸네일로 고정한다(오너 지시 2026-08-13).
+DEFAULT_THUMBNAIL = 'https://sodate-admin.pages.dev/media/thumbnails/unibridge-social/logo-thumb.webp'
 
 # "8/15(토) 합정 [오후 2시] 🅰️올데이🅰️ 99~07 ..." — 앞에 붙는 이모지/체크마크는 무시하고 검색.
 _SCHEDULE_ITEM_RE = re.compile(r'(\d{1,2})/(\d{1,2})\([가-힣]\)\s*([가-힣]+)\s*\[([^\]]+)\]')
@@ -139,6 +142,7 @@ class UnibridgeSocialScraper(BaseScraper):
                         age_range_max=age_range_max,
                         age_male=age_male,
                         age_female=age_female,
+                        thumbnail_urls=[DEFAULT_THUMBNAIL],
                     ))
                 except Exception as e:
                     self.logger.warning(f'유니브리지소셜 이벤트 생성 실패 {text!r}: {e}')
