@@ -120,7 +120,7 @@ export default function SettingsScreen() {
         />
         <SettingRow
           iconName="mail-outline"
-          label="문의하기"
+          label="제휴문의"
           value="admin@ourmine.co.kr"
           onPress={handleContact}
         />
