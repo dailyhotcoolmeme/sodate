@@ -70,6 +70,8 @@ export function BoardEditorInput({
 }) {
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
+  // 썸네일 누르면 전체보기(2026-08-14 오너 지시) — X 버튼과는 별도 터치 영역이라 겹치지 않는다.
+  const [previewUri, setPreviewUri] = useState<string | null>(null)
 
   return (
     <View style={styles.wrap}>
@@ -91,7 +93,9 @@ export function BoardEditorInput({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
           {images.map((u) => (
             <View key={u} style={styles.thumbWrap}>
-              <Image source={{ uri: u }} style={styles.thumb} contentFit="cover" />
+              <TouchableOpacity onPress={() => setPreviewUri(u)} activeOpacity={0.85}>
+                <Image source={{ uri: u }} style={styles.thumb} contentFit="cover" />
+              </TouchableOpacity>
               <TouchableOpacity style={styles.thumbX} onPress={() => api.removeImage(u)} hitSlop={6}>
                 <Ionicons name="close" size={13} color="#fff" />
               </TouchableOpacity>
@@ -100,6 +104,16 @@ export function BoardEditorInput({
         </ScrollView>
       )}
 
+      <Modal visible={!!previewUri} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
+        <Pressable style={styles.previewOverlay} onPress={() => setPreviewUri(null)}>
+          {!!previewUri && (
+            <Image source={{ uri: previewUri }} style={styles.previewImage} contentFit="contain" />
+          )}
+          <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewUri(null)} hitSlop={10}>
+            <Ionicons name="close" size={22} color="#fff" />
+          </TouchableOpacity>
+        </Pressable>
+      </Modal>
     </View>
   )
 }
@@ -115,7 +129,9 @@ function makeStyles(colors: AppColors) {
       borderWidth: 1, borderColor: colors.border, minHeight: 220,
     },
 
-    thumbs: { gap: 8, paddingVertical: 2 },
+    // X 버튼이 썸네일 위(top: -5)로 살짝 튀어나오는데 paddingVertical만으로는 위쪽이
+    // 잘려 보였다(2026-08-14 오너 지적) — 위쪽만 버튼이 다 들어올 만큼 더 준다.
+    thumbs: { gap: 8, paddingTop: 8, paddingBottom: 2 },
     thumbWrap: { position: 'relative' },
     thumb: { width: 76, height: 76, borderRadius: 8, backgroundColor: colors.surfaceHigh },
     thumbX: {
@@ -124,6 +140,13 @@ function makeStyles(colors: AppColors) {
       alignItems: 'center', justifyContent: 'center',
     },
 
+    previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+    previewImage: { width: '100%', height: '80%' },
+    previewClose: {
+      position: 'absolute', top: 50, right: 20,
+      width: 36, height: 36, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.15)',
+      alignItems: 'center', justifyContent: 'center',
+    },
   })
 }
 
@@ -223,7 +246,8 @@ export function LinkInputModal({ api }: { api: BoardLinksApi }) {
 
 function makeLinkStyles(colors: AppColors) {
   return StyleSheet.create({
-    thumbs: { gap: 8, paddingVertical: 2 },
+    // 사진 썸네일과 같은 이유(위 makeStyles 참고) — X 버튼이 위로 튀어나오니 위쪽 여백을 더 준다.
+    thumbs: { gap: 8, paddingTop: 8, paddingBottom: 2 },
     thumbWrap: { position: 'relative' },
     thumb: { width: 76, height: 76, borderRadius: 8, backgroundColor: colors.surfaceHigh },
     playBadge: {
