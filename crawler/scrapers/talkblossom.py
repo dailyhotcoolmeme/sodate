@@ -25,6 +25,9 @@ def _dedup_key(ev) -> str:
 
 class TalkblossomScraper(BaseScraper):
     BASE_URL = 'https://talkblossom.co.kr'
+    # 사이트에서 긁던 사진이 실제 모임 사진이 아니라 카테고리 로고였다. 오너가 준
+    # 브랜드 이미지로 고정한다(오너 지시 2026-08-13).
+    DEFAULT_THUMBNAIL = 'https://sodate-admin.pages.dev/media/thumbnails/talkblossom/logo-thumb.webp'
 
     # Cafe24 option_stock_data의 stock_number(성별 잔여석)를 DB 기록
     WRITES_SEATS = True
@@ -577,7 +580,7 @@ class TalkblossomScraper(BaseScraper):
                         price_female=price_female,
                         gender_ratio=None,
                         source_url=unique_url,
-                        thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
+                        thumbnail_urls=[self.DEFAULT_THUMBNAIL],
                         theme=theme_list,
                         seats_left_male=seats_left_male,
                         seats_left_female=seats_left_female,
@@ -659,7 +662,7 @@ class TalkblossomScraper(BaseScraper):
                     price_female=price_female,
                     gender_ratio=None,
                     source_url=unique_url,
-                    thumbnail_urls=[thumbnail_url] if thumbnail_url else [],
+                    thumbnail_urls=[self.DEFAULT_THUMBNAIL],
                     theme=['일반'],
                     seats_left_male=None,
                     seats_left_female=None,
