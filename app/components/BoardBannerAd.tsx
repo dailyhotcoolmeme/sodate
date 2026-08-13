@@ -22,11 +22,15 @@ export default function BoardBannerAd() {
   const [width, setWidth] = useState(0)
   const unitId = getBoardBannerAdUnitId()
 
+  // ⚠️(2026-08-13 오너 지적) 스크롤을 살짝만 움직여도 광고 자리에 빈 공간이 생겼다 —
+  // onLayout은 스크롤 중 부모가 다시 렌더될 때마다 다시 불릴 수 있는데, 그때마다
+  // width state가 갱신되면 BannerAd의 width prop이 바뀐 걸로 보여 네이티브 광고 뷰가
+  // 다시 로드되면서 잠깐 빈 자리가 보였다. 처음 한 번만 측정해서 고정하고 그 뒤로는
+  // 다시 안 바꾼다 — 광고가 스크롤 중에 다시 로드될 일이 없어진다.
   const onLayout = (e: LayoutChangeEvent) => {
-    // onLayout이 주는 값은 wrap의 바깥 박스 너비(패딩 포함)라, 그 안의 실제 광고가
-    // 들어갈 너비를 얻으려면 좌우 패딩을 빼야 한다 — 안 빼면 광고가 패딩 밖으로 넘친다.
+    if (width > 0) return
     const w = Math.round(e.nativeEvent.layout.width) - SIDE_PADDING * 2
-    if (w > 0 && w !== width) setWidth(w)
+    if (w > 0) setWidth(w)
   }
 
   if (failed) return null
