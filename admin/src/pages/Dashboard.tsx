@@ -5,6 +5,24 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
 
+const KST_OFFSET_MS = 9 * 3600 * 1000
+
+// ⚠️(2026-08-13) new Date().toISOString().split('T')[0] 은 항상 UTC 날짜라, 한국시간
+// 00~09시엔 어제 날짜가 나온다("오늘" 카드가 통째로 어제 데이터를 보여줌). 브라우저
+// locale에도 기대지 않고(관리자가 항상 한국에서 접속한다는 보장 없음) 순수 시각 계산으로
+// "지금 이 순간의 한국 달력일 자정"을 UTC 인스턴트로 구해 DB 비교에 쓴다.
+function kstMidnightUTC(date = new Date()): Date {
+  const kst = new Date(date.getTime() + KST_OFFSET_MS)
+  const kstMidnight = Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate())
+  return new Date(kstMidnight - KST_OFFSET_MS)
+}
+
+// UTC ISO 문자열(created_at)을 한국 달력일(YYYY-MM-DD)로. 같은 트릭: +9h 해서 UTC로 자르면
+// 그게 곧 한국 날짜다.
+function kstDateStr(iso: string): string {
+  return new Date(new Date(iso).getTime() + KST_OFFSET_MS).toISOString().split('T')[0]
+}
+
 interface Stats {
   totalEvents: number
   todayEvents: number
@@ -39,7 +57,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
-      const today = new Date().toISOString().split('T')[0]
+      const today = kstMidnightUTC().toISOString()
       const thirtyDaysAgo = new Date(Date.now() - 30 * 864e5).toISOString()
 
       const [
@@ -73,7 +91,7 @@ export default function Dashboard() {
       // 일별 트렌드 집계
       const trendMap: Record<string, Record<string, number>> = {}
       for (const e of analyticsResult.data ?? []) {
-        const date = e.created_at.split('T')[0]
+        const date = kstDateStr(e.created_at)
         if (!trendMap[date]) trendMap[date] = { app_open: 0, event_view: 0, event_apply_click: 0, event_favorite_add: 0 }
         trendMap[date][e.event_type] = (trendMap[date][e.event_type] ?? 0) + 1
       }
