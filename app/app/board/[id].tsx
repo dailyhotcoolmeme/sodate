@@ -33,6 +33,34 @@ import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 /** 댓글 입력칸과 등록 버튼의 한 줄 높이 */
 const COMPOSER_H = 38
 
+// 세로·가로 비율이 심하게 극단적인 사진(파노라마, 아주 긴 캡처 등)까지 그대로 두면
+// 화면을 지나치게 많이 차지하니 이 범위로만 눌러준다(대부분의 사진은 이 안에 들어와
+// 안 잘린다 — 크롭은 이 범위를 벗어난 극단적인 사진에만 소폭 적용됨).
+const IMAGE_MIN_RATIO = 0.55  // 세로로 아주 긴 사진의 하한(가로/세로)
+const IMAGE_MAX_RATIO = 2.2   // 가로로 아주 긴 사진의 상한
+
+/**
+ * 게시글 첨부 사진. 예전엔 높이 220 고정 + contentFit="cover" 라 세로로 긴 사진(휴대폰
+ * 세로사진 대부분)이 위아래로 심하게 잘려 보였다(2026-08-13 오너 지적). 로드되면 실제
+ * 가로세로 비율을 읽어 그 비율대로 높이를 잡는다 — 안 잘리고 전체가 다 보인다.
+ */
+function PostImage({ uri, style }: { uri: string; style: any }) {
+  const [ratio, setRatio] = useState<number | null>(null)
+  return (
+    <Image
+      source={{ uri }}
+      style={[style, ratio != null && { height: undefined, aspectRatio: ratio }]}
+      contentFit="cover"
+      onLoad={(e) => {
+        const { width, height } = e.source
+        if (width > 0 && height > 0) {
+          setRatio(Math.min(IMAGE_MAX_RATIO, Math.max(IMAGE_MIN_RATIO, width / height)))
+        }
+      }}
+    />
+  )
+}
+
 /** 글 상세 — 추천·비추, 댓글(대댓글 한 단계), 내 글이면 수정·삭제. */
 export default function BoardPostScreen() {
   const { id, commentId } = useLocalSearchParams<{ id: string; commentId?: string }>()
@@ -441,7 +469,7 @@ export default function BoardPostScreen() {
                 </View>
               ) : (
                 <View key={u} style={styles.imageWrap}>
-                  <Image source={{ uri: u }} style={styles.image} contentFit="cover" />
+                  <PostImage uri={u} style={styles.image} />
                 </View>
               )
             ))}
