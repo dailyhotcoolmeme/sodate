@@ -520,7 +520,9 @@ serve(async (req) => {
     if (action === 'report') {
       const targetType = String(body.targetType ?? '')
       const targetId = String(body.targetId ?? '')
-      if (!['post', 'comment', 'image'].includes(targetType))
+      // 'image' → 'content' 로 일반화(2026-08-13) — 사진·유튜브 링크 등 첨부물 전체를
+      // 한 종류로 신고한다(supabase/migrations/20260813f_board_content_report_unify.sql).
+      if (!['post', 'comment', 'content'].includes(targetType))
         return json({ error: '잘못된 요청입니다.' }, 400)
       const { error } = await supabase.from('board_reports').insert({
         target_type: targetType, target_id: targetId,

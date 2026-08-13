@@ -49,7 +49,7 @@ const ADMIN_URL = 'https://sodate-admin.pages.dev'
 const TARGET_LABEL: Record<string, string> = {
   post: '게시글',
   comment: '댓글',
-  image: '이미지',
+  content: '첨부(사진·링크)',
 }
 
 function esc(s: string): string {
@@ -121,17 +121,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let contentPreview = ''
     let reportCount = 0
 
-    if (report.target_type === 'post' || report.target_type === 'image') {
+    if (report.target_type === 'post' || report.target_type === 'content') {
       const { data: post } = await supabase
         .from('board_posts')
-        .select('nickname,title,content,report_count,image_report_count')
+        .select('nickname,title,content,report_count,content_report_count')
         .eq('id', report.target_id)
         .maybeSingle()
       if (post) {
         title = post.title
         author = post.nickname
         contentPreview = post.content
-        reportCount = report.target_type === 'image' ? post.image_report_count : post.report_count
+        reportCount = report.target_type === 'content' ? post.content_report_count : post.report_count
       }
     } else {
       const { data: comment } = await supabase

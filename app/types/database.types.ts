@@ -321,9 +321,9 @@ export interface Database {
           comment_count: number
           view_count: number
           report_count: number
-          image_report_count: number
+          content_report_count: number
           is_active: boolean
-          image_hidden: boolean
+          content_hidden: boolean
           created_at: string
           updated_at: string
         }

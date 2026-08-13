@@ -169,7 +169,9 @@ export async function vote(
 
 // ── 신고 ──
 export async function report(
-  targetType: 'post' | 'comment' | 'image',
+  /** 'content' = 첨부(사진+유튜브 링크 등) 전체 — 예전엔 'image' 전용이었다가
+   *  2026-08-13 일반화(supabase/migrations/20260813f_board_content_report_unify.sql). */
+  targetType: 'post' | 'comment' | 'content',
   targetId: string,
   reason?: string
 ): Promise<{ ok: true; already?: boolean } | { error: string }> {

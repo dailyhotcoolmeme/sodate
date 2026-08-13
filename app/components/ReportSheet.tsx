@@ -40,7 +40,8 @@ interface Props {
    * 사유 목록·화면 구조는 후기와 똑같이 두고, 제목·안내문의 대상 이름만
    * 신고 대상에 맞게 바꾼다(2026-08-01 — "후기 신고"로 고정돼 있던 걸 지적받아 고침).
    */
-  board?: { type: 'post' | 'comment' | 'image'; id: string } | null
+  /** 'content' = 첨부(사진+유튜브 링크 등) 전체를 한꺼번에 신고 — 2026-08-13 일반화. */
+  board?: { type: 'post' | 'comment' | 'content'; id: string } | null
   /** 신고 완료 시 호출 (already: 이미 신고한 대상 여부) */
   onReported?: (already: boolean) => void
 }
@@ -122,7 +123,7 @@ export default function ReportSheet({ visible, onClose, reviewId, board, onRepor
   // 걸 또 지적받아 여기서 같이 뺐다).
   const subject = !board ? '후기'
     : board.type === 'comment' ? '댓글'
-    : board.type === 'image' ? '이미지'
+    : board.type === 'content' ? '첨부'
     : '게시글'
   const sheetTitle = `${subject} 신고`
 

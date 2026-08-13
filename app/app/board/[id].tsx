@@ -81,7 +81,7 @@ export default function BoardPostScreen() {
   const [secret, setSecret] = useState(false)
   const [editing, setEditing] = useState<BoardComment | null>(null)
   const [sending, setSending] = useState(false)
-  const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'image'; id: string } | null>(null)
+  const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'content'; id: string } | null>(null)
   const keyboardShown = useKeyboardState((k) => k.isVisible)
   const scrollY = useRef(0)
   const [composing, setComposing] = useState(false)   // 입력칸을 만졌는가(닉네임 줄 펼침)
@@ -428,9 +428,11 @@ export default function BoardPostScreen() {
                   <TouchableOpacity onPress={() => setReportTarget({ type: 'post', id })} hitSlop={8}>
                     <Text style={styles.metaAct}>신고</Text>
                   </TouchableOpacity>
-                  {!!post.image_urls?.length && !post.image_hidden && (
-                    <TouchableOpacity onPress={() => setReportTarget({ type: 'image', id })} hitSlop={8}>
-                      <Text style={styles.metaAct}>이미지 신고</Text>
+                  {/* 사진·유튜브 링크 등 첨부물 전체를 하나로 신고(2026-08-13 일반화) —
+                      신고되면 첨부만 가려지고 글은 그대로 보인다. */}
+                  {(!!post.image_urls?.length || !!post.link_urls?.length) && !post.content_hidden && (
+                    <TouchableOpacity onPress={() => setReportTarget({ type: 'content', id })} hitSlop={8}>
+                      <Text style={styles.metaAct}>첨부 신고</Text>
                     </TouchableOpacity>
                   )}
                 </>
@@ -443,9 +445,18 @@ export default function BoardPostScreen() {
           <Text style={styles.bodyText} selectable>{post.content}</Text>
         </View>
 
+        {/* 첨부(사진+링크) 신고 누적 시 이미지처럼 통째로 안 그리고 가림 문구로 대신한다
+            (2026-08-13 일반화 — 반투명 덮개는 밝은 사진·썸네일이 비쳐 보여 가린 게
+            아니었던 예전 문제와 동일하게 피한다). */}
         {!!post.link_urls?.length && (
           <View style={styles.images}>
-            {post.link_urls.map((u) => (
+            {post.content_hidden ? (
+              <View style={[styles.imageWrap, styles.imageBlocked]}>
+                <Ionicons name="eye-off-outline" size={22} color={colors.textSecondary} />
+                <Text style={styles.imageBlockedText}>첨부 검수 중</Text>
+                <Text style={styles.imageBlockedSub}>신고가 접수되어 확인하고 있습니다</Text>
+              </View>
+            ) : post.link_urls.map((u) => (
               <TouchableOpacity key={u} style={styles.imageWrap} onPress={() => openOutlink(u)} activeOpacity={0.85}>
                 <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.image} contentFit="cover" />
                 <View style={styles.linkPlayBadge}>
@@ -458,20 +469,16 @@ export default function BoardPostScreen() {
 
         {!!post.image_urls?.length && (
           <View style={styles.images}>
-            {post.image_urls.map((u) => (
-              // 가려진 이미지는 아예 그리지 않는다. 반투명 덮개를 씌우는 방식은
-              // 밝은 사진이 그대로 비쳐 보여 가린 게 아니었다(2026-07-31 오너 지적).
-              post.image_hidden ? (
-                <View key={u} style={[styles.imageWrap, styles.imageBlocked]}>
-                  <Ionicons name="eye-off-outline" size={22} color={colors.textSecondary} />
-                  <Text style={styles.imageBlockedText}>이미지 검수 중</Text>
-                  <Text style={styles.imageBlockedSub}>신고가 접수되어 확인하고 있습니다</Text>
-                </View>
-              ) : (
-                <View key={u} style={styles.imageWrap}>
-                  <PostImage uri={u} style={styles.image} />
-                </View>
-              )
+            {post.content_hidden ? (
+              <View style={[styles.imageWrap, styles.imageBlocked]}>
+                <Ionicons name="eye-off-outline" size={22} color={colors.textSecondary} />
+                <Text style={styles.imageBlockedText}>첨부 검수 중</Text>
+                <Text style={styles.imageBlockedSub}>신고가 접수되어 확인하고 있습니다</Text>
+              </View>
+            ) : post.image_urls.map((u) => (
+              <View key={u} style={styles.imageWrap}>
+                <PostImage uri={u} style={styles.image} />
+              </View>
             ))}
           </View>
         )}
