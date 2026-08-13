@@ -277,12 +277,13 @@ export default function BoardWriteScreen() {
           >
             <Ionicons name="image-outline" size={21} color={full ? colors.textTertiary : colors.textSecondary} />
             <Text style={[styles.toolText, full && styles.toolTextOff]}>
-              사진 {editor.photoCount}/{MAX_IMAGES}
+              사진 <Text style={styles.toolTextSub}>{editor.photoCount}/{MAX_IMAGES}</Text>
             </Text>
           </TouchableOpacity>
 
           {/* 움짤(GIF) — 사진과 분리된 자리. 갯수가 아니라 파일당 용량으로만 제한해서
-              뱃지도 "N/10"이 아니라 "5MB"로 보여준다(2026-08-13 오너 지시). */}
+              뱃지도 "N/10"이 아니라 "(5MB)"로 보여준다(2026-08-13 오너 지시,
+              2026-08-14 문구·색 조정: "GIF (5MB)", 용량 글자만 연하게). */}
           <TouchableOpacity
             style={styles.tool}
             onPress={editor.addGif}
@@ -290,17 +291,18 @@ export default function BoardWriteScreen() {
             hitSlop={8}
           >
             <Ionicons name="film-outline" size={21} color={colors.textSecondary} />
-            <Text style={styles.toolText}>움짤 · 5MB</Text>
+            <Text style={styles.toolText}>GIF <Text style={styles.toolTextSub}>(5MB)</Text></Text>
           </TouchableOpacity>
 
-          {/* 유튜브 링크 — 갯수 제한 없음(2026-08-13 오너 지시, 스팸은 admin으로 관리) */}
+          {/* 유튜브 링크 — 갯수 제한 없음(2026-08-13 오너 지시, 스팸은 admin으로 관리).
+              카운트는 안 보여준다(2026-08-14 오너 지시 — "0" 자체가 필요 없다는 지적). */}
           <TouchableOpacity
             style={styles.tool}
             onPress={linksApi.openAdd}
             hitSlop={8}
           >
             <Ionicons name="logo-youtube" size={21} color={colors.textSecondary} />
-            <Text style={styles.toolText}>링크 {links.length}</Text>
+            <Text style={styles.toolText}>유튜브</Text>
           </TouchableOpacity>
         </View>
       </KeyboardStickyView>
@@ -424,5 +426,7 @@ function makeStyles(colors: AppColors) {
     tool: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
     toolText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
     toolTextOff: { color: colors.textTertiary },
+    // 갯수·용량 표시만 연하게(2026-08-14 오너 지시) — 라벨과 구분되게.
+    toolTextSub: { color: colors.textTertiary, fontWeight: '500' },
   })
 }
