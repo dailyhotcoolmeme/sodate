@@ -316,11 +316,13 @@ function PostRow({
           {!!tagLabel && <Text style={[styles.rowTag, isRead && styles.rowTagRead]}>{tagLabel} </Text>}
           {post.title}
         </Text>
+        {/* 말머리·댓글수처럼 사진·링크 딱지도 읽은 글이면 연하게(2026-08-14 오너 지시 —
+            "이미지 뿐만 아니라 다른 딱지들도 모두"). */}
         {hasImage && (
-          <Ionicons name="image-outline" size={16} color={colors.textSecondary} style={styles.rowIcon} />
+          <Ionicons name="image-outline" size={16} color={isRead ? colors.textTertiary : colors.textSecondary} style={styles.rowIcon} />
         )}
         {hasLink && (
-          <Ionicons name="play-circle-outline" size={16} color={colors.textSecondary} style={styles.rowIcon} />
+          <Ionicons name="play-circle-outline" size={16} color={isRead ? colors.textTertiary : colors.textSecondary} style={styles.rowIcon} />
         )}
         {post.comment_count > 0 && (
           <Text style={[styles.rowCount, isRead && styles.rowTagRead]}>[{post.comment_count}]</Text>
