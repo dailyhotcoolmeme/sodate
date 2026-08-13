@@ -197,7 +197,10 @@ export default function Board() {
   }
 
   /** 기기 차단 — 애플 1.2 필수 요건. owner_token 은 화면에 보여주지 않고 값만 넘긴다.
-   *  ⚠️ 차단은 "쓰기"만 막는다(board Edge Function이 action 처리 전에 board_blocks를
+   *  ⚠️(2026-08-13 오너 지시) 글·댓글 행에는 차단 버튼을 안 둔다 — 글 하나만 보고
+   *  차단하면 성급한 판단이 될 수 있어서, 아래 활동 보기 모달에서 이 사용자가 쓴
+   *  전체 이력을 다 본 뒤에만 차단할 수 있게 여기로 좁혔다.
+   *  차단은 "쓰기"만 막는다(board Edge Function이 action 처리 전에 board_blocks를
    *  먼저 검사 — supabase/functions/board/index.ts). 글 목록·상세 읽기는 RLS가
    *  is_active만 보므로 board_blocks와 무관하게 그대로 된다. 즉 차단된 사용자도
    *  커뮤니티는 계속 볼 수 있고 글·댓글·추천만 못 쓴다(오너 확인 2026-08-13, 의도된 동작). */
@@ -207,14 +210,6 @@ export default function Board() {
       .upsert({ owner_token: token, reason: '관리자 차단' }, { onConflict: 'owner_token' })
     if (error) { alert(`실패: ${error.message}`); return }
     setMsg('차단했습니다')
-  }
-
-  async function blockAuthor(kind: 'post' | 'comment', id: string) {
-    const table = kind === 'post' ? 'board_posts' : 'board_comments'
-    const { data } = await supabase.from(table).select('owner_token').eq('id', id).maybeSingle()
-    const token = (data as WithToken | null)?.owner_token
-    if (!token) { alert('작성자를 찾을 수 없습니다'); return }
-    await blockToken(token)
   }
 
   /**
@@ -335,7 +330,7 @@ export default function Board() {
         </div>
       ) : tab === 'comments' ? (
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-          <table className="w-full min-w-[920px] table-fixed text-sm">
+          <table className="w-full min-w-[860px] table-fixed text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="px-3 py-3 text-left font-medium w-[120px]">닉네임</th>
@@ -343,7 +338,7 @@ export default function Board() {
                 <th className="px-3 py-3 text-center font-medium w-[80px]">신고수</th>
                 <th className="px-3 py-3 text-center font-medium w-[86px]">노출</th>
                 <th className="px-3 py-3 text-left font-medium w-[110px]">작성일</th>
-                <th className="px-3 py-3 text-center font-medium w-[260px]">액션</th>
+                <th className="px-3 py-3 text-center font-medium w-[200px]">액션</th>
               </tr>
             </thead>
             <tbody>
@@ -390,9 +385,6 @@ export default function Board() {
                       <button onClick={() => viewUserActivity('comment', c.id)} className="px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
                         활동 보기
                       </button>
-                      <button onClick={() => blockAuthor('comment', c.id)} className="px-2 py-1 rounded-lg border border-orange-200 text-xs font-medium text-orange-600 hover:bg-orange-50">
-                        차단
-                      </button>
                       <button onClick={() => removeComment(c)} className="px-2 py-1 rounded-lg border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50">
                         삭제
                       </button>
@@ -408,7 +400,7 @@ export default function Board() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-          <table className="w-full min-w-[1040px] table-fixed text-sm">
+          <table className="w-full min-w-[960px] table-fixed text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="px-3 py-3 text-left font-medium w-[120px]">닉네임</th>
@@ -417,7 +409,7 @@ export default function Board() {
                 <th className="px-3 py-3 text-center font-medium w-[70px]">댓글</th>
                 <th className="px-3 py-3 text-center font-medium w-[110px]">신고(글/사진)</th>
                 <th className="px-3 py-3 text-center font-medium w-[86px]">노출</th>
-                <th className="px-3 py-3 text-center font-medium w-[300px]">액션</th>
+                <th className="px-3 py-3 text-center font-medium w-[240px]">액션</th>
               </tr>
             </thead>
             <tbody>
@@ -460,9 +452,6 @@ export default function Board() {
                         )}
                         <button onClick={() => viewUserActivity('post', p.id)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
                           <UserSearch size={12} /> 활동 보기
-                        </button>
-                        <button onClick={() => blockAuthor('post', p.id)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-orange-200 text-xs font-medium text-orange-600 hover:bg-orange-50">
-                          <ShieldBan size={12} /> 차단
                         </button>
                         <button onClick={() => removePost(p)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-red-200 text-xs font-medium text-red-600 hover:bg-red-50">
                           <Trash2 size={12} /> 삭제
