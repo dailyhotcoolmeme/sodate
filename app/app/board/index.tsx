@@ -20,7 +20,7 @@ import {
 } from '@/hooks/useBoard'
 import { wideContent } from '@/constants/layout'
 import { report } from '@/lib/board'
-import { blockAuthor, markCommentsSeen } from '@/lib/boardIdentity'
+import { blockAuthor, markCommentsSeen, getReadPostIds } from '@/lib/boardIdentity'
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/boardSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
@@ -43,6 +43,9 @@ export default function BoardListScreen() {
 
   const settings = useBoardSettings()
   const { posts, total, loading, error, pageCount, refetch } = useBoardList(page, search)
+  // 읽은 글은 연하게(2026-08-13 오너 지시) — 기기에 저장된 목록, 상세 보고 돌아올
+  // 때마다 최신화해야 하므로 아래 useFocusEffect에서 refetchAll과 같이 다시 불러온다.
+  const [readIds, setReadIds] = useState<Set<string>>(new Set())
   // 내 글에 달린 새 댓글 — 목록 위 띠(2026-08-12 오너 지시). 푸시 없이 앱에서만 보인다.
   const { groups: newCommentGroups, refetch: refetchNewComments } = useMyPostNewComments()
   const [newCommentExpanded, setNewCommentExpanded] = useState(false)
@@ -51,8 +54,12 @@ export default function BoardListScreen() {
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetchAll)
 
-  // 글을 쓰고 돌아오면 목록이 최신이어야 한다.
-  useFocusEffect(useCallback(() => { refetchAll() }, [refetchAll]))
+  // 글을 쓰고 돌아오면 목록이 최신이어야 한다. 글 하나 보고 돌아왔을 때 그 글이 바로
+  // 연하게 보이도록 읽은 글 목록도 같이 다시 불러온다.
+  useFocusEffect(useCallback(() => {
+    refetchAll()
+    getReadPostIds().then((ids) => setReadIds(new Set(ids)))
+  }, [refetchAll]))
 
   // 새 댓글 목록에서 글을 누르면: 읽음 처리하고 그 글의 댓글 위치로 이동한다.
   // 새 댓글이 딱 1개면 펼칠 필요 없이 눌렀을 때 바로 그 글로 간다(오너 지시).
@@ -209,7 +216,7 @@ export default function BoardListScreen() {
 
           <View>
             {posts.map((p) => (
-              <PostRow key={p.id} post={p} hot={hot} cold={cold} styles={styles} colors={colors}
+              <PostRow key={p.id} post={p} hot={hot} cold={cold} isRead={readIds.has(p.id)} styles={styles} colors={colors}
                 onPress={() => router.push(`/board/${p.id}`)}
                 onLongPress={() => handleBlock(p)} />
             ))}
@@ -262,11 +269,12 @@ export default function BoardListScreen() {
 }
 
 function PostRow({
-  post, hot, cold, styles, colors, onPress, onLongPress,
+  post, hot, cold, isRead, styles, colors, onPress, onLongPress,
 }: {
   post: BoardPostWithTag
   hot: number
   cold: number
+  isRead: boolean
   styles: ReturnType<typeof makeStyles>
   colors: AppColors
   onPress: () => void
@@ -282,7 +290,7 @@ function PostRow({
     <TouchableOpacity style={styles.row} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
       <View style={styles.rowTitleLine}>
         <Text
-          style={[styles.rowTitle, isHot && styles.rowTitleHot, isCold && styles.rowTitleCold]}
+          style={[styles.rowTitle, isHot && styles.rowTitleHot, isCold && styles.rowTitleCold, isRead && styles.rowTitleRead]}
           numberOfLines={1}
         >
           {/* 말머리 — admin(board_tags)에서 등록한 문자열을 그대로 붙인다(2026-08-12). */}
@@ -554,6 +562,8 @@ function makeStyles(colors: AppColors) {
     // 추천이 많으면 굵게, 비추가 많으면 흐리게(오너 확정). 흐려질 뿐 지워지지 않는다.
     rowTitleHot: { fontWeight: '800' },
     rowTitleCold: { color: colors.textTertiary },
+    // 읽은 글은 연하게(2026-08-13 오너 지시) — hot/cold 색보다 우선 적용.
+    rowTitleRead: { color: colors.textTertiary },
     rowIcon: { flexShrink: 0 },
     rowCount: { flexShrink: 0, fontSize: 13, fontWeight: '700', color: colors.primary },
     rowMeta: { fontSize: 11.5, color: colors.textTertiary },

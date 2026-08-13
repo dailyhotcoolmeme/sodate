@@ -15,6 +15,7 @@ const VOTES = 'sodate_board_my_votes'
 const TERMS_AGREED = 'sodate_board_terms_agreed'
 const BLOCKED = 'sodate_board_blocked_authors'
 const SEEN_COMMENT_IDS = 'sodate_board_seen_comment_ids'
+const READ_POST_IDS = 'sodate_board_read_posts'
 
 async function readList(key: string): Promise<string[]> {
   try {
@@ -74,6 +75,27 @@ export async function markCommentsSeen(ids: string[]): Promise<void> {
     if (changed) await AsyncStorage.setItem(SEEN_COMMENT_IDS, JSON.stringify(Array.from(set)))
   } catch {
     // ignore
+  }
+}
+
+/**
+ * 내가 읽은 글 — 목록에서 연하게 표시하기 위한 기록(2026-08-13 오너 지시). 서버에 안 남기고
+ * 기기에만 남긴다(로그인 없는 익명 게시판이라 서버가 '누가 읽었는지' 알 이유가 없다).
+ * 계속 쌓이는 목록이라(다른 '내 것' 목록과 달리 글쓴 것만큼만 늘지 않음) 무한정 커지지
+ * 않게 최근 READ_POST_MAX개만 남긴다.
+ */
+const READ_POST_MAX = 1000
+export const getReadPostIds = () => readList(READ_POST_IDS)
+
+export async function markPostRead(id: string): Promise<void> {
+  try {
+    const list = await readList(READ_POST_IDS)
+    if (list.includes(id)) return
+    list.push(id)
+    const trimmed = list.length > READ_POST_MAX ? list.slice(list.length - READ_POST_MAX) : list
+    await AsyncStorage.setItem(READ_POST_IDS, JSON.stringify(trimmed))
+  } catch {
+    // 저장 실패는 조용히 넘긴다 — 읽음 표시만 안 될 뿐 글은 정상적으로 보인다
   }
 }
 

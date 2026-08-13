@@ -23,7 +23,7 @@ import {
   vote, deletePost, createComment, updateComment, deleteComment, markViewed, report,
 } from '@/lib/board'
 import { getLastNickname } from '@/lib/reviewIdentity'
-import { blockAuthor, markCommentsSeen, getMyPostIds } from '@/lib/boardIdentity'
+import { blockAuthor, markCommentsSeen, getMyPostIds, markPostRead } from '@/lib/boardIdentity'
 import { wideContent } from '@/constants/layout'
 import { openOutlink } from '@/lib/outlink'
 import { youtubeThumbnail } from '@/lib/youtube'
@@ -180,6 +180,8 @@ export default function BoardPostScreen() {
   useEffect(() => { getLastNickname().then((n) => n && setNickname(n)) }, [])
   // 조회수는 화면에 감춰뒀지만 값은 쌓아둔다(나중에 켜면 그때까지 숫자가 그대로).
   useEffect(() => { if (id) markViewed(id) }, [id])
+  // 목록에서 읽은 글을 연하게 표시하기 위한 기기 저장(2026-08-13 오너 지시).
+  useEffect(() => { if (id) markPostRead(id) }, [id])
   useFocusEffect(useCallback(() => { refetch() }, [refetch]))
 
 
