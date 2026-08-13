@@ -57,6 +57,8 @@ export default function BoardBannerAd() {
   )
 }
 
+// 광고 밑 여백은 여기서 안 주고 board/index.tsx의 스크롤 콘텐츠 paddingBottom
+// 한 곳에서만 관리한다(글쓰기 버튼과의 간격을 정확히 맞추려면 계산 기준이 하나여야 함).
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: SIDE_PADDING, paddingTop: 10, paddingBottom: 20 },
+  wrap: { paddingHorizontal: SIDE_PADDING, paddingTop: 10 },
 })

@@ -29,6 +29,16 @@ import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
  * 추천이 기준을 넘으면 제목이 굵어지고, 비추가 넘으면 흐려진다. 기준값은
  * board_settings 에서 읽어 코드 수정 없이 바꿀 수 있다.
  */
+
+// ⚠️(2026-08-13) 글쓰기 FAB는 화면(screen) 기준 고정, 배너 광고는 스크롤 콘텐츠 기준이라
+// 서로 다른 좌표계다 — 애드몹 정책상 광고 위에 다른 버튼을 겹치면 안 되므로(실수 클릭
+// 유도 금지) 겹치지 않으면서도 스크롤을 끝까지 내렸을 때 광고 바로 밑에 자연스러운
+// 간격(AD_FAB_GAP)만 남도록, 스크롤 콘텐츠의 paddingBottom을 FAB의 실제 크기 기준으로
+// 역산해서 맞춘다. 숫자 하나를 감으로 늘렸다 줄였다 하면(90→120 등) 오히려 간격이
+// 어긋난다 — 이 상수들만 바꾸면 항상 정확히 맞게 재계산된다.
+const FAB_BOTTOM_OFFSET = 18   // writeBtnAbs의 bottom
+const FAB_HEIGHT = 44          // writeBtn 실측 높이(paddingVertical 12*2 + 내용 약 20)
+const AD_FAB_GAP = 16          // 광고 바로 밑~버튼 사이 원하는 간격
 export default function BoardListScreen() {
   const router = useRouter()
   const colors = useColors()
@@ -204,7 +214,7 @@ export default function BoardListScreen() {
       ) : (
         <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[wideContent, { flexGrow: 1, paddingBottom: insets.bottom + 120 }]}
+          contentContainerStyle={[wideContent, { flexGrow: 1, paddingBottom: insets.bottom + FAB_BOTTOM_OFFSET + FAB_HEIGHT + AD_FAB_GAP }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -242,7 +252,7 @@ export default function BoardListScreen() {
           renderToHardwareTextureAndroid를 줘서 별도 레이어로 띄우면 항상 위에 그려진다
           (iOS는 원래 문제없어 영향 없음, 이 prop이 TouchableOpacity 타입엔 없어 View로 감쌈). */}
       <View
-        style={[styles.writeBtnAbs, { bottom: insets.bottom + 18 }]}
+        style={[styles.writeBtnAbs, { bottom: insets.bottom + FAB_BOTTOM_OFFSET }]}
         renderToHardwareTextureAndroid
       >
         <TouchableOpacity
