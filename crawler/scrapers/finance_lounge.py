@@ -30,7 +30,11 @@ INSTAGRAM_URL = 'https://www.instagram.com/finance.lounge2030/'
 # 노션 일정 텍스트에 사진이 없어(참석자 명단 이미지는 attendee_image_url로 별도 저장)
 # 피드 썸네일·상세 상단 이미지가 비어 있었다. 업체 로고를 기본 썸네일로 고정한다
 # (오너 지시 2026-08-13).
-DEFAULT_THUMBNAIL = 'https://sodate-admin.pages.dev/media/thumbnails/finance-lounge/logo-thumb.webp'
+# ⚠️ v2: 상세페이지 히어로는 4:3 고정 틀(cover 크롭)이라, 원본 포스터(928x1226, 세로로
+# 긴 3:4 비율)를 그대로 올리면 중앙 기준으로 위아래가 크게 잘려 제목("Finance Lounge/
+# 금융권")이 통째로 잘려나갔다(오너 스크린샷으로 확인). 앱이 추가로 자르지 않도록
+# 업로드 전에 정확히 4:3(928x696)으로 미리 잘라 제목이 항상 보이게 했다.
+DEFAULT_THUMBNAIL = 'https://sodate-admin.pages.dev/media/thumbnails/finance-lounge/logo-thumb-v2.webp'
 
 # "8.12 20시 용산 (20대+심층대화 특집, ...)" / "8.14 20시 삼성(마감)" / "8.20 20시반 용산"
 _SCHEDULE_RE = re.compile(
