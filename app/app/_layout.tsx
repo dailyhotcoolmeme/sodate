@@ -13,6 +13,7 @@ import { runPostOnboardingSetup } from '@/lib/initAds'
 import { useThemeStore } from '@/stores/themeStore'
 import { usePushNotification } from '@/hooks/usePushNotification'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { initAppUpdateChecker } from '@/lib/appUpdates'
 import ProfileSheet from '@/components/ProfileSheet'
 
 const ONBOARDING_KEY = 'sodate-onboarding-done'
@@ -22,6 +23,9 @@ export default function RootLayout() {
   usePushNotification()
   const { isDark, colors, load } = useThemeStore()
   useEffect(() => { load() }, [])
+  // 앱을 강제 종료 안 하고 계속 켜둔 사용자도 OTA를 받게 — 포그라운드 전환마다 확인
+  // (2026-08-14 오너 지시, lib/appUpdates.ts 참고).
+  useEffect(() => initAppUpdateChecker(), [])
   // 온보딩 판정 전까지 첫 프레임(홈 스켈레톤/온보딩 인디케이터)이 잠깐 보이지 않도록
   // 스플래시와 동일한 화면으로 덮는다. 판정 끝나면 해제.
   const [gateOff, setGateOff] = useState(false)

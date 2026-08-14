@@ -15,6 +15,7 @@ import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkIn
 import { MAX_IMAGES } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
+import { setUpdateHold } from '@/lib/appUpdates'
 import { wideContent } from '@/constants/layout'
 
 const TITLE_MAX = 60
@@ -117,6 +118,13 @@ export default function BoardWriteScreen() {
 
   // 쓰던 게 있으면 닫기 전에 물어본다
   const dirty = title.trim().length > 0 || content.trim().length > 0 || images.length > 0 || links.length > 0
+  // 입력 중엔 OTA 자동 새로고침을 보류 — 화면을 벗어나면(뒤로가기·등록) 즉시 풀림
+  // (lib/appUpdates.ts 참고).
+  useEffect(() => {
+    setUpdateHold(dirty)
+    return () => setUpdateHold(false)
+  }, [dirty])
+
   const close = () => {
     if (!dirty) { router.back(); return }
     Alert.alert('작성 중인 글이 있어요', '지금 나가면 쓰던 내용이 사라집니다.', [
