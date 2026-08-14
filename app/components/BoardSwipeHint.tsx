@@ -7,9 +7,11 @@ import { getBoardVisited } from '@/lib/boardIdentity'
 
 const TAB_WIDTH = 30
 const TAB_HEIGHT = 56
-// 평소엔 이만큼만 화면 밖으로 숨어 있다가(edge peek), 통통 튀듯 반쯤 나왔다 들어간다.
+// 평소엔 이만큼만 화면 밖으로 숨어 있다가(edge peek), 통통 튀듯 나왔다 들어간다.
 const HIDDEN_X = TAB_WIDTH * 0.62
-const PEEK_X = 4
+// 완전히 화면 안으로 들어오는 지점(0) — 예전엔 4까지만 나와 절반쯤만 보이다 말아서
+// 눈에 잘 안 띄었다(2026-08-14 오너 지적: "살짝 보이다가 멈춘 느낌"). 끝까지 나오게.
+const PEEK_X = 0
 
 /**
  * 모임 피드 오른쪽 끝에서 통통 튀며 "왼쪽으로 스와이프하면 커뮤니티" 임을 알리는 힌트
@@ -33,13 +35,20 @@ export default function BoardSwipeHint() {
 
   useEffect(() => {
     if (!visible) return
+    // 한 번 톡 튀고 마는 게 아니라, 통통 두 번 튀듯 강조하고 훨씬 오래 머문 뒤 들어간다
+    // (2026-08-14 오너 지적 반영). friction을 낮게 잡아 스프링 자체가 목표를 살짝
+    // 지나쳤다 돌아오는 탄력(overshoot)이 나오게 했다 — 그게 "통통" 튀는 느낌의 핵심.
     const bounce = Animated.loop(
       Animated.sequence([
-        Animated.delay(900),
-        Animated.spring(translateX, { toValue: PEEK_X, useNativeDriver: true, friction: 4, tension: 60 }),
-        Animated.delay(650),
-        Animated.timing(translateX, { toValue: HIDDEN_X, duration: 260, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
-        Animated.delay(2400),
+        Animated.delay(500),
+        Animated.spring(translateX, { toValue: PEEK_X, useNativeDriver: true, friction: 3, tension: 110 }),
+        Animated.delay(550),
+        Animated.spring(translateX, { toValue: HIDDEN_X * 0.7, useNativeDriver: true, friction: 5, tension: 140 }),
+        Animated.delay(90),
+        Animated.spring(translateX, { toValue: PEEK_X, useNativeDriver: true, friction: 4, tension: 140 }),
+        Animated.delay(1000),
+        Animated.timing(translateX, { toValue: HIDDEN_X, duration: 280, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(1300),
       ])
     )
     bounce.start()
