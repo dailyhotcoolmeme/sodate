@@ -1,0 +1,675 @@
+- generic [active] [ref=e1]:
+  - generic:  
+  - text: 
+  - banner [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e10]:
+        - link "모드파티 | 로테이션 소개팅의 기준,일주일의 가장 설레는 약속 모드파티 | 로테이션 소개팅의 기준,일주일의 가장 설레는 약속 모드파티 | 로테이션 소개팅의 기준,일주일의 가장 설레는 약속" [ref=e22] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e23]: 모드파티 | 로테이션 소개팅의 기준,일주일의 가장 설레는 약속
+          - img "모드파티 | 로테이션 소개팅의 기준,일주일의 가장 설레는 약속" [ref=e24]
+          - img "모드파티 | 로테이션 소개팅의 기준,일주일의 가장 설레는 약속" [ref=e25]
+        - generic [ref=e34]:
+          - link "로그인" [ref=e36] [cursor=pointer]:
+            - /url: /login?back_url=L3Nob3Bfdmlldy8%2FaWR4PTM3Nw%3D%3D&used_login_btn=Y
+            - generic [ref=e37]: 
+          - generic [ref=e42]:
+            - link "회원가입" [ref=e43] [cursor=pointer]:
+              - /url: /site_join_pattern_choice?back_url=L3Nob3Bfdmlldy8%2FaWR4PTM3Nw%3D%3D
+              - generic [ref=e44]: 
+            - tooltip "이번 주말 설레는 약속!" [ref=e47]
+      - text:  
+  - main [ref=e58]:
+    - generic [ref=e74]:
+      - generic [ref=e76]:
+        - list [ref=e78]:
+          - listitem [ref=e79]:
+            - link "Home" [ref=e80] [cursor=pointer]:
+              - /url: /
+            - generic [ref=e81]: 
+          - listitem [ref=e82]:
+            - link "돌싱" [ref=e83]:
+              - /url: javascript:;
+        - generic [ref=e94]:
+          - generic [ref=e95]:
+            - heading "[정기모임] 천안 돌싱 와인파티 SALE BEST MD HOT" [level=1] [ref=e96]:
+              - text: "[정기모임] 천안 돌싱 와인파티"
+              - generic [ref=e97]:
+                - generic [ref=e98]: SALE
+                - generic [ref=e99]: BEST
+                - generic [ref=e100]: MD
+                - generic [ref=e101]: HOT
+            - generic [ref=e102]:
+              - generic [ref=e104]:
+                - generic [ref=e105]: 49,000원
+                - text: 79,000원
+              - button [ref=e107] [cursor=pointer]:
+                - generic [ref=e108]: 
+          - generic [ref=e111]:
+            - generic [ref=e112]:
+              - generic [ref=e113]: 8/28(금)
+              - generic [ref=e114]: 9/11(금)
+            - generic [ref=e115]:
+              - generic [ref=e116]:
+                - generic [ref=e117]: 📍
+                - generic [ref=e118]: 천안 하니앤손스
+              - generic [ref=e119]:
+                - generic [ref=e120]: ⏰
+                - generic [ref=e121]: 17:00 ~ 19:00
+          - text: 
+          - generic [ref=e123]:
+            - generic [ref=e124]:
+              - generic [ref=e125]: 구매
+              - paragraph [ref=e127]:
+                - generic [ref=e128]: 최대 구매 수량
+                - generic [ref=e129]: "1"
+            - text: 
+          - generic [ref=e130]:
+            - text: 
+            - generic [ref=e132]:
+              - generic [ref=e133]:
+                - generic [ref=e134]:
+                  - generic [ref=e135]: 참여희망날짜 *
+                  - generic [ref=e136]:
+                    - text: 
+                    - button "참여희망날짜 (필수)" [expanded] [ref=e137] [cursor=pointer]
+                - generic [ref=e138]:
+                  - generic [ref=e139]: 성별 *
+                  - generic [ref=e140]:
+                    - text: 
+                    - button "성별 (필수)" [expanded] [ref=e141] [cursor=pointer]
+              - generic [ref=e143]:
+                - generic [ref=e144]: 프리미엄인증(선택사항)
+                - generic [ref=e145]:
+                  - text: 
+                  - button "프리미엄인증(선택사항) (선택)" [ref=e146] [cursor=pointer]
+          - generic [ref=e147]:
+            - link "참가신청" [ref=e148] [cursor=pointer]:
+              - /url: javascript:;
+            - generic [ref=e149] [cursor=pointer]: 장바구니
+            - text: 
+          - generic [ref=e150]: 간편결제 가능
+        - generic [ref=e156]:
+          - paragraph [ref=e157]:
+            - iframe [ref=e158]:
+              - generic [ref=f8e2]:
+                - generic [ref=f8e3]:
+                  - button "8.28(금)" [ref=f8e4] [cursor=pointer]
+                  - button "9.11(금)" [ref=f8e5] [cursor=pointer]
+                - generic [ref=f8e6]:
+                  - generic [ref=f8e7]:
+                    - generic [ref=f8e8]: 이번주 티켓이 얼마 남지 않았습니다
+                    - generic [ref=f8e9]: 8.28(금) · 각 티켓은 한정 수량으로 운영됩니다
+                    - generic [ref=f8e11]:
+                      - generic [ref=f8e12]: 슈퍼얼리버드
+                      - generic [ref=f8e13]: 얼리버드
+                      - generic [ref=f8e14]: 정가
+                    - generic [ref=f8e15]:
+                      - generic [ref=f8e16]: 남성
+                      - generic [ref=f8e17]: 마감
+                      - generic [ref=f8e19]:
+                        - generic [ref=f8e20]: 59,000원
+                        - generic [ref=f8e21]: 진행중
+                      - generic [ref=f8e22]:
+                        - generic [ref=f8e23]: 79,000원
+                        - generic [ref=f8e24]: 대기
+                    - generic [ref=f8e25]:
+                      - generic [ref=f8e26]: 여성
+                      - generic [ref=f8e27]: 마감
+                      - generic [ref=f8e29]:
+                        - generic [ref=f8e30]: 54,000원
+                        - generic [ref=f8e31]: 진행중
+                      - generic [ref=f8e32]:
+                        - generic [ref=f8e33]: 69,000원
+                        - generic [ref=f8e34]: 대기
+                  - generic [ref=f8e36]:
+                    - generic [ref=f8e37]:
+                      - generic [ref=f8e38]: WHO'S COMING
+                      - generic [ref=f8e39]: 어떤 분들이 참가하나요?
+                      - generic [ref=f8e40]: 실제 파티 데이터를 집계한 결과입니다.
+                    - generic [ref=f8e41]:
+                      - generic [ref=f8e42]: 8월 28일(금)
+                      - generic [ref=f8e43]: 지난 파티들의 누적 데이터 기준
+                      - generic [ref=f8e44]:
+                        - generic [ref=f8e45]:
+                          - generic [ref=f8e46]:
+                            - generic [ref=f8e47]: 남성 참가자
+                            - generic [ref=f8e48]: (82년생 ~ 92년생)
+                          - generic [ref=f8e49]: 키
+                          - generic [ref=f8e50]:
+                            - generic [ref=f8e51]: 180cm 이상
+                            - generic [ref=f8e52]: 32%
+                          - generic [ref=f8e55]:
+                            - generic [ref=f8e56]: 175~179cm
+                            - generic [ref=f8e57]: 33%
+                          - generic [ref=f8e60]: 직업군
+                          - generic [ref=f8e61]:
+                            - generic [ref=f8e62]: 대기업 · 공기업
+                            - generic [ref=f8e63]: 20%
+                          - generic [ref=f8e66]:
+                            - generic [ref=f8e67]: 전문직 · 공무원
+                            - generic [ref=f8e68]: 28%
+                          - generic [ref=f8e71]:
+                            - generic [ref=f8e72]: 연구원 · 엔지니어
+                            - generic [ref=f8e73]: 16%
+                          - generic [ref=f8e76]:
+                            - generic [ref=f8e77]: 사업 · 자영업
+                            - generic [ref=f8e78]: 24%
+                          - generic [ref=f8e81]:
+                            - generic [ref=f8e82]: 기타
+                            - generic [ref=f8e83]: 12%
+                          - generic [ref=f8e86]: 연령대
+                          - generic [ref=f8e87]:
+                            - generic [ref=f8e88]: 34~36세
+                            - generic [ref=f8e89]: 7%
+                          - generic [ref=f8e92]:
+                            - generic [ref=f8e93]: 37~40세
+                            - generic [ref=f8e94]: 42%
+                          - generic [ref=f8e97]:
+                            - generic [ref=f8e98]: 41~44세
+                            - generic [ref=f8e99]: 52%
+                          - generic [ref=f8e102]: 특별 회원 참가율
+                          - generic [ref=f8e103]:
+                            - generic [ref=f8e104]: 프리미엄 인증 + 상위 10% 인기회원
+                            - generic [ref=f8e105]: 11%
+                        - generic [ref=f8e106]:
+                          - generic [ref=f8e107]:
+                            - generic [ref=f8e108]: 여성 참가자
+                            - generic [ref=f8e109]: (85년생 ~ 95년생)
+                          - generic [ref=f8e110]: 키
+                          - generic [ref=f8e111]:
+                            - generic [ref=f8e112]: 165cm 이상
+                            - generic [ref=f8e113]: 39%
+                          - generic [ref=f8e116]:
+                            - generic [ref=f8e117]: 160~164cm
+                            - generic [ref=f8e118]: 45%
+                          - generic [ref=f8e121]: 직업군
+                          - generic [ref=f8e122]:
+                            - generic [ref=f8e123]: 전문직 · 공무원
+                            - generic [ref=f8e124]: 45%
+                          - generic [ref=f8e127]:
+                            - generic [ref=f8e128]: 대기업 · 공기업
+                            - generic [ref=f8e129]: 27%
+                          - generic [ref=f8e132]:
+                            - generic [ref=f8e133]: 프리랜서 · 사업
+                            - generic [ref=f8e134]: 23%
+                          - generic [ref=f8e137]:
+                            - generic [ref=f8e138]: 승무원 · 모델 · 인플루언서
+                            - generic [ref=f8e139]: 3%
+                          - generic [ref=f8e142]:
+                            - generic [ref=f8e143]: 기타
+                            - generic [ref=f8e144]: 1%
+                          - generic [ref=f8e147]: 연령대
+                          - generic [ref=f8e148]:
+                            - generic [ref=f8e149]: 31~33세
+                            - generic [ref=f8e150]: 20%
+                          - generic [ref=f8e153]:
+                            - generic [ref=f8e154]: 34~37세
+                            - generic [ref=f8e155]: 45%
+                          - generic [ref=f8e158]:
+                            - generic [ref=f8e159]: 38~41세
+                            - generic [ref=f8e160]: 35%
+                          - generic [ref=f8e163]: 특별 회원 참가율
+                          - generic [ref=f8e164]:
+                            - generic [ref=f8e165]: 프리미엄 인증 + 상위 10% 인기회원
+                            - generic [ref=f8e166]: 11%
+          - generic [ref=e159]:
+            - generic "돌싱 와인파티" [ref=e160]
+            - generic [ref=e162]:
+              - generic [ref=e163]: 돌싱 전용 · 로테이션 와인파티
+              - generic [ref=e164]: DOLSING SOCIAL · WINE PARTY
+              - generic [ref=e165]: 금요일 · 천안
+              - generic [ref=e166]: 설명하지 않아도 되는 자리
+              - generic [ref=e167]: 이별의 복잡함을 이미 아는 사람들끼리. 돌싱만 모이는 로테이션 와인파티.
+              - generic [ref=e168]:
+                - generic [ref=e169]: 참가 가능 연령
+                - generic [ref=e170]: 남성 82~92년생 · 여성 85~95년생
+                - generic [ref=e171]: 법적으로 이혼이 완료된 분(돌싱) 대상 · 참가 자격 확인을 위해 이혼 사실 증빙을 요청할 수 있습니다.
+            - generic [ref=e173]:
+              - generic [ref=e174]: ABOUT DOLSING SOCIAL
+              - generic [ref=e175]: 기존 만남의 채널들은돌싱에게 친절하지 않았습니다
+              - generic [ref=e176]: 세 가지 지점에서 대부분 막혔습니다.
+              - generic [ref=e177]:
+                - generic [ref=e178]: i
+                - generic [ref=e180]:
+                  - generic [ref=e181]: 결정사 — 한 번에 한 명
+                  - generic [ref=e183]: 수백만 원을 내고, 만날 수 있는 건 한 번에 한 명입니다. 맞는 분인지는 만나봐야 압니다.
+              - generic [ref=e184]:
+                - generic [ref=e185]: ii
+                - generic [ref=e187]:
+                  - generic [ref=e188]: 지인 소개 — 한 번의 실패가 주는 부담
+                  - generic [ref=e190]: 주선자에게 미안해져, 두 번째 부탁을 꺼내기 어렵습니다. 결국 기회는 점점 줄어듭니다.
+              - generic [ref=e191]:
+                - generic [ref=e192]: iii
+                - generic [ref=e194]:
+                  - generic [ref=e195]: 일반 싱글파티 — 나만 돌싱일 것 같은 불편함
+                  - generic [ref=e197]: 주변이 전부 초혼일 때, 이야기를 꺼내는 일 자체가 부담입니다. 자리를 즐기기도 전에 지칩니다.
+              - generic [ref=e198]: 이혼, 자녀, 양육, 노후 —설명이 필요 없는 대화.
+              - generic [ref=e200]:
+                - generic [ref=e201]:
+                  - generic [ref=e202]: PATH ONE
+                  - generic [ref=e203]: 진지한 인연을 찾고 계신 분
+                  - generic [ref=e204]: 결정사의 부담 없이, 직접 만나서 상대를 느껴보고 싶은 분. 재혼까지 열어두되 천천히 알아가고 싶은 분.
+                - generic [ref=e205]:
+                  - generic [ref=e206]: PATH TWO
+                  - generic [ref=e207]: 가볍게 다시 시작하고 싶은 분
+                  - generic [ref=e208]: 재혼은 아직 부담스럽지만, 좋은 사람을 만나 대화를 나누는 것만으로 충분한 분.
+            - generic [ref=e210]:
+              - generic [ref=e211]: THE VENUE
+              - generic [ref=e212]: 천안 하니앤손스
+              - generic [ref=e213]: 당신의 시간이 노출되지 않는 공간. 외부 시선 없이, 오직 대화에만 집중할 수 있도록.
+              - generic [ref=e214]:
+                - img "천안 하니앤손스" [ref=e216]
+                - img "천안 하니앤손스" [ref=e218]
+                - img "천안 하니앤손스" [ref=e220]
+                - img "천안 하니앤손스" [ref=e222]
+            - generic [ref=e224]:
+              - generic [ref=e225]: PROGRAM
+              - generic [ref=e226]: 한 번 만나, 여러 분을 편안하게
+              - generic [ref=e227]: 타임테이블
+              - generic [ref=e228]:
+                - generic [ref=e229]: 금요일 17:00~19:00
+                - generic [ref=e230]:
+                  - generic [ref=e231]:
+                    - generic [ref=e232]: 17:00~17:10
+                    - generic [ref=e233]: 참가자 확인&자리안내
+                  - generic [ref=e234]:
+                    - generic [ref=e235]: 17:10~17:30
+                    - generic [ref=e236]: 프로필카드 작성 및 첫인사
+                  - generic [ref=e237]:
+                    - generic [ref=e238]: 17:30~18:50
+                    - generic [ref=e239]: 로테이션 대화
+                  - generic [ref=e240]:
+                    - generic [ref=e241]: 18:50~19:00
+                    - generic [ref=e242]: 온라인진심권&마무리
+              - generic [ref=e244]:
+                - generic [ref=e248]:
+                  - generic [ref=e249]: STEP I
+                  - generic [ref=e250]: 참석 안내
+                  - generic [ref=e251]: 번호 배정 · 자리 안내
+                  - img "참석 안내" [ref=e253]
+                - generic [ref=e257]:
+                  - generic [ref=e258]: STEP II
+                  - generic [ref=e259]: 대화 & 로테이션
+                  - generic [ref=e260]: 2:2 로테이션으로 여러 분과 편안하게 대화합니다.
+                  - img "대화 & 로테이션" [ref=e262]
+                - generic [ref=e266]:
+                  - generic [ref=e267]: STEP III
+                  - generic [ref=e268]: 진심권 타임
+                  - generic [ref=e269]: 마음에 드는 상대에게만 조용히 진심권을 전하고, 매칭 결과와 연락처를 확인합니다.
+                  - img "진심권 타임" [ref=e271]
+              - generic [ref=e272]: "일시: 금요일 · 17:00~19:00 · 정시 시작"
+            - generic [ref=e275]:
+              - generic [ref=e276]: COMPARISON
+              - generic [ref=e277]: 소개팅앱 · 결혼정보회사와 무엇이 다른가요?
+              - generic [ref=e278]:
+                - generic [ref=e280]: 소개팅앱
+                - generic [ref=e281]: 결혼정보회사
+                - generic [ref=e282]: MOD PARTY
+              - generic [ref=e283]:
+                - generic [ref=e284]: 만나려면
+                - generic [ref=e285]: 상대 승낙 필요
+                - generic [ref=e286]: 매칭 성사 필요
+                - generic [ref=e287]: 참석하면 확정
+              - generic [ref=e288]:
+                - generic [ref=e289]: 만나는 인원
+                - generic [ref=e290]: 미보장
+                - generic [ref=e291]: 1회당 1명
+                - generic [ref=e292]: 최대 40명
+              - generic [ref=e293]:
+                - generic [ref=e294]: 드는 비용
+                - generic [ref=e295]: 알 수 없음
+                - generic [ref=e296]: 가입비 수백만 원대
+                - generic [ref=e297]: 4 ~ 8만 원대
+              - generic [ref=e298]:
+                - generic [ref=e299]: 상대 정보
+                - generic [ref=e300]: 본인이 쓴 프로필
+                - generic [ref=e301]: 서류 심사
+                - generic [ref=e302]: 서류 · 서약서 확인
+              - generic [ref=e303]:
+                - generic [ref=e304]: 안 맞았을 때
+                - generic [ref=e305]: 응답 없이 종료
+                - generic [ref=e306]: 매니저를 통해 통보
+                - generic [ref=e307]: 상호 호감일 때만 연결
+              - generic [ref=e308]: 소개팅앱은 결제해도 상대가 승낙하지 않으면 만남이 성사되지 않아 실제 비용을 미리 알 수 없습니다. MOD PARTY는 참석 즉시 최대 40명과의 대화가 확정됩니다.
+            - generic [ref=e311]:
+              - generic [ref=e312]:
+                - text: VERIFICATION
+                - generic [ref=e313]: 필수 인증
+              - generic [ref=e314]: 검증이라는 말, 저희는 이렇게 지킵니다
+              - generic [ref=e315]: 신청만 받아놓고 검증했다고 말하는 곳이 많습니다.MOD PARTY는 승인 전 아래 절차를 참가자 전원에게 예외 없이 적용합니다.
+              - generic [ref=e316]:
+                - generic [ref=e317]:
+                  - generic [ref=e318]: "01"
+                  - generic [ref=e320]:
+                    - generic [ref=e321]: 신분 확인
+                    - generic [ref=e322]: "\"실명과 나이를 서류로 대조합니다.\""
+                    - generic [ref=e323]: 전원 필수이며 예외를 두지 않습니다.
+                - generic [ref=e324]:
+                  - generic [ref=e325]: "02"
+                  - generic [ref=e327]:
+                    - generic [ref=e328]: 미혼 확인
+                    - generic [ref=e329]: "\"결혼 여부, 명확하게 확인합니다.\""
+                    - generic [ref=e330]: 서류 제출, 또는 허위일 경우 법적 책임을 지는 서약서 동의 중 한 가지를 반드시 거칩니다.
+                - generic [ref=e331]:
+                  - generic [ref=e332]: "03"
+                  - generic [ref=e334]:
+                    - generic [ref=e335]: 직업 · 소속 확인
+                    - generic [ref=e336]: "\"프로필에 적힌 말만 믿지 않습니다.\""
+                    - generic [ref=e337]: 재직 정보를 서류 기반으로 확인합니다.
+                - generic [ref=e338]:
+                  - generic [ref=e339]: "04"
+                  - generic [ref=e341]:
+                    - generic [ref=e342]: 심사 후 승인
+                    - generic [ref=e343]: "\"결제했다고 참가가 확정되지 않습니다.\""
+                    - generic [ref=e344]: 위 절차를 통과한 분에게만 최종 안내가 발송됩니다.
+                - generic [ref=e346]: ‘잡는 것’이 아니라 ‘속일 동기 자체를 없애는 것’입니다. 모든 참가자는 제출한 정보가 사실임을 확인하는 서약에 동의하며, 서류를 위조하거나 혼인 상태를 숨긴 사실이 확인되면 이 서약이 책임을 묻는 근거가 됩니다.
+                - generic [ref=e347]: 혼인 상태 · 신원을 허위 기재해 참가한 사실이 확인되면 위약금 청구 및 민·형사상 절차가 즉시 개시되며, 피해 참가자에게는 법률적 지원이 제공됩니다.
+                - generic [ref=e348]:
+                  - img "서정권 변호사" [ref=e350]
+                  - generic [ref=e351]:
+                    - generic [ref=e352]: 서정권 변호사
+                    - generic [ref=e353]: 법무법인 대청 · 모드파티 법률 자문운영 정책 및 서약서 문안 법률 검토
+            - generic [ref=e355]:
+              - generic [ref=e356]:
+                - text: PREMIUM BADGE
+                - generic [ref=e357]: 선택 인증
+              - generic [ref=e358]: 프리미엄 인증 뱃지
+              - generic [ref=e359]: 모드파티의 공식 인증을 받으면, 말하지 않아도 매력이 신뢰 있게 전달됩니다.
+              - generic [ref=e360]:
+                - generic [ref=e361]:
+                  - generic [ref=e362]: 재력 인증
+                  - generic [ref=e363]: 주요 지역 거주 또는 부동산 보유
+                - generic [ref=e364]:
+                  - generic [ref=e365]: 전문직 인증
+                  - generic [ref=e366]: 의사 · 변호사 · 회계사 등
+                - generic [ref=e367]:
+                  - generic [ref=e368]: 명문대학 인증
+                  - generic [ref=e369]: 국내외 주요 대학 재학 또는 졸업
+                - generic [ref=e370]:
+                  - generic [ref=e371]: 대기업 인증
+                  - generic [ref=e372]: 국내 인정 기업 재직
+                - generic [ref=e373]:
+                  - generic [ref=e374]: 사업가 인증
+                  - generic [ref=e375]: 일정 매출 이상 사업체 운영
+                - generic [ref=e376]:
+                  - generic [ref=e377]: 셀럽 인증
+                  - generic [ref=e378]: 연예인 · 운동선수 · 공인 또는 팔로워 5만 이상
+              - generic [ref=e379]: 뱃지가 없어도 참가에는 전혀 지장이 없습니다.
+            - generic [ref=e382]:
+              - generic [ref=e383]: DRESS CODE
+              - generic [ref=e384]: 드레스 코드
+              - generic [ref=e385]:
+                - generic [ref=e386]: 단정하게, 편안하게
+                - generic [ref=e387]: 특정 컨셉을 강요하지 않습니다.프라이빗 라운지에 어울리는 차분한 세미 포멀이면 충분합니다.
+              - generic [ref=e388]:
+                - generic [ref=e389]:
+                  - generic [ref=e390]: 남성
+                  - generic [ref=e391]: 재킷 · 니트 + 슬랙스차분한 톤의 구두
+                - generic [ref=e392]:
+                  - generic [ref=e393]: 여성
+                  - generic [ref=e394]: 원피스 · 블라우스 + 슬랙스차분한 톤의 구두
+              - generic [ref=e395]: 참고용 예시입니다. 드레스코드는 권장 사항이며 강제하지 않습니다.
+            - generic [ref=e398]:
+              - generic [ref=e399]: MATCHING
+              - generic [ref=e400]: 온라인진심권
+              - generic [ref=e401]:
+                - generic [ref=e402]:
+                  - generic [ref=e403]: 로테이션
+                  - generic [ref=e404]: 수십 명과자연스럽게 대화
+                - generic [ref=e405]:
+                  - generic [ref=e406]: 온라인진심권
+                  - generic [ref=e407]: 마음에 드는 분께몰래 선택
+                - generic [ref=e408]:
+                  - generic [ref=e409]: 자동 연결
+                  - generic [ref=e410]: 서로 일치할 때만번호 자동 교환
+              - generic [ref=e411]: “진심은, 신중한 선택에 담깁니다.”
+              - generic [ref=e415]:
+                - generic [ref=e416]: STEP 1
+                - generic [ref=e417]: 온라인진심권 안내
+                - generic [ref=e418]: 파티 종료 후 발송되는 링크(또는 카카오톡 채널)로 접속해, 마음에 드는 분께 직접 신청하세요.
+              - generic [ref=e422]:
+                - generic [ref=e423]: STEP 2
+                - generic [ref=e424]: 매칭 결과 확인
+                - generic [ref=e425]: 상호 선택되면 현장에서 즉시 확인되고, 이후에도 링크로 다시 확인할 수 있습니다.
+              - generic [ref=e426]: 한 번뿐인 선택,그 순간의 진심이 인연을 만듭니다.
+              - generic [ref=e428]: 기능 요약
+              - generic [ref=e429]: 파티 종료 직전 온라인 진심권 신청 링크 발송
+              - generic [ref=e430]: 링크 내에서 1명에게만 진심 전달 가능
+              - generic [ref=e431]: 실시간 매칭 결과 확인 및 자동 연락처 교환
+            - generic [ref=e433]:
+              - generic [ref=e434]: SIGNATURE MEMBER
+              - generic [ref=e435]: 모드파티를 빛내주는 분들
+              - generic [ref=e436]:
+                - generic [ref=e437]: 매월 1일, 다음 달 이달의 멤버를 선정해 개별로 안내드립니다.
+                - generic [ref=e438]:
+                  - generic [ref=e439]: 우수회원
+                  - generic [ref=e440]: 꾸준히 참여해 준 소중한 분
+                - generic [ref=e441]:
+                  - generic [ref=e442]: 인기멤버
+                  - generic [ref=e443]: 현장에서 호감을 많이 받으신 분
+                - generic [ref=e444]:
+                  - generic [ref=e445]: 매니저님 추천
+                  - generic [ref=e446]: 파티에 좋은 영향을 주신 분
+                - generic [ref=e447]: 선정되신 분께는 파티 포인트가 제공되며, 프리미엄 인증 배지 보유 시 시그니처 파티에도 참여하실 수 있습니다.
+            - generic [ref=e449]:
+              - generic [ref=e450]: PRIVACY
+              - generic [ref=e451]: 개인 정보 보호 시스템 안내
+              - generic [ref=e452]:
+                - generic [ref=e453]: "01"
+                - generic [ref=e455]:
+                  - generic [ref=e456]: 번호로만 호명, 명단은 비공개
+                  - generic [ref=e458]: 현장에서는 참가 번호로만 소통하며, 참가자 명단은 공개되지 않습니다.
+              - generic [ref=e459]:
+                - generic [ref=e460]: "02"
+                - generic [ref=e462]:
+                  - generic [ref=e463]: 사진은 매칭 성공 이후에만 공개
+                  - generic [ref=e465]: 프로필 사진은 상호 매칭이 확정된 이후에만 상대에게 공개됩니다. 현장 사진 촬영은 진행하지 않습니다.
+              - generic [ref=e466]:
+                - generic [ref=e467]: "03"
+                - generic [ref=e469]:
+                  - generic [ref=e470]: 개인정보 접근 제한
+                  - generic [ref=e472]: 개인정보는 내부 검증 팀만 접근 가능하며, 회피하고 싶은 상대가 있으면 사전에 운영진에게 알려주실 수 있습니다.
+            - generic [ref=e474]:
+              - generic [ref=e475]: Q&A
+              - generic [ref=e476]: 참가 전 가장 많이 받는 질문들
+              - generic [ref=e477]:
+                - generic [ref=e478]: Q. 혼자 가도 어색하지 않을까요?
+                - generic [ref=e479]: 대부분의 참가자가 혼자 오십니다. 로테이션 방식이라 자리 자체가 대화를 유도하고, 진행자가 흐름을 이끕니다.
+              - generic [ref=e480]:
+                - generic [ref=e481]: Q. 아는 사람이 오면 어떡하죠?
+                - generic [ref=e482]: 신청 단계에서 회피하고 싶은 상대가 있으시면 사전에 운영진에게 알려주시면 됩니다. 참가자 명단은 공개되지 않습니다.
+              - generic [ref=e483]:
+                - generic [ref=e484]: Q. 이혼한 지 얼마 되지 않았는데 괜찮을까요?
+                - generic [ref=e485]: 경과 기간에 대한 제한은 두지 않습니다. 각자의 속도가 다르다는 것을 전제로 운영합니다.
+              - generic [ref=e486]:
+                - generic [ref=e487]: Q. 자녀가 있어도 참가할 수 있나요?
+                - generic [ref=e488]: 물론입니다. 돌싱 사이에서 자녀의 존재는 디폴트 전제이고, 서로가 이를 가장 자연스럽게 받아들이는 자리입니다.
+              - generic [ref=e489]:
+                - generic [ref=e490]: Q. 재혼을 염두에 두지 않는데 참가해도 되나요?
+                - generic [ref=e491]: 충분합니다. 재혼 중개 자리가 아닙니다. 좋은 대화와 편안한 만남을 원하시는 분 누구나 환영합니다.
+              - generic [ref=e492]:
+                - generic [ref=e493]: Q. 사진이 노출될까 걱정됩니다.
+                - generic [ref=e494]: 현장에서는 번호로 호명되며, 프로필 사진은 매칭 성공 이후에만 상대에게 공개됩니다. 현장 사진 촬영은 진행하지 않습니다.
+            - generic [ref=e497]:
+              - generic [ref=e498]: RESERVATION
+              - generic [ref=e499]: 조용히 살펴보고,편하게 결정하세요
+              - generic [ref=e500]: 서두르지 않아도 괜찮습니다. 준비가 되셨을 때, 조용히 신청해 주세요.
+              - generic [ref=e501]: 런칭 특가는 초기 한정 회차에만 적용됩니다 · 성비 밸런스를 위해 선착순 마감됩니다.
+          - generic [ref=e502]:
+            - generic [ref=e503]:
+              - generic [ref=e504]: GUIDE AND POLICY
+              - generic [ref=e505]: 예약 전, 꼭 확인하세요
+              - generic [ref=e506]: 인증 · 유의사항 · 신청 절차 · 환불 안내
+            - generic [ref=e508]:
+              - generic [ref=e509]: VERIFICATION
+              - generic [ref=e510]: 참가자 인증 안내
+            - generic [ref=e511]: 검증된 분들만 같은 자리에 모일 수 있도록, 모든 참가자는 아래 인증을 거칩니다.
+            - generic [ref=e512]: 필수 인증
+            - generic [ref=e513]:
+              - strong [ref=e514]: ① 핸드폰 본인인증
+              - text: · 본인 여부 확인
+            - generic [ref=e515]:
+              - strong [ref=e516]: ② 현장 신분증 확인
+              - text: · 파티 당일 재점검
+            - generic [ref=e517]:
+              - strong [ref=e518]: ③ 명함 / 재직 / 학교 / 직업
+              - text: 중 1가지 인증 · 신원 진위 확인
+            - generic [ref=e519]: 프리미엄 인증 (선택)
+            - generic [ref=e520]:
+              - text: 재력 · 전문직 · 명문대학 · 대기업 · 사업가 · 엘리트 집안 · 셀럽 · 수입차 등 해당하는 분께는
+              - strong [ref=e521]: 프리미엄 인증 뱃지
+              - text: 가 부여됩니다. (선택 · 미보유 시에도 참가 가능)
+            - generic [ref=e522]: 신원 · 자격 인증 서류 필수
+            - generic [ref=e523]:
+              - text: 본 모임은
+              - strong [ref=e524]: 돌싱(이혼) 자격이 확인된 분
+              - text: 만 참석 가능합니다. 참가 자격은
+              - strong [ref=e525]: 서류 인증(혼인관계증명서 등)
+              - text: 으로 확인되며, 인증 완료 후 참여가 확정됩니다.
+            - generic [ref=e526]:
+              - strong [ref=e527]: 본인 신원에 대한 인증을 속이지 않으며
+              - text: ", 신원 정보에 변경이 있을 경우 반드시 수정합니다. (자격 서류 · 사업자 · 명함 · 재직 등 정보 위조 시 참가 제한 및 영구 이용 제한될 수 있습니다)"
+            - generic [ref=e528]:
+              - generic [ref=e529]: JINSIM PASS
+              - generic [ref=e530]: 진심권 안내
+            - generic [ref=e531]:
+              - text: 파티에서 마음에 드는 분께 진심을 전하는 한 장. 참가자에게
+              - strong [ref=e532]: 단 1장씩만
+              - text: 제공되며,
+              - strong [ref=e533]: 추가 판매는 없습니다.
+            - generic [ref=e534]:
+              - text: 호감 가는 분께 보내고
+              - strong [ref=e535]: 상대도 나에게 보내면 매칭
+              - text: 되어 연락처가 열립니다. (서로 보냈을 때만 성립) 1인 1장뿐이라, 받았다면 그건 진심이라는 뜻입니다.
+            - generic [ref=e536]: 앱 출시 후 더 편하게 이용하실 수 있습니다.
+            - generic [ref=e537]:
+              - generic [ref=e538]: NOTICE
+              - generic [ref=e539]: 유의사항
+            - generic [ref=e540]: 입장 및 참가
+            - generic [ref=e541]:
+              - text: 행사
+              - strong [ref=e542]: 20분 전
+              - text: 부터 신분증 확인 후 입장 가능합니다.
+            - generic [ref=e543]: 타 모임 운영진 · 호스트의 참가는 제한되며, 적발 시 환불 없이 퇴장 · 영구 제명됩니다.
+            - generic [ref=e544]: 행사 매너
+            - generic [ref=e545]: 회원 간 매너는 필수이며, 분위기를 해치는 경우 제재 · 강제 퇴장될 수 있습니다.
+            - generic [ref=e546]: 프로필 검토 결과 파티 콘셉트에 맞지 않는 경우 신청이 제한될 수 있습니다.
+            - generic [ref=e547]: 프라이버시 보호를 위해 참가자 사진 촬영은 제한됩니다.
+            - generic [ref=e548]: 본인 부주의로 발생한 사고에 대해서는 책임지지 않습니다.
+            - generic [ref=e549]:
+              - generic [ref=e550]: PROCESS
+              - generic [ref=e551]: 신청 절차
+            - generic [ref=e552]:
+              - generic [ref=e553]:
+                - generic [ref=e554]: "1"
+                - text: 회원가입
+              - text: →
+              - generic [ref=e555]:
+                - generic [ref=e556]: "2"
+                - text: 참가신청 · 결제
+              - text: →
+              - generic [ref=e557]:
+                - generic [ref=e558]: "3"
+                - text: 프로필 작성
+              - text: →
+              - generic [ref=e559]:
+                - generic [ref=e560]: "4"
+                - text: 승인(검증)
+              - text: →
+              - generic [ref=e561]:
+                - generic [ref=e562]: "5"
+                - text: 명단 확정
+              - text: →
+              - generic [ref=e563]:
+                - generic [ref=e564]: "6"
+                - text: 파티 참여
+            - generic [ref=e565]:
+              - text: 프로필은
+              - strong [ref=e566]: 첫 참여 시 1회만
+              - text: 작성하며, AI와 담당자 검증을 거쳐 승인됩니다. (승인 결과는 영업일 1~2일 내 안내)
+            - generic [ref=e567]:
+              - text: 승인 후
+              - strong [ref=e568]: 성비를 맞춰 명단이 확정
+              - text: 되며, 확정 시 개별 연락(문자 · 카톡)을 드립니다. 미수신 시 명단에 없는 상태이고, 무단 방문 시 입장 · 환불 불가합니다.
+            - generic [ref=e569]: 대기자 안내
+            - generic [ref=e570]: 정원 · 성비 상황에 따라 대기로 전환될 수 있으며, 이 경우 확정 가능 시점을 함께 안내드립니다.
+            - generic [ref=e571]: 일정 조율이 어려우면 대기 중 언제든 취소하실 수 있습니다. (환불 규정 적용)
+            - generic [ref=e572]:
+              - generic [ref=e573]: REFUND
+              - generic [ref=e574]: 환불 및 이월 안내
+            - generic [ref=e575]: 모드파티는 시간 · 날짜가 정해진 오프라인 행사로, 전자상거래법 제17조 제2항 제3호에 따라 청약 철회가 제한되는 서비스입니다.
+            - generic [ref=e576]: 환불 규정 (행사일 기준)
+            - table [ref=e577]:
+              - rowgroup [ref=e578]:
+                - row [ref=e579]:
+                  - columnheader "4일 전" [ref=e580]
+                  - columnheader "3일 전" [ref=e581]
+                  - columnheader "2일 전 ~ 당일" [ref=e582]
+              - rowgroup [ref=e583]:
+                - row [ref=e584]:
+                  - cell "80% 환불" [ref=e585]
+                  - cell "50% 환불" [ref=e586]
+                  - cell "환불 불가" [ref=e587]
+            - generic [ref=e588]:
+              - text: 환불 금액은 위 표(행사일 기준)에 따르며, 위약금은
+              - strong [ref=e589]: 기본 판매가 기준
+              - text: "으로 산정됩니다. (예: 39,000원 상품을 쿠폰으로 34,000원에 결제해도 39,000원 기준)"
+            - generic [ref=e590]: 사유와 무관하게 위 표 기준이 적용됩니다. 단, 당일 취소 · 무단 불참 · 지각 · 연락 두절 · 허위 정보 기재 · 고의적 규정 위반의 경우 환불 및 이월 · 양도가 불가합니다.
+            - generic [ref=e591]: 이월 및 취소 방법
+            - generic [ref=e592]:
+              - text: 이월은 타당한 사유의 증빙 서류 제출 시 가능하며(구두 불가),
+              - strong [ref=e593]: 1회 이월 후 환불은 불가
+              - text: 합니다. 취소 · 환불 문의는 우측 하단
+              - strong [ref=e594]: 실시간 상담
+              - text: 으로 접수해 주세요.
+            - generic [ref=e595]: 제휴 업장 사정(화재 · 정전 · 영업 중단 등)으로 중단 시 동일 금액의 대체 이벤트로 갈음합니다.
+            - generic [ref=e596]: 참가자가 고의 또는 과실로 허위 정보 기재 · 신원 위조 · 비매너 행위 등 본 약관을 위반하여 주최사 또는 다른 참가자에게 손해를 입힌 경우, 참가자는 그로 인한 신뢰 훼손 및 영업 방해 등 일체의 손해를 배상할 책임을 부담합니다. 이때 손해배상액은 금 200만원으로 예정하며(민법 제398조), 주최사의 실제 손해액(원상회복 비용, 행사 진행 차질로 인한 손실, 법적 대응에 소요된 제반 비용 등을 포함)이 이를 초과하는 경우 그 초과액에 대하여도 배상을 청구할 수 있습니다.
+            - generic [ref=e597]: 상품정보 제공고시
+            - table [ref=e598]:
+              - rowgroup [ref=e599]:
+                - row [ref=e600]:
+                  - cell "서비스 제공 사업자" [ref=e601]
+                  - cell "상품상세 참조" [ref=e602]
+                - row [ref=e603]:
+                  - cell "인증 · 허가 등 확인 사항" [ref=e604]
+                  - cell "상품상세 참조" [ref=e605]
+                - row [ref=e606]:
+                  - cell "이용조건 (기간 · 장소 · 추가비용 등)" [ref=e607]
+                  - cell "상품상세 참조" [ref=e608]
+                - row [ref=e609]:
+                  - cell "취소 · 중도해약 · 환불 기준" [ref=e610]
+                  - cell "상품상세 참조" [ref=e611]
+                - row [ref=e612]:
+                  - cell "취소 · 환불 방법" [ref=e613]
+                  - cell "상품상세 참조" [ref=e614]
+                - row [ref=e615]:
+                  - cell "소비자상담 관련 전화번호" [ref=e616]
+                  - cell "상품상세 참조" [ref=e617]
+      - text: 
+  - contentinfo [ref=e618]:
+    - generic [ref=e623]:
+      - generic [ref=e624]:
+        - group:
+          - link " SNS 바로가기" [ref=e625] [cursor=pointer]:
+            - /url: https://www.instagram.com/mod.party/
+            - generic [ref=e626]: 
+            - generic [ref=e627]: SNS 바로가기
+          - link " SNS 바로가기" [ref=e628] [cursor=pointer]:
+            - /url: https://www.youtube.com/@modparty
+            - generic [ref=e629]: 
+            - generic [ref=e630]: SNS 바로가기
+          - link "ꄧ SNS 바로가기" [ref=e631] [cursor=pointer]:
+            - /url: https://blog.naver.com/mod2020
+            - generic [ref=e632]: ꄧ
+            - generic [ref=e633]: SNS 바로가기
+      - paragraph [ref=e636]:
+        - generic [ref=e637]: "상호명: 주식회사 모드파티"
+        - generic [ref=e638]: "대표자: 이대로"
+        - generic [ref=e639]: "사업장주소: 서울 강남구 테헤란로22길 11 (역삼동, 모닝타워) 지하1층 모드라운지"
+        - generic [ref=e640]: "사업자등록번호: 611-88-01898"
+        - generic [ref=e641]: "통신판매업신고번호: 2020-서울서초-3723호"
+        - generic [ref=e642]: "대표자 이메일: modwotjr@modparty.co.kr"
+        - generic [ref=e643]: "호스팅 제공자: (주)아임웹"
+  - iframe [ref=e644]:
+    

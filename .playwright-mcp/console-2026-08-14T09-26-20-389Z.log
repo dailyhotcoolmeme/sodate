@@ -1,0 +1,8 @@
+[      92ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.munto.kr/ko/socialing?id=669622:0
+[     244ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://www.munto.kr/api/auth/refresh:0
+[     316ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://api.munto.kr/api/web/v1/socialing/669622?action=true:0
+[     769ms] [WARNING] [Meta Pixel] - Duplicate Pixel ID: 185351011952221. @ https://connect.facebook.net/en_US/fbevents.js:197
+[    1365ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://api.munto.kr/api/web/v1/socialing/669622?action=true:0
+[    3414ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://api.munto.kr/api/web/v1/socialing/669622?action=true:0
+[    7488ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://api.munto.kr/api/web/v1/socialing/669622?action=true:0
+[    7493ms] [LOG] Error status: 404 @ https://www.munto.kr/_next/static/chunks/pages/socialing-160b7df8e1f0bb64.js:0

@@ -1,0 +1,5 @@
+[     932ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://lqxfkqxrtjnqozqmwzlp.supabase.co/storage/v1/object/public/scripts/imweb-realtime-widget.js:0
+[    1514ms] TypeError: Cannot read properties of undefined (reading 'innerHTML')
+    at https://www.modparty.co.kr/shop_view/?idx=377:4925:82
+[    1556ms] [TIMEEND] loadTemplate: 40.315185546875 ms @ https://www.modparty.co.kr/js/site_shop/site_shop.js?1786599655:499
+[    1886ms] [LOG] IMWEB_DEPLOY_STRATEGY init event dispatched {accesstype: FO, features: Object, syncPeriod: 60000, syncTime: 1786687985781, instance: DeployStrategy} @ https://static.imweb.me/vendor/js/deploy_strategy.js:34
