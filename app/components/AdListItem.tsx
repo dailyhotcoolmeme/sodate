@@ -9,7 +9,7 @@ import {
 } from 'react-native-google-mobile-ads'
 import { Image } from 'expo-image'
 import { useColors } from '@/hooks/useColors'
-import { getFeedNativeAdUnitId } from '@/lib/ads'
+import { getFeedNativeAdUnitId, claimPooledNativeAd } from '@/lib/ads'
 import { track } from '@/lib/analytics'
 
 // 구글 정책: 네이티브 광고 미디어 뷰의 가로·세로가 120 미만이면 수익화 대상에서 제외될 수 있음.
@@ -34,36 +34,51 @@ export default function AdListItem({ slot = 'feed', variant = 'thumb' }: { slot?
 
   useEffect(() => {
     let mounted = true
-    let loaded: NativeAd | null = null
+    let owned: NativeAd | null = null
     // 게시판 등 다른 슬롯도 당장은 피드와 같은 광고 단위를 재사용한다(리포트는 slot으로 구분).
     // AdMob에서 게시판 전용 네이티브 광고 단위를 만들면 @/lib/ads 에 추가해 이 슬롯만 바꿔 끼우면 된다.
     const unitId = getFeedNativeAdUnitId()
-    NativeAd.createForAdRequest(unitId)
-      .then((nativeAd) => {
-        if (mounted) {
-          loaded = nativeAd
-          setAd(nativeAd)
-        } else {
-          nativeAd.destroy()
-        }
-        track('ad_load_success', { properties: { slot, platform: Platform.OS, unit: unitId } })
-      })
-      .catch((e) => {
-        // 슬롯은 비워두고 앱은 그대로 돌아간다. 다만 예전처럼 조용히 삼키지는 않는다 —
-        // 실패 사실과 사유를 남겨야 출시 후에 "광고가 왜 안 나오는지"를 알 수 있다.
-        track('ad_load_fail', {
-          properties: {
-            slot,
-            platform: Platform.OS,
-            unit: unitId,
-            code: e?.code ?? null,
-            message: String(e?.message ?? e).slice(0, 200),
-          },
+
+    // 미리 채워둔 풀에서 즉시 꺼내 쓴다(lib/ads.ts 참고) — 네트워크 왕복 없이 반영되므로
+    // 이 행이 스크롤로 화면 밖에 밀려 언마운트되기 전에 뜰 확률이 훨씬 높다.
+    const pooled = claimPooledNativeAd(unitId, slot)
+    if (pooled) {
+      owned = pooled
+      setAd(pooled)
+    } else {
+      // 세션 시작 직후 등 풀이 아직 안 찼으면 그 자리에서 즉석 요청(예전 방식)으로 폴백.
+      NativeAd.createForAdRequest(unitId)
+        .then((nativeAd) => {
+          if (mounted) {
+            owned = nativeAd
+            setAd(nativeAd)
+            track('ad_load_success', { properties: { slot, platform: Platform.OS, unit: unitId } })
+          } else {
+            // 로드는 됐지만 그새 이 행이 언마운트돼 화면에 못 뿌리고 바로 버리는 경우.
+            // 예전엔 이것도 무조건 'ad_load_success'로 찍혀서 "로드는 다 성공하는데 왜
+            // 화면엔 안 보이나"를 분간할 수 없었다(2026-08-14 오너 지적으로 발견) —
+            // discarded 표시로 구분해서 실측 가능하게 남긴다.
+            nativeAd.destroy()
+            track('ad_load_success', { properties: { slot, platform: Platform.OS, unit: unitId, discarded: true } })
+          }
         })
-      })
+        .catch((e) => {
+          // 슬롯은 비워두고 앱은 그대로 돌아간다. 다만 예전처럼 조용히 삼키지는 않는다 —
+          // 실패 사실과 사유를 남겨야 출시 후에 "광고가 왜 안 나오는지"를 알 수 있다.
+          track('ad_load_fail', {
+            properties: {
+              slot,
+              platform: Platform.OS,
+              unit: unitId,
+              code: e?.code ?? null,
+              message: String(e?.message ?? e).slice(0, 200),
+            },
+          })
+        })
+    }
     return () => {
       mounted = false
-      loaded?.destroy()
+      owned?.destroy()
     }
   }, [slot])
 

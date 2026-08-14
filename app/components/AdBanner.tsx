@@ -39,10 +39,13 @@ export default function AdBanner({ variant = 'thumb' }: { variant?: Variant }) {
         if (mounted) {
           loaded = nativeAd
           setAd(nativeAd)
+          track('ad_load_success', { properties: { slot: 'detail', platform: Platform.OS, unit: unitId, variant } })
         } else {
+          // 로드 완료 전에 화면을 벗어난 경우 — discarded로 구분해서 남긴다
+          // (components/AdListItem.tsx와 동일한 이유, 2026-08-14).
           nativeAd.destroy()
+          track('ad_load_success', { properties: { slot: 'detail', platform: Platform.OS, unit: unitId, variant, discarded: true } })
         }
-        track('ad_load_success', { properties: { slot: 'detail', platform: Platform.OS, unit: unitId, variant } })
       })
       .catch((e) => {
         // 조용히 삼키면 출시 후 광고가 안 나와도 알 수가 없다 — 사유를 남긴다

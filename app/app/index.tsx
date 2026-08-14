@@ -40,6 +40,7 @@ import BoardSwipeHint from '@/components/BoardSwipeHint'
 import { useFilterStore, useFilterHydrated, type FilterState } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { track } from '@/lib/analytics'
+import { warmNativeAdPool, getFeedNativeAdUnitId } from '@/lib/ads'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
@@ -108,6 +109,10 @@ export default function HomeScreen() {
   // 앱 오픈 트래킹
   useEffect(() => { track('app_open') }, [])
   useEffect(() => { track('screen_view', { properties: { screen_name: 'home' } }) }, [])
+  // 피드 광고 슬롯이 화면에 뜨기 전에 미리 채워둔다 — 행이 마운트되자마자 즉시 꺼내
+  // 쓰게 해서, 로드를 기다리다 스크롤에 밀려 언마운트되는 경합을 줄인다(lib/ads.ts 참고,
+  // 2026-08-14 오너 지적: 12번째에만 뜨고 나머지 광고는 하나도 안 보이던 문제).
+  useEffect(() => { warmNativeAdPool(getFeedNativeAdUnitId(), 'feed') }, [])
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,

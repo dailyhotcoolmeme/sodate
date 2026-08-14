@@ -1,6 +1,7 @@
 import { Platform } from 'react-native'
-import { TestIds } from 'react-native-google-mobile-ads'
+import { NativeAd, TestIds } from 'react-native-google-mobile-ads'
 import * as Updates from 'expo-updates'
+import { track } from './analytics'
 
 /**
  * 광고 단위 ID 중앙 관리 파일.
@@ -80,3 +81,64 @@ export const getFeedNativeAdUnitId = () => resolve(REAL.feedNative, TestIds.NATI
 export const getDetailNativeAdUnitId = () => resolve(REAL.detailNative, TestIds.NATIVE)
 /** 게시판 목록 맨 아래(페이지 번호 밑) 배너 광고 단위 ID */
 export const getBoardBannerAdUnitId = () => resolve(REAL.boardBanner, TestIds.BANNER)
+
+// ── 네이티브 광고 선(先)로딩 풀 ─────────────────────────────────────────────
+//
+// 예전엔 AdListItem이 화면에 뜰 때(FlatList가 그 행을 마운트할 때)마다 그 자리에서
+// NativeAd를 요청했다. 그런데 스크롤이 빨라 그 행이 로드 완료 전에 화면 밖으로
+// 밀려나(FlatList 가상화로 언마운트) 버리면, 로드는 성공해도 화면에 뿌리지 못한 채
+// 바로 destroy() 됐다 — 스크롤을 멈춘 자리(예: 12번째)만 우연히 살아남아 보이고
+// 나머지는 하나도 안 뜨는 것처럼 보인 원인이었다(2026-08-14, DB 실측: feed 슬롯
+// 로드 성공 893건 vs 실패 68건으로 로드 자체는 멀쩡했는데 화면엔 거의 안 보였음).
+//
+// 화면에 뜨는 순간에 요청하는 대신, 미리 몇 개를 항상 대기시켜두고(warmNativeAdPool)
+// 행이 마운트되면 그 자리에서 즉시 꺼내 쓴다(claimPooledNativeAd) — 네트워크 왕복
+// 없이 동기에 가깝게 반영되므로, 마운트-언마운트 경합이 일어날 틈이 거의 없다.
+// 카드형 보기는 광고 간격이 촘촘해(3개마다) 첫 렌더링에서 슬롯 여러 개가 한꺼번에
+// 뜰 수 있다 — 그 초기 버스트를 커버할 만큼 넉넉히 잡는다.
+const POOL_SIZE = 3
+const pools = new Map<string, NativeAd[]>()
+const filling = new Map<string, number>()
+
+function fillPool(unitId: string, slot: string): void {
+  const pool = pools.get(unitId) ?? []
+  pools.set(unitId, pool)
+  const inFlight = filling.get(unitId) ?? 0
+  const need = POOL_SIZE - pool.length - inFlight
+  for (let i = 0; i < need; i++) {
+    filling.set(unitId, (filling.get(unitId) ?? 0) + 1)
+    NativeAd.createForAdRequest(unitId)
+      .then((nativeAd) => {
+        pools.get(unitId)?.push(nativeAd)
+        track('ad_load_success', { properties: { slot, platform: Platform.OS, unit: unitId } })
+      })
+      .catch((e) => {
+        track('ad_load_fail', {
+          properties: {
+            slot, platform: Platform.OS, unit: unitId,
+            code: e?.code ?? null, message: String(e?.message ?? e).slice(0, 200),
+          },
+        })
+      })
+      .finally(() => {
+        filling.set(unitId, (filling.get(unitId) ?? 1) - 1)
+      })
+  }
+}
+
+/** 목록 화면 마운트 시 1회 호출 — 첫 행이 뜨기 전에 미리 몇 개를 채워둔다. */
+export function warmNativeAdPool(unitId: string, slot: string): void {
+  fillPool(unitId, slot)
+}
+
+/**
+ * 이미 로드돼 대기 중인 광고를 즉시 꺼내 쓴다. 없으면 null — 호출부가 그 자리에서
+ * 즉석 요청으로 폴백해야 한다(세션 시작 직후처럼 풀이 아직 안 찼을 때 대비).
+ * 꺼내 쓴 만큼 자동으로 보충 요청을 건다.
+ */
+export function claimPooledNativeAd(unitId: string, slot: string): NativeAd | null {
+  const pool = pools.get(unitId)
+  const ad = pool?.shift() ?? null
+  fillPool(unitId, slot)
+  return ad
+}
