@@ -1,9 +1,17 @@
-"""유니브리지소셜(unibridge_social) 스크래퍼 — 자체 사이트 없이 인스타 바이오에 걸린
-구글폼(forms.gle) 링크들로 신청을 받는다. 각 폼의 초기 HTML에 박힌
-FB_PUBLIC_LOAD_DATA_ JSON에서 '일정선택' 문항의 선택지를 회차별 이벤트로,
-'참가비 안내' 문항에서 성별 가격을 뽑는다(2026-08-11, 정식 부여 방식 없이도
-가격까지 확보되는 드문 케이스). 폼 자체는 로그인·JS렌더링 불필요 — httpx만으로 충분.
-바이오에서 forms.gle 링크를 걷어올 때만 인스타 특성상 실제 Chrome이 필요."""
+"""유니브리지소셜(unibridge_social) 스크래퍼 — 자체 사이트 없이 구글폼(forms.gle)으로
+신청을 받는다. 각 폼의 초기 HTML에 박힌 FB_PUBLIC_LOAD_DATA_ JSON에서 '일정선택'
+문항의 선택지를 회차별 이벤트로, '참가비 안내' 문항에서 성별 가격을 뽑는다
+(2026-08-11, 정식 부여 방식 없이도 가격까지 확보되는 드문 케이스).
+
+⚠️ 폼 링크 수집처를 인스타 바이오 → 링크 모음(litt.ly)으로 옮겼다(2026-08-14).
+   두 가지가 겹쳐서 8/11 이후 3일간 수집 0건이었고, 9월 일정 22건이 통째로 앱에
+   안 들어갔다:
+     1) 인스타가 비로그인 프로필 접근을 막았다(Actions에서 ERR_HTTP_RESPONSE_CODE_FAILURE,
+        로컬에서도 바이오 없는 로그인 월만 옴).
+     2) 설령 바이오를 읽었어도 0건이었다 — 업체가 바이오 링크를 forms.gle에서
+        litt.ly로 바꿨는데 우리는 바이오에서 forms.gle만 찾고 있었다.
+   litt.ly는 로그인·브라우저 없이 httpx만으로 읽힌다(단, UA 함정은 _active_form_urls 주석 참고).
+   아웃링크(source_url)는 기존대로 인스타 본계정으로 보낸다(오너 지시 2026-08-11)."""
 import json
 import re
 from datetime import datetime
@@ -11,14 +19,16 @@ from typing import Optional
 from urllib.parse import quote
 
 import httpx
-from playwright.sync_api import sync_playwright
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
 from utils.security import sanitize_text
 from utils.region import resolve_region
 
-PROFILE_URL = 'https://www.instagram.com/unibridge_social/'
+PROFILE_URL = 'https://www.instagram.com/unibridge_social/'   # 아웃링크 전용(수집엔 안 씀)
+# 신청폼 링크가 모여 있는 곳. 업체가 여기 구조를 또 바꾸면 수집이 0건이 되는데,
+# 그때는 _active_form_urls가 ERROR를 남기고 워치독 긴급 알림이 잡는다.
+LINK_HUB_URL = 'https://litt.ly/unibridge_social'
 # 이 업체는 회차별 실제 사진이 없어(구글폼 텍스트 문항만 파싱) 피드 썸네일·상세 상단
 # 이미지가 전부 비어 있었다. 업체 로고를 기본 썸네일로 고정한다(오너 지시 2026-08-13).
 DEFAULT_THUMBNAIL = 'https://sodate-admin.pages.dev/media/thumbnails/unibridge-social/logo-thumb.webp'
@@ -151,27 +161,31 @@ class UnibridgeSocialScraper(BaseScraper):
         return events
 
     def _active_form_urls(self) -> list[str]:
-        """바이오의 forms.gle 링크 중 마감(closedform)이 아닌 것만 최종 URL로 반환."""
+        """링크 모음(litt.ly)의 forms.gle 링크 중 마감(closedform)이 아닌 것만 최종 URL로 반환."""
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True, channel='chrome', args=['--no-sandbox'])
-                context = browser.new_context(locale='ko-KR', viewport={'width': 390, 'height': 844},
-                    user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 '
-                               '(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1')
-                page = context.new_page()
-                page.goto(PROFILE_URL, timeout=30000, wait_until='domcontentloaded')
-                page.wait_for_timeout(4000)
-                html = page.content()
-                browser.close()
+            # ⚠️ User-Agent를 붙이면 안 된다. litt.ly가 UA를 보고 JS 렌더링용 껍데기 HTML을
+            #    돌려줘서 링크가 통째로 사라진다(2026-08-14 실측: Chrome UA → forms.gle 0건,
+            #    UA 없음 → 3건). 아래 폼 조회도 같은 이유로 UA 없이 간다.
+            r = httpx.get(LINK_HUB_URL, timeout=20, follow_redirects=True)
+            r.raise_for_status()
+            html = r.text
         except Exception as e:
-            self.logger.error(f'유니브리지소셜 인스타 프로필 로드 실패: {e}')
+            self.logger.error(f'유니브리지소셜 링크 모음 로드 실패({LINK_HUB_URL}): {e}')
             return []
 
-        short_links = sorted(set(re.findall(r'https://forms\.gle/[A-Za-z0-9]+', html)))
+        short_links = sorted(set(re.findall(r'https://forms\.gle/[A-Za-z0-9_-]+', html)))
+        if not short_links:
+            # 업체가 링크 구조를 또 바꾼 상황. 조용히 0건으로 끝나면 이번처럼 며칠씩 모른다.
+            self.logger.error(
+                f'유니브리지소셜 링크 모음에 신청폼이 하나도 없음 — 업체가 링크를 또 바꿨는지 확인 필요({LINK_HUB_URL})'
+            )
+            return []
+
         active = []
         for link in short_links:
             try:
                 r = httpx.get(link, follow_redirects=True, timeout=15)
+                r.raise_for_status()
                 final = str(r.url)
                 if 'closedform' in final:
                     continue
