@@ -98,6 +98,7 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
         print(f'  스크래퍼 실행 실패: {str(e)[:60]}')
         return 0
     updated = 0
+    matched_ids = set()
     for ev in evs:
         eid = by_url.get(ev.source_url)
         if not eid:
@@ -105,6 +106,7 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
             eid = by_evt.get(m.group(1)) if m else None
         if not eid:
             continue
+        matched_ids.add(eid)
         d = ev.model_dump() if hasattr(ev, 'model_dump') else ev.__dict__
         sm, sf = d.get('seats_left_male'), d.get('seats_left_female')
         # ⚠️(2026-07-25) 원본 사이트가 정원 초과(오버부킹) 등으로 음수를 낼 때가 있어
@@ -127,6 +129,29 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
         except Exception as e:
             # 이 행 하나 실패로 나머지 업체 전체가 못 도는 것 방지 — 로그만 남기고 계속.
             print(f'  이벤트 갱신 실패(스킵): {eid} - {str(e)[:120]}')
+
+    # ⚠️(2026-08-14) 예전엔 이번 스크랩에 안 잡힌 기존 이벤트를 그냥 내버려뒀다 — 사이트에서
+    # 이미 취소·삭제·날짜변경된 일정이 앱엔 계속 "신청 가능"으로 남아, 신청하기 눌러보면
+    # 없는 일정이라고 나오는 사고로 이어졌다(모드파티 8/14 돌싱파티, 오너 실제 제보).
+    # 이번에 재확인 안 된 기존 이벤트는 마감 처리한다 — 삭제(destructive)는 안 하고
+    # is_closed=True만 세팅(전체 크롤 DELETE_STALE이 다음 정기 크롤에서 정리하거나, 다시
+    # 나타나면 위 upd에서 is_closed가 자동으로 풀린다). 사이트가 잠깐 죽거나 목록을
+    # 절반만 긁어온 부분 실패로 멀쩡한 일정을 통째로 마감 처리하지 않도록, 이번에 절반
+    # 이상 재확인됐을 때만 진행한다(base_scraper.py의 DELETE_STALE 안전장치와 동일 기준).
+    unmatched = [e for e in dbevs if e['id'] not in matched_ids]
+    if unmatched:
+        if dbevs and len(matched_ids) >= len(dbevs) * 0.5:
+            for e in unmatched:
+                try:
+                    sb.table('events').update({'is_closed': True}).eq('id', e['id']).execute()
+                except Exception as ex:
+                    print(f'  마감 처리 실패(스킵): {e["id"]} - {str(ex)[:100]}')
+            print(f'  이번 조회에서 안 잡힘 → 마감 처리 {len(unmatched)}건')
+        else:
+            print(
+                f'  재확인 {len(matched_ids)}/{len(dbevs)}건뿐 — 부분 실패 의심, '
+                f'마감 처리 건너뜀({len(unmatched)}건 보존)'
+            )
     return updated
 
 
@@ -247,9 +272,29 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
         return 0
 
     updated = 0
+    closed_missing = 0
     with httpx.Client(timeout=20) as client:
         for eid, sid in targets:
-            detail = _get(client, f'{MUNTO_API_BASE}/socialing/{sid}')
+            # ⚠️(2026-08-14) 예전엔 상세 조회 실패면 그냥 continue라, 호스트가 취소·삭제한
+            # 소셜링(문토 API가 404 "삭제된 모임은 내용을 확인할 수 없어요" 반환)이 15분마다
+            # 도는 이 경량 갱신에서도 계속 무시돼 앱엔 계속 "신청 가능"으로 남았다(오너
+            # 실제 제보: 대전 로테이션소개팅 4건). 404만 마감 확정 신호로 보고 처리한다 —
+            # 타임아웃 등 다른 실패는(사이트가 일시적으로 느릴 뿐일 수 있어) 여전히 스킵,
+            # 다음 15분 주기에 재시도된다.
+            try:
+                resp = client.get(f'{MUNTO_API_BASE}/socialing/{sid}', timeout=15)
+            except Exception:
+                continue
+            if resp.status_code == 404:
+                try:
+                    sb.table('events').update({'is_closed': True}).eq('id', eid).execute()
+                    closed_missing += 1
+                except Exception as ex:
+                    print(f'  [munto] 마감 처리 실패(스킵) {eid}: {str(ex)[:80]}')
+                continue
+            if resp.status_code != 200:
+                continue
+            detail = resp.json()
             if not detail:
                 continue
             members_data = _get(
@@ -280,7 +325,7 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
             except Exception as ex:
                 print(f'  [munto] 갱신 실패(스킵) {eid}: {str(ex)[:80]}')
             time.sleep(0.3)
-    print(f'[munto] 임박 {days}일내 갱신 {updated}건 (대상 {len(targets)}건)')
+    print(f'[munto] 임박 {days}일내 갱신 {updated}건, 삭제확인→마감 {closed_missing}건 (대상 {len(targets)}건)')
     return updated
 
 
