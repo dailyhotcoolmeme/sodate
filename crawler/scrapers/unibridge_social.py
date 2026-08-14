@@ -58,6 +58,11 @@ def _year_for(yy: int) -> int:
 class UnibridgeSocialScraper(BaseScraper):
     # 폼 '참가비 안내' 문항에서 남/여 실제 참가비를 직접 파싱 → 정본으로 채운다.
     WRITES_PRICE = True
+    # 구글폼의 '일정선택' 문항이 곧 전체 일정 정본이라(업체가 회차를 내리면 선택지에서
+    # 바로 사라진다) 이번 크롤에 없는 회차는 지워도 안전하다. 켜기 전엔 내려간 회차가
+    # 계속 남아 있었다(2026-08-14: 8/15 합정·8/19 건대가 폼에서 빠졌는데도 앱에 노출).
+    # base_scraper의 50% 부분실패 안전장치는 그대로 걸린다.
+    DELETE_STALE = True
 
     def __init__(self):
         super().__init__('unibridge-social')
