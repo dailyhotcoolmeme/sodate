@@ -27,9 +27,18 @@ _ERROR_TITLE_RE = re.compile(
 )
 
 
+# 업체 접두사("[로꼬] " 등)를 떼고 남은 게 HTTP 상태코드 숫자 하나뿐이면 오류 페이지다.
+# 2026-08-14: 로꼬 상세가 403을 내던 순간 그 페이지 <title>이 그냥 "403"이었다.
+# 위 정규식은 숫자 뒤에 error/forbidden 같은 단어가 붙은 것만 잡게 되어 있어 이걸
+# 통째로 빠져나갔고, "[로꼬] 403"이라는 모임 2건이 15일간 앱에 노출됐다.
+_BARE_STATUS_TITLE_RE = re.compile(r'^\s*(?:\[[^\]]{1,20}\]\s*)?[1-5]\d{2}\s*$')
+
+
 def looks_like_error_title(title: Optional[str]) -> bool:
     """모임명이 서버 오류 페이지에서 긁혀온 것처럼 보이면 True."""
-    return bool(title) and bool(_ERROR_TITLE_RE.search(title))
+    if not title:
+        return False
+    return bool(_ERROR_TITLE_RE.search(title)) or bool(_BARE_STATUS_TITLE_RE.match(title))
 
 
 class BaseScraper(ABC):

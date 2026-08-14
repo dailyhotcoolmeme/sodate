@@ -98,7 +98,13 @@ class LovecommunityLoco(BaseScraper):
                     product_url = f'{self.BASE_URL}/party/?idx={idx}'
                     try:
                         page.goto(product_url, timeout=20000)
-                        page.wait_for_load_state('networkidle', timeout=10000)
+                        # ⚠️ networkidle 타임아웃으로 상품을 통째로 버리지 않는다. 광고·채팅
+                        #    위젯이 계속 물려 있어 idx=4는 로컬에서도 매번 10초를 넘기는데,
+                        #    예외가 그대로 올라가 그 상품 파싱 자체가 스킵되고 있었다.
+                        try:
+                            page.wait_for_load_state('networkidle', timeout=10000)
+                        except Exception:
+                            self.logger.debug(f'Loco idx={idx} networkidle 대기 초과(계속 진행)')
                         time.sleep(2)
 
                         # 현재 URL이 외부 사이트로 리디렉션됐는지 확인
@@ -120,6 +126,20 @@ class LovecommunityLoco(BaseScraper):
                         except Exception as e:
                             self.logger.warning(f'Loco idx={idx} 위젯 가격 조회 실패: {e}')
                             widget = {}
+
+                        # ⚠️ 참가자 현황("🍷 8월 15일(토) 18:30~21:00 사당❤️")은 상세 본문이
+                        #    다 그려진 뒤에야 DOM에 들어온다. networkidle + sleep(2)만으로는
+                        #    그 전에 page.content()를 떠서 조용히 0건이 됐다 — 2026-08-14 실측:
+                        #    같은 코드가 로컬에선 17건, Actions에선 8/12부터 계속 0건이었다.
+                        #    날짜 헤더가 실제로 보일 때까지 명시적으로 기다린다.
+                        try:
+                            page.wait_for_function(
+                                r"() => /🍷\s*\d{1,2}월\s*\d{1,2}일/.test(document.body.innerText)",
+                                timeout=15000,
+                            )
+                        except Exception:
+                            # 오픈 예정 상품처럼 원래 현황이 없는 경우도 있어 계속 진행한다.
+                            self.logger.warning(f'Loco idx={idx} 참가자 현황이 안 떴다 — 그대로 파싱 시도')
 
                         soup = BeautifulSoup(page.content(), 'html.parser')
                         new_events = self._parse_product_page(soup, idx, widget)
