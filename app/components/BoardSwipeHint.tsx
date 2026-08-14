@@ -61,9 +61,13 @@ export default function BoardSwipeHint() {
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={() => router.replace('/board')}
-      style={styles.wrap}
+      style={[styles.wrap, { backgroundColor: colors.primary }]}
       hitSlop={{ left: 10, top: 10, bottom: 10 }}
     >
+      {/* wrap 자체를 탭과 같은 색으로 채워 뒤를 받친다 — 스프링이 오버슈트로 탭을 살짝
+          더 왼쪽까지 밀 때, 화면 끝과 탭 사이에 잠깐 빈 틈(배경색)이 비치던 문제
+          (2026-08-14 오너 지적). wrap은 애니메이션과 무관하게 항상 같은 자리에 고정돼
+          있어 그 틈도 핑크로 채워준다. */}
       <Animated.View style={[styles.tab, { backgroundColor: colors.primary, transform: [{ translateX }] }]}>
         <Ionicons name="chevron-back" size={17} color="#fff" />
       </Animated.View>
@@ -74,6 +78,7 @@ export default function BoardSwipeHint() {
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute', right: 0, top: '50%', marginTop: -TAB_HEIGHT / 2,
+    borderTopLeftRadius: 14, borderBottomLeftRadius: 14,
   },
   tab: {
     width: TAB_WIDTH, height: TAB_HEIGHT,
