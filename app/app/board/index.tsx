@@ -21,7 +21,7 @@ import {
 } from '@/hooks/useBoard'
 import { wideContent } from '@/constants/layout'
 import { report } from '@/lib/board'
-import { blockAuthor, markCommentsSeen, getReadPostIds } from '@/lib/boardIdentity'
+import { blockAuthor, markCommentsSeen, getReadPostIds, markBoardVisited } from '@/lib/boardIdentity'
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/boardSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
@@ -51,6 +51,10 @@ export default function BoardListScreen() {
   // 검색칸이 목록 맨 아래에 있던 걸 톱바 돋보기 아이콘 → 팝업 방식으로 옮겼다
   // (2026-08-13 오너 지시). 최근 검색어는 기기에 저장(lib/boardSearchHistory).
   const [searchModalVisible, setSearchModalVisible] = useState(false)
+
+  // 커뮤니티에 한 번 들어왔다는 기록 — 모임 피드의 스와이프 힌트를 다시 안 보여주려는
+  // 용도(2026-08-14, lib/boardIdentity.ts 참고).
+  useEffect(() => { markBoardVisited() }, [])
 
   const settings = useBoardSettings()
   const { posts, total, loading, error, pageCount, refetch } = useBoardList(page, search)

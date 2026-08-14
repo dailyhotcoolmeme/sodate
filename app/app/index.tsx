@@ -36,6 +36,7 @@ import { DAY_OPTIONS, TIME_SLOTS } from '@/constants/filters'
 import { useCompanies } from '@/hooks/useCompanies'
 import TopBar from '@/components/TopBar'
 import SwipeSegment from '@/components/SwipeSegment'
+import BoardSwipeHint from '@/components/BoardSwipeHint'
 import { useFilterStore, useFilterHydrated, type FilterState } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { track } from '@/lib/analytics'
@@ -869,6 +870,9 @@ export default function HomeScreen() {
           <Ionicons name="chevron-up" size={22} color="#fff" />
         </TouchableOpacity>
       )}
+
+      {/* 커뮤니티를 한 번도 안 가본 기기에만 — 왼쪽 스와이프하면 커뮤니티라는 힌트(2026-08-14 오너 지시) */}
+      <BoardSwipeHint />
     </View>
     </SwipeSegment>
   )

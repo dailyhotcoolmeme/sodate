@@ -16,6 +16,7 @@ const TERMS_AGREED = 'sodate_board_terms_agreed'
 const BLOCKED = 'sodate_board_blocked_authors'
 const SEEN_COMMENT_IDS = 'sodate_board_seen_comment_ids'
 const READ_POST_IDS = 'sodate_board_read_posts'
+const BOARD_VISITED = 'sodate_board_visited'
 
 async function readList(key: string): Promise<string[]> {
   try {
@@ -96,6 +97,28 @@ export async function markPostRead(id: string): Promise<void> {
     await AsyncStorage.setItem(READ_POST_IDS, JSON.stringify(trimmed))
   } catch {
     // 저장 실패는 조용히 넘긴다 — 읽음 표시만 안 될 뿐 글은 정상적으로 보인다
+  }
+}
+
+/**
+ * 커뮤니티(게시판)에 한 번이라도 들어가 본 적 있는 기기인지(2026-08-14 오너 지시).
+ * 모임 피드 화면의 스와이프 힌트(오른쪽 끝에서 통통 튀는 화살표)를 이 기기에서
+ * 커뮤니티를 한 번도 안 가봤을 때만 보여주기 위한 기록 — 한 번이라도 들어가면
+ * 그 뒤로는 영구히 안 뜬다(다시 보여줄 이유가 없다).
+ */
+export async function getBoardVisited(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(BOARD_VISITED)) === '1'
+  } catch {
+    return false
+  }
+}
+
+export async function markBoardVisited(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(BOARD_VISITED, '1')
+  } catch {
+    // ignore
   }
 }
 
