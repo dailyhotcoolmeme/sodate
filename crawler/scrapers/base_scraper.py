@@ -53,18 +53,22 @@ class BaseScraper(ABC):
         self.supabase = get_supabase()
         self.logger = get_logger(company_slug)
         self.company_id: Optional[str] = None
+        self.company_name: Optional[str] = None
 
     def get_company_id(self) -> str:
         if self.company_id:
             return self.company_id
+        # name도 같이 가져와 캐싱(2026-08-14) — events.company_name(검색용) 채우는 데 씀.
+        # 쿼리 자체는 그대로(컬럼만 하나 늘림), 추가 왕복 없음.
         result = (
             self.supabase.table('companies')
-            .select('id')
+            .select('id,name')
             .eq('slug', self.company_slug)
             .single()
             .execute()
         )
         self.company_id = result.data['id']
+        self.company_name = result.data['name']
         return self.company_id
 
     @abstractmethod
@@ -141,6 +145,12 @@ class BaseScraper(ABC):
                 continue
 
             data['company_id'] = company_id
+            # 검색용 동기화 컬럼(2026-08-14) — DB 트리거로 하다가 크롤러 대량 upsert와
+            # 겹쳐 리소스 고갈로 서비스 전체가 멈춘 사고가 있어(20260814b 마이그레이션
+            # 참고), 트리거 대신 이미 아는 값을 그냥 같이 써넣는 방식으로 바꿨다 —
+            # 추가 쿼리 없음.
+            if self.company_name:
+                data['company_name'] = self.company_name
             data['crawled_at'] = datetime.now(timezone.utc).isoformat()
 
             # 정원/잔여석/가격은 기본적으로 크롤러가 쓰지 않는다(관리자 전용). upsert 데이터에서 제거 →
@@ -208,6 +218,12 @@ class BaseScraper(ABC):
                 data['hashtags'] = derived_hashtags
             else:
                 data.pop('hashtags', None)
+
+            # hashtags를 이번에 실제로 쓸 때만 검색용 합친 문자열도 같이 채운다 —
+            # hashtags를 안 건드리는 경우(기존/admin 편집값 보존) hashtags_search도
+            # 건드리지 않아야 서로 안 어긋난다.
+            if 'hashtags' in data:
+                data['hashtags_search'] = ' '.join(data['hashtags'])
 
             if isinstance(data['event_date'], datetime):
                 dt = data['event_date']
