@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   Keyboard,
+  Pressable,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
@@ -27,6 +28,7 @@ import { useEvents } from '@/hooks/useEvents'
 import { useFilter } from '@/hooks/useFilter'
 import { useFavorites } from '@/hooks/useFavorites'
 import { useColors } from '@/hooks/useColors'
+import type { AppColors } from '@/constants/colors'
 import { useThemeStore } from '@/stores/themeStore'
 import { useRegions } from '@/hooks/useRegions'
 import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
@@ -41,6 +43,7 @@ import { useFilterStore, useFilterHydrated, type FilterState } from '@/stores/fi
 import { useProfileStore } from '@/stores/profileStore'
 import { track } from '@/lib/analytics'
 import { warmNativeAdPool, getFeedNativeAdUnitId } from '@/lib/ads'
+import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/eventSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
@@ -64,7 +67,11 @@ type ListRow =
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets()
-  const { events, loading, loadingMore, error, refetch, loadMore } = useEvents()
+  // 톱바 검색 — 모임명·해시태그·업체명·지역으로 모임 피드 안에서만 검색(2026-08-14 오너
+  // 지시, 커뮤니티 검색과는 별개). 최근 검색어는 기기에 저장(lib/eventSearchHistory).
+  const [search, setSearch] = useState('')
+  const [searchModalVisible, setSearchModalVisible] = useState(false)
+  const { events, loading, loadingMore, error, refetch, loadMore } = useEvents(search)
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const [filterVisible, setFilterVisible] = useState(false)
@@ -592,6 +599,14 @@ export default function HomeScreen() {
     toggleAgeGroup(groupId)
   }, [toggleAgeGroup])
 
+  // 검색 팝업에서 검색을 실행했을 때 — 최근 검색어에 남기고 실제 검색을 적용한다.
+  const runSearch = (term: string) => {
+    setSearch(term)
+    addRecentSearch(term)
+    track('filter_apply', { properties: { search: term } })
+  }
+  const clearSearch = () => setSearch('')
+
   const activeChips: { label: string; onRemove: () => void }[] = []
   // 지역: 완전히 선택된 군은 군 이름 하나로 묶어 표시, 나머지는 개별
   const _remainRegions = new Set(regions)
@@ -627,6 +642,7 @@ export default function HomeScreen() {
     const fmt = (d: string) => d.slice(5).replace('-', '.')
     activeChips.push({ label: `${fmt(dateStart)}~${fmt(dateEnd)}`, onRemove: () => useFilterStore.getState().setDateRange(null, null) })
   }
+  if (search) activeChips.push({ label: `'${search}'`, onRemove: clearSearch })
 
   // 이벤트 사이사이에 광고 슬롯 삽입
   const listData = useMemo<ListRow[]>(() => {
@@ -659,6 +675,7 @@ export default function HomeScreen() {
       <TopBar
         segment="event"
         onLogoPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
+        onSearchPress={() => setSearchModalVisible(true)}
       />
 
       {/* ── 지역 빠른 탭 + 나이대 칩 — 스크롤하면 접힘(옵션 E) ── */}
@@ -743,7 +760,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
-          <TouchableOpacity onPress={resetFilters} style={styles.resetBtn}>
+          <TouchableOpacity onPress={() => { resetFilters(); clearSearch() }} style={styles.resetBtn}>
             <Text style={styles.resetText}>초기화</Text>
           </TouchableOpacity>
         </View>
@@ -878,7 +895,137 @@ export default function HomeScreen() {
 
       {/* 커뮤니티를 한 번도 안 가본 기기에만 — 왼쪽 스와이프하면 커뮤니티라는 힌트(2026-08-14 오너 지시) */}
       <BoardSwipeHint />
+
+      <EventSearchModal
+        visible={searchModalVisible}
+        onClose={() => setSearchModalVisible(false)}
+        onSearch={runSearch}
+        colors={colors}
+      />
     </View>
     </SwipeSegment>
   )
+}
+
+/**
+ * 모임 피드 검색 팝업 — 톱바 돋보기 아이콘 → 팝업(게시판 검색과 동일한 UX 패턴,
+ * app/board/index.tsx의 BoardSearchModal 참고). 최근 검색어가 아래 목록으로 남아
+ * 있다가 탭하면 바로 그 단어로 재검색, 개별/전체 삭제도 여기서 한다.
+ */
+function EventSearchModal({
+  visible, onClose, onSearch, colors,
+}: {
+  visible: boolean
+  onClose: () => void
+  onSearch: (term: string) => void
+  colors: AppColors
+}) {
+  const insets = useSafeAreaInsets()
+  const styles = useMemo(() => makeEventSearchModalStyles(colors, insets.top), [colors, insets.top])
+  const [draft, setDraft] = useState('')
+  const [recent, setRecent] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!visible) return
+    setDraft('')
+    getRecentSearches().then(setRecent)
+  }, [visible])
+
+  const submit = (term: string) => {
+    const t = term.trim()
+    if (!t) return
+    onSearch(t)
+    onClose()
+  }
+
+  const removeOne = async (term: string) => {
+    await removeRecentSearch(term)
+    setRecent((prev) => prev.filter((v) => v !== term))
+  }
+
+  const clearAll = async () => {
+    await clearRecentSearches()
+    setRecent([])
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={styles.card}>
+          <View style={styles.inputRow}>
+            <Ionicons name="search-outline" size={18} color={colors.textTertiary} />
+            <TextInput
+              style={styles.input}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="모임명·해시태그 검색"
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="search"
+              autoFocus
+              onSubmitEditing={() => submit(draft)}
+            />
+            {draft.length > 0 && (
+              <TouchableOpacity onPress={() => setDraft('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={17} color={colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {recent.length > 0 && (
+            <>
+              <View style={styles.recentHeader}>
+                <Text style={styles.recentTitle}>최근 검색어</Text>
+                <TouchableOpacity onPress={clearAll} hitSlop={6}>
+                  <Text style={styles.clearAll}>전체 삭제</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.recentList} keyboardShouldPersistTaps="handled" bounces={false}>
+                {recent.map((term) => (
+                  <View key={term} style={styles.recentRow}>
+                    <TouchableOpacity style={styles.recentTermBtn} onPress={() => submit(term)} activeOpacity={0.7}>
+                      <Ionicons name="time-outline" size={14} color={colors.textTertiary} />
+                      <Text style={styles.recentTerm} numberOfLines={1}>{term}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => removeOne(term)} hitSlop={8}>
+                      <Ionicons name="close" size={16} color={colors.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function makeEventSearchModalStyles(colors: AppColors, topInset: number) {
+  // 톱바 실제 높이 = insets.top(안전영역) + 바 안쪽 높이(위아래 패딩 10+10 + 가장 큰
+  // 아이콘 26 ≈ 46). 그 아래 시각적 여백(14px)까지 더해 톱바에 안 붙게 띄운다.
+  const topOffset = topInset + 46 + 14
+  return StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'flex-start', padding: 16, paddingTop: topOffset },
+    card: {
+      width: '100%', maxWidth: 420, maxHeight: '70%', borderRadius: 16, backgroundColor: colors.surface,
+      borderWidth: 1, borderColor: colors.border, padding: 14, gap: 10,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16,
+      elevation: 12,
+    },
+    inputRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      backgroundColor: colors.surfaceHigh, borderRadius: 12,
+      paddingHorizontal: 12, paddingVertical: 10,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    input: { flex: 1, fontSize: 15, color: colors.textPrimary, padding: 0 },
+    recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 },
+    recentTitle: { fontSize: 12.5, fontWeight: '700', color: colors.textSecondary },
+    clearAll: { fontSize: 12, color: colors.textTertiary },
+    recentList: { flexGrow: 0 },
+    recentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+    recentTermBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    recentTerm: { flex: 1, fontSize: 14, color: colors.textPrimary },
+  })
 }

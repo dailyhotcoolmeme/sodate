@@ -108,6 +108,11 @@ export interface Database {
           age_male: string | null
           age_female: string | null
           hashtags: string[]
+          // 2026-08-14: 모임 피드 검색용. hashtags(배열)의 ilike 부분일치가 안 돼 문자열로
+          // 합쳐둔 트리거 동기화 컬럼(supabase/migrations/20260814_events_search_fields.sql).
+          hashtags_search: string | null
+          // 조인 없이 companies.name을 ilike로 검색하기 위한 트리거 동기화 컬럼(위와 동일 이유).
+          company_name: string | null
           format: string | null
           source_url: string
           is_closed: boolean
@@ -143,6 +148,8 @@ export interface Database {
           age_male?: string | null
           age_female?: string | null
           hashtags?: string[]
+          hashtags_search?: string | null
+          company_name?: string | null
           format?: string | null
           source_url: string
           is_closed?: boolean
@@ -178,6 +185,8 @@ export interface Database {
           age_male?: string | null
           age_female?: string | null
           hashtags?: string[]
+          hashtags_search?: string | null
+          company_name?: string | null
           format?: string | null
           source_url?: string
           is_closed?: boolean

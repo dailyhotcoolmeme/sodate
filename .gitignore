@@ -30,3 +30,6 @@ app/certs/
 # 인스타그램 로그인 세션(쿠키) — 비밀번호와 동급, 절대 커밋 금지
 crawler/.instagram_session.json
 crawler/.ig_chrome_profile/
+
+# supabase CLI 로컬 캐시(link 시 생성, 프로젝트 무관 기기별 값)
+supabase/.temp/

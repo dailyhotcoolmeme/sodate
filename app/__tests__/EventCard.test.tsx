@@ -46,6 +46,8 @@ const mockEvent: EventWithCompany = {
   seats_left_female: null,
   theme: ['와인', '로테이션'],
   hashtags: ['#와인', '#로테이션', '#30대'],
+  hashtags_search: '#와인 #로테이션 #30대',
+  company_name: '프립',
   age_range_min: null,
   age_range_max: null,
   age_male: null,

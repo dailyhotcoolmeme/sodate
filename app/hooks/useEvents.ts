@@ -45,7 +45,24 @@ function writeEventsCache(key: string, events: EventWithCompany[]) {
   AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ key, savedAt: Date.now(), events })).catch(() => {})
 }
 
-export function useEvents() {
+// 모임명(title)·해시태그·업체명·지역으로 검색(2026-08-14 오너 지시, 커뮤니티 검색과는
+// 별개로 모임 피드 안에서만). hashtags는 배열이라 ilike 부분일치가 안 되고 companies.name은
+// 조인 테이블이라 PostgREST or() 로직트리 안에서 직접 필터링이 안 돼(둘 다 실측 확인),
+// events에 검색용으로 동기화해둔 hashtags_search·company_name 컬럼을 대신 쓴다
+// (supabase/migrations/20260814_events_search_fields.sql).
+function searchOrFilter(term: string): string {
+  // 쉼표·괄호는 or 구문의 구분자라 검색어에 들어가면 질의가 깨진다(board 검색과 동일 이유).
+  const safe = term.trim().replace(/[,()]/g, ' ')
+  return [
+    `title.ilike.%${safe}%`,
+    `hashtags_search.ilike.%${safe}%`,
+    `company_name.ilike.%${safe}%`,
+    `location_region.ilike.%${safe}%`,
+    `location_detail.ilike.%${safe}%`,
+  ].join(',')
+}
+
+export function useEvents(search = '') {
   const [events, setEvents] = useState<EventWithCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -60,8 +77,8 @@ export function useEvents() {
 
   // 캐시를 구분하는 키 — buildQuery·applyClientFilters가 실제로 참조하는 필터 전부를 담는다.
   const cacheKey = useMemo(() => JSON.stringify({
-    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge,
-  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge])
+    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search,
+  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search])
 
   const buildQuery = useCallback((from: number, to: number) => {
     let query = supabase
@@ -116,6 +133,11 @@ export function useEvents() {
       query = query.overlaps('hashtags', hashtags)
     }
 
+    // 톱바 검색 — 다른 필터와는 AND(지금 걸린 필터 안에서 검색어로 더 좁히기)
+    if (search.trim()) {
+      query = query.or(searchOrFilter(search))
+    }
+
     // 나이대 필터 (다중 선택) — 선택한 구간 중 하나라도 겹치면 표시
     if (ageGroups.length > 0) {
       const buckets = AGE_GROUP_FILTERS.filter((a) => ageGroups.includes(a.id))
@@ -150,7 +172,7 @@ export function useEvents() {
     }
 
     return query.range(from, to)
-  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge])
+  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge, search])
 
   // 요일·시간대는 KST 기준 클라이언트 필터 (서버에서 dow/hour 직접 못 거름)
   const applyClientFilters = useCallback((rows: EventWithCompany[]) => {
