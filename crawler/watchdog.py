@@ -236,9 +236,20 @@ def record_alert(sb, fp: str, prev: dict | None, sent: bool, note: str = '') -> 
         print(f'알림 이력 기록 실패(무시): {e}')
 
 
-def _persisted_days(prev: dict | None, now: datetime) -> float:
-    """이 문제가 처음 보인 뒤 며칠째인지. 지문은 숫자를 지워 만들기 때문에("마지막 성공이
-    #일 #시간 전") 날이 바뀌어도 같은 지문이 유지돼 first_seen_at이 그대로 누적된다."""
+def _persisted_days(issue: dict, prev: dict | None, now: datetime) -> float:
+    """이 문제가 며칠째 이어지고 있는지.
+
+    ⚠️ first_seen_at(알림 이력)만 믿으면 안 된다. 지문은 company와 msg로 만드는데,
+       점검 코드에서 필드 하나만 손대도 지문이 바뀌어 first_seen_at이 0으로 리셋된다
+       (2026-08-14 실측: check_failing_crawls에 company를 추가하자 3일째 방치 중이던
+       유니브리지소셜·오프더레코드가 seen_count 123 → 1이 되며 '0일째'로 잡혔고,
+       하필 그 에스컬레이션을 만들자마자 무력화됐다).
+       → 문제 자체가 지속 기간을 아는 점검(예: '마지막 성공이 3일 전')은 그 값을
+         issue['persisted_days']로 직접 실어 보낸다. 그게 있으면 무조건 그쪽이 정본이다.
+    """
+    own = issue.get('persisted_days')
+    if own is not None:
+        return float(own)
     if not prev or not prev.get('first_seen_at'):
         return 0.0
     try:
@@ -246,6 +257,16 @@ def _persisted_days(prev: dict | None, now: datetime) -> float:
     except Exception:
         return 0.0
     return (now - first).total_seconds() / 86400
+
+
+def _bullet(issue: dict) -> str:
+    """본문 한 줄. 업체명이 없는 항목에서 공백이 두 칸 되거나(예전 f-string) 줄 전체를
+    .strip() 해서 들여쓰기가 통째로 날아가던 것을 여기서 한 번에 정리한다."""
+    name = (issue.get('company') or '').strip()
+    body = issue['msg']
+    # 문구가 이미 업체명으로 시작하면(대부분의 크롤 실패·드리프트) 겹쳐 쓰지 않는다.
+    head = f'{name} ' if name and not body.startswith(name) else ''
+    return f'  · {head}{body}'
 
 
 def _company_label(items: list) -> str:
@@ -289,7 +310,7 @@ def build_urgent_message(sb, issues):
 
         if owner:
             # 며칠째 방치된 건은 억제를 풀어 더 자주 알린다(3일 사고 재발 방지).
-            days = _persisted_days(prev, now)
+            days = _persisted_days(i, prev, now)
             escalated = days >= ESCALATE_AFTER_DAYS
             silence = ESCALATED_SILENCE_HOURS if escalated else i.get('silence_hours', REPEAT_SILENCE_HOURS)
             # 같은 내용을 최근에 보냈으면 조용히 넘긴다(반복 폭탄 방지).
@@ -344,7 +365,7 @@ def build_urgent_message(sb, issues):
     if auto_items:
         lines.append(f'■ 자동조치를 했는데 또 발생 {len(auto_items)}건 — 자동복구가 듣지 않습니다')
         for _fp, _p, i, _n, _d in auto_items[:5]:
-            lines.append(f'  · {i.get("company", "")} {i["msg"]}'.strip())
+            lines.append(_bullet(i))
         lines.append('')
     lines.append(f'같은 내용은 {REPEAT_SILENCE_HOURS}시간(방치 {ESCALATE_AFTER_DAYS}일 넘으면 {ESCALATED_SILENCE_HOURS}시간) 안에는 다시 보내지 않습니다.')
     lines.append('상세 이미지 유형 등 운영 과제는 이 메일에 넣지 않습니다 — 하루 1회 별도 요약으로 갑니다.')
@@ -389,7 +410,7 @@ def build_ops_digest(sb, issues):
              '급한 장애가 아니라 시간 날 때 채워 넣을 것들입니다.',
              '진짜 장애는 이 메일이 아니라 🚨 제목의 긴급 메일로 따로 갑니다.', '']
     for i in errors[:OPS_DIGEST_MAX_LINES]:
-        lines.append(f'  · {i.get("company", "")} {i["msg"]}'.strip())
+        lines.append(_bullet(i))
     if len(errors) > OPS_DIGEST_MAX_LINES:
         lines.append(f'  ... 외 {len(errors) - OPS_DIGEST_MAX_LINES}건 더')
     lines.append('')
@@ -540,12 +561,16 @@ def check_failing_crawls(sb, comps: dict) -> list[dict]:
             if hours < FAIL_STREAK_HOURS:
                 continue
             detail = f'마지막 성공이 {hours // 24}일 {hours % 24}시간 전'
+            persisted = hours / 24
         else:
             detail = '최근 14일 내 성공 기록 없음'
+            persisted = 14.0
         issues.append({
             'level': 'ERROR',
             'action': 'owner',
             'company': comps.get(cid, cid),
+            # 방치 일수의 정본. 알림 이력(first_seen_at)은 지문이 바뀌면 리셋되므로 믿지 않는다.
+            'persisted_days': persisted,
             'msg': f'{comps.get(cid, cid)}: 크롤이 계속 실패 중 — {detail}. '
                    f'그동안 이 업체 일정은 갱신되지 않고 그대로 노출됩니다(사이트 변경·로그인 만료 의심)',
         })
