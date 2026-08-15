@@ -197,11 +197,48 @@ def _parse_age_range(text: str) -> tuple[Optional[int], Optional[int], Optional[
     return None, None, None
 
 
-def _extract_region(text: str, location_field: str = '') -> str:
-    """지역 추출."""
+# REGION_KW 중 '서울에서만 쓰는 통칭'. 같은 이름의 동네가 지방에도 있을 수 있어
+# (2026-08-15: 경기 평택시 '합정동' — 서울 마포 합정으로 오인해 앱에 평택 모임이
+# '합정'으로 떴다) 주소 광역이 서울이 아니면 이 이름은 나올 수 없다고 본다.
+# '수원·인천·부산·대구·대전'은 그 자체가 지방 지명이라 여기 넣지 않는다.
+_SEOUL_ONLY_KW = {
+    '강남', '홍대', '신촌', '잠실', '건대', '성수', '이태원', '합정',
+    '여의도', '마포', '종로', '망원', '신림', '영등포', '광진', '송파', '용산',
+}
+_METRO_CITIES = {'부산', '대구', '인천', '광주', '대전', '울산', '세종'}
+_ADMIN_SUFFIX = re.compile(r'(특별자치시|특별자치도|광역시|특별시|도)$')
+
+
+def _region_from_address(address: str) -> Optional[str]:
+    """주소('경기 평택시 합정동')에서 지역을 뽑는다. 광역시는 광역명, 그 외는 시·군 이름."""
+    parts = (address or '').split()
+    if len(parts) < 2:
+        return None
+    macro = parts[0]
+    if macro in _METRO_CITIES:
+        return macro
+    for tok in parts[1:]:
+        if tok.endswith(('시', '군')):
+            return re.sub(r'(시|군)$', '', tok)
+    return _ADMIN_SUFFIX.sub('', macro) or macro
+
+
+def _extract_region(text: str, location_field: str = '', address: str = '') -> str:
+    """지역 추출.
+
+    ⚠️ 주소를 지역의 '정본'으로 삼으면 안 된다. 주소는 행정구역이라 '서울 마포구
+       동교동'에 '홍대'라는 말이 없어서, 주소 우선으로 바꾸면 사용자가 실제로 쓰는
+       통칭(홍대·합정·건대·여의도·이태원…)을 30건 넘게 잃는다(2026-08-15 실측).
+       그래서 지역명은 지금처럼 제목·태그에서 뽑고, 주소는 '검증'에만 쓴다 —
+       뽑힌 게 서울 통칭인데 주소 광역이 서울이 아니면 그때만 주소로 바로잡는다.
+    """
     combined = location_field + ' ' + text
     for r in REGION_KW:
         if r in combined:
+            if r in _SEOUL_ONLY_KW and address and not address.split()[0].startswith('서울'):
+                fixed = _region_from_address(address)
+                if fixed:
+                    return fixed
             return r
     # location_field 자체가 비어 있으면 지역 정보가 없는 것 — '서울'로 추측하지 말고 '기타'.
     return location_field.split()[0] if location_field else '기타'
@@ -565,7 +602,7 @@ class MuntoScraper(BaseScraper):
                         location_raw = detail.get('location') or item.get('location', '')
                         social_loc = detail.get('socialingLocation') or {}
                         addr = social_loc.get('addressName', '') or social_loc.get('roadmapAddress', '')
-                        region = _extract_region(addr + ' ' + name, location_raw)
+                        region = _extract_region(addr + ' ' + name, location_raw, address=addr)
 
                         # 상세 위치
                         place_name = social_loc.get('placeName', '') or None
