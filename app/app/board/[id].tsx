@@ -450,6 +450,15 @@ export default function BoardPostScreen() {
   const commentIdSet = new Set(comments.map((c) => c.id))
   const roots = comments.filter((c) => !c.parent_id || !commentIdSet.has(c.parent_id))
   const repliesOf = (pid: string) => comments.filter((c) => c.parent_id === pid)
+  /**
+   * 글쓴이가 자기 글에 단 댓글인가. 로그인이 없는 서비스라 작성자 식별은 owner_token
+   * (기기별 익명 해시)뿐이다 — 차단 기능도 같은 값을 쓴다. 닉네임은 아무나 같게 쓸 수
+   * 있어서 배지 근거로 못 쓴다.
+   * 옛 글은 owner_token 이 비어 있을 수 있는데, 그때 빈 값끼리 맞아떨어져 엉뚱한 댓글에
+   * 배지가 붙으면 안 되므로 양쪽 다 값이 있을 때만 본다.
+   */
+  const isAuthorComment = (c: BoardComment) =>
+    !!post?.owner_token && !!c.owner_token && c.owner_token === post.owner_token
 
   return (
     <View style={styles.container}>
@@ -597,6 +606,7 @@ export default function BoardPostScreen() {
           <View key={c.id} onLayout={(e) => { commentY.current[c.id] = e.nativeEvent.layout.y }}>
             <CommentRow
               c={c} mine={myCommentIds.includes(c.id)} styles={styles} colors={colors}
+              byAuthor={isAuthorComment(c)}
               // 부모를 잃고 올라온 답글은 답글 표시를 유지한다(답글에는 다시 답글을 못 단다)
               reply={!!c.parent_id}
               onReply={c.parent_id ? undefined : () => openReply(c)}
@@ -608,6 +618,7 @@ export default function BoardPostScreen() {
             {repliesOf(c.id).map((r) => (
               <CommentRow
                 key={r.id} c={r} reply mine={myCommentIds.includes(r.id)} styles={styles} colors={colors}
+                byAuthor={isAuthorComment(r)}
                 onLayout={(y) => { commentY.current[r.id] = (commentY.current[c.id] ?? 0) + y }}
                 onEdit={() => { setEditing(r); setDraft(r.content) }}
                 onDelete={() => removeComment(r)}
@@ -866,11 +877,13 @@ function makeReplyModalStyles(colors: AppColors) {
 }
 
 function CommentRow({
-  c, reply = false, mine, styles, colors, onReply, onEdit, onDelete, onReport, onBlock, onLayout,
+  c, reply = false, mine, byAuthor = false, styles, colors, onReply, onEdit, onDelete, onReport, onBlock, onLayout,
 }: {
   c: BoardComment
   reply?: boolean
   mine: boolean
+  /** 글쓴이가 자기 글에 단 댓글이면 true — 닉네임 앞에 '작성자' 배지를 붙인다. */
+  byAuthor?: boolean
   styles: ReturnType<typeof makeStyles>
   colors: AppColors
   onReply?: () => void
@@ -893,7 +906,18 @@ function CommentRow({
       {/* 수정·삭제(신고)는 닉네임·날짜와 같은 줄 오른쪽. 글자 크기·줄높이를 메타와
           똑같이 맞춰 줄 간격이 밀리지 않게 한다(2026-07-31 오너 지시). */}
       <View style={styles.commentMetaRow}>
-        <Text style={styles.commentMeta}>{c.nickname} · {formatFull(c.created_at)}</Text>
+        {/* 배지는 메타 텍스트와 같은 줄에 두되 별도 View 로 둔다 — Text 안에 배경을 넣으면
+            iOS 에서 배경 높이가 줄 높이를 밀어 댓글 간격이 흔들린다. */}
+        <View style={styles.commentMetaLeft}>
+          {byAuthor && (
+            <View style={styles.authorBadge}>
+              <Text style={styles.authorBadgeText}>작성자</Text>
+            </View>
+          )}
+          <Text style={styles.commentMeta} numberOfLines={1}>
+            {c.nickname} · {formatFull(c.created_at)}
+          </Text>
+        </View>
         <View style={styles.commentManage}>
           {mine ? (
             <>
@@ -1011,8 +1035,17 @@ function makeStyles(colors: AppColors) {
     comment: { paddingHorizontal: 16, paddingVertical: 11, gap: 4,
       borderTopWidth: 1, borderTopColor: colors.divider },
     commentReply: { paddingLeft: 34, backgroundColor: colors.surface },
-    commentMeta: { fontSize: 11.5, lineHeight: 16, color: colors.textTertiary },
+    commentMeta: { flexShrink: 1, fontSize: 11.5, lineHeight: 16, color: colors.textTertiary },
     commentMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+    // 배지 + 닉네임·날짜를 한 덩어리로 묶어, 길어지면 오른쪽 관리 버튼 대신 이쪽이 줄어든다.
+    commentMetaLeft: { flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+    // 줄 높이(16)를 넘기지 않도록 세로 여백은 1로 최소화한다 — 댓글 간격이 밀리면 안 된다.
+    authorBadge: {
+      paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4,
+      // 연한 핑크 배경 — 톱바 토글(TopBar.tsx)이 쓰는 `primary`+30 과 같은 농도로 맞춘다.
+      backgroundColor: `${colors.primary}30`,
+    },
+    authorBadgeText: { fontSize: 10, lineHeight: 14, fontWeight: '700', color: colors.primary },
     commentManage: { flexDirection: 'row', gap: 12 },
     commentMetaAct: { fontSize: 11.5, lineHeight: 16, color: colors.textSecondary },
     commentBody: { fontSize: 14, lineHeight: 21, color: colors.textPrimary },
