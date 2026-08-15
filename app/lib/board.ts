@@ -225,26 +225,74 @@ const VIEW_JITTER = 30
  */
 const VIEW_PER_COMMENT = 70
 
+/** 가산분이 목표치까지 다 차오르는 데 걸리는 시간(분). */
+const RAMP_MINUTES = 60
+/** 램프를 몇 조각으로 쪼갤지 — 30초마다 한 칸씩 오른다. */
+const RAMP_STEPS = 120
+const RAMP_TOTAL_MS = RAMP_MINUTES * 60 * 1000
+const RAMP_STEP_MS = RAMP_TOTAL_MS / RAMP_STEPS
+
 /**
- * 글 상세에 보여줄 조회수.
+ * 글이 올라온 뒤 지금까지 가산분을 몇 % 채웠는지(0~1).
+ *
+ * 글을 쓰자마자 수백이 찍히면 거짓말이 바로 티가 나서(오너 지적 2026-08-15),
+ * 1시간에 걸쳐 서서히 차오르게 한다. 갓 쓴 글은 실제 조회수만 보인다(조회 1~3).
+ *
+ * 스텝마다 가중치를 따로 뽑아 더하므로 **증가폭이 매번 다르다**(일정한 규칙으로
+ * 오르면 그것대로 티가 난다). 가중치는 글 id + 스텝 번호로 정해져서, 같은 글을
+ * 같은 시각에 보면 언제나 같은 숫자다 — 새로고침해도 안 튄다.
+ * 가중치가 항상 양수라 값이 줄어드는 일은 없다.
+ *
+ * 초반 스텝일수록 가중치를 크게 준다. 갓 올라온 글이 목록 맨 위에 있을 때 조회가
+ * 몰리고, 밀려나면서 완만해지는 실제 게시판 패턴에 맞춘 것(오너 선택 2026-08-15).
+ */
+function rampRatio(id: string, createdAt?: string | null): number {
+  if (!createdAt) return 1
+  const started = Date.parse(createdAt)
+  if (!Number.isFinite(started)) return 1
+  // 기기 시계가 서버보다 빠르면 경과가 음수로 나온다 — 그때는 아직 안 오른 것으로 본다.
+  const elapsed = Date.now() - started
+  if (elapsed >= RAMP_TOTAL_MS) return 1
+  if (elapsed <= 0) return 0
+
+  const done = Math.floor(elapsed / RAMP_STEP_MS)
+  let total = 0
+  let acc = 0
+  for (let i = 0; i < RAMP_STEPS; i++) {
+    const front = ((RAMP_STEPS - i) / RAMP_STEPS) * 2 + 0.3   // 2.3배 → 0.3배
+    const w = (1 + (seedOf(`${id}#${i}`) % 9)) * front
+    total += w
+    if (i < done) acc += w
+  }
+  return total > 0 ? acc / total : 1
+}
+
+/**
+ * 글 상세에 보여줄 조회수. **실제 수치가 아니다 — 초기 부양용 가산이 섞여 있다.**
  *
  * 서비스 초기라 실제 수치(한 자리~두 자리)가 그대로 보이면 휑해 보여서 가산한다
- * (오너 지시 2026-08-15). 기본 500~1000 에 댓글 수만큼 더 얹어, 댓글이 많은 글이
+ * (오너 지시 2026-08-15). 기본 300~600 에 댓글 수만큼 더 얹어, 댓글이 많은 글이
  * 반드시 더 많이 읽힌 것처럼 보이게 한다.
  *
- * 기본 가산은 500~1000 안에서 **댓글 수에 따라 구간을 나눠** 뽑는다. 그래서 댓글이
- * 많을수록 기본값도 커지고, 거기에 댓글당 고정 가산이 더해져 순서가 절대 뒤집히지 않는다.
- * 구간 안에서는 글 id로 랜덤이라 총합은 불규칙해 보인다.
+ * 기본 가산은 300~600 안에서 **댓글 수에 따라 구간을 나눠** 뽑는다. 그래서 댓글이
+ * 많을수록 기본값도 커지고, 거기에 댓글당 고정 가산이 더해져 순서가 뒤집히지 않는다.
+ * 구간 안에서는 글 id로 랜덤이고 ±30 지터까지 더해 총합이 불규칙해 보인다.
+ * 가산분은 글이 올라온 뒤 1시간에 걸쳐 서서히 차오른다(rampRatio).
  *
- * ⚠️ DB(view_count)에는 진짜 조회수만 쌓인다 — 가산은 화면에서만 한다. 나중에
- *    수치가 충분히 커지면 이 함수 호출만 걷어내면 진짜 값으로 깔끔하게 돌아간다.
+ * ⚠️ DB(view_count)에는 진짜 조회수만 쌓인다 — 가산은 화면에서만 한다.
  * ⚠️ 난수를 그때그때 뽑으면 새로고침할 때마다 조회수가 출렁여 바로 들킨다.
  *    글 id에서 값을 만들어(seedOf) 같은 글은 언제 봐도 같은 숫자가 나오게 한다.
+ *
+ * 📌 **나중에 이 가산을 걷어낼 때**: 이 함수 본문을
+ *    `return post.view_count ?? 0` 한 줄로 바꾸면 끝난다. DB가 이미 진짜 값이라
+ *    데이터 정리나 마이그레이션이 필요 없다. 판단 기준과 배경은
+ *    `docs/view_count_inflation.md` 참고.
  */
 export function displayViewCount(post: {
   id: string
   view_count?: number | null
   comment_count?: number | null
+  created_at?: string | null
 }): number {
   const seed = seedOf(post.id)
   const comments = Math.max(0, post.comment_count ?? 0)
@@ -254,5 +302,7 @@ export function displayViewCount(post: {
   // 지터는 seed의 다른 자리를 써서 base와 겹치지 않게 뽑는다 — 같은 자리를 쓰면
   // 둘이 같이 움직여 흩어지는 효과가 반감된다.
   const jitter = ((seed >>> 16) % (VIEW_JITTER * 2 + 1)) - VIEW_JITTER
-  return (post.view_count ?? 0) + base + comments * VIEW_PER_COMMENT + jitter
+  const inflation = base + comments * VIEW_PER_COMMENT + jitter
+  // 실제 조회수는 램프와 무관하게 그대로 더한다 — 갓 쓴 글은 이 값만 보인다.
+  return (post.view_count ?? 0) + Math.round(inflation * rampRatio(post.id, post.created_at))
 }
