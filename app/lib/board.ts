@@ -205,8 +205,19 @@ function seedOf(id: string): number {
  */
 const VIEW_BASE_MIN = 300
 const VIEW_BASE_MAX = 600
-/** 기본 가산을 몇 구간으로 쪼갤지 — 댓글이 이보다 많으면 전부 최상위 구간을 쓴다. */
-const VIEW_BANDS = 10
+/**
+ * 기본 가산을 몇 구간으로 쪼갤지 — 댓글이 이보다 많으면 전부 최상위 구간을 쓴다.
+ * 10 이었을 땐 댓글 10개를 넘는 순간 구간이 포화돼 그룹 간 여유가 43점까지 줄었고,
+ * 아래 지터(±30, 폭 60)를 감당하지 못해 순서가 뒤집혔다 → 30 으로 넓혔다.
+ */
+const VIEW_BANDS = 30
+/**
+ * 같은 댓글 수끼리 숫자가 겹쳐 보이지 않게 흩뿌리는 폭(±). 구간 폭만으로는 값이
+ * 9~27가지뿐이라 글이 몇 개만 쌓여도 610/610, 714/714 처럼 똑같은 수가 나와
+ * 조작한 티가 났다(오너 지적 2026-08-15).
+ * ⚠️ 이 폭의 2배(60)가 그룹 간 여유보다 작아야 순서가 안 뒤집힌다.
+ */
+const VIEW_JITTER = 30
 /**
  * 댓글 1개당 가산. ⚠️ 여기를 글마다 랜덤으로 두면 안 된다 — 기본 가산 구간 폭(약 27)보다
  * 편차가 커지는 순간 "댓글 많은 글이 더 많이 읽힌다"는 순서가 뒤집힌다(실측: 댓글 6개 글
@@ -235,9 +246,13 @@ export function displayViewCount(post: {
   view_count?: number | null
   comment_count?: number | null
 }): number {
+  const seed = seedOf(post.id)
   const comments = Math.max(0, post.comment_count ?? 0)
   const band = Math.min(comments, VIEW_BANDS)
   const span = Math.floor((VIEW_BASE_MAX - VIEW_BASE_MIN) / (VIEW_BANDS + 1))
-  const base = VIEW_BASE_MIN + band * span + (seedOf(post.id) % (span + 1))
-  return (post.view_count ?? 0) + base + comments * VIEW_PER_COMMENT
+  const base = VIEW_BASE_MIN + band * span + (seed % (span + 1))
+  // 지터는 seed의 다른 자리를 써서 base와 겹치지 않게 뽑는다 — 같은 자리를 쓰면
+  // 둘이 같이 움직여 흩어지는 효과가 반감된다.
+  const jitter = ((seed >>> 16) % (VIEW_JITTER * 2 + 1)) - VIEW_JITTER
+  return (post.view_count ?? 0) + base + comments * VIEW_PER_COMMENT + jitter
 }
