@@ -179,11 +179,61 @@ export async function report(
   return 'error' in r ? r : { ok: true, already: r.already === true }
 }
 
-// ── 조회수 (화면에는 감춰뒀지만 값은 쌓아둔다) ──
+// ── 조회수 ──
 export async function markViewed(postId: string): Promise<void> {
   try {
     await call({ action: 'view', postId })
   } catch {
     // 조회수는 실패해도 사용자에게 알릴 일이 아니다
   }
+}
+
+/** 글 id로 0~2^32 범위의 값을 만든다(FNV-1a). 같은 글이면 항상 같은 값. */
+function seedOf(id: string): number {
+  let h = 2166136261
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+/** 기본 가산 범위(오너 지시 2026-08-15). 이 폭을 댓글 수만큼 잘게 나눠 쓴다. */
+const VIEW_BASE_MIN = 500
+const VIEW_BASE_MAX = 1000
+/** 기본 가산을 몇 구간으로 쪼갤지 — 댓글이 이보다 많으면 전부 최상위 구간을 쓴다. */
+const VIEW_BANDS = 10
+/**
+ * 댓글 1개당 가산. ⚠️ 여기를 글마다 랜덤으로 두면 안 된다 — 기본 가산 구간 폭(약 45)보다
+ * 편차가 커지는 순간 "댓글 많은 글이 더 많이 읽힌다"는 순서가 뒤집힌다(실측: 댓글 6개 글
+ * 1,203 < 댓글 5개 글 1,626). 고정해야 순서가 항상 지켜진다.
+ */
+const VIEW_PER_COMMENT = 120
+
+/**
+ * 글 상세에 보여줄 조회수.
+ *
+ * 서비스 초기라 실제 수치(한 자리~두 자리)가 그대로 보이면 휑해 보여서 가산한다
+ * (오너 지시 2026-08-15). 기본 500~1000 에 댓글 수만큼 더 얹어, 댓글이 많은 글이
+ * 반드시 더 많이 읽힌 것처럼 보이게 한다.
+ *
+ * 기본 가산은 500~1000 안에서 **댓글 수에 따라 구간을 나눠** 뽑는다. 그래서 댓글이
+ * 많을수록 기본값도 커지고, 거기에 댓글당 고정 가산이 더해져 순서가 절대 뒤집히지 않는다.
+ * 구간 안에서는 글 id로 랜덤이라 총합은 불규칙해 보인다.
+ *
+ * ⚠️ DB(view_count)에는 진짜 조회수만 쌓인다 — 가산은 화면에서만 한다. 나중에
+ *    수치가 충분히 커지면 이 함수 호출만 걷어내면 진짜 값으로 깔끔하게 돌아간다.
+ * ⚠️ 난수를 그때그때 뽑으면 새로고침할 때마다 조회수가 출렁여 바로 들킨다.
+ *    글 id에서 값을 만들어(seedOf) 같은 글은 언제 봐도 같은 숫자가 나오게 한다.
+ */
+export function displayViewCount(post: {
+  id: string
+  view_count?: number | null
+  comment_count?: number | null
+}): number {
+  const comments = Math.max(0, post.comment_count ?? 0)
+  const band = Math.min(comments, VIEW_BANDS)
+  const span = Math.floor((VIEW_BASE_MAX - VIEW_BASE_MIN) / (VIEW_BANDS + 1))
+  const base = VIEW_BASE_MIN + band * span + (seedOf(post.id) % (span + 1))
+  return (post.view_count ?? 0) + base + comments * VIEW_PER_COMMENT
 }

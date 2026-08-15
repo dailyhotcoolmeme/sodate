@@ -21,6 +21,7 @@ import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
 import {
   vote, deletePost, createComment, updateComment, deleteComment, markViewed, report,
+  displayViewCount,
 } from '@/lib/board'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { blockAuthor, markCommentsSeen, getMyPostIds, markPostRead } from '@/lib/boardIdentity'
@@ -482,7 +483,11 @@ export default function BoardPostScreen() {
           {/* 수정·삭제는 닉네임·날짜와 같은 줄 오른쪽에 둔다(2026-07-31 오너 지시).
               글자 크기를 메타와 맞춰야 줄 높이가 흔들리지 않는다. */}
           <View style={styles.metaRow}>
-            <Text style={styles.meta}>{post.nickname} · {formatFull(post.created_at)}</Text>
+            {/* 닉네임이 길면 액션 버튼을 밀어내지 않고 이쪽이 줄어든다(조회수를 붙이면서
+                한 줄이 더 빠듯해졌다). */}
+            <Text style={styles.meta} numberOfLines={1}>
+              {post.nickname} · {formatFull(post.created_at)} · 조회 {displayViewCount(post).toLocaleString()}
+            </Text>
             <View style={styles.metaActions}>
               {isMine ? (
                 <>
@@ -954,7 +959,8 @@ function makeStyles(colors: AppColors) {
     // lineHeight 명시 필수 — 이모지가 잘려 보이는 문제(rowTitle과 동일 원인, 목록 쪽 주석 참고)
     title: { fontSize: 18, fontWeight: '800', lineHeight: 25, color: colors.textPrimary, letterSpacing: -0.3 },
     titleTag: { color: colors.primary },
-    meta: { fontSize: 12, lineHeight: 17, color: colors.textTertiary },
+    // flexShrink 가 없으면 긴 닉네임 + 조회수에 밀려 오른쪽 수정·삭제가 화면 밖으로 나간다.
+    meta: { flexShrink: 1, fontSize: 12, lineHeight: 17, color: colors.textTertiary },
     metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
     metaActions: { flexDirection: 'row', gap: 12 },
     // 메타와 같은 크기·줄높이 — 다르면 줄 간격이 어긋난다
