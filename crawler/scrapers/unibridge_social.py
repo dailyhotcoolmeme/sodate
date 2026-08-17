@@ -38,7 +38,14 @@ _SCHEDULE_ITEM_RE = re.compile(r'(\d{1,2})/(\d{1,2})\([가-힣]\)\s*([가-힣]+)
 _AGE_RANGE_RE = re.compile(r'\b(\d{2})~(\d{2})\b')
 _HOUR_RE = re.compile(r'(\d{1,2})시')
 # "남자일시마감"/"남자 일시적 마감"처럼 한쪽 성별만 찬 경우는 전체 마감이 아니다(다른 성별은 신청 가능).
-_PARTIAL_CLOSE_RE = re.compile(r'(남자|여자)\s*(일시적?)?\s*마감')
+# '남자'뿐 아니라 '남성/여성' 표기도 쓴다(실측: "💛남성 마감, 로테이션 소개팅A").
+_PARTIAL_CLOSE_RE = re.compile(r'(남자|여자|남성|여성)\s*(일시적?)?\s*마감')
+# '마감'이 들어갔다고 다 끝난 모임이 아니다. 신청서를 언제 닫는지 알리는 안내가 섞여 있다
+# (2026-08-17 오너 제보: "8/18 합정 … 🚨여자 모집중🚨 … - 오후 2시 폼마감~!!" 이 모임이
+#  앱에 마감으로 떴다 — 실제로는 여자 모집 중이었다).
+_FORM_DEADLINE_RE = re.compile(r'(폼|접수|신청|모집서|링크)\s*마감')
+# 반대로 이게 있으면 아직 사람을 받고 있다는 뜻이라 마감으로 보지 않는다.
+_RECRUITING_RE = re.compile(r'모집\s*중|모집중')
 
 
 def _parse_kor_hour(phrase: str) -> Optional[int]:
@@ -125,7 +132,18 @@ class UnibridgeSocialScraper(BaseScraper):
                     event_date = datetime(now.year + 1, month, day, hour, 0)
 
                 region = resolve_region(region_phrase=region_raw)
-                is_closed = '마감' in text and not _PARTIAL_CLOSE_RE.search(text)
+                # 마감 판정 — '마감'이라는 글자만 보고 정하면 안 된다.
+                #   · "폼마감/접수마감"  : 신청서를 닫는 시각 안내지 모임이 끝난 게 아니다
+                #   · "남자 마감"        : 한쪽 성별만 찬 것이라 다른 성별은 아직 받는다
+                #   · "모집중"           : 대놓고 받고 있다는 뜻
+                # 셋 중 하나라도 있으면 마감으로 보지 않는다. 잘못 마감으로 띄우면 아직
+                # 자리가 있는 모임을 사용자가 그냥 지나친다(2026-08-17 실제로 그랬다).
+                closed_text = re.sub(_FORM_DEADLINE_RE, '', text)
+                is_closed = (
+                    '마감' in closed_text
+                    and not _PARTIAL_CLOSE_RE.search(closed_text)
+                    and not _RECRUITING_RE.search(text)
+                )
 
                 age_range_min = age_range_max = None
                 age_male = age_female = None
