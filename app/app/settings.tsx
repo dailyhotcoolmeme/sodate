@@ -1,6 +1,6 @@
 import TopBar from '@/components/TopBar'
 import { Image } from 'expo-image'
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -21,8 +21,34 @@ import * as Updates from 'expo-updates'
 const APP_VERSION = '1.0.0'
 // 2026-08-07: iOS build 8이 OTA 업데이트를 아예 못 받는 문제(채널 헤더 누락) 진단용.
 // 이 줄 자체가 화면에 안 뜬다면 그 사실 자체가 "이 기기가 OTA를 못 받는다"는 증거다.
-// 뜬다면 channel/업데이트ID 값으로 실제 수신 여부를 바로 확인할 수 있다.
-const updateInfo = `${Updates.channel ?? '없음(채널 미설정)'} · ${Updates.isEmbeddedLaunch ? '내장번들(OTA 미적용)' : (Updates.updateId ?? '').slice(0, 8)}`
+const updateInfo = `${Updates.channel ?? '없음(채널 미설정)'} · ${Updates.isEmbeddedLaunch ? '내장번들' : (Updates.updateId ?? '').slice(0, 8)}`
+
+/**
+ * 업데이트 상태 표시용.
+ *
+ * 예전엔 업데이트 ID 앞 8자리만 보여줬는데, 그 값만으로는 최신인지 알 수가 없었다.
+ * 2026-08-17: 앱을 계속 켜둔 채로 쓰면 자동 확인(lib/appUpdates.ts)이 포그라운드
+ * 전환 때만 돌아서 옛 번들 그대로였고, 오너가 그걸 모른 채 "고친 게 왜 안 보이냐"를
+ * 확인하느라 시간을 썼다. 이제 이 화면에서 직접 확인하고 바로 적용할 수 있게 한다.
+ */
+type UpdateState =
+  | { kind: 'dev' }
+  | { kind: 'checking' }
+  | { kind: 'latest' }
+  | { kind: 'available' }
+  | { kind: 'applying' }
+  | { kind: 'error' }
+
+function updateStateText(s: UpdateState): string {
+  switch (s.kind) {
+    case 'dev': return '개발 모드 (업데이트 없음)'
+    case 'checking': return '확인 중…'
+    case 'latest': return `최신입니다 · ${updateInfo}`
+    case 'available': return '새 버전 있음 · 눌러서 지금 적용'
+    case 'applying': return '적용 중…'
+    case 'error': return `확인 실패 · ${updateInfo}`
+  }
+}
 
 function SettingRow({
   iconName,
@@ -70,6 +96,32 @@ export default function SettingsScreen() {
     Linking.openURL('mailto:admin@ourmine.co.kr').catch(() =>
       Alert.alert('오류', '메일 앱을 열 수 없습니다')
     )
+
+  // 이 화면에 들어올 때마다 새 업데이트가 있는지 확인한다.
+  const [updateState, setUpdateState] = useState<UpdateState>(
+    __DEV__ || !Updates.isEnabled ? { kind: 'dev' } : { kind: 'checking' }
+  )
+  useEffect(() => {
+    if (__DEV__ || !Updates.isEnabled) return
+    let alive = true
+    Updates.checkForUpdateAsync()
+      .then((r) => { if (alive) setUpdateState({ kind: r.isAvailable ? 'available' : 'latest' }) })
+      .catch(() => { if (alive) setUpdateState({ kind: 'error' }) })
+    return () => { alive = false }
+  }, [])
+
+  /** 새 버전이 있을 때 눌러서 바로 받기 — 앱을 껐다 켤 필요 없이 그 자리에서 반영된다. */
+  const applyUpdate = async () => {
+    if (updateState.kind !== 'available') return
+    setUpdateState({ kind: 'applying' })
+    try {
+      await Updates.fetchUpdateAsync()
+      await Updates.reloadAsync()   // 여기서 앱이 새 번들로 다시 시작된다
+    } catch {
+      setUpdateState({ kind: 'error' })
+      Alert.alert('업데이트 실패', '잠시 후 다시 시도해주세요.')
+    }
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -130,7 +182,12 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>앱 정보</Text>
         <SettingRow iconName="cube-outline" label="버전" value={APP_VERSION} />
-        <SettingRow iconName="cloud-outline" label="업데이트 상태" value={updateInfo} />
+        <SettingRow
+          iconName="cloud-outline"
+          label="업데이트 상태"
+          value={updateStateText(updateState)}
+          onPress={updateState.kind === 'available' ? applyUpdate : undefined}
+        />
         <SettingRow
           iconName="information-circle-outline"
           label="소개팅모아 소개"

@@ -247,9 +247,13 @@ const RAMP_STEP_MS = RAMP_TOTAL_MS / RAMP_STEPS
  * 몰리고, 밀려나면서 완만해지는 실제 게시판 패턴에 맞춘 것(오너 선택 2026-08-15).
  */
 function rampRatio(id: string, createdAt?: string | null): number {
-  if (!createdAt) return 1
+  // ⚠️ 작성 시각을 못 읽으면 0(가산 없음)으로 간다. 예전엔 1(즉시 만개)이었는데,
+  //    그 방향은 무언가 어긋나는 순간 "글 쓰자마자 조회 292" 같은 거짓말이 튀어나온다
+  //    (2026-08-17 실제로 오너가 그 화면을 봄). 숫자가 작게 나오는 건 눈에 안 띄지만
+  //    부풀려 나오는 건 바로 티가 나므로, 확신이 없을 땐 안 부풀리는 쪽이 안전하다.
+  if (!createdAt) return 0
   const started = Date.parse(createdAt)
-  if (!Number.isFinite(started)) return 1
+  if (!Number.isFinite(started)) return 0
   // 기기 시계가 서버보다 빠르면 경과가 음수로 나온다 — 그때는 아직 안 오른 것으로 본다.
   const elapsed = Date.now() - started
   if (elapsed >= RAMP_TOTAL_MS) return 1
