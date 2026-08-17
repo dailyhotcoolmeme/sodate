@@ -35,11 +35,23 @@ async function checkAndApplyUpdate(): Promise<void> {
   }
 }
 
+// 켜둔 채로 계속 쓰면 포그라운드 전환이 안 일어나 확인 기회가 없다 — 2026-08-17에
+// 실제로 그래서 옛 번들 그대로 쓰다가 "고친 게 왜 안 보이냐"가 됐다. 앱이 떠 있는
+// 동안에는 주기적으로도 확인한다.
+const PERIODIC_CHECK_MS = 15 * 60 * 1000
+
 /** 앱 최상단(_layout)에서 마운트 시 1회 호출. */
 export function initAppUpdateChecker(): () => void {
   checkAndApplyUpdate()
   const sub = AppState.addEventListener('change', (state) => {
     if (state === 'active') checkAndApplyUpdate()
   })
-  return () => sub.remove()
+  const timer = setInterval(() => {
+    // 백그라운드에서는 굳이 돌리지 않는다(어차피 돌아올 때 위 리스너가 확인한다).
+    if (AppState.currentState === 'active') checkAndApplyUpdate()
+  }, PERIODIC_CHECK_MS)
+  return () => {
+    sub.remove()
+    clearInterval(timer)
+  }
 }

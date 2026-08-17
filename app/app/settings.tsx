@@ -35,18 +35,22 @@ type UpdateState =
   | { kind: 'dev' }
   | { kind: 'checking' }
   | { kind: 'latest' }
-  | { kind: 'available' }
   | { kind: 'applying' }
   | { kind: 'error' }
 
-function updateStateText(s: UpdateState): string {
+/**
+ * 사용자에게는 상태만 말로 보여준다. 채널명·업데이트ID 같은 건 알 필요가 없다
+ * (오너 지적 2026-08-17). 다만 "고친 게 왜 안 보이지"를 따질 땐 그 값이 결정적이라
+ * (2026-08-17 실제로 오너가 알려준 ID로 옛 번들임을 특정했다) 길게 누르면 나오게 뒀다.
+ */
+function updateStateText(s: UpdateState, diag: boolean): string {
+  const detail = diag ? ` · ${updateInfo}` : ''
   switch (s.kind) {
-    case 'dev': return '개발 모드 (업데이트 없음)'
+    case 'dev': return '개발 모드' + detail
     case 'checking': return '확인 중…'
-    case 'latest': return `최신입니다 · ${updateInfo}`
-    case 'available': return '새 버전 있음 · 눌러서 지금 적용'
-    case 'applying': return '적용 중…'
-    case 'error': return `확인 실패 · ${updateInfo}`
+    case 'latest': return '최신입니다' + detail
+    case 'applying': return '새 버전 받는 중…'
+    case 'error': return '확인 실패' + detail
   }
 }
 
@@ -55,6 +59,7 @@ function SettingRow({
   label,
   value,
   onPress,
+  onLongPress,
   danger,
   right,
 }: {
@@ -62,6 +67,7 @@ function SettingRow({
   label: string
   value?: string
   onPress?: () => void
+  onLongPress?: () => void
   danger?: boolean
   right?: React.ReactNode
 }) {
@@ -71,7 +77,8 @@ function SettingRow({
     <TouchableOpacity
       style={styles.row}
       onPress={onPress}
-      disabled={!onPress && !right}
+      onLongPress={onLongPress}
+      disabled={!onPress && !onLongPress && !right}
       activeOpacity={onPress ? 0.7 : 1}
     >
       <Ionicons name={iconName} size={20} color={danger ? colors.error : colors.textTertiary} style={styles.rowIcon} />
@@ -97,31 +104,31 @@ export default function SettingsScreen() {
       Alert.alert('오류', '메일 앱을 열 수 없습니다')
     )
 
-  // 이 화면에 들어올 때마다 새 업데이트가 있는지 확인한다.
+  // 이 화면에 들어오면 새 버전을 확인하고, 있으면 **알아서 받아 적용**한다.
+  // 사용자가 업데이트 상태를 들여다보고 눌러줄 거라 기대하면 안 된다(오너 지적 2026-08-17).
   const [updateState, setUpdateState] = useState<UpdateState>(
     __DEV__ || !Updates.isEnabled ? { kind: 'dev' } : { kind: 'checking' }
   )
+  /** 길게 눌렀을 때만 채널·업데이트ID를 보여준다(문제 생겼을 때 확인용). */
+  const [showDiag, setShowDiag] = useState(false)
+
   useEffect(() => {
     if (__DEV__ || !Updates.isEnabled) return
     let alive = true
-    Updates.checkForUpdateAsync()
-      .then((r) => { if (alive) setUpdateState({ kind: r.isAvailable ? 'available' : 'latest' }) })
-      .catch(() => { if (alive) setUpdateState({ kind: 'error' }) })
+    ;(async () => {
+      try {
+        const r = await Updates.checkForUpdateAsync()
+        if (!alive) return
+        if (!r.isAvailable) { setUpdateState({ kind: 'latest' }); return }
+        setUpdateState({ kind: 'applying' })
+        await Updates.fetchUpdateAsync()
+        await Updates.reloadAsync()   // 여기서 앱이 새 번들로 다시 시작된다
+      } catch {
+        if (alive) setUpdateState({ kind: 'error' })
+      }
+    })()
     return () => { alive = false }
   }, [])
-
-  /** 새 버전이 있을 때 눌러서 바로 받기 — 앱을 껐다 켤 필요 없이 그 자리에서 반영된다. */
-  const applyUpdate = async () => {
-    if (updateState.kind !== 'available') return
-    setUpdateState({ kind: 'applying' })
-    try {
-      await Updates.fetchUpdateAsync()
-      await Updates.reloadAsync()   // 여기서 앱이 새 번들로 다시 시작된다
-    } catch {
-      setUpdateState({ kind: 'error' })
-      Alert.alert('업데이트 실패', '잠시 후 다시 시도해주세요.')
-    }
-  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -185,8 +192,8 @@ export default function SettingsScreen() {
         <SettingRow
           iconName="cloud-outline"
           label="업데이트 상태"
-          value={updateStateText(updateState)}
-          onPress={updateState.kind === 'available' ? applyUpdate : undefined}
+          value={updateStateText(updateState, showDiag)}
+          onLongPress={() => setShowDiag((v) => !v)}
         />
         <SettingRow
           iconName="information-circle-outline"
