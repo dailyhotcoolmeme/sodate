@@ -248,11 +248,19 @@ class BaseScraper(ABC):
                     )
                     continue
 
-                # KST 기준 시간 검증: 소개팅 이벤트는 오전 10시 ~ 자정 사이
+                # KST 기준 시간 검증 — 소개팅 모임은 오전 10시~밤 10시 사이에만 열린다
+                # (오너 확인 2026-08-17). 요일은 구분하지 않는다: 실측상 평일에도 13~15시
+                # 낮 모임(카페 자만추 등)이 상당수라 요일로 나누면 멀쩡한 게 잘려나간다.
+                #
+                # ⚠️ 상한이 23시였을 땐 23:50이 그대로 통과했다. 이 범위를 벗어난 값은 대개
+                #    '모임 시각'이 아니다 — 문토 편지소개팅(id=670534)은 우편으로 진행해
+                #    모일 자리가 아예 없는데 startDate에 '모집 마감'인 23:50이 들어와
+                #    앱 목록 첫 줄에 떴다(오너 제보). 틀린 시간을 보여주느니 안 올린다.
                 dt_kst = dt.astimezone(KST)
-                if not (10 <= dt_kst.hour <= 23):
+                if not (10 <= dt_kst.hour <= 21):
                     self.logger.warning(
-                        f"비정상 시간대 이벤트 건너뜀 ({dt_kst.strftime('%H:%M')} KST): {event.source_url}"
+                        f"모임 시간대(10~22시) 밖이라 건너뜀 ({dt_kst.strftime('%m/%d %H:%M')} KST): "
+                        f"{(data.get('title') or '')[:40]} | {event.source_url}"
                     )
                     continue
 
