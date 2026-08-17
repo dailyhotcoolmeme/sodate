@@ -215,7 +215,13 @@ export default function BoardWriteScreen() {
         />
 
         <View>
-          <Text style={styles.label}>제목</Text>
+          {/* 글자 수는 입력칸 아래가 아니라 '제목' 라벨과 같은 줄 오른쪽에 둔다
+              (오너 지시 2026-08-17) — 아래에 있으면 입력칸과 다음 항목 사이가 벌어져
+              보이고, 정작 입력하면서는 눈이 안 간다. */}
+          <View style={styles.labelRow}>
+            <Text style={[styles.label, styles.labelInRow]}>제목</Text>
+            <Text style={styles.counter}>{title.length}/{TITLE_MAX}</Text>
+          </View>
           <TextInput
             style={styles.input}
             value={title}
@@ -224,7 +230,6 @@ export default function BoardWriteScreen() {
             placeholderTextColor={colors.textTertiary}
             maxLength={TITLE_MAX}
           />
-          <Text style={styles.counter}>{title.length}/{TITLE_MAX}</Text>
         </View>
 
         <View>
@@ -397,12 +402,16 @@ function makeStyles(colors: AppColors) {
     headerActionOff: { color: colors.textTertiary },
 
     label: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 7 },
+    // 라벨과 글자수를 한 줄에. 아래 여백은 이 줄이 갖고, 안의 label 은 marginBottom 을 0으로
+    // 덮어써서 두 글자가 같은 baseline 에 놓이게 한다(label 마진이 살아 있으면 어긋난다).
+    labelRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 7 },
+    labelInRow: { marginBottom: 0 },
     input: {
       backgroundColor: colors.surfaceHigh, borderRadius: 12,
       paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: colors.textPrimary,
       borderWidth: 1, borderColor: colors.border,
     },
-    counter: { fontSize: 11, color: colors.textTertiary, textAlign: 'right', marginTop: 5 },
+    counter: { fontSize: 11, color: colors.textTertiary },
     topRow: { flexDirection: 'row', gap: 10 },
     nickCol: { flex: 1 },
     tagCol: { flex: 1 },

@@ -275,16 +275,20 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       fontSize: 20,
       color: colors.textTertiary,
     },
+    // 배경에 묻혀 아무도 안 읽던 안내라 왼쪽 핑크 줄 + 진한 글씨로 바꿨다
+    // (오너 선택 2026-08-17). 인용문처럼 보여 시선이 걸린다.
     disclaimer: {
-      margin: 20,
-      padding: 16,
-      backgroundColor: colors.surface,
-      borderRadius: 12,
+      marginHorizontal: 20,
+      marginVertical: 20,
+      paddingLeft: 14,
+      paddingVertical: 2,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary,
     },
     disclaimerText: {
-      fontSize: 12,
-      color: colors.textTertiary,
-      lineHeight: 18,
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 20,
     },
   })
 }
