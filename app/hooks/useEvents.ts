@@ -4,7 +4,7 @@ import { supabase, type EventWithCompany } from '@/lib/supabase'
 import { useFilterStore, useFilterHydrated } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
-import { kstDowHour, timeSlotOf } from '@/constants/filters'
+import { hoursForTimeSlots } from '@/constants/filters'
 
 // 2026-07-26: 예전엔 .limit(100)으로 한 번에 끝까지 가져왔는데, 완성도 작업으로 활성
 // 이벤트 총량이 685건까지 늘면서 100건(날짜 가까운 순)만 보이고 나머지 585건(85%)이
@@ -160,6 +160,16 @@ export function useEvents(search = '') {
         .or(`age_range_max.is.null,age_range_max.gte.${myAge}`)
     }
 
+    // 요일·시간대 — KST 기준 생성 컬럼(event_dow/event_hour)으로 서버에서 직접 거른다.
+    // 2026-08-19 이전에는 이 둘만 클라이언트에서 걸러서, 첫 페이지가 통째로 걸러지면
+    // 다음 페이지를 최대 30번까지 이어 받았다(실측 19회·937KB·1.14초로 22건).
+    if (days.length > 0) {
+      query = query.in('event_dow', days)
+    }
+    if (timeSlots.length > 0) {
+      query = query.in('event_hour', hoursForTimeSlots(timeSlots))
+    }
+
     // 정렬
     if (sortBy === 'created') {
       query = query.order('created_at', { ascending: false })
@@ -172,49 +182,24 @@ export function useEvents(search = '') {
     }
 
     return query.range(from, to)
-  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge, search])
-
-  // 요일·시간대는 KST 기준 클라이언트 필터 (서버에서 dow/hour 직접 못 거름)
-  const applyClientFilters = useCallback((rows: EventWithCompany[]) => {
-    if (days.length === 0 && timeSlots.length === 0) return rows
-    return rows.filter((e) => {
-      const { dow, hour } = kstDowHour(e.event_date)
-      if (days.length > 0 && !days.includes(dow)) return false
-      if (timeSlots.length > 0 && !timeSlots.includes(timeSlotOf(hour))) return false
-      return true
-    })
-  }, [days, timeSlots])
-
-  const hasClientFilter = days.length > 0 || timeSlots.length > 0
+  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge, search, days, timeSlots])
 
   /**
-   * 한 페이지(60건)를 받아 요일·시간대로 거르면 0건이 나오는 일이 흔하다. 목록은
-   * 날짜순이라 첫 페이지가 대략 하루치뿐이어서, "토요일"을 고르면 목요일·금요일만
-   * 들어 있는 첫 페이지가 통째로 걸러져 화면이 비었다. FlatList 는 데이터가 0건이면
-   * onEndReached 를 부르지 않으므로 다음 페이지를 영영 안 불러왔다 — 즉 요일·시간대
-   * 필터가 "결과 없음" 버튼처럼 동작했다(2026-08-13 감사, 토요일 일정은 실제 401건).
+   * 한 페이지를 받아온다.
    *
-   * 그래서 걸러낸 결과가 한 화면 분량이 될 때까지 서버 페이지를 이어서 당긴다.
-   * 필터가 없으면 예전처럼 한 페이지만 받는다.
+   * 2026-08-13~08-19 사이에는 여기서 서버 페이지를 최대 30번까지 이어 받았다.
+   * 요일·시간대만 클라이언트에서 걸렀던 탓인데(날짜순 목록이라 첫 페이지가 대략
+   * 하루치뿐이어서 "토요일"을 고르면 첫 페이지가 통째로 걸러져 화면이 비었고,
+   * FlatList 는 0건이면 onEndReached 를 안 불러 다음 페이지를 영영 안 받았다),
+   * 이제 그 둘도 서버가 거르므로 연쇄가 필요 없다. 페이지 하나면 60건이 채워진다.
    */
-  const MAX_CHAINED_PAGES = 30   // 하드 상한(오늘~+1달)이 있어 이 안에서 끝난다. 무한루프 방지용.
-  const fetchFilteredPages = useCallback(async (startPage: number) => {
-    const collected: EventWithCompany[] = []
-    let page = startPage
-    let exhausted = false
-
-    for (let i = 0; i < MAX_CHAINED_PAGES; i++) {
-      const from = page * PAGE_SIZE
-      const { data, error: err } = await buildQuery(from, from + PAGE_SIZE - 1)
-      if (err) throw err
-      const raw = (data ?? []) as EventWithCompany[]
-      collected.push(...applyClientFilters(raw))
-      if (raw.length < PAGE_SIZE) { exhausted = true; break }
-      if (!hasClientFilter || collected.length >= PAGE_SIZE) break
-      page += 1
-    }
-    return { rows: collected, lastPage: page, exhausted }
-  }, [buildQuery, applyClientFilters, hasClientFilter])
+  const fetchFilteredPages = useCallback(async (page: number) => {
+    const from = page * PAGE_SIZE
+    const { data, error: err } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (err) throw err
+    const rows = (data ?? []) as EventWithCompany[]
+    return { rows, lastPage: page, exhausted: rows.length < PAGE_SIZE }
+  }, [buildQuery])
 
   // opts.silent: 화면엔 이미 캐시된 목록이 보이는 상태에서 뒤에서 조용히 최신화할 때 씀
   // (스피너를 다시 띄우지 않고, 실패해도 이미 보이는 화면을 에러로 덮지 않음).

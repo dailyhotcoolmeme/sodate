@@ -325,3 +325,85 @@ export function useMyPostNewComments() {
   useEffect(() => { load() }, [load])
   return { groups, loading, refetch: load }
 }
+
+/**
+ * 어떤 작성자(기기 하나)가 쓴 글·댓글 — 커뮤니티에서 닉네임을 누르면 열린다.
+ *
+ * ## 왜 닉네임이 아니라 owner_token 으로 묶는가 (2026-08-19 오너 결정)
+ *
+ * 이 게시판은 닉네임을 글마다 자유롭게 입력한다. 실제 데이터를 세어보니:
+ *
+ *   글 51 · 댓글 138 → 고유 닉네임 53개 vs 고유 기기 13개
+ *   · 'ㅇㅇ' 하나를 **서로 다른 5명**이 쓰고 있었다(ㅋㅋ 3명, ㅋㅋㅋ 2명, ㅇㅇㅇ 2명)
+ *   · 반대로 한 사람이 닉네임을 **24개**까지 돌려쓰고 있었다
+ *
+ * 닉네임으로 묶으면 남의 글이 섞여 나와 그냥 버그로 보인다. 그래서 기기 기준으로 묶는다.
+ * owner_token 은 차단(뮤트) 기능 때문에 이미 목록·상세 응답에 들어 있어 추가 노출은 없다.
+ *
+ * ⚠️ 대신 "닉네임을 바꿔 써도 같은 사람으로 묶인다"는 성질이 생긴다. 오너가 이 점을
+ *    알고 고른 선택이다(닉네임 기준은 애초에 결과가 틀린다). 화면에도 그렇게 안내한다.
+ *
+ * ## 비밀 댓글은 넣지 않는다
+ * 비밀 댓글은 글 작성자와 당사자만 볼 수 있는 기능이라(개인정보처리방침 1항) 여기서
+ * 목록으로 보여주면 열람 범위가 깨진다. 내용은 물론 존재 자체를 빼서 카운트에도 안 넣는다.
+ */
+export type AuthorPost = {
+  id: string
+  nickname: string
+  title: string
+  comment_count: number
+  upvotes: number
+  downvotes: number
+  created_at: string
+}
+
+export type AuthorComment = {
+  id: string
+  post_id: string
+  nickname: string
+  content: string
+  created_at: string
+  post_title: string | null
+}
+
+export function useAuthorActivity(ownerToken: string | undefined) {
+  const [posts, setPosts] = useState<AuthorPost[]>([])
+  const [comments, setComments] = useState<AuthorComment[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    if (!ownerToken) { setPosts([]); setComments([]); setLoading(false); return }
+    setLoading(true)
+    try {
+      const [p, c] = await Promise.all([
+        supabase.from('board_posts')
+          .select('id,nickname,title,comment_count,upvotes,downvotes,created_at')
+          .eq('owner_token', ownerToken)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(200),
+        supabase.from('board_comments')
+          .select('id,post_id,nickname,content,created_at,board_posts(title)')
+          .eq('owner_token', ownerToken)
+          .eq('is_active', true)
+          // 비밀 댓글은 목록에서 통째로 제외(위 주석 참고)
+          .eq('is_secret', false)
+          .order('created_at', { ascending: false })
+          .limit(200),
+      ])
+      setPosts((p.data as unknown as AuthorPost[]) ?? [])
+      setComments(((c.data ?? []) as unknown as Array<{
+        id: string; post_id: string; nickname: string; content: string
+        created_at: string; board_posts: { title: string } | null
+      }>).map((x) => ({
+        id: x.id, post_id: x.post_id, nickname: x.nickname, content: x.content,
+        created_at: x.created_at, post_title: x.board_posts?.title ?? null,
+      })))
+    } finally {
+      setLoading(false)
+    }
+  }, [ownerToken])
+
+  useEffect(() => { load() }, [load])
+  return { posts, comments, loading, refetch: load }
+}

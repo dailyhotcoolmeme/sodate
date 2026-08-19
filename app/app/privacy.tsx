@@ -24,7 +24,7 @@ export default function PrivacyScreen() {
       <TopBar showBack />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
         <Text style={styles.title}>개인정보처리방침</Text>
-        <Text style={styles.date}>시행일: 2026년 8월 13일 (직전 개정: 2026년 7월 20일)</Text>
+        <Text style={styles.date}>시행일: 2026년 8월 26일 (직전 개정: 2026년 8월 13일)</Text>
 
         <Text style={styles.body}>
           소개팅모아(이하 "서비스")는 이용자의 개인정보를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다. 본 방침을 통해 수집하는 개인정보의 항목, 이용 목적, 보유 기간 등을 안내드립니다.
@@ -79,6 +79,7 @@ export default function PrivacyScreen() {
           • 푸시 알림 토큰·알림 설정: 알림을 끄거나 12개월 이상 앱 실행 기록이 없을 때까지{'\n'}
           • 관심 목록(찜): 이용자가 찜을 해제하거나 삭제를 요청할 때까지{'\n'}
           • 기기 차단 목록: 이용자가 차단을 해제할 때까지(해당 기기 내 저장){'\n'}
+          • 이용 제한(운영자 차단) 기록: 제한 사유와 익명 식별 토큰만 보관하며, 제한이 해제될 때까지{'\n'}
           • 관계 법령에 따라 보존이 필요한 경우: 해당 법령이 정한 기간
         </Text>
         <Text style={styles.body}>
@@ -104,7 +105,7 @@ export default function PrivacyScreen() {
         </Text>
         <Text style={styles.bullet}>
           {'\n'}• 이전받는 자: Supabase Inc. (문의: privacy@supabase.io){'\n'}
-            이전 국가: 미국 / 이전 항목: 기기 식별자, 앱 이용 기록, 후기 정보{'\n'}
+            이전 국가: 미국 / 이전 항목: 기기 식별자, 앱 이용 기록, 후기 정보, 커뮤니티 게시판 이용 정보(닉네임, 글·댓글 내용, 첨부 이미지, 추천·비추 기록, 조회 기록, 신고 접수 내역, 비밀 댓글에 입력한 연락 수단), 알림 설정 정보(관심 지역·태그·업체), 관심 목록(찜){'\n'}
             이전 일시·방법: 서비스 이용 시점에 네트워크를 통해 전송{'\n'}
             이용 목적: 데이터 저장 및 서버 운영 / 보유 기간: 위 3항과 동일{'\n\n'}
           • 이전받는 자: Expo Inc.{'\n'}
@@ -149,11 +150,18 @@ export default function PrivacyScreen() {
           서비스는 성인 대상 서비스로, 이용약관 제3조에 따라 만 19세 미만은 이용할 수 없습니다. 서비스는 만 14세 미만 아동의 개인정보를 수집하지 않으며, 만 14세 미만임이 확인된 경우 해당 정보를 지체 없이 파기합니다. 법정대리인은 아래 10항의 문의처로 아동의 개인정보 열람·정정·삭제를 요청할 수 있습니다.
         </Text>
 
-        <Text style={styles.sectionTitle}>10. 개인정보 보호책임자</Text>
+        {/*
+          개인정보 보호법 제30조 제1항 제6호는 "보호책임자의 성명 **또는** 개인정보
+          보호업무 및 관련 고충사항을 처리하는 부서의 명칭과 전화번호 등 연락처"를 요구한다.
+          '성명 또는 부서명'이라 개인 이름을 밝히지 않고 부서명으로 갈음할 수 있다
+          (2026-08-19 조문 확인 후 오너 결정: 이름은 넣지 않는다).
+        */}
+        <Text style={styles.sectionTitle}>10. 개인정보 보호책임자 및 문의처</Text>
         <Text style={styles.body}>
           개인정보 처리에 관한 불만·문의는 아래로 연락 주세요.{'\n\n'}
-          개인정보 보호책임자{'\n'}
-          소속: 주식회사 아워마인{'\n'}
+          개인정보 보호업무 및 고충사항 처리 부서{'\n'}
+          회사: 주식회사 아워마인{'\n'}
+          부서: 소개팅모아 운영팀{'\n'}
           이메일: admin@ourmine.co.kr{'\n'}
           처리 기간: 접수 후 7일 이내
         </Text>

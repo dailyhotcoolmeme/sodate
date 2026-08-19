@@ -8,3 +8,4 @@ pydantic==2.7.1
 python-dateutil==2.9.0
 pytest==8.2.0
 pytest-asyncio==0.23.7
+Pillow==12.3.0  # 썸네일 리사이즈·WebP 재인코딩(2026-08-19) — utils/thumbnail.py

@@ -32,6 +32,21 @@ def upload_bytes(key: str, data: bytes, content_type: str = 'image/png') -> str:
     return f'{PUBLIC_MEDIA_BASE}/media/{key}'
 
 
+def object_exists(key: str) -> bool:
+    """이미 올라가 있는 키인지 확인한다(썸네일 재호스팅에서 재업로드를 피하려고 씀).
+    권한 문제 등 '없다'와 구분해야 하는 오류는 그대로 던진다 — 조용히 False 를 돌려주면
+    매 크롤마다 같은 이미지를 다시 받아 올리게 된다."""
+    bucket = os.environ['R2_BUCKET']
+    try:
+        _client().head_object(Bucket=bucket, Key=key)
+        return True
+    except Exception as e:
+        code = getattr(e, 'response', {}).get('Error', {}).get('Code', '')
+        if code in ('404', 'NoSuchKey', 'NotFound'):
+            return False
+        raise
+
+
 def delete_by_public_url(url: Optional[str]) -> bool:
     """attendee_image_url에 저장된 공개 URL로부터 R2 키를 역산해 원본을 지운다.
     URL 형식이 아니거나(다른 소스) 이미 지워졌으면 조용히 False."""

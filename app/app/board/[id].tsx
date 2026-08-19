@@ -137,6 +137,12 @@ export default function BoardPostScreen() {
   // 전수조사 요청, 조사해보니 이 셋은 로딩 표시 자체가 아예 없었다).
   const [deletingPost, setDeletingPost] = useState(false)
   const [blockingAuthor, setBlockingAuthor] = useState(false)
+  // 닉네임을 누르면 그 작성자의 글·댓글 목록으로 간다(2026-08-19 오너 지시).
+  // 묶는 기준은 닉네임이 아니라 owner_token(기기)이다 — 같은 닉네임을 여러 사람이
+  // 쓰고 있어서 닉네임으로 묶으면 남의 글이 섞인다(hooks/useBoard.ts 의 실측 참고).
+  const openAuthor = useCallback((ownerToken: string, nick: string) => {
+    router.push({ pathname: '/board/author/[token]', params: { token: ownerToken, nickname: nick } })
+  }, [router])
   const [deletingComment, setDeletingComment] = useState(false)
   const [replyModal, setReplyModal] = useState<BoardComment | null>(null)
   const [replyDraft, setReplyDraft] = useState('')
@@ -495,7 +501,13 @@ export default function BoardPostScreen() {
             {/* 닉네임이 길면 액션 버튼을 밀어내지 않고 이쪽이 줄어든다(조회수를 붙이면서
                 한 줄이 더 빠듯해졌다). */}
             <Text style={styles.meta} numberOfLines={1}>
-              {post.nickname} · {formatFull(post.created_at)} · 조회 {displayViewCount(post).toLocaleString()}
+              {/* 닉네임만 눌러서 그 작성자의 글·댓글 목록으로 간다(2026-08-19 오너 지시).
+                  묶는 기준은 닉네임이 아니라 owner_token(기기) — 같은 닉을 여러 사람이
+                  쓰고 있어서 닉네임으로 묶으면 결과가 틀린다(hooks/useBoard.ts 참고). */}
+              <Text onPress={() => openAuthor(post.owner_token, post.nickname)}>
+                {post.nickname}
+              </Text>
+              {' · '}{formatFull(post.created_at)} · 조회 {displayViewCount(post).toLocaleString()}
             </Text>
             <View style={styles.metaActions}>
               {isMine ? (
@@ -614,6 +626,7 @@ export default function BoardPostScreen() {
               onDelete={() => removeComment(c)}
               onReport={() => setReportTarget({ type: 'comment', id: c.id })}
               onBlock={() => handleBlockAuthor(c.nickname, c.owner_token, false, 'comment', c.id)}
+              onAuthorPress={() => openAuthor(c.owner_token, c.nickname)}
             />
             {repliesOf(c.id).map((r) => (
               <CommentRow
@@ -624,6 +637,7 @@ export default function BoardPostScreen() {
                 onDelete={() => removeComment(r)}
                 onReport={() => setReportTarget({ type: 'comment', id: r.id })}
                 onBlock={() => handleBlockAuthor(r.nickname, r.owner_token, false, 'comment', r.id)}
+                onAuthorPress={() => openAuthor(r.owner_token, r.nickname)}
               />
             ))}
           </View>
@@ -877,7 +891,7 @@ function makeReplyModalStyles(colors: AppColors) {
 }
 
 function CommentRow({
-  c, reply = false, mine, byAuthor = false, styles, colors, onReply, onEdit, onDelete, onReport, onBlock, onLayout,
+  c, reply = false, mine, byAuthor = false, styles, colors, onReply, onEdit, onDelete, onReport, onBlock, onAuthorPress, onLayout,
 }: {
   c: BoardComment
   reply?: boolean
@@ -891,6 +905,7 @@ function CommentRow({
   onDelete: () => void
   onReport: () => void
   onBlock: () => void
+  onAuthorPress: () => void
   /** 답글의 부모 안에서의 세로 위치 */
   onLayout?: (y: number) => void
 }) {
@@ -915,7 +930,9 @@ function CommentRow({
             </View>
           )}
           <Text style={styles.commentMeta} numberOfLines={1}>
-            {c.nickname} · {formatFull(c.created_at)}
+            {/* 닉네임만 눌러 그 작성자의 활동으로 이동(2026-08-19 오너 지시) */}
+            <Text onPress={onAuthorPress}>{c.nickname}</Text>
+            {' · '}{formatFull(c.created_at)}
           </Text>
         </View>
         <View style={styles.commentManage}>

@@ -27,3 +27,23 @@ export function timeSlotOf(hour: number): string {
   if (hour < 21) return 'evening'
   return 'night'
 }
+
+/**
+ * 시간대 id 목록 -> 해당하는 KST 시(0~23) 목록.
+ *
+ * 2026-08-19: 예전엔 한 페이지(60건)를 받아 timeSlotOf 로 클라이언트에서 걸렀는데,
+ * 목록이 날짜순이라 첫 페이지가 대략 하루치뿐이어서 걸러낸 결과가 몇 건 안 나왔고
+ * 앱이 다음 페이지를 계속 이어 받았다(실측: 평일 필터 시 요청 19회·937KB·1.14초로
+ * 22건). 이제 events.event_hour 생성 컬럼을 서버에서 직접 거른다 —
+ * supabase/migrations/20260819_events_kst_dow_hour.sql 참고.
+ *
+ * ⚠️ 여기 경계값은 위 timeSlotOf 와 반드시 같아야 한다. 한쪽만 고치면 필터 결과가
+ *    화면 표시와 어긋난다.
+ */
+export function hoursForTimeSlots(slots: string[]): number[] {
+  const hours = new Set<number>()
+  for (let h = 0; h < 24; h++) {
+    if (slots.includes(timeSlotOf(h))) hours.add(h)
+  }
+  return [...hours]
+}

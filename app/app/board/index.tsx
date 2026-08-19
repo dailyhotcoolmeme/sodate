@@ -243,7 +243,11 @@ export default function BoardListScreen() {
             {posts.map((p) => (
               <PostRow key={p.id} post={p} hot={hot} cold={cold} isRead={readIds.has(p.id)} styles={styles} colors={colors}
                 onPress={() => router.push(`/board/${p.id}`)}
-                onLongPress={() => handleBlock(p)} />
+                onLongPress={() => handleBlock(p)}
+                onAuthorPress={() => router.push({
+                  pathname: '/board/author/[token]',
+                  params: { token: p.owner_token, nickname: p.nickname },
+                })} />
             ))}
 
             <Pager page={page} pageCount={pageCount} onChange={setPage} styles={styles} colors={colors} />
@@ -296,7 +300,7 @@ export default function BoardListScreen() {
 }
 
 function PostRow({
-  post, hot, cold, isRead, styles, colors, onPress, onLongPress,
+  post, hot, cold, isRead, styles, colors, onPress, onLongPress, onAuthorPress,
 }: {
   post: BoardPostWithTag
   hot: number
@@ -306,6 +310,7 @@ function PostRow({
   colors: AppColors
   onPress: () => void
   onLongPress: () => void
+  onAuthorPress: () => void
 }) {
   const isHot = post.upvotes >= hot
   const isCold = post.downvotes >= cold
@@ -339,7 +344,11 @@ function PostRow({
       </View>
       <View style={styles.rowMetaRow}>
         <Text style={styles.rowMeta} numberOfLines={1}>
-          {post.nickname} · {formatWhen(post.created_at)}
+          {/* 닉네임만 눌러서 그 작성자의 글·댓글로 갈 수 있다(2026-08-19 오너 지시).
+              중첩 Text 의 onPress 는 글자 영역에서만 잡히므로, 나머지를 누르면
+              평소처럼 글로 들어간다. */}
+          <Text onPress={onAuthorPress}>{post.nickname}</Text>
+          {' · '}{formatWhen(post.created_at)}
         </Text>
         <Text style={styles.rowMeta}>·</Text>
         <View style={styles.rowVoteItem}>

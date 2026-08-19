@@ -11,6 +11,7 @@ from utils.supabase_client import get_supabase
 from utils.logger import get_logger
 from utils.date_filter import is_within_one_month
 from utils.hashtags import derive_hashtags
+from utils.thumbnail import optimize_thumbnails
 
 
 # 오류 페이지의 <title>이 모임명으로 저장되는 것을 막는다.
@@ -199,6 +200,11 @@ class BaseScraper(ABC):
             # (목록 API에서 빠진 상품을 ID로만 재조회할 때 썸네일이 안 딸려오는 경우 대비)
             if not data.get('thumbnail_urls'):
                 data.pop('thumbnail_urls', None)
+            else:
+                # 업체 CDN 원본을 그대로 쓰면 피드가 무거워진다(imweb 평균 907KB·최대 1.4MB).
+                # 900px WebP 로 다시 구워 R2 에 재호스팅한다 — 자세한 근거와 실측은
+                # utils/thumbnail.py 주석 참고. 실패하면 원본 URL 이 그대로 남아 크롤은 안 깨진다.
+                data['thumbnail_urls'] = optimize_thumbnails(data['thumbnail_urls'])
 
             # 참석자 명단 이미지도 같은 이유로 None이면 upsert에서 제외(기존 값 보존).
             # R2 재업로드가 일시적으로 실패해도 이미 있던 이미지를 지우지 않는다 —
