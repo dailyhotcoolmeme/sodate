@@ -13,6 +13,7 @@ import SwipeSegment from '@/components/SwipeSegment'
 import AppSpinner from '@/components/AppSpinner'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import BoardBannerAd from '@/components/BoardBannerAd'
+import BoardPromoBanner from '@/components/BoardPromoBanner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import {
@@ -233,6 +234,10 @@ export default function BoardListScreen() {
           scrollEventThrottle={16}
         >
           {search && renderActiveSearchBar()}
+
+          {/* 맨 위 홍보 배너 — AdMob 아니라 우리가 만든 자체 배너다(2026-08-19 오너 지시).
+              검색 중일 때는 검색 결과에 집중하도록 띄우지 않는다. */}
+          {!search && <BoardPromoBanner />}
 
           <View>
             {posts.map((p) => (

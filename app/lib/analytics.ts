@@ -38,6 +38,8 @@ export type AnalyticsEventType =
   // 출시 후 플랫폼별 충전율·오류를 DB에서 바로 볼 수 있게 남긴다.
   | 'ad_load_success'
   | 'ad_load_fail'
+  // 자체 홍보 배너(AdMob 아님) 탭 — 커뮤니티 피드 맨 위(2026-08-19).
+  | 'promo_banner_tap'
 
 interface AnalyticsPayload {
   event_type: AnalyticsEventType
