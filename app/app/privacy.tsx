@@ -24,7 +24,7 @@ export default function PrivacyScreen() {
       <TopBar showBack />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
         <Text style={styles.title}>개인정보처리방침</Text>
-        <Text style={styles.date}>시행일: 2026년 8월 26일 (직전 개정: 2026년 8월 13일)</Text>
+        <Text style={styles.date}>시행일: 2026년 8월 19일 (직전 개정: 2026년 8월 13일)</Text>
 
         <Text style={styles.body}>
           소개팅모아(이하 "서비스")는 이용자의 개인정보를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다. 본 방침을 통해 수집하는 개인정보의 항목, 이용 목적, 보유 기간 등을 안내드립니다.
