@@ -30,8 +30,12 @@ export default function AuthorScreen() {
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(colors), [colors])
-  const { token, nickname } = useLocalSearchParams<{ token: string; nickname?: string }>()
-  const [tab, setTab] = useState<'post' | 'comment'>('post')
+  const { token, nickname, tab: tabParam } = useLocalSearchParams<{
+    token: string; nickname?: string; tab?: 'post' | 'comment'
+  }>()
+  // 닉네임 메뉴에서 '게시글 보기'/'댓글 보기' 중 무엇을 골랐는지 그대로 열어준다
+  // (2026-08-19 오너 지시). 직접 들어온 경우엔 글 탭.
+  const [tab, setTab] = useState<'post' | 'comment'>(tabParam === 'comment' ? 'comment' : 'post')
   const [blocked, setBlocked] = useState(false)
 
   const { posts, comments, loading, refetch } = useAuthorActivity(token)

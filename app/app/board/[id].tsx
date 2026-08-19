@@ -16,6 +16,7 @@ import TopBar from '@/components/TopBar'
 import AppSpinner from '@/components/AppSpinner'
 import ReportSheet from '@/components/ReportSheet'
 import LoadingOverlay from '@/components/LoadingOverlay'
+import AuthorMenu, { type AuthorMenuTarget } from '@/components/AuthorMenu'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
@@ -137,12 +138,15 @@ export default function BoardPostScreen() {
   // 전수조사 요청, 조사해보니 이 셋은 로딩 표시 자체가 아예 없었다).
   const [deletingPost, setDeletingPost] = useState(false)
   const [blockingAuthor, setBlockingAuthor] = useState(false)
-  // 닉네임을 누르면 그 작성자의 글·댓글 목록으로 간다(2026-08-19 오너 지시).
+  // 닉네임을 누르면 **바로 이동하지 않고** 그 자리에 작은 메뉴를 띄운다
+  // (게시글 보기 / 댓글 보기). 2026-08-19 오너 지적 — 글을 읽다 닉네임에 손이
+  // 스치기만 해도 화면이 통째로 바뀌면 안 되고, 무엇을 보러 갈지 고를 수 있어야 한다.
   // 묶는 기준은 닉네임이 아니라 owner_token(기기)이다 — 같은 닉네임을 여러 사람이
   // 쓰고 있어서 닉네임으로 묶으면 남의 글이 섞인다(hooks/useBoard.ts 의 실측 참고).
-  const openAuthor = useCallback((ownerToken: string, nick: string) => {
-    router.push({ pathname: '/board/author/[token]', params: { token: ownerToken, nickname: nick } })
-  }, [router])
+  const [authorMenu, setAuthorMenu] = useState<AuthorMenuTarget | null>(null)
+  const openAuthor = useCallback((ownerToken: string, nick: string, x: number, y: number) => {
+    setAuthorMenu({ token: ownerToken, nickname: nick, x, y })
+  }, [])
   const [deletingComment, setDeletingComment] = useState(false)
   const [replyModal, setReplyModal] = useState<BoardComment | null>(null)
   const [replyDraft, setReplyDraft] = useState('')
@@ -504,7 +508,7 @@ export default function BoardPostScreen() {
               {/* 닉네임만 눌러서 그 작성자의 글·댓글 목록으로 간다(2026-08-19 오너 지시).
                   묶는 기준은 닉네임이 아니라 owner_token(기기) — 같은 닉을 여러 사람이
                   쓰고 있어서 닉네임으로 묶으면 결과가 틀린다(hooks/useBoard.ts 참고). */}
-              <Text onPress={() => openAuthor(post.owner_token, post.nickname)}>
+              <Text onPress={(e) => openAuthor(post.owner_token, post.nickname, e.nativeEvent.pageX, e.nativeEvent.pageY)}>
                 {post.nickname}
               </Text>
               {' · '}{formatFull(post.created_at)} · 조회 {displayViewCount(post).toLocaleString()}
@@ -626,7 +630,7 @@ export default function BoardPostScreen() {
               onDelete={() => removeComment(c)}
               onReport={() => setReportTarget({ type: 'comment', id: c.id })}
               onBlock={() => handleBlockAuthor(c.nickname, c.owner_token, false, 'comment', c.id)}
-              onAuthorPress={() => openAuthor(c.owner_token, c.nickname)}
+              onAuthorPress={(x, y) => openAuthor(c.owner_token, c.nickname, x, y)}
             />
             {repliesOf(c.id).map((r) => (
               <CommentRow
@@ -637,7 +641,7 @@ export default function BoardPostScreen() {
                 onDelete={() => removeComment(r)}
                 onReport={() => setReportTarget({ type: 'comment', id: r.id })}
                 onBlock={() => handleBlockAuthor(r.nickname, r.owner_token, false, 'comment', r.id)}
-                onAuthorPress={() => openAuthor(r.owner_token, r.nickname)}
+                onAuthorPress={(x, y) => openAuthor(r.owner_token, r.nickname, x, y)}
               />
             ))}
           </View>
@@ -719,6 +723,7 @@ export default function BoardPostScreen() {
       </KeyboardAvoidingView>
 
       <LoadingOverlay visible={sending || voting || deletingPost || blockingAuthor || deletingComment || replySending} />
+      <AuthorMenu target={authorMenu} onClose={() => setAuthorMenu(null)} />
 
       <ReplyModal
         target={replyModal}
@@ -905,7 +910,7 @@ function CommentRow({
   onDelete: () => void
   onReport: () => void
   onBlock: () => void
-  onAuthorPress: () => void
+  onAuthorPress: (x: number, y: number) => void
   /** 답글의 부모 안에서의 세로 위치 */
   onLayout?: (y: number) => void
 }) {
@@ -931,7 +936,7 @@ function CommentRow({
           )}
           <Text style={styles.commentMeta} numberOfLines={1}>
             {/* 닉네임만 눌러 그 작성자의 활동으로 이동(2026-08-19 오너 지시) */}
-            <Text onPress={onAuthorPress}>{c.nickname}</Text>
+            <Text onPress={(e) => onAuthorPress(e.nativeEvent.pageX, e.nativeEvent.pageY)}>{c.nickname}</Text>
             {' · '}{formatFull(c.created_at)}
           </Text>
         </View>

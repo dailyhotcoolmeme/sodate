@@ -14,6 +14,7 @@ import AppSpinner from '@/components/AppSpinner'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import BoardBannerAd from '@/components/BoardBannerAd'
 import BoardPromoBanner from '@/components/BoardPromoBanner'
+import AuthorMenu, { type AuthorMenuTarget } from '@/components/AuthorMenu'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import {
@@ -96,6 +97,9 @@ export default function BoardListScreen() {
   // 등록·수정·삭제는 전부 화면 전체 중앙 스피너가 규칙인데 이 화면엔 로딩 표시
   // 자체가 없었다(2026-08-14 전수조사에서 발견).
   const [blocking, setBlocking] = useState(false)
+  // 닉네임을 누르면 바로 이동하지 않고 그 자리에 작은 메뉴를 띄운다
+  // (2026-08-19 오너 지적 — 스치기만 해도 화면이 통째로 바뀌면 안 된다).
+  const [authorMenu, setAuthorMenu] = useState<AuthorMenuTarget | null>(null)
   const handleBlock = (post: BoardPostWithTag) => {
     Alert.alert(
       `'${post.nickname}' 차단`,
@@ -244,10 +248,7 @@ export default function BoardListScreen() {
               <PostRow key={p.id} post={p} hot={hot} cold={cold} isRead={readIds.has(p.id)} styles={styles} colors={colors}
                 onPress={() => router.push(`/board/${p.id}`)}
                 onLongPress={() => handleBlock(p)}
-                onAuthorPress={() => router.push({
-                  pathname: '/board/author/[token]',
-                  params: { token: p.owner_token, nickname: p.nickname },
-                })} />
+                onAuthorPress={(x, y) => setAuthorMenu({ token: p.owner_token, nickname: p.nickname, x, y })} />
             ))}
 
             <Pager page={page} pageCount={pageCount} onChange={setPage} styles={styles} colors={colors} />
@@ -294,6 +295,7 @@ export default function BoardListScreen() {
       </View>
 
       <LoadingOverlay visible={blocking} />
+      <AuthorMenu target={authorMenu} onClose={() => setAuthorMenu(null)} />
     </View>
     </SwipeSegment>
   )
@@ -310,7 +312,7 @@ function PostRow({
   colors: AppColors
   onPress: () => void
   onLongPress: () => void
-  onAuthorPress: () => void
+  onAuthorPress: (x: number, y: number) => void
 }) {
   const isHot = post.upvotes >= hot
   const isCold = post.downvotes >= cold
@@ -347,7 +349,7 @@ function PostRow({
           {/* 닉네임만 눌러서 그 작성자의 글·댓글로 갈 수 있다(2026-08-19 오너 지시).
               중첩 Text 의 onPress 는 글자 영역에서만 잡히므로, 나머지를 누르면
               평소처럼 글로 들어간다. */}
-          <Text onPress={onAuthorPress}>{post.nickname}</Text>
+          <Text onPress={(e) => onAuthorPress(e.nativeEvent.pageX, e.nativeEvent.pageY)}>{post.nickname}</Text>
           {' · '}{formatWhen(post.created_at)}
         </Text>
         <Text style={styles.rowMeta}>·</Text>
