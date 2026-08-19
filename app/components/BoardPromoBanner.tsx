@@ -13,7 +13,10 @@ const ASPECT = 1110 / 276
 // 그대로다(오너 요청 2026-08-19). GIF 로도 만들어봤지만 256색이라 배경 보라 그라데이션이
 // 뭉개지고 5.4MB 였다 — 같은 화질에서 WebP 가 148KB 로 37배 작아 이쪽을 쓴다.
 // expo-image 가 애니메이션 WebP 를 그대로 재생한다.
-const BANNER_URL = 'https://sodate-admin.pages.dev/media/promo/toolshere-banner-anim-v1.webp'
+// v2(2026-08-19): 12fps 는 화살표가 뚝뚝 끊겨 보여 24fps 로 올렸고, 루프 이음매가
+// 튀지 않도록 파문 주기를 화살표와 같은 3.6초로 맞췄다. 문구를 줄인 덕에 프레임이
+// 단순해져 오히려 140KB 로 더 작아졌다.
+const BANNER_URL = 'https://sodate-admin.pages.dev/media/promo/toolshere-banner-anim-v2.webp'
 const TARGET_URL = 'https://toolshere.app'
 
 /**
