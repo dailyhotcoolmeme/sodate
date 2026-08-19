@@ -16,7 +16,16 @@ const ASPECT = 1110 / 276
 // v2(2026-08-19): 12fps 는 화살표가 뚝뚝 끊겨 보여 24fps 로 올렸고, 루프 이음매가
 // 튀지 않도록 파문 주기를 화살표와 같은 3.6초로 맞췄다. 문구를 줄인 덕에 프레임이
 // 단순해져 오히려 140KB 로 더 작아졌다.
-const BANNER_URL = 'https://sodate-admin.pages.dev/media/promo/toolshere-banner-anim-v2.webp'
+//
+// ⚠️ v3(2026-08-19): 다크모드에서 네 귀퉁이에 흰 실선이 보였다(오너 제보). 배너를 굽는
+//    banner.html 이 카드에 border-radius:36px 를 주면서 페이지 배경을 안 깔아, 둥근
+//    모서리 **바깥** 삼각형이 브라우저 기본 흰색으로 사진에 찍혀 있었다. 아래 borderRadius
+//    가 12pt 로 자르는데 구워진 반지름은 11.7pt(36px×0.3252) 라, 그 0.3pt 틈으로 흰색이
+//    초승달처럼 살아남았다. 라이트모드에선 배경이 밝아 안 보이고 다크모드에서만 드러난다.
+//    → 이미지에서 border-radius 를 아예 빼서 보라 카드가 1110×276 을 꽉 채우게 하고,
+//      둥근 모서리는 이 컴포넌트의 borderRadius 가 전담한다. 이제 radius 를 얼마로 바꾸든
+//      흰 테두리가 생길 수 없다. **배너를 다시 만들 때 이미지에 모서리를 굽지 말 것.**
+const BANNER_URL = 'https://sodate-admin.pages.dev/media/promo/toolshere-banner-anim-v3.webp'
 const TARGET_URL = 'https://toolshere.app'
 
 /**

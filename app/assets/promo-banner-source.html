@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:1110px;height:276px;overflow:hidden;background:#100e1a}
+.banner{position:relative;width:1110px;height:276px;overflow:hidden;
+  background:linear-gradient(135deg,#100e1a 0%,#2a1a60 52%,#100e1a 100%);
+  font-family:"Apple SD Gothic Neo","Pretendard",-apple-system,sans-serif;}
+.glow1{position:absolute;top:-150px;left:-90px;width:420px;height:420px;border-radius:50%;
+  background:rgba(124,58,237,.34);filter:blur(90px)}
+.glow2{position:absolute;bottom:-160px;right:-40px;width:430px;height:430px;border-radius:50%;
+  background:rgba(79,70,229,.28);filter:blur(90px)}
+.dots{position:absolute;inset:0;opacity:.20;
+  background-image:radial-gradient(rgba(237,233,254,.35) 1.8px, transparent 1.9px);
+  background-size:24px 24px}
+.inner{position:relative;height:100%;display:flex;align-items:center;
+  padding:0 50px 0 44px;gap:22px}
+.left{flex:1;min-width:0}
+.title{font-size:44px;line-height:1.15;font-weight:800;color:#fff;
+  letter-spacing:-1.8px;white-space:nowrap}
+.sub{margin-top:16px;font-size:29px;line-height:1.5;color:rgba(255,255,255,.80);
+  letter-spacing:-.6px;white-space:nowrap}
+.free{color:#c4b5fd;font-weight:700}
+.right{display:flex;flex-direction:column;align-items:center;gap:9px;flex-shrink:0}
+.logo{width:150px;height:150px}
+.wordmark{font-size:37px;font-weight:800;color:#fff;letter-spacing:-.8px;white-space:nowrap}
+</style></head><body>
+<div class="banner">
+  <div class="glow1"></div><div class="glow2"></div><div class="dots"></div>
+  <div class="inner">
+    <div class="left">
+      <div class="title">세상에 흩어진 모든 도구들이 모여 있는 곳</div>
+      <div class="sub">PDF 도구는 A사이트, 이미지 도구는 B사이트<br>도구 찾아 떠돌아다니는 생활은 이제 그만!&nbsp;&nbsp;<span class="free">완전 무료!</span>&nbsp;<span class="free">무제한!</span></div>
+    </div>
+    <div class="right">
+      <svg class="logo" viewBox="0 0 100 100">
+        <defs><clipPath id="c"><circle cx="50" cy="50" r="30"/></clipPath></defs>
+        <circle cx="50" cy="50" r="30" fill="#6366f1"/>
+        <g clip-path="url(#c)" fill="none" stroke="#fff" stroke-width="4.5">
+          <line x1="50" y1="34" x2="50" y2="60"/><path d="M40 50 L50 62 L60 50"/>
+        </g>
+      </svg>
+      <div class="wordmark">Tools Here</div>
+    </div>
+  </div>
+</div></body></html>
