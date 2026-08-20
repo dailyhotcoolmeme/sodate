@@ -17,6 +17,9 @@ const BLOCKED = 'sodate_board_blocked_authors'
 const SEEN_COMMENT_IDS = 'sodate_board_seen_comment_ids'
 const READ_POST_IDS = 'sodate_board_read_posts'
 const BOARD_VISITED = 'sodate_board_visited'
+// 토글 안내 말풍선 상태(아래 getToggleTip 주석 참고). BOARD_VISITED 와 따로 둔다 —
+// 그건 오른쪽 스와이프 힌트카드가 쓰는 값이라 같이 쓰면 서로 얽힌다.
+const TOGGLE_TIP = 'sodate_board_toggle_tip'
 
 async function readList(key: string): Promise<string[]> {
   try {
@@ -117,6 +120,40 @@ export async function getBoardVisited(): Promise<boolean> {
 export async function markBoardVisited(): Promise<void> {
   try {
     await AsyncStorage.setItem(BOARD_VISITED, '1')
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * 커뮤니티 톱바 토글 안내 말풍선의 상태.
+ *
+ * 커뮤니티로 오는 길이 셋(토글·스와이프·햄버거 메뉴)인데, 토글을 모르고 다른 길로만
+ * 다니는 사람에게 "토글 버튼으로 바로 올 수 있어요"를 한 번 알려준다(2026-08-20 오너 지시).
+ *
+ *   null      아직 커뮤니티에 처음 들어오기 전
+ *   'pending' 첫 진입이 토글이 아니었다 → 닫을 때까지 계속 띄운다
+ *   'done'    띄울 필요 없음(토글로 첫 진입했거나, 사용자가 닫기를 눌렀거나)
+ *
+ * 상태 하나로 "첫 진입을 어떻게 했나"와 "닫았나"를 둘 다 표현하므로 키가 하나면 된다.
+ * 자동으로 사라지지 않는다 — 오직 닫기를 눌러야 'done' 이 된다(오너 결정).
+ */
+export type ToggleTipState = null | 'pending' | 'done'
+
+export async function getToggleTip(): Promise<ToggleTipState> {
+  try {
+    const v = await AsyncStorage.getItem(TOGGLE_TIP)
+    return v === 'pending' || v === 'done' ? v : null
+  } catch {
+    // 못 읽으면 '아직 결정 안 됨'이 아니라 '띄우지 않음'으로 본다 — 읽기 실패 때문에
+    // 매번 말풍선이 뜨는 쪽이 훨씬 나쁘다.
+    return 'done'
+  }
+}
+
+export async function setToggleTip(v: Exclude<ToggleTipState, null>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TOGGLE_TIP, v)
   } catch {
     // ignore
   }

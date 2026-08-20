@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter, usePathname } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
+import { setBoardEntry } from '@/lib/boardEntry'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useProfileSheetStore } from '@/stores/profileSheetStore'
 
@@ -30,6 +31,8 @@ export default function TopBar({
   noSafeTop = false,
   onBeforeLeave,
   onSearchPress,
+  showToggleTip = false,
+  onCloseToggleTip,
 }: {
   showBack?: boolean
   onLogoPress?: () => void
@@ -51,6 +54,12 @@ export default function TopBar({
   /** 주면 벨 아이콘 왼쪽에 돋보기 아이콘이 뜬다(2026-08-13, 지금은 게시판 목록 검색
    *  팝업 전용). 화면마다 다른 동작이라 TopBar가 직접 검색 상태를 갖지 않고 호출부에 위임. */
   onSearchPress?: () => void
+  /** 토글 아래에 "토글 버튼으로 바로 올 수 있어요" 말풍선을 띄운다(2026-08-20 오너 지시).
+   *  띄울지 말지는 커뮤니티 화면(app/board/index.tsx)이 판단해서 내려준다 — 여기서
+   *  판단하지 않는 이유는 TopBar 가 모든 화면에 깔려 있어서다. 대신 토글의 실제 위치를
+   *  아는 건 이쪽뿐이라 그리는 건 여기서 한다. */
+  showToggleTip?: boolean
+  onCloseToggleTip?: () => void
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -104,7 +113,11 @@ export default function TopBar({
   })
 
   const styles = useMemo(() => StyleSheet.create({
-    wrap: { backgroundColor: colors.background },
+    // 말풍선이 톱바 밖(목록 위)까지 내려오므로 톱바가 아래 내용보다 위에 있어야 한다.
+    // 커뮤니티 목록 맨 위에는 홍보 배너(BoardPromoBanner)가 있는데, 그건 ScrollView 안이라
+    // 형제 순서상 톱바보다 나중에 그려진다 — 그냥 두면 배너가 말풍선을 덮는다(2026-08-20 오너 지적).
+    // ⚠️ 안드로이드는 zIndex 만으로는 안 먹는다. elevation 을 같이 줘야 한다.
+    wrap: { backgroundColor: colors.background, zIndex: 20, elevation: 20 },
     bar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -163,6 +176,35 @@ export default function TopBar({
     },
     menuBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
     menuItemText: { fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
+    // 커뮤니티 항목 강조(2026-08-20 오너 지시) — 다른 항목과 성격이 달라 눈에 띄어야 한다.
+    // 위 구분선으로 '여기서부터 다른 것'을 먼저 알리고, 배경·글자색으로 한 번 더 준다.
+    menuItemOn: {
+      backgroundColor: `${colors.primary}18`,
+      borderTopWidth: 1, borderTopColor: colors.divider,
+    },
+    menuItemTextOn: { color: colors.primary, fontWeight: '700' },
+    // ── 토글 안내 말풍선(2026-08-20 오너 지시) ──
+    // 꼬리: 같은 색 정사각형을 45도 돌려 말풍선 위에 겹친다(별도 이미지 불필요).
+    // left:'50%' + marginLeft 로 토글 정중앙을 가리키므로 로고 폭이 바뀌어도 안 어긋난다.
+    tipTail: {
+      position: 'absolute', top: SEG_BORDER_H + 2, left: '50%', marginLeft: -4.5,
+      width: 9, height: 9, backgroundColor: colors.primary,
+      transform: [{ rotate: '45deg' }], borderRadius: 1,
+    },
+    tipBubble: {
+      // 토글 아래 10px. 꼬리(top +6, 45도라 대각선 약 12.7px)가 위로 4px 삐져나와
+      // 말풍선과 자연스럽게 이어진다. 이 둘은 같이 움직여야 한다.
+      position: 'absolute', top: SEG_BORDER_H + 10, left: 0,
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      backgroundColor: colors.primary, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 9,
+      shadowColor: '#000', shadowOpacity: 0.20, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
+    },
+    tipText: { color: '#fff', fontSize: 14, letterSpacing: -0.3 },
+    // 본문(흰색)과 확실히 갈리는 진한 와인색(오너 선택 2026-08-20 'B'안).
+    // 대괄호까지 씌워 눌러야 할 곳임을 두 번 알린다.
+    tipClose: { color: '#8C2049', fontSize: 13, fontWeight: '700' },
   }), [colors])
 
   // 첫 줄만 화면에 따라 다르다. 메뉴가 통째로 바뀌면 '아까 있던 게 없어졌다'가 된다.
@@ -173,7 +215,7 @@ export default function TopBar({
   // 메뉴는 지금 있는 쪽(일정/커뮤니티)에 필요한 것만 보여준다(2026-08-12 오너 지시).
   // 후기 모음·관심 모임·알림 설정·내 정보는 전부 '모임' 쪽 기능이라 커뮤니티에서는 뺀다.
   // '설정'은 앱 전체 설정이라 양쪽에 둔다.
-  const MENU: { label: string; icon: string; action: () => void; badge?: number }[] = [
+  const MENU: { label: string; icon: string; action: () => void; badge?: number; highlight?: boolean }[] = [
     firstItem,
     ...(seg === 'board'
       ? [{ label: '차단 목록', icon: 'eye-off-outline', action: () => router.push('/board/blocked') }]
@@ -184,6 +226,16 @@ export default function TopBar({
           { label: '내 정보', icon: 'person-outline', action: () => useProfileSheetStore.getState().openSheet() },
         ]),
     { label: '설정', icon: 'settings-outline', action: () => router.push('/settings') },
+    // 커뮤니티로 가는 세 번째 길(2026-08-20 오너 지시). 맨 아래에 강조해서 둔다.
+    // 이미 커뮤니티에 있으면 뺀다 — 지금 있는 곳으로 가는 메뉴는 의미가 없다.
+    // router.push 가 아니라 goSegment 를 쓴다: 토글·스와이프가 전부 replace 라
+    // push 하면 뒤로가기 스택이 어긋나고, 전환 애니메이션(leave)도 그대로 재사용된다.
+    ...(seg === 'board' ? [] : [{
+      label: '커뮤니티',
+      icon: 'people-outline',
+      highlight: true,
+      action: () => { setBoardEntry('menu'); goSegment('board') },
+    }]),
   ]
 
   return (
@@ -210,7 +262,11 @@ export default function TopBar({
           <View style={styles.segSwitchWrap}>
             <TouchableOpacity
               activeOpacity={0.85}
-              onPress={() => goSegment(seg === 'board' ? 'event' : 'board')}
+              onPress={() => {
+                // 어떤 길로 커뮤니티에 들어왔는지 남긴다(lib/boardEntry.ts 참고).
+                if (seg !== 'board') setBoardEntry('toggle')
+                goSegment(seg === 'board' ? 'event' : 'board')
+              }}
               // 커뮤니티(켜짐)는 진한 핑크(colors.primary), 모임 피드(꺼짐)는 무채색 회색 대신
               // 연한 핑크로(2026-08-14 오너 지시) — 톱바 어디서나 핑크 톤 하나로 통일.
               style={[styles.segTrack, { backgroundColor: seg === 'board' ? colors.primary : `${colors.primary}30` }]}
@@ -221,7 +277,24 @@ export default function TopBar({
             >
               <Animated.View style={[styles.segThumb, { transform: [{ translateX: thumbTranslate }] }]} />
             </TouchableOpacity>
+
+            {/* 꼬리는 토글을 감싼 View 안에 둔다 — left:'50%' 로 토글 정중앙을 가리키므로
+                로고 폭이나 여백이 바뀌어도 좌표를 다시 계산할 필요가 없다. */}
+            {showToggleTip && <View style={styles.tipTail} />}
           </View>
+
+          {/* 말풍선 본체는 로고+토글을 감싼 left 컨테이너 기준이라 left:0 이 곧 바 왼쪽
+              여백(14)과 같은 자리다. 꼬리와 부모를 일부러 다르게 뒀다 — 한 부모에 두면
+              둘 중 하나는 좌표를 손으로 계산해야 한다.
+              토글을 가리지 않게 아래에만 둔다(보고 바로 눌러볼 수 있어야 한다). */}
+          {showToggleTip && (
+            <View style={styles.tipBubble}>
+              <Text style={styles.tipText}>토글 버튼으로 바로 올 수 있어요</Text>
+              <TouchableOpacity onPress={onCloseToggleTip} hitSlop={10} activeOpacity={0.7}>
+                <Text style={styles.tipClose}>[닫기]</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <View style={styles.rightIcons}>
@@ -254,10 +327,10 @@ export default function TopBar({
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setMenuVisible(false)}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[styles.menuCard, { top: insets.top + 48 }]}>
             {MENU.map((m) => (
-              <TouchableOpacity key={m.label} style={styles.menuItem}
+              <TouchableOpacity key={m.label} style={[styles.menuItem, m.highlight && styles.menuItemOn]}
                 onPress={() => { setMenuVisible(false); onBeforeNavigate?.(); m.action() }}>
-                <Ionicons name={m.icon as any} size={18} color={colors.textSecondary} />
-                <Text style={styles.menuItemText}>{m.label}</Text>
+                <Ionicons name={m.icon as any} size={18} color={m.highlight ? colors.primary : colors.textSecondary} />
+                <Text style={[styles.menuItemText, m.highlight && styles.menuItemTextOn]}>{m.label}</Text>
                 {!!m.badge && (
                   <View style={styles.menuBadge}>
                     <Text style={styles.menuBadgeText}>{m.badge > 99 ? '99+' : m.badge}</Text>

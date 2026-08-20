@@ -23,7 +23,11 @@ import {
 } from '@/hooks/useBoard'
 import { wideContent } from '@/constants/layout'
 import { report } from '@/lib/board'
-import { blockAuthor, markCommentsSeen, getReadPostIds, markBoardVisited } from '@/lib/boardIdentity'
+import {
+  blockAuthor, markCommentsSeen, getReadPostIds, markBoardVisited,
+  getToggleTip, setToggleTip,
+} from '@/lib/boardIdentity'
+import { consumeBoardEntry } from '@/lib/boardEntry'
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/boardSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
@@ -57,6 +61,41 @@ export default function BoardListScreen() {
   // 커뮤니티에 한 번 들어왔다는 기록 — 모임 피드의 스와이프 힌트를 다시 안 보여주려는
   // 용도(2026-08-14, lib/boardIdentity.ts 참고).
   useEffect(() => { markBoardVisited() }, [])
+
+  /**
+   * "토글 버튼으로 바로 올 수 있어요" 말풍선(2026-08-20 오너 지시).
+   *
+   * 커뮤니티로 오는 길이 셋이라(토글·스와이프·햄버거 메뉴), 토글을 모르고 다른 길로만
+   * 다니는 사람에게 한 번 알려준다. 첫 진입이 토글이었으면 이미 아는 사람이라 영영 안 띄운다.
+   *
+   * ⚠️ 진입 방식은 **마운트될 때 딱 한 번** 읽어야 한다(consume 이 값을 비운다).
+   *    필터가 바뀌거나 리렌더될 때 다시 읽으면 그땐 이미 'unknown' 이라 판정이 틀어진다.
+   * ⚠️ 'unknown'(앱 재시작 후 커뮤니티로 바로 복귀 등)은 "토글이 아님"이 아니라 "모름"이다.
+   *    아무것도 저장하지 않고 판정을 미룬다 — 여기서 'pending' 을 넣으면 평소 토글만 쓰던
+   *    사람에게도 말풍선이 뜬다.
+   */
+  const [showToggleTip, setShowToggleTip] = useState(false)
+  useEffect(() => {
+    const entry = consumeBoardEntry()
+    let alive = true
+    ;(async () => {
+      const state = await getToggleTip()
+      if (!alive) return
+      if (state === 'done') return
+      if (state === 'pending') { setShowToggleTip(true); return }
+      // 여기부터는 첫 진입(state === null)
+      if (entry === 'unknown') return          // 어떻게 왔는지 모른다 → 판정 보류
+      if (entry === 'toggle') { setToggleTip('done'); return }
+      setToggleTip('pending')
+      setShowToggleTip(true)
+    })()
+    return () => { alive = false }
+  }, [])
+
+  const closeToggleTip = useCallback(() => {
+    setShowToggleTip(false)
+    setToggleTip('done')   // 닫으면 다시는 안 뜬다(오너 지시)
+  }, [])
 
   const settings = useBoardSettings()
   const { posts, total, loading, error, pageCount, refetch } = useBoardList(page, search)
@@ -216,6 +255,8 @@ export default function BoardListScreen() {
         segment="board"
         onLogoPress={() => { setPage(0); refetchAll() }}
         onSearchPress={() => setSearchModalVisible(true)}
+        showToggleTip={showToggleTip}
+        onCloseToggleTip={closeToggleTip}
       />
 
 

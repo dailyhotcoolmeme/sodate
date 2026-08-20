@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from 'react'
 import { PanResponder, StyleSheet, Dimensions, Animated } from 'react-native'
 import { useRouter } from 'expo-router'
+import { setBoardEntry } from '@/lib/boardEntry'
 import { useColors } from '@/hooks/useColors'
 
 // 소개팅 ↔ 커뮤니티 화면을 좌우 스와이프로 전환한다. 톱바 토글과 같은 router.replace를
@@ -75,6 +76,9 @@ export default function SwipeSegment({ current, children }: { current: 'event' |
         captured.current = false
         if (g.dx <= -RELEASE_THRESHOLD && current === 'event') {
           pendingEnterFrom = 'right' // 다음(커뮤니티) 화면은 오른쪽에서 들어온다
+          // 토글이 아닌 길로 들어왔다는 표시(lib/boardEntry.ts) — 커뮤니티 화면이 이걸 보고
+          // "토글 버튼으로 바로 올 수 있어요" 말풍선을 띄울지 정한다.
+          setBoardEntry('swipe')
           router.replace('/board')
         } else if (g.dx >= RELEASE_THRESHOLD && current === 'board') {
           pendingEnterFrom = 'left' // 다음(소개팅) 화면은 왼쪽에서 들어온다
