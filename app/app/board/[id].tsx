@@ -35,10 +35,13 @@ import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 /** 댓글 입력칸과 등록 버튼의 한 줄 높이 */
 const COMPOSER_H = 38
 
-// 세로·가로 비율이 심하게 극단적인 사진(파노라마, 아주 긴 캡처 등)까지 그대로 두면
-// 화면을 지나치게 많이 차지하니 이 범위로만 눌러준다(대부분의 사진은 이 안에 들어와
-// 안 잘린다 — 크롭은 이 범위를 벗어난 극단적인 사진에만 소폭 적용됨).
-const IMAGE_MIN_RATIO = 0.55  // 세로로 아주 긴 사진의 하한(가로/세로)
+// 가로로 아주 긴 파노라마만 눌러준다.
+//
+// ⚠️ 세로 하한(IMAGE_MIN_RATIO 0.55)은 없앴다(오너 지시 2026-08-21).
+//    화면을 너무 차지하지 말라고 넣었던 값인데, contentFit="cover" 와 같이 쓰여서
+//    **하한을 넘는 세로 사진을 잘라내고 있었다**. 긴 캡처는 대개 글자가 들어 있어
+//    잘리면 내용 자체를 못 본다(1080x3000 이면 위아래 34%, 1080x5000 이면 60% 손실).
+//    이제 세로로 긴 사진은 긴 그대로 전부 보여준다 — 스크롤이 길어지는 건 감수한다.
 const IMAGE_MAX_RATIO = 2.2   // 가로로 아주 긴 사진의 상한
 
 /**
@@ -56,7 +59,7 @@ function PostImage({ uri, style }: { uri: string; style: any }) {
       onLoad={(e) => {
         const { width, height } = e.source
         if (width > 0 && height > 0) {
-          setRatio(Math.min(IMAGE_MAX_RATIO, Math.max(IMAGE_MIN_RATIO, width / height)))
+          setRatio(Math.min(IMAGE_MAX_RATIO, width / height))
         }
       }}
     />
