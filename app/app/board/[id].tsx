@@ -16,7 +16,7 @@ import TopBar from '@/components/TopBar'
 import AppSpinner from '@/components/AppSpinner'
 import ReportSheet from '@/components/ReportSheet'
 import LoadingOverlay from '@/components/LoadingOverlay'
-import AuthorMenu, { type AuthorMenuTarget } from '@/components/AuthorMenu'
+import AuthorMenu, { AUTHOR_MENU_ENABLED, type AuthorMenuTarget } from '@/components/AuthorMenu'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
@@ -508,9 +508,13 @@ export default function BoardPostScreen() {
               {/* 닉네임만 눌러서 그 작성자의 글·댓글 목록으로 간다(2026-08-19 오너 지시).
                   묶는 기준은 닉네임이 아니라 owner_token(기기) — 같은 닉을 여러 사람이
                   쓰고 있어서 닉네임으로 묶으면 결과가 틀린다(hooks/useBoard.ts 참고). */}
-              <Text onPress={(e) => openAuthor(post.owner_token, post.nickname, e.nativeEvent.pageX, e.nativeEvent.pageY)}>
-                {post.nickname}
-              </Text>
+              {AUTHOR_MENU_ENABLED
+                ? (
+                  <Text onPress={(e) => openAuthor(post.owner_token, post.nickname, e.nativeEvent.pageX, e.nativeEvent.pageY)}>
+                    {post.nickname}
+                  </Text>
+                )
+                : post.nickname}
               {' · '}{formatFull(post.created_at)} · 조회 {displayViewCount(post).toLocaleString()}
             </Text>
             <View style={styles.metaActions}>
@@ -936,7 +940,9 @@ function CommentRow({
           )}
           <Text style={styles.commentMeta} numberOfLines={1}>
             {/* 닉네임만 눌러 그 작성자의 활동으로 이동(2026-08-19 오너 지시) */}
-            <Text onPress={(e) => onAuthorPress(e.nativeEvent.pageX, e.nativeEvent.pageY)}>{c.nickname}</Text>
+            {AUTHOR_MENU_ENABLED
+              ? <Text onPress={(e) => onAuthorPress(e.nativeEvent.pageX, e.nativeEvent.pageY)}>{c.nickname}</Text>
+              : c.nickname}
             {' · '}{formatFull(c.created_at)}
           </Text>
         </View>

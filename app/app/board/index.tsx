@@ -14,7 +14,7 @@ import AppSpinner from '@/components/AppSpinner'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import BoardBannerAd from '@/components/BoardBannerAd'
 import BoardPromoBanner from '@/components/BoardPromoBanner'
-import AuthorMenu, { type AuthorMenuTarget } from '@/components/AuthorMenu'
+import AuthorMenu, { AUTHOR_MENU_ENABLED, type AuthorMenuTarget } from '@/components/AuthorMenu'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import {
@@ -370,7 +370,11 @@ function PostRow({
           {/* 닉네임만 눌러서 그 작성자의 글·댓글로 갈 수 있다(2026-08-19 오너 지시).
               중첩 Text 의 onPress 는 글자 영역에서만 잡히므로, 나머지를 누르면
               평소처럼 글로 들어간다. */}
-          <Text onPress={(e) => onAuthorPress(e.nativeEvent.pageX, e.nativeEvent.pageY)}>{post.nickname}</Text>
+          {/* 기능을 숨긴 동안에는 onPress 를 아예 안 건다 — 눌러도 아무 일이 없으면
+              고장 난 것처럼 보인다. AUTHOR_MENU_ENABLED 하나로 되살아난다. */}
+          {AUTHOR_MENU_ENABLED
+            ? <Text onPress={(e) => onAuthorPress(e.nativeEvent.pageX, e.nativeEvent.pageY)}>{post.nickname}</Text>
+            : post.nickname}
           {' · '}{formatWhen(post.created_at)}
         </Text>
         <Text style={styles.rowMeta}>·</Text>

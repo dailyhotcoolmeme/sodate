@@ -17,6 +17,20 @@ import type { AppColors } from '@/constants/colors'
  * 마땅치 않은데, 터치 이벤트가 pageX/pageY 를 그대로 준다. 화면 밖으로 넘치면
  * 안쪽으로 끌어당긴다.
  */
+/**
+ * 이 기능 전체를 켜고 끄는 스위치. **여기 하나만 true 로 바꾸면 다시 열린다.**
+ *
+ * 2026-08-20 오너 지시로 일단 숨긴다("추후에 다시 오픈할거야"). 코드는 지우지 않고
+ * 그대로 둔다 — 화면(app/board/author/[token].tsx), 훅(useAuthorActivity), 이 메뉴,
+ * 라우트 등록까지 전부 살아 있고 이 값만 false 다.
+ *
+ * false 인 동안:
+ *   · 닉네임에 onPress 를 아예 안 건다 — 눌러도 아무 반응이 없으면 고장 난 것처럼 보인다
+ *   · 혹시 어딘가에서 열려도 이 컴포넌트가 null 을 돌려줘 메뉴가 안 뜬다
+ *   · 화면 자체는 주소로 직접 들어가면 여전히 동작한다(들어갈 길이 없을 뿐)
+ */
+export const AUTHOR_MENU_ENABLED = false
+
 export type AuthorMenuTarget = {
   token: string
   nickname: string
@@ -39,6 +53,7 @@ export default function AuthorMenu({
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
+  if (!AUTHOR_MENU_ENABLED) return null
   if (!target) return null
 
   const { width: sw, height: sh } = Dimensions.get('window')
