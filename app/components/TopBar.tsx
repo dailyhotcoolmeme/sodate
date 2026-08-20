@@ -114,10 +114,14 @@ export default function TopBar({
 
   const styles = useMemo(() => StyleSheet.create({
     // 말풍선이 톱바 밖(목록 위)까지 내려오므로 톱바가 아래 내용보다 위에 있어야 한다.
-    // 커뮤니티 목록 맨 위에는 홍보 배너(BoardPromoBanner)가 있는데, 그건 ScrollView 안이라
-    // 형제 순서상 톱바보다 나중에 그려진다 — 그냥 두면 배너가 말풍선을 덮는다(2026-08-20 오너 지적).
-    // ⚠️ 안드로이드는 zIndex 만으로는 안 먹는다. elevation 을 같이 줘야 한다.
-    wrap: { backgroundColor: colors.background, zIndex: 20, elevation: 20 },
+    // 커뮤니티 목록 맨 위 홍보 배너는 ScrollView 안이라 형제 순서상 톱바보다 나중에
+    // 그려지기 때문이다(2026-08-20 오너 지적).
+    //
+    // ⚠️ 여기에 elevation 을 주면 안 된다. 안드로이드의 elevation 은 스택 순서만 올리는 게
+    //    아니라 **그림자를 같이 그린다** — 톱바 아래에 없던 그림자가 생겨 디자인이 망가진다
+    //    (2026-08-20 오너 지적, 내가 넣었다가 뺀 것). 순서는 zIndex 로만 잡고, 떠 보여야 하는
+    //    말풍선 본체에만 그림자(elevation)를 준다.
+    wrap: { backgroundColor: colors.background, zIndex: 20 },
     bar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -176,12 +180,8 @@ export default function TopBar({
     },
     menuBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
     menuItemText: { fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
-    // 커뮤니티 항목 강조(2026-08-20 오너 지시) — 다른 항목과 성격이 달라 눈에 띄어야 한다.
-    // 위 구분선으로 '여기서부터 다른 것'을 먼저 알리고, 배경·글자색으로 한 번 더 준다.
-    menuItemOn: {
-      backgroundColor: `${colors.primary}18`,
-      borderTopWidth: 1, borderTopColor: colors.divider,
-    },
+    // 커뮤니티 항목 강조 — 배경 박스도 구분선도 두지 않는다(2026-08-20 오너 지시:
+    // "배경색 박스 없애고 글자색만 유지"). 글자·아이콘 색과 굵기로만 구분한다.
     menuItemTextOn: { color: colors.primary, fontWeight: '700' },
     // ── 토글 안내 말풍선(2026-08-20 오너 지시) ──
     // 꼬리: 같은 색 정사각형을 45도 돌려 말풍선 위에 겹친다(별도 이미지 불필요).
@@ -327,7 +327,7 @@ export default function TopBar({
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setMenuVisible(false)}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}} style={[styles.menuCard, { top: insets.top + 48 }]}>
             {MENU.map((m) => (
-              <TouchableOpacity key={m.label} style={[styles.menuItem, m.highlight && styles.menuItemOn]}
+              <TouchableOpacity key={m.label} style={styles.menuItem}
                 onPress={() => { setMenuVisible(false); onBeforeNavigate?.(); m.action() }}>
                 <Ionicons name={m.icon as any} size={18} color={m.highlight ? colors.primary : colors.textSecondary} />
                 <Text style={[styles.menuItemText, m.highlight && styles.menuItemTextOn]}>{m.label}</Text>
