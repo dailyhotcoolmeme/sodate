@@ -43,34 +43,50 @@ export default function BoardSwipeHint() {
 
   useEffect(() => {
     if (!visible) return
-    // 위치는 0(완전히 나온 상태)을 절대 못 넘게(overshootClamping) 통통 나왔다 들어가고,
-    // 나온 순간엔 스케일까지 살짝 부풀렸다 되돌려 두 번 튀는 느낌을 더한다. 오래 머문 뒤
-    // 들어가고, 쉬는 시간을 짧게 잡아 자주 반복되게 했다(2026-08-14 오너 지적 반영).
-    const pop = Animated.spring(scale, {
-      toValue: 1.14, useNativeDriver: true, friction: 3, tension: 200, overshootClamping: false,
-    })
-    const settle = Animated.spring(scale, {
-      toValue: 1, useNativeDriver: true, friction: 4, tension: 200, overshootClamping: true,
-    })
+    /**
+     * 나왔다 → 커졌다 작아졌다 → 한 번 더 → 쏙 들어갔다 를 반복한다.
+     *
+     * 2026-08-20 오너 지적: "너무 정적인 느낌, 이 모든 흐름의 속도가 더 빨라야 한다".
+     *
+     * 원인은 delay 만이 아니라 **스프링 자체**였다. 예전 값(tension 200 / friction 3)은
+     * 감쇠비가 0.1 밖에 안 돼서, 눈에 보이는 움직임이 끝난 뒤에도 스프링이 미세하게
+     * 계속 떨렸다. Animated.sequence 는 앞 단계가 완전히 멈춰야 다음으로 넘어가므로
+     * 그 잔떨림 시간이 통째로 대기 시간이 됐다 — 한 동작 하고 한참 서 있는 것처럼 보인 이유다.
+     *
+     * 그래서 전부 timing 으로 바꿨다. 길이가 숫자로 딱 정해져서 잔떨림 대기가 없고,
+     * 아래 합계 그대로 **한 바퀴 1.62초**로 돈다(예전은 스프링 정착까지 합쳐 5초 이상).
+     * "통통" 튀는 느낌은 스프링의 흔들림이 아니라 1 → 1.14 → 1 펄스와 back 이징이 낸다.
+     *
+     * ⚠️ translateX 에는 절대 overshoot 이징(back/elastic)을 쓰지 말 것. 0 을 넘어가면
+     *    탭이 화면 끝보다 안쪽으로 밀려 배경 빈 틈이 비친다(2026-08-14 오너 지적).
+     *    scale 은 커지는 쪽으로만 움직이므로 back 을 써도 안전하다.
+     */
+    const slideOut = () =>
+      Animated.timing(translateX, {
+        toValue: PEEK_X, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      })
+    const grow = () =>
+      Animated.timing(scale, {
+        toValue: 1.14, duration: 110, easing: Easing.out(Easing.back(2.2)), useNativeDriver: true,
+      })
+    const shrink = () =>
+      Animated.timing(scale, {
+        toValue: 1, duration: 120, easing: Easing.inOut(Easing.quad), useNativeDriver: true,
+      })
+
     const bounce = Animated.loop(
       Animated.sequence([
-        Animated.delay(500),
-        Animated.parallel([
-          Animated.spring(translateX, { toValue: PEEK_X, useNativeDriver: true, friction: 5, tension: 120, overshootClamping: true }),
-          pop,
-        ]),
-        Animated.delay(120),
-        settle,
-        Animated.delay(500),
-        Animated.parallel([
-          Animated.spring(translateX, { toValue: PEEK_X, useNativeDriver: true, friction: 5, tension: 160, overshootClamping: true }),
-          Animated.spring(scale, { toValue: 1.14, useNativeDriver: true, friction: 3, tension: 200, overshootClamping: false }),
-        ]),
-        Animated.delay(120),
-        Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 4, tension: 200, overshootClamping: true }),
-        Animated.delay(900),
-        Animated.timing(translateX, { toValue: HIDDEN_X, duration: 280, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
-        Animated.delay(1300),
+        Animated.delay(140),
+        Animated.parallel([slideOut(), grow()]),   // 150
+        shrink(),                                   // 120
+        Animated.delay(90),
+        grow(),                                     // 110  ← 두 번째 통통
+        shrink(),                                   // 120
+        Animated.delay(240),
+        Animated.timing(translateX, {               // 130  ← 쏙 들어감
+          toValue: HIDDEN_X, duration: 130, easing: Easing.in(Easing.cubic), useNativeDriver: true,
+        }),
+        Animated.delay(420),                        // 다음 바퀴까지 쉼
       ])
     )
     bounce.start()
