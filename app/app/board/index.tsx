@@ -140,32 +140,20 @@ export default function BoardListScreen() {
   }
   const clearSearch = () => { setSearch(''); setPage(0) }
 
-  // 검색이 걸려 있을 때 목록 위에 보이는 슬림한 안내줄 — 검색칸 자체는 톱바 돋보기
-  // → 팝업으로 옮겼지만(2026-08-13), 지금 검색 중이라는 사실과 지우기는 목록에서도
-  // 바로 보여야 한다.
-  const renderActiveSearchBar = () => (
-    <View style={styles.searchInfoRow}>
-      <Text style={styles.searchInfo} numberOfLines={1}>
-        &lsquo;{search}&rsquo; 검색 결과 {total}건
-      </Text>
-      <TouchableOpacity onPress={clearSearch} hitSlop={8}>
-        <Text style={styles.searchClear}>지우기</Text>
-      </TouchableOpacity>
-    </View>
-  )
-
-  return (
-    <SwipeSegment current="board">
-    <View style={styles.container}>
-      <TopBar
-        segment="board"
-        onLogoPress={() => { setPage(0); refetchAll() }}
-        onSearchPress={() => setSearchModalVisible(true)}
-      />
-
-      {/* 내 글에 달린 새 댓글 띠 — 검색줄이 있던 자리를 대신 차지한다. 검색줄은 그
-          아래로 내렸다(2026-08-12 오너 지시). 댓글이 없으면 이 줄 자체가 없다. */}
-      {newCommentTotal > 0 && (
+  /**
+   * 내 글에 달린 새 댓글 띠.
+   *
+   * 2026-08-12 에는 톱바 바로 밑(검색줄이 있던 자리)에 고정으로 뒀는데, 2026-08-19 에
+   * 홍보 배너가 생기면서 이 띠가 배너보다 위에 뜨게 됐다. 오너 지시로 배너 아래로
+   * 내린다(2026-08-20). 배너를 위로 고정하는 방법도 있었지만 이 앱은 sticky 를 쓰지
+   * 않는 규칙이라, 띠를 목록과 같이 스크롤되는 자리로 옮겼다.
+   *
+   * 목록이 비었거나 조회에 실패한 화면에서도 이 띠는 살아 있어야 한다 — 내 글에 달린
+   * 댓글은 게시판 상태와 무관하게 알려줘야 하므로 그 두 갈래에서도 같이 부른다.
+   */
+  const renderNewComments = () => {
+    if (newCommentTotal === 0) return null
+    return (
         newCommentTotal === 1 ? (
           <TouchableOpacity
             style={styles.newCommentRow}
@@ -204,7 +192,32 @@ export default function BoardListScreen() {
             )}
           </View>
         )
-      )}
+    )
+  }
+
+  // 검색이 걸려 있을 때 목록 위에 보이는 슬림한 안내줄 — 검색칸 자체는 톱바 돋보기
+  // → 팝업으로 옮겼지만(2026-08-13), 지금 검색 중이라는 사실과 지우기는 목록에서도
+  // 바로 보여야 한다.
+  const renderActiveSearchBar = () => (
+    <View style={styles.searchInfoRow}>
+      <Text style={styles.searchInfo} numberOfLines={1}>
+        &lsquo;{search}&rsquo; 검색 결과 {total}건
+      </Text>
+      <TouchableOpacity onPress={clearSearch} hitSlop={8}>
+        <Text style={styles.searchClear}>지우기</Text>
+      </TouchableOpacity>
+    </View>
+  )
+
+  return (
+    <SwipeSegment current="board">
+    <View style={styles.container}>
+      <TopBar
+        segment="board"
+        onLogoPress={() => { setPage(0); refetchAll() }}
+        onSearchPress={() => setSearchModalVisible(true)}
+      />
+
 
       {loading && posts.length === 0 ? (
         <View style={styles.center}><AppSpinner /></View>
@@ -212,19 +225,25 @@ export default function BoardListScreen() {
         // ⚠️(2026-08-13) 조회가 실패해도 예전엔 posts=[] 그대로라 "아직 글이 없어요"로
         // 보였다 — 진짜 빈 상태와 구분이 안 돼 게시판이 통째로 고장나도 티가 안 났다
         // (같은 날 컬럼 rename 사고로 두 번 겪음). 실패는 실패라고 분명히 알려준다.
-        <View style={styles.center}>
+        <View style={{ flex: 1 }}>
+          {renderNewComments()}
+          <View style={styles.center}>
           <Ionicons name="construct-outline" size={32} color={colors.textTertiary} />
           <Text style={styles.emptyText}>일시적인 점검 중입니다</Text>
           <Text style={styles.emptySub}>잠시 후 다시 시도해주세요</Text>
+          </View>
         </View>
       ) : posts.length === 0 ? (
-        <View style={styles.center}>
+        <View style={{ flex: 1 }}>
+          {renderNewComments()}
+          <View style={styles.center}>
           {search && <View style={styles.emptySearchRow}>{renderActiveSearchBar()}</View>}
           <Ionicons name="chatbubbles-outline" size={32} color={colors.textTertiary} />
           <Text style={styles.emptyText}>
             {search ? '검색 결과가 없어요' : '아직 글이 없어요'}
           </Text>
           {!search && <Text style={styles.emptySub}>첫 글을 남겨보세요!</Text>}
+          </View>
         </View>
       ) : (
         <KeyboardAwareScrollView
@@ -242,6 +261,8 @@ export default function BoardListScreen() {
           {/* 맨 위 홍보 배너 — AdMob 아니라 우리가 만든 자체 배너다(2026-08-19 오너 지시).
               검색 중일 때는 검색 결과에 집중하도록 띄우지 않는다. */}
           {!search && <BoardPromoBanner />}
+
+          {renderNewComments()}
 
           <View>
             {posts.map((p) => (

@@ -26,7 +26,9 @@ const ASPECT = 1110 / 276
 //      둥근 모서리는 이 컴포넌트의 borderRadius 가 전담한다. 이제 radius 를 얼마로 바꾸든
 //      흰 테두리가 생길 수 없다. **배너를 다시 만들 때 이미지에 모서리를 굽지 말 것.**
 const BANNER_URL = 'https://sodate-admin.pages.dev/media/promo/toolshere-banner-anim-v3.webp'
-const TARGET_URL = 'https://toolshere.app'
+// 언어 없는 루트(toolshere.app)로 보내면 서버가 로케일을 판별해 /ko 로 한 번 더
+// 넘긴다 — 그 왕복이 눈에 띄게 느려서 처음부터 /ko 로 보낸다(오너 지시 2026-08-20).
+const TARGET_URL = 'https://toolshere.app/ko'
 
 /**
  * 커뮤니티 피드 맨 위 홍보 배너(2026-08-19 오너 지시).
