@@ -17,7 +17,7 @@ const HIDDEN_X = TAB_WIDTH * 0.62
 const PEEK_X = 0
 
 /**
- * 모임 피드 오른쪽 끝에서 통통 튀며 "왼쪽으로 스와이프하면 커뮤니티" 임을 알리는 힌트
+ * 모임 피드 오른쪽 끝에서 통통 튀며 "옆으로 넘기면 커뮤니티" 임을 알리는 힌트
  * (2026-08-14 오너 지시). 커뮤니티(게시판)에 한 번이라도 들어가 본 기기에는 다시
  * 보여줄 이유가 없어, lib/boardIdentity.ts의 기록을 보고 안 가본 기기에서만 마운트한다.
  *
@@ -54,7 +54,7 @@ export default function BoardSwipeHint() {
      * 그 잔떨림 시간이 통째로 대기 시간이 됐다 — 한 동작 하고 한참 서 있는 것처럼 보인 이유다.
      *
      * 그래서 전부 timing 으로 바꿨다. 길이가 숫자로 딱 정해져서 잔떨림 대기가 없고,
-     * 아래 합계 그대로 **한 바퀴 1.62초**로 돈다(예전은 스프링 정착까지 합쳐 5초 이상).
+     * 아래 합계 그대로 한 바퀴가 돈다(예전은 스프링 정착까지 합쳐 5초 이상).
      * "통통" 튀는 느낌은 스프링의 흔들림이 아니라 1 → 1.14 → 1 펄스와 back 이징이 낸다.
      *
      * ⚠️ translateX 에는 절대 overshoot 이징(back/elastic)을 쓰지 말 것. 0 을 넘어가면
@@ -86,7 +86,7 @@ export default function BoardSwipeHint() {
         Animated.timing(translateX, {               // 130  ← 쏙 들어감
           toValue: HIDDEN_X, duration: 130, easing: Easing.in(Easing.cubic), useNativeDriver: true,
         }),
-        Animated.delay(420),                        // 다음 바퀴까지 쉼
+        Animated.delay(840),                        // 다음 바퀴까지 쉼(오너 지시 2026-08-20: 420의 2배)
       ])
     )
     bounce.start()
@@ -103,7 +103,16 @@ export default function BoardSwipeHint() {
       hitSlop={{ left: 10, top: 10, bottom: 10 }}
     >
       <Animated.View style={[styles.tab, { backgroundColor: colors.primary, transform: [{ translateX }, { scale }] }]}>
-        <Ionicons name="chevron-back" size={17} color="#fff" />
+        {/*
+          화살표는 손가락이 움직일 방향(왼쪽)이 아니라 **갈 곳이 어느 쪽인지**를 가리킨다
+          (오너 지시 2026-08-20). 캐러셀의 '다음' 화살표가 오른쪽을 향하고 정작 제스처는
+          왼쪽 스와이프인 것과 같은 관례다.
+
+          이 앱에는 근거가 하나 더 있다 — 톱바 토글이 켜짐(오른쪽)=커뮤니티, 꺼짐(왼쪽)=소개팅
+          이라 "커뮤니티는 오른쪽"이라고 이미 가르치고 있다. 여기서만 왼쪽 화살표를 쓰면
+          같은 앱이 두 가지로 말하는 셈이 된다.
+        */}
+        <Ionicons name="chevron-forward" size={17} color="#fff" />
       </Animated.View>
     </TouchableOpacity>
   )
