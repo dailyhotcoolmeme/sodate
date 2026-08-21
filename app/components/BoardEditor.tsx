@@ -133,9 +133,11 @@ function makeStyles(colors: AppColors) {
       borderWidth: 1, borderColor: colors.border, minHeight: 220,
     },
 
-    // X 버튼이 썸네일 위(top: -5)로 살짝 튀어나오는데 paddingVertical만으로는 위쪽이
-    // 잘려 보였다(2026-08-14 오너 지적) — 위쪽만 버튼이 다 들어올 만큼 더 준다.
-    thumbs: { gap: 8, paddingTop: 8, paddingBottom: 2 },
+    // X 버튼이 썸네일 밖으로 튀어나온다(top:-5, right:-5). 그만큼 컨테이너에 여백을 줘야
+    // 잘리지 않는다. 위쪽은 paddingTop 8로 해결했었는데(2026-08-14), 오른쪽 여백이 없어
+    // **맨 끝 썸네일의 X 버튼이 스크롤 끝에서 잘렸다**(2026-08-21 오너 지적). 오른쪽에도
+    // 버튼이 튀어나온 만큼(약 6) 여백을 준다.
+    thumbs: { gap: 8, paddingTop: 8, paddingBottom: 2, paddingRight: 8 },
     thumbWrap: { position: 'relative' },
     thumb: { width: 76, height: 76, borderRadius: 8, backgroundColor: colors.surfaceHigh },
     thumbX: {
@@ -251,7 +253,7 @@ export function LinkInputModal({ api }: { api: BoardLinksApi }) {
 function makeLinkStyles(colors: AppColors) {
   return StyleSheet.create({
     // 사진 썸네일과 같은 이유(위 makeStyles 참고) — X 버튼이 위로 튀어나오니 위쪽 여백을 더 준다.
-    thumbs: { gap: 8, paddingTop: 8, paddingBottom: 2 },
+    thumbs: { gap: 8, paddingTop: 8, paddingBottom: 2, paddingRight: 8 },
     thumbWrap: { position: 'relative' },
     thumb: { width: 76, height: 76, borderRadius: 8, backgroundColor: colors.surfaceHigh },
     playBadge: {
