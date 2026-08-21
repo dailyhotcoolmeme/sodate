@@ -321,6 +321,7 @@ export interface Database {
           nickname: string
           title: string
           content: string
+          content_below: string | null
           image_urls: string[] | null
           link_urls: string[] | null
           owner_token: string
@@ -358,6 +359,7 @@ export interface Database {
           nickname: string
           /** 비밀 댓글이면 빈 문자열. 실제 본문은 secret_content 에 있고 앱은 읽을 권한이 없다. */
           content: string
+          content_below?: string | null
           owner_token: string
           is_secret: boolean
           report_count: number

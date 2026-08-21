@@ -58,6 +58,8 @@ export async function createPost(p: {
   nickname: string
   title: string
   content: string
+  /** 첨부 아래에 이어 쓰는 본문(첨부가 있을 때만). 없으면 안 보내도 된다. */
+  contentBelow?: string
   imageUrls?: string[]
   /** 유튜브 링크(최대 3개) — 서버가 유튜브만 허용, 아니면 에러 문구를 돌려준다. */
   linkUrls?: string[]
@@ -77,7 +79,7 @@ export async function createPost(p: {
 export async function getPostForEdit(postId: string): Promise<
   {
     post: {
-      nickname: string; title: string; content: string; image_urls: string[] | null
+      nickname: string; title: string; content: string; content_below: string | null; image_urls: string[] | null
       link_urls: string[] | null
       tag_id: string | null
       /** 지금은 비활성화됐을 수 있는 말머리도 수정 화면엔 '현재 선택'으로 보여줘야 해서 같이 온다 */
@@ -93,6 +95,7 @@ export async function updatePost(p: {
   postId: string
   title?: string
   content?: string
+  contentBelow?: string
   imageUrls?: string[]
   linkUrls?: string[]
   /** 'tagId' 키 자체를 안 보내면 말머리를 그대로 두고, null 을 보내면 없앤다. */

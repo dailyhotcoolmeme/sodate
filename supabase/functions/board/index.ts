@@ -280,6 +280,8 @@ serve(async (req) => {
       const nick = String(body.nickname ?? '').trim()
       const title = String(body.title ?? '').trim()
       const content = String(body.content ?? '').trim()
+      // 첨부 아래에 이어 쓰는 본문(2026-08-21). 첨부가 있을 때만 앱이 보내온다. 없으면 빈 문자열.
+      const contentBelow = String(body.contentBelow ?? '').trim()
       // 사진은 10장, 움짤(GIF)은 갯수 대신 5MB로만 제한한다(2026-08-13 오너 지시) —
       // 여기 15는 그 둘을 합친 서버 안전판일 뿐, 화면에 보여주는 제한은 lib/boardImage.ts에 있다.
       const images: string[] = Array.isArray(body.imageUrls) ? body.imageUrls.slice(0, MAX_ATTACHED_IMAGES) : []
@@ -292,7 +294,10 @@ serve(async (req) => {
         return json({ error: `제목은 1~${TITLE_MAX}자로 입력해주세요.` }, 400)
       if (!content || content.length > CONTENT_MAX)
         return json({ error: `본문은 1~${CONTENT_MAX}자로 입력해주세요.` }, 400)
-      const bad = moderate(`${nick} ${title} ${content}`)
+      // 아랫글도 같은 상한·모더레이션 적용. 아랫글은 있어도 되고 없어도 된다(첨부 있을 때만 입력됨).
+      if (contentBelow.length > CONTENT_MAX)
+        return json({ error: `첨부 아래 본문은 ${CONTENT_MAX}자 이내로 입력해주세요.` }, 400)
+      const bad = moderate(`${nick} ${title} ${content} ${contentBelow}`)
       if (bad) return json({ error: bad }, 400)
       const tagResult = await resolveTagId(body.tagId)
       if ('error' in tagResult) return json({ error: tagResult.error }, 400)
@@ -300,7 +305,7 @@ serve(async (req) => {
         return json({ error: '잠시 후에 다시 올려주세요.' }, 429)
 
       const { data, error } = await supabase.from('board_posts').insert({
-        nickname: nick, title, content, owner_token: hash,
+        nickname: nick, title, content, content_below: contentBelow || null, owner_token: hash,
         image_urls: images.length ? images : null,
         link_urls: linksResult.links.length ? linksResult.links : null,
         tag_id: tagResult.tagId,
@@ -317,7 +322,7 @@ serve(async (req) => {
     if (action === 'getPost') {
       const id = String(body.postId ?? '')
       const { data } = await supabase.from('board_posts')
-        .select('nickname,title,content,image_urls,link_urls,tag_id,board_tags(label),owner_token').eq('id', id).maybeSingle()
+        .select('nickname,title,content,content_below,image_urls,link_urls,tag_id,board_tags(label),owner_token').eq('id', id).maybeSingle()
       if (!data) return json({ error: '글을 찾을 수 없습니다.' }, 404)
       if (data.owner_token !== hash) return json({ error: '본인이 쓴 것만 수정할 수 있어요.' }, 403)
       // 지금은 비활성화된 말머리라도 수정 화면에 '현재 선택'으로 보여줘야 하니 라벨을 같이 준다.
@@ -344,6 +349,13 @@ serve(async (req) => {
         if (!content || content.length > CONTENT_MAX)
           return json({ error: `본문은 1~${CONTENT_MAX}자로 입력해주세요.` }, 400)
         patch.content = content
+      }
+      // 아랫글 — 빈 문자열이면 NULL 로 지운다(첨부를 다 뺀 경우 등). undefined면 안 건드림.
+      if (body.contentBelow != null) {
+        const cb = String(body.contentBelow).trim()
+        if (cb.length > CONTENT_MAX)
+          return json({ error: `첨부 아래 본문은 ${CONTENT_MAX}자 이내로 입력해주세요.` }, 400)
+        patch.content_below = cb || null
       }
       if (Array.isArray(body.imageUrls)) patch.image_urls = body.imageUrls.slice(0, MAX_ATTACHED_IMAGES)
       if (Array.isArray(body.linkUrls)) {

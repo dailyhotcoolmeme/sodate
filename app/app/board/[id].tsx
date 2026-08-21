@@ -593,6 +593,14 @@ export default function BoardPostScreen() {
           </View>
         )}
 
+        {/* 첨부(사진·유튜브) 아래에 이어 쓰는 본문(2026-08-21). 있을 때만 렌더 —
+            윗글(post.content)과 같은 스타일. 첨부가 신고로 가려져도 이 글은 그대로 보인다. */}
+        {!!post.content_below && (
+          <View style={styles.postBody}>
+            <Text style={styles.bodyText} selectable>{post.content_below}</Text>
+          </View>
+        )}
+
         <View style={styles.votes}>
           <TouchableOpacity
             style={[styles.voteBtn, myVote === 1 && styles.voteBtnOn]}
