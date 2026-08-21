@@ -17,6 +17,8 @@ class MockScraper(BaseScraper):
     def __init__(self):
         self.company_slug = 'test'
         self.company_id = 'test-uuid-1234'
+        # 실제 get_company_id()가 companies.name 도 같이 캐싱한다(2026-08-14). 목업도 맞춘다.
+        self.company_name = '테스트업체'
         self.supabase = MagicMock()
         from utils.logger import get_logger
         self.logger = get_logger('test')
