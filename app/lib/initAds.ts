@@ -36,7 +36,13 @@ export async function runPostOnboardingSetup(): Promise<void> {
     // (비맞춤으로 내려갈 뿐) 이라 실패를 삼켜도 된다.
   }
 
-  mobileAds().initialize().catch(() => {})
+  // AdMob 초기화를 앱 진입 직후가 아니라 살짝 뒤로 미룬다(2026-08-21 오너 제보).
+  // 콜드 스타트 순간엔 Google Play Services 가 아직 안 깨어난 경우가 있어, 그때 AdMob 이
+  // Play Services/Play Integrity 를 건드리면 시스템이 "Something went wrong / Check that
+  // Google Play is enabled" 다이얼로그를 띄운다(우리 JS 로는 못 막는 네이티브 팝업).
+  // 첫 화면이 뜨고 광고가 실제로 필요해지기 전까지 몇 초 여유를 주면 Play Services 가
+  // 준비돼 이 충돌이 크게 줄어든다. 광고는 목록을 스크롤해야 자리가 나오므로 지연돼도 무방.
+  setTimeout(() => { mobileAds().initialize().catch(() => {}) }, 4000)
 }
 
 /** @deprecated 이름만 남긴 하위호환. runPostOnboardingSetup을 쓸 것. */

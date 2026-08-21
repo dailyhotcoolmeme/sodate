@@ -13,3 +13,10 @@ alter table public.board_posts
 
 comment on column public.board_posts.content_below is
   '첨부(사진/유튜브) 아래에 이어 쓰는 본문. 첨부가 있는 글에서만 입력 가능. NULL이면 없음.';
+
+-- ⚠️ 이 테이블은 컬럼별로 명시적 GRANT 가 걸려 있다(테이블 전체 grant 가 아님).
+-- 그래서 새 컬럼을 추가하면 그 컬럼에는 권한이 없어, 앱이 select 에 그 컬럼을 넣는 순간
+-- "permission denied for table board_posts" 로 조회 전체가 막힌다(2026-08-21 실제로 겪음:
+-- content_below 배포 직후 게시글 조회 전면 중단). 기존 content 컬럼과 동일하게 부여한다.
+-- write 는 컬럼 권한이 있어도 RLS(row 레벨)가 막아 Edge Function(service_role)만 가능하다.
+grant select (content_below) on public.board_posts to anon, authenticated;
