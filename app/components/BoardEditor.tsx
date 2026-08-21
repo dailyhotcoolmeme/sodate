@@ -4,7 +4,7 @@ import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { pickAndUpload, MAX_IMAGES, isGifUrl } from '@/lib/boardImage'
+import { pickAndUpload, pickAndUploadMany, MAX_IMAGES, isGifUrl } from '@/lib/boardImage'
 import { youtubeId, youtubeThumbnail } from '@/lib/youtube'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
@@ -24,17 +24,21 @@ export function useBoardEditor(images: string[], onChangeImages: (next: string[]
   // 제한한다(2026-08-13 오너 지시). 별도 상태 없이 URL 확장자로 구분한다.
   const photoCount = images.filter((u) => !isGifUrl(u)).length
 
+  // 한 번에 여러 장을 골라 **고른 순서대로** 붙인다(2026-08-21 오너 지시). 예전엔
+  // 한 장씩 반복해야 했다. 지금 더 받을 수 있는 장수만큼만 받고, 초과분·실패분은 알려준다.
   const addImage = async () => {
-    if (photoCount >= MAX_IMAGES) {
+    const remaining = MAX_IMAGES - photoCount
+    if (remaining <= 0) {
       Alert.alert('알림', `사진은 ${MAX_IMAGES}장까지 올릴 수 있어요.`)
       return
     }
     setUploading(true)
-    const r = await pickAndUpload('photo')
+    const r = await pickAndUploadMany(remaining)
     setUploading(false)
     if (!r) return
-    if ('error' in r) { Alert.alert('알림', r.error); return }
-    onChangeImages([...images, r.url])
+    // 성공한 건 순서 그대로 먼저 붙이고, 안내가 있으면(초과·실패) 그다음에 띄운다.
+    if (r.urls.length) onChangeImages([...images, ...r.urls])
+    if (r.error) Alert.alert('알림', r.error)
   }
 
   const addGif = async () => {

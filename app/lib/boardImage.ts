@@ -130,3 +130,80 @@ export async function pickAndUpload(mode: PickMode = 'photo'): Promise<{ url: st
 
 /** URL만 보고 움짤인지 구분한다 — 업로드된 R2 키가 실제 확장자를 그대로 담고 있어 가능. */
 export const isGifUrl = (url: string): boolean => /\.gif(\?|$)/i.test(url)
+
+
+/**
+ * 한 번에 여러 장을 골라 순서대로 올린다(2026-08-21 오너 지시 — 한 장씩 반복하지 말고
+ * 동시에 여러 개, 고른 순서대로 첨부). 사진 전용 — 움짤은 압축 없이 원본이라 갯수가
+ * 아니라 파일당 용량으로 관리해서 여기 섞지 않는다(위 addGif 그대로).
+ *
+ * - `remaining` : 지금 더 받을 수 있는 장수(사진 10 - 이미 붙은 사진). 이보다 많이 고르면
+ *   앞에서부터 그만큼만 올리고 몇 장이 빠졌는지 알려준다.
+ * - 리사이즈·업로드는 한 장씩 순차로 한다. 병렬로 쏘면 Edge Function 이 동시에 여러 건을
+ *   받아 느려지고, 순서도 뒤섞일 수 있다. 고른 순서를 지키는 게 이 작업의 핵심이라 순차가 맞다.
+ * - 중간에 한 장이 실패해도 멈추지 않고 나머지를 계속 올린다. 끝나고 성공한 URL 들과
+ *   (있으면) 실패 안내를 함께 돌려준다.
+ */
+export async function pickAndUploadMany(
+  remaining: number
+): Promise<{ urls: string[]; skipped: number; error?: string } | null> {
+  const native = loadNative()
+  if (!native) {
+    return { urls: [], skipped: 0, error: '사진 첨부는 다음 앱 업데이트부터 사용할 수 있어요.' }
+  }
+  const { picker: ImagePicker, manipulator: ImageManipulator } = native
+
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+  if (!perm.granted) {
+    return { urls: [], skipped: 0, error: '사진 접근을 허용해야 첨부할 수 있어요. 설정에서 권한을 켜주세요.' }
+  }
+
+  const picked = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 1,
+    allowsMultipleSelection: true,
+    // 고를 수 있는 상한을 시스템 선택창에 그대로 알려준다 — 사용자가 애초에 초과 선택을 못 하게.
+    selectionLimit: Math.max(1, remaining),
+    // 다중 선택은 GIF 원본 바이트가 필요 없다(사진만 받는다). base64 를 안 받아 메모리를 아낀다.
+    base64: false,
+  })
+  if (picked.canceled || !picked.assets?.length) return null
+
+  // iOS 는 고른 순서대로, 안드로이드도 대부분 순서를 유지한다. 시스템이 주는 순서를 그대로 쓴다.
+  const assets = picked.assets as Array<{ uri: string; mimeType?: string }>
+  const take = assets.slice(0, Math.max(0, remaining))
+  const skipped = assets.length - take.length
+
+  const urls: string[] = []
+  let failed = 0
+  const ownerToken = await getOrCreateToken()
+  for (const asset of take) {
+    // 다중 선택은 사진만 — 혹시 GIF 가 섞이면 그 한 장만 건너뛴다(정지프레임으로 뭉개지는 걸 막는다).
+    if (asset.mimeType === 'image/gif' || /\.gif$/i.test(asset.uri)) { failed++; continue }
+    try {
+      const resized = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1280 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      )
+      if (!resized.base64) { failed++; continue }
+      const { data, error } = await supabase.functions.invoke('board', {
+        body: { action: 'uploadImage', dataUrl: `data:image/jpeg;base64,${resized.base64}`, ownerToken },
+      })
+      if (error || !data?.url) { failed++; continue }
+      urls.push(data.url)
+    } catch {
+      failed++
+    }
+  }
+
+  let error: string | undefined
+  if (skipped > 0 && failed > 0) {
+    error = `${skipped}장은 최대 장수를 넘어 빠졌고, ${failed}장은 올리지 못했어요.`
+  } else if (skipped > 0) {
+    error = `사진은 최대 ${MAX_IMAGES}장까지라 ${skipped}장은 빠졌어요.`
+  } else if (failed > 0) {
+    error = `${failed}장은 올리지 못했어요. 나머지는 첨부됐어요.`
+  }
+  return { urls, skipped, error }
+}
