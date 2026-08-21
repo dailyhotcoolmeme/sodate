@@ -232,8 +232,14 @@ class BaseScraper(ABC):
             if data.get('attendee_image_url') is None:
                 data.pop('attendee_image_url', None)
 
-            # 테마는 구분하지 않는다 — 전부 소개팅. 스크래퍼가 뭘 넣든 일괄 고정.
-            data['theme'] = ['소개팅']
+            # 테마 — 소개팅은 전부 '소개팅'으로 일괄 고정(스크래퍼가 뭘 넣든 덮음).
+            # 소셜링(2026-08-21)은 여기서 제외한다: 앱 필터가 socialing_category 로 나뉘므로,
+            # 테마는 그 카테고리명을 넣어 준다(있으면). 없으면 스크래퍼가 넣은 값을 그대로 둔다.
+            if data.get('event_type') == 'socialing':
+                cat = data.get('socialing_category')
+                data['theme'] = [cat] if cat else (data.get('theme') or [])
+            else:
+                data['theme'] = ['소개팅']
 
             # 해시태그 자동 생성 (admin 검수·수정 대상). theme는 그대로 두고 hashtags만 채운다.
             # 매칭이 없어 빈 배열이면 upsert에서 제외 → 기존(admin 편집) 값을 빈 배열로 덮지 않는다.
@@ -282,8 +288,10 @@ class BaseScraper(ABC):
                 #    '모임 시각'이 아니다 — 문토 편지소개팅(id=670534)은 우편으로 진행해
                 #    모일 자리가 아예 없는데 startDate에 '모집 마감'인 23:50이 들어와
                 #    앱 목록 첫 줄에 떴다(오너 제보). 틀린 시간을 보여주느니 안 올린다.
+                # 소셜링(2026-08-21)은 이 시간대 필터를 적용하지 않는다 — 아침 러닝(6~9시)·
+                # 평일 밤·심야 모임이 정상이라 소개팅 기준(10~21시)으로 자르면 멀쩡한 게 날아간다.
                 dt_kst = dt.astimezone(KST)
-                if not (10 <= dt_kst.hour <= 21):
+                if data.get('event_type') != 'socialing' and not (10 <= dt_kst.hour <= 21):
                     self.logger.warning(
                         f"모임 시간대(10~22시) 밖이라 건너뜀 ({dt_kst.strftime('%m/%d %H:%M')} KST): "
                         f"{(data.get('title') or '')[:40]} | {event.source_url}"

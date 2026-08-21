@@ -30,6 +30,8 @@ from scrapers.lovecommunity import LovecommunityLoco
 from scrapers.finance_lounge import FinanceLoungeScraper
 from scrapers.otr_lounge import OtrLoungeScraper
 from scrapers.unibridge_social import UnibridgeSocialScraper
+from scrapers.trevari import TrevariScraper
+from scrapers.donghaeng import DonghaengScraper
 from utils.logger import get_logger
 
 logger = get_logger('main')
@@ -49,6 +51,9 @@ SCRAPERS = [
     FinanceLoungeScraper,
     OtrLoungeScraper,
     UnibridgeSocialScraper,
+    # 소셜링 신규 소스(2026-08-21) — event_type='socialing'. 소개팅 피드엔 안 섞임.
+    TrevariScraper,
+    DonghaengScraper,
 ]
 
 # ⚠️(2026-07-24 오너 지적으로 폐기) discover_candidates.py 전담 방침이 있었으나

@@ -36,6 +36,14 @@ DATING_CATEGORY_ID = 12
 # 소개팅 관련 키워드 (제목/태그 필터링용)
 DATING_KEYWORDS = ['소개팅', '미팅', '로테이션', '만남살롱', '커플', '썸', '솔로', '매칭']
 
+# 소셜링(취미 모임) 카테고리 — 2026-08-21 문토 API 실측. {categoryId: socialing_category}.
+#   event_type='socialing' 으로 저장돼 소셜링 탭에 뜬다. 소개팅 키워드 필터를 면제(전부 통과).
+#   파티·솔로파티(9)는 성격이 미팅에 가까워 소셜링에서 제외(소개팅 쪽 별도 검토). 친목(8)·cat6 제외.
+SOCIALING_CATEGORIES = {
+    1: '영화', 2: '등산·아웃도어', 3: '쿠킹·다이닝', 4: '문화·예술',
+    5: '여행·캠핑', 7: '독서·성장', 10: '재테크·경제', 11: '외국어', 13: '게임',
+}
+
 DATE_RE = re.compile(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})')
 PRICE_RE = re.compile(r'([\d,]+)\s*원')
 AGE_RANGE_RE = re.compile(
@@ -510,187 +518,216 @@ class MuntoScraper(BaseScraper):
     def __init__(self):
         super().__init__('munto')
 
+    def _fetch_list(self, client, category_id: int, min_expected: int) -> list:
+        """카테고리 목록 조회. ⚠️ 문토 API가 간헐적으로 빈 목록(0개)이나 극소수만 돌려준다
+        (2026-07-31: 최근 6회 중 1회 0개, 1회 8개). 그대로 두면 그 회차 갱신이 통째로
+        건너뛰어지므로, 평소치보다 비정상적으로 적으면 몇 번 다시 부른다."""
+        socialings: list = []
+        for attempt in range(3):
+            list_data = _get(
+                client,
+                f'{MUNTO_API_BASE}/socialing/section',
+                params={'type': 'default', 'categoryId': category_id, 'limit': 300}
+            )
+            socialings = (list_data or {}).get('socialings', []) or []
+            if len(socialings) >= min_expected:
+                break
+            self.logger.warning(
+                f'문토 목록(cat {category_id})이 {len(socialings)}개뿐 — 재시도 {attempt + 1}/3'
+            )
+            time.sleep(3 * (attempt + 1))
+        return socialings
+
     def scrape(self) -> list[EventModel]:
         events: list[EventModel] = []
 
+        # 소개팅·소셜링 아이템을 하나의 파싱 경로로 처리한다(같은 문토 API 구조).
+        # event_type 으로만 갈린다: 소개팅은 키워드 필터·나이 '2030' 기본·format 지정,
+        # 소셜링은 필터 면제·나이 미표기 유지·socialing_category 부여.
+        def process_item(client, item, event_type: str, socialing_category):
+            try:
+                name = item.get('name', '')
+                # 소개팅만 키워드 필터. 소셜링은 카테고리 자체가 취미라 전부 통과.
+                if event_type == 'dating':
+                    tags = item.get('tags', [])
+                    tag_names = [t if isinstance(t, str) else t.get('name', '') for t in tags]
+                    all_text = name + ' '.join(tag_names)
+                    if not any(kw in all_text for kw in DATING_KEYWORDS):
+                        return
+
+                socialing_id = item.get('id')
+                if not socialing_id:
+                    return
+
+                detail = _get(client, f'{MUNTO_API_BASE}/socialing/{socialing_id}')
+                if not detail:
+                    self.logger.warning(f'문토 상세 조회 실패: {socialing_id}')
+                    return
+
+                time.sleep(0.5)  # API 부하 방지
+
+                members_data = _get(
+                    client,
+                    f'{MUNTO_API_BASE}/socialing/{socialing_id}/members',
+                    params={'status': 'APPROVE'}
+                )
+                members = members_data.get('members', []) if members_data else []
+
+                # --- 기본 정보 ---
+                title = sanitize_text(f'[문토] {name}', 80)
+
+                # 날짜
+                start_date_str = detail.get('startDate') or item.get('startDate')
+                now_kst = datetime.now(KST).replace(tzinfo=None)
+                if start_date_str:
+                    try:
+                        # KST(UTC+9)로 명시 변환 후 naive KST 벽시계로 넘긴다.
+                        event_date = datetime.fromisoformat(
+                            start_date_str.replace('Z', '+00:00')
+                        ).astimezone(KST).replace(tzinfo=None)
+                    except Exception:
+                        event_date = now_kst.replace(hour=19, minute=0, second=0, microsecond=0)
+                else:
+                    event_date = now_kst.replace(hour=19, minute=0, second=0, microsecond=0)
+
+                # 미래 이벤트만 (KST 기준으로 비교)
+                if event_date < now_kst:
+                    return
+
+                # 가격 (단일 가격 — 남녀 구분 없음)
+                # price=0(무료)도 유효값 — falsy 체크로 걸러지면 무료행사가 '가격없음'으로 잘못 표시됨.
+                price = detail.get('price')
+                price_male = int(price) if price is not None else None
+                price_female = price_male  # 문토는 남녀 동일가격
+
+                # 지역
+                location_raw = detail.get('location') or item.get('location', '')
+                social_loc = detail.get('socialingLocation') or {}
+                addr = social_loc.get('addressName', '') or social_loc.get('roadmapAddress', '')
+                region = _extract_region(addr + ' ' + name, location_raw, address=addr)
+
+                # 상세 위치
+                place_name = social_loc.get('placeName', '') or None
+
+                # 썸네일
+                covers = detail.get('covers') or item.get('covers', [])
+                if not covers:
+                    cover = detail.get('cover') or item.get('cover')
+                    covers = [cover] if cover else []
+                thumbnails = [u for u in covers if u and not u.endswith('.svg')][:5]
+
+                introduce = detail.get('introduce', '') or ''
+
+                # 나이 — 소개팅만. 소셜링(취미)은 나이 제한 개념이 옅어 미표기를 그대로 둔다.
+                if event_type == 'dating':
+                    # 문토는 성별로 다름(남/여 각각 만나이). 라벨>인라인>공통>제목 순.
+                    # API min/max는 신뢰 안 함(오너 확정). 못 찾으면(나이 표기 자체가 없으면)
+                    # '2030' 표시(오너 확정 2026-07-25) — 필터용 age_range_min/max는 안 건드림.
+                    age_male_disp, age_female_disp, age_range_min, age_range_max, _agenote = \
+                        _munto_resolve_ages(name, introduce, now_kst.year)
+                    if age_male_disp is None and age_female_disp is None:
+                        age_male_disp = age_female_disp = '2030'
+                else:
+                    age_male_disp = age_female_disp = None
+                    age_range_min = age_range_max = None
+                age_group_label = None
+
+                # 참가자 현황. 소셜링 취미모임은 성별 정원(maleMaximumCount)이 0이고
+                # 총정원은 maximumPerson 에 온다 — 성별 좌석 대신 총 인원 현황으로 담는다.
+                male_max = detail.get('maleMaximumCount') or 0
+                female_max = detail.get('femaleMaximumCount') or 0
+                male_current = detail.get('maleCurrentCount') or 0
+                female_current = detail.get('femaleCurrentCount') or 0
+
+                participant_stats, capacity_male, capacity_female, seats_left_male, seats_left_female = \
+                    _build_participant_stats(
+                        members,
+                        male_max, female_max,
+                        male_current, female_current
+                    )
+
+                # participant_stats가 비어있어도 현재 인원은 기록
+                if not participant_stats.get('male') and male_current > 0:
+                    participant_stats['male_count'] = male_current
+                if not participant_stats.get('female') and female_current > 0:
+                    participant_stats['female_count'] = female_current
+
+                # 소셜링: 성별 정원이 없으니(0) 총 정원을 별도로 담아 앱이 "N명 중 M명"을 그린다.
+                if event_type == 'socialing':
+                    total_cap = detail.get('maximumPerson')
+                    if total_cap:
+                        participant_stats['total_capacity'] = int(total_cap)
+                        participant_stats['total_count'] = male_current + female_current
+
+                # 마감 여부
+                status = detail.get('status', '')
+                is_closed = status in ('CLOSED', 'CONFIRM', 'CANCEL') or detail.get('stopRecruit', False)
+
+                # 포맷 — 소개팅만 로테이션/소개팅 구분. 소셜링은 없음(카테고리로 대체).
+                if event_type == 'dating':
+                    category_tag = detail.get('categoryTag', {}) or {}
+                    tag_name = category_tag.get('name', '')
+                    fmt = '로테이션' if '로테이션' in tag_name else '소개팅'
+                else:
+                    fmt = None
+
+                source_url = f'{MUNTO_BASE_URL}/ko/socialing?id={socialing_id}'
+
+                events.append(EventModel(
+                    external_id=f'munto_{socialing_id}',
+                    title=title,
+                    description=sanitize_text(introduce, 6000) if introduce else None,
+                    thumbnail_urls=thumbnails,
+                    event_date=event_date,
+                    location_region=region,
+                    location_detail=place_name,
+                    price_male=price_male,
+                    price_female=price_female,
+                    gender_ratio=f'{male_current}:{female_current}' if male_current or female_current else None,
+                    capacity_male=capacity_male,
+                    capacity_female=capacity_female,
+                    seats_left_male=seats_left_male,
+                    seats_left_female=seats_left_female,
+                    theme=['소개팅'] if event_type == 'dating' else [],
+                    age_range_min=age_range_min,
+                    age_range_max=age_range_max,
+                    age_male=age_male_disp,
+                    age_female=age_female_disp,
+                    format=fmt,
+                    age_group_label=age_group_label,
+                    participant_stats=participant_stats if participant_stats else None,
+                    source_url=source_url,
+                    is_closed=is_closed,
+                    event_type=event_type,
+                    socialing_category=socialing_category,
+                ))
+
+                self.logger.debug(
+                    f'문토 {event_type} 수집: {socialing_id} | {name[:40]} | '
+                    f'남{male_current}/{male_max} 여{female_current}/{female_max}'
+                )
+                time.sleep(0.3)
+
+            except Exception as e:
+                self.logger.warning(f'문토 이벤트 파싱 실패 id={item.get("id")}: {e}')
+
         try:
             with httpx.Client(headers=API_HEADERS, follow_redirects=True) as client:
-                # 연애·사랑 카테고리 소셜링 목록. ⚠️예전 limit=30은 인위적 상한이라
-                # 실제 활성 리스팅(235건 확인, 2026-07-24)의 앞 30개만 가져오고 나머지
-                # (및 거기 딸린 더 먼 미래 날짜)를 통째로 놓치고 있었음. 여유있게 상향.
-                # ⚠️ 문토 API가 간헐적으로 빈 목록(0개)이나 극소수만 돌려준다
-                #    (2026-07-31 확인: 최근 6회 중 1회 0개, 1회 8개). 그대로 두면 그 회차는
-                #    갱신이 통째로 건너뛰어지므로, 평소 수백 개가 오는 점을 이용해
-                #    비정상적으로 적으면 몇 번 다시 부른다.
-                socialings: list = []
-                for attempt in range(3):
-                    list_data = _get(
-                        client,
-                        f'{MUNTO_API_BASE}/socialing/section',
-                        params={'type': 'default', 'categoryId': DATING_CATEGORY_ID, 'limit': 300}
-                    )
-                    socialings = (list_data or {}).get('socialings', []) or []
-                    if len(socialings) >= MIN_EXPECTED_SOCIALINGS:
-                        break
-                    self.logger.warning(
-                        f'문토 목록이 {len(socialings)}개뿐 — 재시도 {attempt + 1}/3'
-                    )
-                    time.sleep(3 * (attempt + 1))
-                if not socialings:
-                    self.logger.error('문토 목록 API 응답 없음(재시도 후에도) — 이번 회차 건너뜀')
-                    return events
-                self.logger.info(f'문토 연애·사랑 카테고리 소셜링 {len(socialings)}개 발견')
+                # ── 소개팅(연애·사랑 카테고리) ──
+                dating_list = self._fetch_list(client, DATING_CATEGORY_ID, MIN_EXPECTED_SOCIALINGS)
+                if not dating_list:
+                    self.logger.error('문토 소개팅 목록 응답 없음(재시도 후에도)')
+                else:
+                    self.logger.info(f'문토 소개팅 카테고리 {len(dating_list)}개 발견')
+                    for item in dating_list:
+                        process_item(client, item, 'dating', None)
 
-                for item in socialings:
-                    try:
-                        name = item.get('name', '')
-                        # 소개팅 관련 이벤트만 필터
-                        tags = item.get('tags', [])
-                        tag_names = [t if isinstance(t, str) else t.get('name', '') for t in tags]
-                        all_text = name + ' '.join(tag_names)
-                        if not any(kw in all_text for kw in DATING_KEYWORDS):
-                            continue
-
-                        socialing_id = item.get('id')
-                        if not socialing_id:
-                            continue
-
-                        # 상세 API 조회
-                        detail = _get(client, f'{MUNTO_API_BASE}/socialing/{socialing_id}')
-                        if not detail:
-                            self.logger.warning(f'문토 상세 조회 실패: {socialing_id}')
-                            continue
-
-                        time.sleep(0.5)  # API 부하 방지
-
-                        # 승인된 멤버 목록 조회
-                        members_data = _get(
-                            client,
-                            f'{MUNTO_API_BASE}/socialing/{socialing_id}/members',
-                            params={'status': 'APPROVE'}
-                        )
-                        members = members_data.get('members', []) if members_data else []
-
-                        # --- 기본 정보 ---
-                        title = sanitize_text(f'[문토] {name}', 80)
-
-                        # 날짜
-                        start_date_str = detail.get('startDate') or item.get('startDate')
-                        now_kst = datetime.now(KST).replace(tzinfo=None)
-                        if start_date_str:
-                            try:
-                                # KST(UTC+9)로 명시 변환 후 naive KST 벽시계로 넘긴다.
-                                event_date = datetime.fromisoformat(
-                                    start_date_str.replace('Z', '+00:00')
-                                ).astimezone(KST).replace(tzinfo=None)
-                            except Exception:
-                                event_date = now_kst.replace(hour=19, minute=0, second=0, microsecond=0)
-                        else:
-                            event_date = now_kst.replace(hour=19, minute=0, second=0, microsecond=0)
-
-                        # 미래 이벤트만 (KST 기준으로 비교)
-                        if event_date < now_kst:
-                            continue
-
-                        # 가격 (단일 가격 — 남녀 구분 없음)
-                        # price=0(무료)도 유효값 — falsy 체크로 걸러지면 무료행사가 '가격없음'으로 잘못 표시됨.
-                        price = detail.get('price')
-                        price_male = int(price) if price is not None else None
-                        price_female = price_male  # 문토는 남녀 동일가격
-
-                        # 지역
-                        location_raw = detail.get('location') or item.get('location', '')
-                        social_loc = detail.get('socialingLocation') or {}
-                        addr = social_loc.get('addressName', '') or social_loc.get('roadmapAddress', '')
-                        region = _extract_region(addr + ' ' + name, location_raw, address=addr)
-
-                        # 상세 위치
-                        place_name = social_loc.get('placeName', '') or None
-
-                        # 썸네일
-                        covers = detail.get('covers') or item.get('covers', [])
-                        if not covers:
-                            cover = detail.get('cover') or item.get('cover')
-                            covers = [cover] if cover else []
-                        thumbnails = [u for u in covers if u and not u.endswith('.svg')][:5]
-
-                        # 나이 — 문토는 성별로 다름(남/여 각각 만나이). 라벨>인라인>공통>제목 순.
-                        # 한쪽경계는 'N세~'(하한)/'~N세'(상한), 무제한은 '제한 없음'. 본문(성별/공통) → 제목 순.
-                        # API min/max는 신뢰 안 함(오너 확정). 그래도 못 찾으면(사이트에 나이 표기 자체가
-                        # 없는 경우) '2030' 표시(오너 확정 2026-07-25: 문토 로테이션소개팅은 나이 미표기시
-                        # 2030세대가 주 대상이라 안내용으로 채움 — 필터용 age_range_min/max는 건드리지 않음).
-                        introduce = detail.get('introduce', '') or ''
-                        age_male_disp, age_female_disp, age_range_min, age_range_max, _agenote = \
-                            _munto_resolve_ages(name, introduce, now_kst.year)
-                        if age_male_disp is None and age_female_disp is None:
-                            age_male_disp = age_female_disp = '2030'
-                        age_group_label = None
-
-                        # 참가자 현황
-                        male_max = detail.get('maleMaximumCount') or 0
-                        female_max = detail.get('femaleMaximumCount') or 0
-                        male_current = detail.get('maleCurrentCount') or 0
-                        female_current = detail.get('femaleCurrentCount') or 0
-
-                        participant_stats, capacity_male, capacity_female, seats_left_male, seats_left_female = \
-                            _build_participant_stats(
-                                members,
-                                male_max, female_max,
-                                male_current, female_current
-                            )
-
-                        # participant_stats가 비어있어도 현재 인원은 기록
-                        if not participant_stats.get('male') and male_current > 0:
-                            participant_stats['male_count'] = male_current
-                        if not participant_stats.get('female') and female_current > 0:
-                            participant_stats['female_count'] = female_current
-
-                        # 마감 여부
-                        status = detail.get('status', '')
-                        is_closed = status in ('CLOSED', 'CONFIRM', 'CANCEL') or detail.get('stopRecruit', False)
-
-                        # 포맷
-                        category_tag = detail.get('categoryTag', {}) or {}
-                        tag_name = category_tag.get('name', '')
-                        fmt = '로테이션' if '로테이션' in tag_name else '소개팅'
-
-                        source_url = f'{MUNTO_BASE_URL}/ko/socialing?id={socialing_id}'
-
-                        events.append(EventModel(
-                            external_id=f'munto_{socialing_id}',
-                            title=title,
-                            description=sanitize_text(introduce, 6000) if introduce else None,
-                            thumbnail_urls=thumbnails,
-                            event_date=event_date,
-                            location_region=region,
-                            location_detail=place_name,
-                            price_male=price_male,
-                            price_female=price_female,
-                            gender_ratio=f'{male_current}:{female_current}' if male_current or female_current else None,
-                            capacity_male=capacity_male,
-                            capacity_female=capacity_female,
-                            seats_left_male=seats_left_male,
-                            seats_left_female=seats_left_female,
-                            theme=['소개팅'],
-                            age_range_min=age_range_min,
-                            age_range_max=age_range_max,
-                            age_male=age_male_disp,
-                            age_female=age_female_disp,
-                            format=fmt,
-                            age_group_label=age_group_label,
-                            participant_stats=participant_stats if participant_stats else None,
-                            source_url=source_url,
-                            is_closed=is_closed,
-                        ))
-
-                        self.logger.debug(
-                            f'문토 이벤트 수집: {socialing_id} | {name[:40]} | '
-                            f'남{male_current}/{male_max} 여{female_current}/{female_max}'
-                        )
-                        time.sleep(0.3)
-
-                    except Exception as e:
-                        self.logger.warning(f'문토 이벤트 파싱 실패 id={item.get("id")}: {e}')
+                # ── 소셜링(취미 9종) ── 카테고리별 건수가 제각각(34~276)이라 빈 것(0)만 재시도.
+                for cat_id, cat_name in SOCIALING_CATEGORIES.items():
+                    soc_list = self._fetch_list(client, cat_id, 1)
+                    self.logger.info(f'문토 소셜링 [{cat_name}] {len(soc_list)}개 발견')
+                    for item in soc_list:
+                        process_item(client, item, 'socialing', cat_name)
 
         except Exception as e:
             self.logger.error(f'문토 크롤링 실패: {e}')

@@ -33,6 +33,11 @@ class EventModel(BaseModel):
     source_url: str
     is_closed: bool = False
     attendee_image_url: Optional[str] = None    # 참석자 명단 이미지(R2 재호스팅된 공개 URL)
+    # 소셜링 확장(2026-08-21) — 앱 탭이 이걸로 나뉜다. 기본은 소개팅(dating).
+    #   event_type='socialing' 이면 base_scraper 가 소개팅 전제(theme 고정·시간대 필터)를 우회한다.
+    #   socialing_category 는 소셜링일 때만 채움(문화·예술/독서·성장/러닝 등) → 앱 필터 칩.
+    event_type: str = 'dating'
+    socialing_category: Optional[str] = None
 
     @field_validator('thumbnail_urls')
     @classmethod
