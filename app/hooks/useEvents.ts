@@ -5,6 +5,7 @@ import { useFilterStore, useFilterHydrated } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { hoursForTimeSlots } from '@/constants/filters'
+import { sourcesForGroupKey } from '@/constants/socialingCategories'
 
 // 2026-07-26: 예전엔 .limit(100)으로 한 번에 끝까지 가져왔는데, 완성도 작업으로 활성
 // 이벤트 총량이 685건까지 늘면서 100건(날짜 가까운 순)만 보이고 나머지 585건(85%)이
@@ -20,7 +21,9 @@ const PAGE_SIZE = 60
 const FEED_COLUMNS =
   'id, company_id, title, thumbnail_urls, event_date, location_region, ' +
   'price_male, price_female, price_detail, age_male, age_female, theme, hashtags, ' +
-  'is_closed, seats_left_male, seats_left_female, source_url, event_type, socialing_category, companies!inner(id, name, slug)'
+  'is_closed, seats_left_male, seats_left_female, source_url, event_type, socialing_category, ' +
+  // 소셜링 참여현황(성비 or 총정원)은 participant_stats 로 그린다 — 소셜링 카드 전용.
+  'participant_stats, companies!inner(id, name, slug)'
 
 // 2026-08-07: 앱을 새로 열 때마다 첫 화면이 빈 스피너로 시작했다. 마지막으로 본 첫 페이지를
 // 기기에 저장해뒀다가, 같은 필터 조합으로 다시 열면 그 캐시를 즉시 보여주고(스피너 생략)
@@ -28,9 +31,15 @@ const FEED_COLUMNS =
 const CACHE_KEY = 'sodate-events-cache-v1'
 const CACHE_MAX_AGE_MS = 10 * 60 * 1000 // 10분 — 가격 변동·마감 등 실시간성 때문에 그 이상은 안 믿는다
 
-async function readEventsCache(key: string): Promise<EventWithCompany[] | null> {
+// 소셜링 확장(2026-08-21): dating/socialing 이 같은 AsyncStorage 키를 쓰면 탭을 오갈 때
+// 서로의 첫 페이지 캐시를 덮어쓴다. eventType 별로 저장 슬롯을 나눈다.
+function cacheStoreKey(eventType: string) {
+  return `${CACHE_KEY}-${eventType}`
+}
+
+async function readEventsCache(storeKey: string, key: string): Promise<EventWithCompany[] | null> {
   try {
-    const raw = await AsyncStorage.getItem(CACHE_KEY)
+    const raw = await AsyncStorage.getItem(storeKey)
     if (!raw) return null
     const parsed = JSON.parse(raw) as { key: string; savedAt: number; events: EventWithCompany[] }
     if (parsed.key !== key) return null
@@ -41,8 +50,8 @@ async function readEventsCache(key: string): Promise<EventWithCompany[] | null> 
   }
 }
 
-function writeEventsCache(key: string, events: EventWithCompany[]) {
-  AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ key, savedAt: Date.now(), events })).catch(() => {})
+function writeEventsCache(storeKey: string, key: string, events: EventWithCompany[]) {
+  AsyncStorage.setItem(storeKey, JSON.stringify({ key, savedAt: Date.now(), events })).catch(() => {})
 }
 
 // 모임명(title)·해시태그·업체명·지역으로 검색(2026-08-14 오너 지시, 커뮤니티 검색과는
@@ -62,7 +71,13 @@ function searchOrFilter(term: string): string {
   ].join(',')
 }
 
-export function useEvents(search = '', eventType: 'dating' | 'socialing' = 'dating') {
+export function useEvents(
+  search = '',
+  eventType: 'dating' | 'socialing' = 'dating',
+  // 소셜링 통합 카테고리 그룹 key(constants/socialingCategories). undefined=전체.
+  // 그룹 하나가 원본 socialing_category 여러 개를 묶으므로 .in() 으로 조회한다.
+  socialingGroup?: string,
+) {
   const [events, setEvents] = useState<EventWithCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -77,8 +92,9 @@ export function useEvents(search = '', eventType: 'dating' | 'socialing' = 'dati
 
   // 캐시를 구분하는 키 — buildQuery·applyClientFilters가 실제로 참조하는 필터 전부를 담는다.
   const cacheKey = useMemo(() => JSON.stringify({
-    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search, eventType,
-  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search, eventType])
+    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search, eventType, socialingGroup,
+  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search, eventType, socialingGroup])
+  const cacheSlot = useMemo(() => cacheStoreKey(eventType), [eventType])
 
   const buildQuery = useCallback((from: number, to: number) => {
     let query = supabase
@@ -95,6 +111,12 @@ export function useEvents(search = '', eventType: 'dating' | 'socialing' = 'dati
       .gte('event_date', new Date().toISOString())
       // 당일 ~ +1달 하드 상한: 1달 넘는 미래 이벤트는 항상 제외 (매일 자동 롤링)
       .lte('event_date', (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString() })())
+
+    // 소셜링 카테고리 필터 — 통합 그룹 하나가 원본 socialing_category 여러 개를 묶는다.
+    if (eventType === 'socialing' && socialingGroup) {
+      const sources = sourcesForGroupKey(socialingGroup)
+      if (sources.length > 0) query = query.in('socialing_category', sources)
+    }
 
     // 지역 필터 (다중 선택)
     if (regions.length > 0) {
@@ -185,7 +207,7 @@ export function useEvents(search = '', eventType: 'dating' | 'socialing' = 'dati
     }
 
     return query.range(from, to)
-  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge, search, days, timeSlots, eventType])
+  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge, search, days, timeSlots, eventType, socialingGroup])
 
   /**
    * 한 페이지를 받아온다.
@@ -216,13 +238,13 @@ export function useEvents(search = '', eventType: 'dating' | 'socialing' = 'dati
       pageRef.current = lastPage
       setEvents(rows)
       setHasMore(!exhausted)
-      writeEventsCache(cacheKey, rows)
+      writeEventsCache(cacheSlot, cacheKey, rows)
     } catch (e: unknown) {
       if (!opts?.silent) setError(e instanceof Error ? e.message : '알 수 없는 오류')
     } finally {
       setLoading(false)
     }
-  }, [fetchFilteredPages, cacheKey])
+  }, [fetchFilteredPages, cacheKey, cacheSlot])
 
   const loadMore = useCallback(async () => {
     if (loading || loadingMore || !hasMore) return
@@ -250,7 +272,7 @@ export function useEvents(search = '', eventType: 'dating' | 'socialing' = 'dati
       didInitialLoad.current = true
       let cancelled = false
       ;(async () => {
-        const cached = await readEventsCache(cacheKey)
+        const cached = await readEventsCache(cacheSlot, cacheKey)
         if (cancelled) return
         if (cached) {
           // 캐시 즉시 표시(스피너 없이) + 뒤에서 조용히 최신화
@@ -266,7 +288,7 @@ export function useEvents(search = '', eventType: 'dating' | 'socialing' = 'dati
 
     // 최초 로드 이후 필터가 바뀌어서 다시 도는 경우는 기존과 동일하게 동작
     fetchEvents()
-  }, [hydrated, fetchEvents, cacheKey])
+  }, [hydrated, fetchEvents, cacheKey, cacheSlot])
 
   return { events, loading, loadingMore, hasMore, error, refetch: fetchEvents, loadMore }
 }

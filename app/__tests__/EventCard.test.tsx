@@ -57,6 +57,8 @@ const mockEvent: EventWithCompany = {
   participant_stats: null,
   image_type_id: null,
   attendee_image_url: null,
+  event_type: 'dating',
+  socialing_category: null,
   source_url: 'https://frip.co.kr/event/1',
   is_active: true,
   is_closed: false,

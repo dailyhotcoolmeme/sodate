@@ -10,7 +10,7 @@ from models.event import EventModel
 from utils.supabase_client import get_supabase
 from utils.logger import get_logger
 from utils.date_filter import is_within_one_month
-from utils.hashtags import derive_hashtags
+from utils.hashtags import derive_hashtags, derive_socialing_hashtags
 from utils.thumbnail import optimize_thumbnails
 from utils.diff import changed_fields
 
@@ -243,16 +243,25 @@ class BaseScraper(ABC):
 
             # 해시태그 자동 생성 (admin 검수·수정 대상). theme는 그대로 두고 hashtags만 채운다.
             # 매칭이 없어 빈 배열이면 upsert에서 제외 → 기존(admin 편집) 값을 빈 배열로 덮지 않는다.
-            derived_hashtags = derive_hashtags(
-                title=data.get('title'),
-                description=data.get('description'),
-                region=data.get('location_region'),
-                age_min=data.get('age_range_min'),
-                age_max=data.get('age_range_max'),
-                extra=data.get('format'),
-            )
-            # 유형 해시태그가 매칭되면 그것이 우선(오너 큐레이션). 자동 태그는 그다음.
-            type_tags = self._type_hashtags_for(data.get('title') or '', typed_hashtags)
+            if data.get('event_type') == 'socialing':
+                # 소셜링(2026-08-21)은 소재·카테고리 기반 전용 사전을 쓴다(소개팅 키워드는 안 맞음).
+                # admin 유형 태그(소개팅 큐레이션)는 소셜링에 없다.
+                derived_hashtags = derive_socialing_hashtags(
+                    title=data.get('title'),
+                    category=data.get('socialing_category'),
+                )
+                type_tags: list[str] = []
+            else:
+                derived_hashtags = derive_hashtags(
+                    title=data.get('title'),
+                    description=data.get('description'),
+                    region=data.get('location_region'),
+                    age_min=data.get('age_range_min'),
+                    age_max=data.get('age_range_max'),
+                    extra=data.get('format'),
+                )
+                # 유형 해시태그가 매칭되면 그것이 우선(오너 큐레이션). 자동 태그는 그다음.
+                type_tags = self._type_hashtags_for(data.get('title') or '', typed_hashtags)
             if type_tags:
                 data['hashtags'] = type_tags
             elif derived_hashtags:

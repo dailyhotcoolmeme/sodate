@@ -19,6 +19,10 @@ export interface ParticipantStats {
   total_count?: number
   seats_left_male?: number
   seats_left_female?: number
+  // 소셜링(2026-08-21) — 성별 정원이 없는 소스(문토 취미·동행클럽)의 총 인원 현황.
+  total_capacity?: number
+  male_count?: number
+  female_count?: number
 }
 
 // 성별 가격 티어(정가/얼리버드/품절). 에모셔널오렌지 자동크롤 전용. null=단일가.
@@ -120,6 +124,9 @@ export interface Database {
           participant_stats: ParticipantStats | null
           image_type_id: string | null
           attendee_image_url: string | null
+          // 소셜링 확장(2026-08-21). event_type 으로 앱 탭이 나뉜다(dating=소개팅 / socialing=소셜링).
+          event_type: string
+          socialing_category: string | null
           crawled_at: string
           created_at: string
           updated_at: string
