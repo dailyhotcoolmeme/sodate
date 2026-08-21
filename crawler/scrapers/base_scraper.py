@@ -12,6 +12,7 @@ from utils.logger import get_logger
 from utils.date_filter import is_within_one_month
 from utils.hashtags import derive_hashtags
 from utils.thumbnail import optimize_thumbnails
+from utils.diff import changed_fields
 
 
 # 오류 페이지의 <title>이 모임명으로 저장되는 것을 막는다.
@@ -138,6 +139,25 @@ class BaseScraper(ABC):
                     verified_urls.add(row['source_url'])
         except Exception as e:
             self.logger.warning(f"verified 목록 조회 실패(계속 진행): {e}")
+
+        # 바뀐 필드만 쓰려고 이 업체의 현재 행을 한 번에 읽어 둔다(source_url 기준).
+        # base_scraper는 하루 2회(정기 크롤)만 도므로 이 읽기 부담은 무시할 수준이고,
+        # 대신 값이 그대로인 이벤트는 write 자체를 건너뛴다. docs/disk-io-fix-design.md
+        cur_by_url: dict = {}
+        try:
+            cres = (
+                self.supabase.table('events')
+                .select('*')
+                .eq('company_id', company_id)
+                .eq('is_active', True)
+                .execute()
+            )
+            for row in (cres.data or []):
+                if row.get('source_url'):
+                    cur_by_url[row['source_url']] = row
+        except Exception as e:
+            # 못 읽으면 예전처럼 무조건 쓰기로 안전하게 폴백(비어 있으면 전부 변경으로 판정).
+            self.logger.warning(f"현재 행 조회 실패, 무조건 쓰기로 진행: {e}")
 
         for event in events:
             # 검증완료 이벤트는 스킵(관리자 입력값 보존)
@@ -283,13 +303,26 @@ class BaseScraper(ABC):
                 data['age_range_max'] = None
 
             try:
-                result = (
-                    self.supabase.table('events')
-                    .upsert(data, on_conflict='source_url')
-                    .execute()
-                )
-                if result.data:
+                cur = cur_by_url.get(event.source_url)
+                if cur is None:
+                    # 새 이벤트 — 그대로 insert. upsert 로 두면 on_conflict 로 안전하게 처리된다.
+                    self.supabase.table('events').upsert(data, on_conflict='source_url').execute()
                     new_count += 1
+                else:
+                    # 기존 이벤트 — 실제로 바뀐 필드만 update. 바뀐 게 없으면 write 를 건너뛴다
+                    # (Disk IO 절감의 핵심). source_url·company_id 는 값이 같아 자동 제외된다.
+                    #
+                    # ⚠️ crawled_at 은 매번 현재시각이라 비교에 넣으면 항상 "변경"으로 잡혀
+                    #    절감이 통째로 무의미해진다 — 비교에서 뺀다. 대신 실제로 바뀐 필드가
+                    #    있을 때만 crawled_at 도 같이 갱신한다(= '마지막으로 값이 변한 시각').
+                    #    워치독은 events.crawled_at 이 아니라 crawl_logs 를 보므로 영향 없다.
+                    incoming_crawled = data.pop('crawled_at', None)
+                    changed = changed_fields(cur, data)
+                    if changed:
+                        if incoming_crawled is not None:
+                            changed['crawled_at'] = incoming_crawled
+                        self.supabase.table('events').update(changed).eq('source_url', event.source_url).execute()
+                    updated_count += 1
             except Exception as e:
                 self.logger.error(
                     f"이벤트 저장 실패: {event.source_url} - {e} "

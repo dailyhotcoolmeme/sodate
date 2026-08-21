@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 from playwright.sync_api import sync_playwright
 
 from utils.supabase_client import get_supabase
+from utils.diff import changed_fields
 from utils.imweb_options import gender_soldout_by_label, gender_soldout_yeonin, gender_soldout_loco
 
 
@@ -81,7 +82,11 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
     # DB 이벤트 인덱스: 전체 URL(정확·우선) / #evt 시각(폴백, 상품ID 없어 여러 상품이
     # 같은 날짜시간에 세션을 두면 충돌 — 충돌나면 모호하므로 evt단독매칭에서 제외해
     # 엉뚱한 상품 행에 업데이트가 새는 것을 막는다(프립처럼 상품이 많으면 흔함).
-    dbevs = sb.table('events').select('id,source_url').eq('company_id', cid).eq('is_active', True).execute().data
+    dbevs = sb.table('events').select(
+        'id,source_url,seats_left_male,seats_left_female,is_closed,price_male,price_female'
+    ).eq('company_id', cid).eq('is_active', True).execute().data
+    # 바뀐 필드만 쓰려고 현재값을 같이 읽는다(쿼리 수는 그대로). docs/disk-io-fix-design.md
+    cur_by_id = {e['id']: e for e in dbevs}
     by_evt, by_url = {}, {}
     for e in dbevs:
         m = _EVT_RE.search(e['source_url'] or '')
@@ -123,6 +128,11 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
             upd['price_male'] = d['price_male']
         if d.get('price_female') is not None:
             upd['price_female'] = d['price_female']
+        # 값이 실제로 바뀐 필드만 골라 쓴다 — 안 바뀌었으면 write 자체를 건너뛴다
+        # (Disk IO 절감의 핵심). "안 씀 = DB가 이미 맞음"이라 앱이 보는 값은 동일하다.
+        upd = changed_fields(cur_by_id.get(eid, {}), upd)
+        if not upd:
+            continue
         try:
             sb.table('events').update(upd).eq('id', eid).execute()
             updated += 1
@@ -173,11 +183,12 @@ def _refresh_frip_soon(sb, cid, days: int) -> int:
     horizon = (now + timedelta(days=days)).isoformat()
     rows = (
         sb.table('events')
-        .select('id,source_url,event_date')
+        .select('id,source_url,event_date,seats_left_male,seats_left_female,is_closed')
         .eq('company_id', cid).eq('is_active', True)
         .gte('event_date', now.isoformat()).lte('event_date', horizon)
         .execute()
     ).data or []
+    frip_cur = {e['id']: e for e in rows}  # 바뀐 필드만 쓰려고 현재값 보관
     if not rows:
         print('[frip] 임박 일정 없음 — 건너뜀')
         return 0
@@ -232,10 +243,14 @@ def _refresh_frip_soon(sb, cid, days: int) -> int:
                 if sf is not None and sf < 0:
                     sf = 0
                 closed = sm is not None and sf is not None and sm <= 0 and sf <= 0
+                upd = changed_fields(
+                    frip_cur.get(eid, {}),
+                    {'seats_left_male': sm, 'seats_left_female': sf, 'is_closed': closed},
+                )
+                if not upd:
+                    continue
                 try:
-                    sb.table('events').update({
-                        'seats_left_male': sm, 'seats_left_female': sf, 'is_closed': closed,
-                    }).eq('id', eid).execute()
+                    sb.table('events').update(upd).eq('id', eid).execute()
                     updated += 1
                 except Exception as ex:
                     print(f'  [frip] 갱신 실패(스킵) {eid}: {str(ex)[:80]}')
@@ -382,7 +397,8 @@ def refresh(slugs=None, days=None, part='all'):
             if not cfg or not cid:
                 continue
             q = sb.table('events').select(
-                'id,source_url,event_date,price_male,price_female,seats_left_male,seats_left_female,is_closed'
+                'id,source_url,event_date,price_male,price_female,seats_left_male,'
+                'seats_left_female,is_closed,price_detail'
             ).eq('company_id', cid).eq('is_active', True).gte('event_date', now.isoformat())
             if horizon:
                 q = q.lte('event_date', horizon)
@@ -459,6 +475,8 @@ def refresh(slugs=None, days=None, part='all'):
                         upd['price_detail'] = detail
                     elif 'male_tiers' in gd or 'female_tiers' in gd:
                         upd['price_detail'] = None
+                    # 실제로 바뀐 필드만 쓴다 — 값이 그대로면 write 를 건너뛴다(Disk IO 절감).
+                    upd = changed_fields(e, upd)
                     if upd:
                         try:
                             sb.table('events').update(upd).eq('id', e['id']).execute()
