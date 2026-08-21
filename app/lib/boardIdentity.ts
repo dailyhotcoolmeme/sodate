@@ -20,6 +20,7 @@ const BOARD_VISITED = 'sodate_board_visited'
 // 토글 안내 말풍선 상태(아래 getToggleTip 주석 참고). BOARD_VISITED 와 따로 둔다 —
 // 그건 오른쪽 스와이프 힌트카드가 쓰는 값이라 같이 쓰면 서로 얽힌다.
 const TOGGLE_TIP = 'sodate_board_toggle_tip'
+const SCRAPS = 'sodate_board_scraps'
 
 async function readList(key: string): Promise<string[]> {
   try {
@@ -175,6 +176,34 @@ export async function setMyVote(postId: string, value: 0 | 1 | -1): Promise<void
     if (value === 0) delete all[postId]
     else all[postId] = value
     await AsyncStorage.setItem(VOTES, JSON.stringify(all))
+  } catch {
+    // ignore
+  }
+}
+
+// ── 스크랩(북마크) 로컬 캐시 ── 2026-08-21
+// 서버(board_scraps)가 정본이지만, 글 상세에서 스크랩 버튼을 누르는 즉시 채워진 하트로
+// 보이려면 로컬에도 상태를 둔다(votes 와 같은 방식). MY "스크랩한 글" 목록은 서버에서
+// 다시 받아 그린다 — 로컬은 버튼 상태 표시용일 뿐 목록의 정본이 아니다.
+export async function getScrappedIds(): Promise<Set<string>> {
+  try {
+    const raw = await AsyncStorage.getItem(SCRAPS)
+    return new Set(raw ? (JSON.parse(raw) as string[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+export async function isScrapped(postId: string): Promise<boolean> {
+  return (await getScrappedIds()).has(postId)
+}
+
+export async function setScrapped(postId: string, on: boolean): Promise<void> {
+  try {
+    const all = await getScrappedIds()
+    if (on) all.add(postId)
+    else all.delete(postId)
+    await AsyncStorage.setItem(SCRAPS, JSON.stringify([...all]))
   } catch {
     // ignore
   }

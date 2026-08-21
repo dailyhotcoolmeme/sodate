@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import AppSpinner from '@/components/AppSpinner'
 import TopBar from '@/components/TopBar'
@@ -18,6 +18,7 @@ import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import EventCard from '@/components/EventCard'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
+import { addRecentView } from '@/lib/recentViews'
 
 function cleanText(text: string): string {
   return text
@@ -30,6 +31,15 @@ export default function CompanyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { data, loading, error, refetch } = useCompany(id)
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
+  // MY '최근 본 것' 기록(2026-08-21) — 로컬 저장, 무해. 화면 노출은 MY 탭이 열릴 때부터.
+  useEffect(() => {
+    if (data?.company) {
+      addRecentView({
+        kind: 'company', id: String(id), title: cleanText(data.company.name),
+        sub: data.company.regions?.join(', ') || undefined,
+      })
+    }
+  }, [data?.company?.id])
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const colors = useColors()

@@ -120,6 +120,9 @@ export default function RootLayout() {
             탭 전환 시 슬라이드 없이 즉시 바뀐다(바텀 탭 표준). */}
         <Stack.Screen name="socialing/index" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="honsul/index" options={{ headerShown: false, animation: 'none' }} />
+        <Stack.Screen name="my/index" options={{ headerShown: false, animation: 'none' }} />
+        <Stack.Screen name="my/scraps" options={{ headerShown: false }} />
+        <Stack.Screen name="my/recent" options={{ headerShown: false }} />
         <Stack.Screen name="board/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="board/write" options={{ headerShown: false }} />
         <Stack.Screen name="board/mine" options={{ headerShown: false }} />

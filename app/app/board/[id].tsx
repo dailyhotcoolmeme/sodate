@@ -22,10 +22,11 @@ import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
 import {
   vote, deletePost, createComment, updateComment, deleteComment, markViewed, report,
-  displayViewCount,
+  displayViewCount, toggleScrap,
 } from '@/lib/board'
 import { getLastNickname } from '@/lib/reviewIdentity'
-import { blockAuthor, markCommentsSeen, getMyPostIds, markPostRead } from '@/lib/boardIdentity'
+import { blockAuthor, markCommentsSeen, getMyPostIds, markPostRead, isScrapped } from '@/lib/boardIdentity'
+import { NEW_TABS_ENABLED } from '@/constants/features'
 import { wideContent } from '@/constants/layout'
 import { openOutlink } from '@/lib/outlink'
 import { youtubeThumbnail } from '@/lib/youtube'
@@ -114,6 +115,9 @@ export default function BoardPostScreen() {
 
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const [voting, setVoting] = useState(false)
+  // 스크랩(NEW_TABS_ENABLED 전환 전까지 버튼은 숨김). 로컬 캐시로 즉시 채워진 상태 표시.
+  const [scrapOn, setScrapOn] = useState(false)
+  const [scrapping, setScrapping] = useState(false)
   const [nickname, setNickname] = useState('')
   const [draft, setDraft] = useState('')
   // 비밀 댓글 — 동행 구할 때 연락처를 주고받아야 해서 넣었다(2026-08-12 오너 지시).
@@ -250,6 +254,20 @@ export default function BoardPostScreen() {
     setVoting(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
     refetch()
+  }
+
+  // 스크랩 초기 상태(로컬 캐시). NEW_TABS 전환 전엔 버튼이 안 보이므로 굳이 서버 조회 안 함.
+  useEffect(() => { if (NEW_TABS_ENABLED) isScrapped(id).then(setScrapOn) }, [id])
+
+  const handleScrap = async () => {
+    if (scrapping) return
+    setScrapping(true)
+    const prev = scrapOn
+    setScrapOn(!prev)                    // 낙관적 갱신 — 바로 채워진 북마크로 보인다
+    const r = await toggleScrap(id)
+    setScrapping(false)
+    if ('error' in r) { setScrapOn(prev); Alert.alert('알림', r.error); return }
+    setScrapOn(r.scrapped)
   }
 
   const handleDelete = () => {
@@ -618,6 +636,17 @@ export default function BoardPostScreen() {
             <Ionicons name={myVote === -1 ? 'thumbs-down' : 'thumbs-down-outline'} size={17} color={myVote === -1 ? colors.primary : colors.textSecondary} />
             <Text style={[styles.voteText, myVote === -1 && styles.voteTextOn]}>비추 {post.downvotes}</Text>
           </TouchableOpacity>
+          {/* 스크랩 — MY 탭 개편(2026-08-21)과 함께 노출. 전환 전까지 NEW_TABS 로 숨긴다. */}
+          {NEW_TABS_ENABLED && (
+            <TouchableOpacity
+              style={[styles.voteBtn, scrapOn && styles.voteBtnOn]}
+              onPress={handleScrap}
+              disabled={scrapping}
+            >
+              <Ionicons name={scrapOn ? 'bookmark' : 'bookmark-outline'} size={17} color={scrapOn ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.voteText, scrapOn && styles.voteTextOn]}>스크랩</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.commentHeadRow}>

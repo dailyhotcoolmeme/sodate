@@ -535,6 +535,47 @@ serve(async (req) => {
       return json({ ok: true, my: value })
     }
 
+    // ── 스크랩(북마크) 토글 ── 2026-08-21
+    // vote 와 같은 (post_id, owner_token) 구조. 이미 있으면 해제, 없으면 추가.
+    // board_scraps 는 앱이 못 읽으므로(RLS revoke) 여기 service_role 로만 넣고 지운다.
+    if (action === 'scrap') {
+      const postId = String(body.postId ?? '')
+      if (!postId) return json({ error: '잘못된 요청입니다.' }, 400)
+      const { data: prev } = await supabase.from('board_scraps')
+        .select('post_id').eq('post_id', postId).eq('owner_token', hash).maybeSingle()
+      if (prev) {
+        await supabase.from('board_scraps').delete()
+          .eq('post_id', postId).eq('owner_token', hash)
+        return json({ ok: true, scrapped: false })
+      }
+      const { error } = await supabase.from('board_scraps')
+        .insert({ post_id: postId, owner_token: hash })
+      // 23505(중복) 은 이미 스크랩된 상태 — 성공으로 본다.
+      if (error && (error as any).code !== '23505') return json({ error: error.message }, 500)
+      return json({ ok: true, scrapped: true })
+    }
+
+    // ── 내 스크랩 글 목록 ── MY 탭 "스크랩한 글"
+    // owner_token 로 스크랩 행을 최신순으로 뽑고, 살아있는(is_active) 글만 돌려준다.
+    // owner_token 은 절대 응답에 넣지 않는다(글쓴이 owner_token 도 제외).
+    if (action === 'myScraps') {
+      const { data: rows } = await supabase.from('board_scraps')
+        .select('post_id, created_at').eq('owner_token', hash)
+        .order('created_at', { ascending: false }).limit(200)
+      const ids = (rows ?? []).map((r: any) => r.post_id)
+      if (ids.length === 0) return json({ posts: [] })
+      const { data: posts } = await supabase.from('board_posts')
+        .select('id,nickname,title,content,image_urls,link_urls,upvotes,downvotes,comment_count,view_count,tag_id,board_tags(label),is_active,image_hidden,created_at')
+        .in('id', ids).eq('is_active', true)
+      const byId = new Map((posts ?? []).map((p: any) => {
+        const { board_tags, ...rest } = p
+        return [p.id, { ...rest, tag_label: board_tags?.label ?? null }]
+      }))
+      // 스크랩한 순서(최신순)를 유지하고, 그새 삭제/숨김된 글은 자동으로 빠진다.
+      const ordered = ids.map((id: string) => byId.get(id)).filter(Boolean)
+      return json({ posts: ordered })
+    }
+
     // ── 신고 (글 / 댓글 / 이미지) ──
     if (action === 'report') {
       const targetType = String(body.targetType ?? '')

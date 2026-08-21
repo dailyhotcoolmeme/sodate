@@ -8,6 +8,7 @@ import { useColors } from '@/hooks/useColors'
 import { setBoardEntry } from '@/lib/boardEntry'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useProfileSheetStore } from '@/stores/profileSheetStore'
+import { NEW_TABS_ENABLED } from '@/constants/features'
 
 // 일정↔커뮤니티 토글 치수 — 바깥 테두리 높이(24)가 옆 "소개팅모아" 로고 높이(24)와
 // 정확히 같아야 한다(2026-08-12 오너 지시). 시스템 Switch는 iOS에서 51x31 고정이라
@@ -317,9 +318,13 @@ export default function TopBar({
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setMenuVisible(true)} hitSlop={8}>
-            <Ionicons name="menu" size={26} color={colors.textPrimary} />
-          </TouchableOpacity>
+          {/* 햄버거 — MY 탭 개편(2026-08-21)으로 대체. 전환(NEW_TABS_ENABLED) 후엔 숨기고,
+              메뉴에 있던 항목은 전부 MY 탭으로 옮긴다. 전환 전 운영 앱은 그대로 햄버거 유지. */}
+          {!NEW_TABS_ENABLED && (
+            <TouchableOpacity style={styles.iconBtn} onPress={() => setMenuVisible(true)} hitSlop={8}>
+              <Ionicons name="menu" size={26} color={colors.textPrimary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 

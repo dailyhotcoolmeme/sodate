@@ -21,6 +21,7 @@ import { useFavorites } from '@/hooks/useFavorites'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import { track } from '@/lib/analytics'
+import { addRecentView } from '@/lib/recentViews'
 import DeadlineBadge from '@/components/DeadlineBadge'
 import HashtagChips from '@/components/HashtagChips'
 import ReviewSection from '@/components/ReviewSection'
@@ -367,6 +368,11 @@ export default function EventDetailScreen() {
   useEffect(() => {
     if (event) {
       track('event_view', { eventId: event.id, companyId: event.company_id })
+      // MY '최근 본 것' 기록(2026-08-21) — 로컬 저장, 무해. 화면 노출은 MY 탭이 열릴 때부터.
+      addRecentView({
+        kind: 'event', id: event.id, title: event.title,
+        sub: [event.companies?.name, event.location_region].filter(Boolean).join(' · ') || undefined,
+      })
     }
   }, [event?.id])
 

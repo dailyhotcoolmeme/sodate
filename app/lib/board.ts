@@ -2,6 +2,7 @@ import { supabase, type BoardPostRow, type BoardCommentRow, type BoardSettingsRo
 import { getOrCreateToken, setLastNickname } from '@/lib/reviewIdentity'
 import {
   addMyPostId, removeMyPostId, addMyCommentId, removeMyCommentId, setMyVote,
+  setScrapped,
 } from '@/lib/boardIdentity'
 
 /**
@@ -168,6 +169,27 @@ export async function vote(
   const my = (r.my ?? 0) as 0 | 1 | -1
   await setMyVote(postId, my)
   return { my }
+}
+
+// ── 스크랩(북마크) ── 2026-08-21
+/** 같은 글을 다시 누르면 스크랩이 해제된다. 서버가 최종 상태(scrapped)를 돌려준다.
+ *  로컬 캐시도 같이 갱신해 글 상세의 버튼이 즉시 채워진 상태로 보이게 한다. */
+export async function toggleScrap(
+  postId: string
+): Promise<{ scrapped: boolean } | { error: string }> {
+  const r = await call({ action: 'scrap', postId })
+  if ('error' in r) return r
+  const scrapped = !!r.scrapped
+  await setScrapped(postId, scrapped)
+  return { scrapped }
+}
+
+/** MY "스크랩한 글" 목록. 스크랩한 순서(최신순), 살아있는 글만. owner_token 은 서버가
+ *  응답에서 지운다. 실패 시 빈 배열이 아니라 에러 객체를 돌려준다(화면이 구분해 처리). */
+export async function fetchMyScraps(): Promise<{ posts: BoardPost[] } | { error: string }> {
+  const r = await call({ action: 'myScraps' })
+  if ('error' in r) return r
+  return { posts: (r.posts ?? []) as BoardPost[] }
 }
 
 // ── 신고 ──
