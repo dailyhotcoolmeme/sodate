@@ -20,7 +20,7 @@ const PAGE_SIZE = 60
 const FEED_COLUMNS =
   'id, company_id, title, thumbnail_urls, event_date, location_region, ' +
   'price_male, price_female, price_detail, age_male, age_female, theme, hashtags, ' +
-  'is_closed, seats_left_male, seats_left_female, source_url, companies!inner(id, name, slug)'
+  'is_closed, seats_left_male, seats_left_female, source_url, event_type, socialing_category, companies!inner(id, name, slug)'
 
 // 2026-08-07: 앱을 새로 열 때마다 첫 화면이 빈 스피너로 시작했다. 마지막으로 본 첫 페이지를
 // 기기에 저장해뒀다가, 같은 필터 조합으로 다시 열면 그 캐시를 즉시 보여주고(스피너 생략)
@@ -62,7 +62,7 @@ function searchOrFilter(term: string): string {
   ].join(',')
 }
 
-export function useEvents(search = '') {
+export function useEvents(search = '', eventType: 'dating' | 'socialing' = 'dating') {
   const [events, setEvents] = useState<EventWithCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -77,8 +77,8 @@ export function useEvents(search = '') {
 
   // 캐시를 구분하는 키 — buildQuery·applyClientFilters가 실제로 참조하는 필터 전부를 담는다.
   const cacheKey = useMemo(() => JSON.stringify({
-    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search,
-  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search])
+    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search, eventType,
+  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search, eventType])
 
   const buildQuery = useCallback((from: number, to: number) => {
     let query = supabase
@@ -87,6 +87,9 @@ export function useEvents(search = '') {
       // companies!inner + app_visible: 앱 숨김 처리한 업체(admin 토글)의 이벤트는 완전 제외
       .select(FEED_COLUMNS)
       .eq('is_active', true)
+      // 소셜링 확장(2026-08-21)의 핵심 안전장치 — 소개팅 피드는 dating 만, 소셜링 화면은
+      // socialing 만 본다. 이 필터가 없으면 소셜링 데이터가 소개팅 피드에 섞여 나온다.
+      .eq('event_type', eventType)
       .eq('companies.app_visible', true)
       // 마감(is_closed) 이벤트도 기본은 목록 노출(카드 흐림+마감배지). '마감제외' 켜면 숨김.
       .gte('event_date', new Date().toISOString())
@@ -182,7 +185,7 @@ export function useEvents(search = '') {
     }
 
     return query.range(from, to)
-  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge, search, days, timeSlots])
+  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge, search, days, timeSlots, eventType])
 
   /**
    * 한 페이지를 받아온다.
