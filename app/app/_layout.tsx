@@ -116,6 +116,10 @@ export default function RootLayout() {
         {/* 게시판. 등록하지 않으면 기본 헤더에 'board/index' 같은 경로가 그대로 뜬다.
             animation:'none' 이유는 위 index 주석 참고(SwipeSegment와 전환이 겹치던 것). */}
         <Stack.Screen name="board/index" options={{ headerShown: false, animation: 'none' }} />
+        {/* 4탭 확장(2026-08-21) — NEW_TABS_ENABLED 로 숨긴 채 개발 중. animation 'none' 으로
+            탭 전환 시 슬라이드 없이 즉시 바뀐다(바텀 탭 표준). */}
+        <Stack.Screen name="socialing/index" options={{ headerShown: false, animation: 'none' }} />
+        <Stack.Screen name="honsul/index" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="board/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="board/write" options={{ headerShown: false }} />
         <Stack.Screen name="board/mine" options={{ headerShown: false }} />

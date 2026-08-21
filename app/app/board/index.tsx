@@ -10,6 +10,7 @@ import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import SwipeSegment from '@/components/SwipeSegment'
+import BottomNav from '@/components/BottomNav'
 import AppSpinner from '@/components/AppSpinner'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import BoardBannerAd from '@/components/BoardBannerAd'
@@ -358,6 +359,8 @@ export default function BoardListScreen() {
 
       <LoadingOverlay visible={blocking} />
       <AuthorMenu target={authorMenu} onClose={() => setAuthorMenu(null)} />
+      {/* 4탭 바텀 내비 — NEW_TABS_ENABLED 꺼져 있으면 null(운영 무변화) */}
+      <BottomNav current="board" />
     </View>
     </SwipeSegment>
   )

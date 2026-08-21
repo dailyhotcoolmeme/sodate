@@ -38,6 +38,7 @@ import { DAY_OPTIONS, TIME_SLOTS } from '@/constants/filters'
 import { useCompanies } from '@/hooks/useCompanies'
 import TopBar from '@/components/TopBar'
 import SwipeSegment from '@/components/SwipeSegment'
+import BottomNav from '@/components/BottomNav'
 import BoardSwipeHint from '@/components/BoardSwipeHint'
 import { useFilterStore, useFilterHydrated, type FilterState } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
@@ -902,6 +903,8 @@ export default function HomeScreen() {
         onSearch={runSearch}
         colors={colors}
       />
+      {/* 4탭 바텀 내비 — NEW_TABS_ENABLED 꺼져 있으면 null(운영 무변화) */}
+      <BottomNav current="event" />
     </View>
     </SwipeSegment>
   )
