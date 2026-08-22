@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import { submitReview, updateReview, type SubmittedReview } from '@/lib/reviews'
+import { submitPlaceReview, updatePlaceReview } from '@/lib/placeReviews'
 import { getLastNickname, getLastGender, type ReviewGender } from '@/lib/reviewIdentity'
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
@@ -47,16 +48,19 @@ export interface ReviewSheetInitial {
 interface Props {
   visible: boolean
   onClose: () => void
-  companyId: string
+  companyId?: string
   /** 후기를 작성한 일정. 서버가 이 id로 모임명을 읽어 함께 저장한다(수정 시엔 불필요). */
   eventId?: string
+  /** 혼술바(매장) 후기면 placeId 지정 — place_reviews 에 저장하고 성별 입력을 뺀다. */
+  placeId?: string
   /** 편집 모드일 때 기존 후기를 넘기면 프리필 + 수정 동작 */
   initial?: ReviewSheetInitial | null
   /** 작성/수정 성공 시 호출(목록 새로고침용) */
   onDone?: (review: SubmittedReview) => void
 }
 
-export default function ReviewSheet({ visible, onClose, companyId, eventId, initial, onDone }: Props) {
+export default function ReviewSheet({ visible, onClose, companyId, eventId, placeId, initial, onDone }: Props) {
+  const isPlace = !!placeId
   const insets = useSafeAreaInsets()
   const colors = useColors()
   const translateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current
@@ -170,7 +174,7 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, init
   const nickValid = nick.length >= NICK_MIN && nick.length <= NICK_MAX
   const ratingValid = rating >= 1 && rating <= 5
   const contentValid = body.length >= CONTENT_MIN && body.length <= CONTENT_MAX
-  const genderValid = gender === 'male' || gender === 'female'
+  const genderValid = isPlace || gender === 'male' || gender === 'female'  // 매장 후기는 성별 없음
   const canSubmit = nickValid && genderValid && ratingValid && contentValid && !submitting
 
   const handleSubmit = async () => {
@@ -182,9 +186,13 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, init
     if (!contentValid) { setError('후기를 5자 이상 입력해주세요.'); return }
     setSubmitting(true)
     setError(null)
-    const result = isEdit
-      ? await updateReview({ reviewId: initial!.id, nickname: nick, rating, content: body, gender: gender! })
-      : await submitReview({ companyId, eventId, nickname: nick, rating, content: body, gender: gender! })
+    const result = isPlace
+      ? (isEdit
+          ? await updatePlaceReview({ reviewId: initial!.id, nickname: nick, rating, content: body })
+          : await submitPlaceReview({ placeId: placeId!, nickname: nick, rating, content: body }))
+      : (isEdit
+          ? await updateReview({ reviewId: initial!.id, nickname: nick, rating, content: body, gender: gender! })
+          : await submitReview({ companyId: companyId!, eventId, nickname: nick, rating, content: body, gender: gender! }))
     if ('error' in result) {
       setError(result.error)
       setSubmitting(false)
@@ -329,6 +337,7 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, init
                     editable={!submitting}
                   />
                 </View>
+                {!isPlace && (
                 <View style={styles.genderField}>
                   <Text style={styles.fieldLabel}>성별</Text>
                   <View style={styles.genderRow}>
@@ -357,6 +366,7 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, init
                     })}
                   </View>
                 </View>
+                )}
               </View>
 
               {/* 별점 */}

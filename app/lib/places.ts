@@ -96,17 +96,19 @@ export async function fetchPlaces(): Promise<PlaceRow[]> {
 
 export interface PlaceReview {
   id: string
-  source: string           // naver_blog / youtube / instagram
+  source: string           // naver_blog / youtube / instagram / user
   content: string | null
   source_url: string | null
   thumbnail_url: string | null
   published_at: string | null
+  author_name: string | null
+  rating: number | null
 }
 
 export async function fetchPlaceReviews(placeId: string): Promise<PlaceReview[]> {
   const sb = supabase as unknown as { from: (t: string) => any }
   const { data } = await sb.from('place_reviews')
-    .select('id,source,content,source_url,thumbnail_url,published_at')
+    .select('id,source,content,source_url,thumbnail_url,published_at,author_name,rating')
     .eq('place_id', placeId).eq('is_active', true)
     .order('published_at', { ascending: false, nullsFirst: false })
   return (data ?? []) as PlaceReview[]

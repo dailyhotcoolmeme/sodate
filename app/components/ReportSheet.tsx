@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import { reportReview } from '@/lib/reviews'
+import { reportPlaceReview } from '@/lib/placeReviews'
 import { report as reportBoard } from '@/lib/board'
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
@@ -42,11 +43,13 @@ interface Props {
    */
   /** 'content' = 첨부(사진+유튜브 링크 등) 전체를 한꺼번에 신고 — 2026-08-13 일반화. */
   board?: { type: 'post' | 'comment' | 'content'; id: string } | null
+  /** 혼술바(매장) 후기 신고면 true — reviews Edge Function 대신 place_reviews RPC로 보낸다. */
+  placeReview?: boolean
   /** 신고 완료 시 호출 (already: 이미 신고한 대상 여부) */
   onReported?: (already: boolean) => void
 }
 
-export default function ReportSheet({ visible, onClose, reviewId, board, onReported }: Props) {
+export default function ReportSheet({ visible, onClose, reviewId, board, placeReview, onReported }: Props) {
   const insets = useSafeAreaInsets()
   const colors = useColors()
   const translateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current
@@ -136,14 +139,16 @@ export default function ReportSheet({ visible, onClose, reviewId, board, onRepor
     setError(null)
     const result = board
       ? await reportBoard(board.type, board.id, reason)
-      : await reportReview(reviewId!, reason)
+      : placeReview
+        ? await reportPlaceReview(reviewId!)
+        : await reportReview(reviewId!, reason)
     if ('error' in result) {
       setError(result.error)
       setSubmitting(false)
       return
     }
     setSubmitting(false)
-    onReported?.(result.already === true)
+    onReported?.(('already' in result && result.already) === true)
     closeSheet()
   }
 

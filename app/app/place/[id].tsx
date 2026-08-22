@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Linking, Dimensions } from 'react-native'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Linking, Dimensions, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import AppSpinner from '@/components/AppSpinner'
 import ReviewSection from '@/components/ReviewSection'
+import ReviewSheet, { type ReviewSheetInitial } from '@/components/ReviewSheet'
+import ReportSheet from '@/components/ReportSheet'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
@@ -14,6 +16,8 @@ import {
   fetchPlace, fetchPlaceReviews, fetchNearbyCoords, openStatus,
   osmTiles, type PlaceRow, type PlaceReview,
 } from '@/lib/places'
+import { deletePlaceReview } from '@/lib/placeReviews'
+import { getMyReviewIds } from '@/lib/reviewIdentity'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 
 const DOW = ['월', '화', '수', '목', '금', '토', '일']
@@ -32,6 +36,17 @@ export default function PlaceDetailScreen() {
   const [loading, setLoading] = useState(true)
   const { favoriteIds, toggle } = usePlaceFavorites()
 
+  // 후기 작성/수정 시트 + 내 후기 식별 + 신고 (소개팅 event/[id] 와 동일 흐름)
+  const [sheetVisible, setSheetVisible] = useState(false)
+  const [editTarget, setEditTarget] = useState<ReviewSheetInitial | null>(null)
+  const [myReviewIds, setMyReviewIds] = useState<string[]>([])
+  const [reportTarget, setReportTarget] = useState<string | null>(null)
+
+  const loadMyReviewIds = useCallback(() => { getMyReviewIds().then(setMyReviewIds) }, [])
+  const refetchReviews = useCallback(async () => {
+    if (id) setReviews(await fetchPlaceReviews(String(id)))
+  }, [id])
+
   useEffect(() => {
     let alive = true
     ;(async () => {
@@ -45,6 +60,21 @@ export default function PlaceDetailScreen() {
     })()
     return () => { alive = false }
   }, [id])
+
+  useEffect(() => { loadMyReviewIds() }, [loadMyReviewIds])
+
+  const openWrite = () => { setEditTarget(null); setSheetVisible(true) }
+  const openEdit = (review: ReviewRow) => {
+    setEditTarget({ id: review.id, author_name: review.author_name, rating: review.rating, content: review.content, gender: review.gender })
+    setSheetVisible(true)
+  }
+  const handleSheetDone = () => { loadMyReviewIds(); refetchReviews() }
+  const handleDelete = async (review: ReviewRow) => {
+    const result = await deletePlaceReview(review.id)
+    if ('error' in result) { Alert.alert('삭제 실패', result.error); return }
+    loadMyReviewIds(); refetchReviews()
+  }
+  const handleReport = (review: ReviewRow) => { setReportTarget(review.id) }
 
   if (loading) return <View style={styles.container}><TopBar showBack /><View style={styles.center}><AppSpinner /></View></View>
   if (!place) return <View style={styles.container}><TopBar showBack /><View style={styles.center}><Text style={styles.muted}>매장을 찾을 수 없어요</Text></View></View>
@@ -156,15 +186,41 @@ export default function PlaceDetailScreen() {
           )}
         </View>
 
-        {/* 후기 — 소개팅과 동일 디자인(ReviewSection) */}
-        <View style={{ marginTop: 6 }}>
+        {/* 후기 — 소개팅과 동일 디자인(ReviewSection) + 작성/수정/삭제/신고 */}
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeader}>
+            <Text style={styles.sectionTitle}>후기</Text>
+            <TouchableOpacity style={styles.writeInline} onPress={openWrite} hitSlop={8} activeOpacity={0.7}>
+              <Ionicons name="create-outline" size={16} color={colors.primary} />
+              <Text style={styles.writeInlineText}>후기 작성</Text>
+            </TouchableOpacity>
+          </View>
           <ReviewSection
             reviews={reviews as unknown as ReviewRow[]}
-            myReviewIds={[]}
-            onEdit={() => {}} onDelete={() => {}} onReport={() => {}}
+            myReviewIds={myReviewIds}
+            onEdit={openEdit}
+            onDelete={handleDelete}
+            onReport={handleReport}
           />
         </View>
       </ScrollView>
+
+      <ReviewSheet
+        visible={sheetVisible}
+        onClose={() => setSheetVisible(false)}
+        placeId={place.id}
+        initial={editTarget}
+        onDone={handleSheetDone}
+      />
+      <ReportSheet
+        visible={reportTarget !== null}
+        reviewId={reportTarget}
+        placeReview
+        onClose={() => setReportTarget(null)}
+        onReported={(already) => {
+          Alert.alert('신고되었습니다', already ? '이미 신고한 후기입니다.' : '검토 후 조치하겠습니다.')
+        }}
+      />
     </View>
   )
 }
@@ -213,5 +269,11 @@ function makeStyles(colors: AppColors) {
     kwChip: { backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
     kwChipText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
     kwCount: { color: colors.primary, fontWeight: '800' },
+    // 후기 섹션 헤더 — 소개팅 event/[id] 와 동일(제목 왼쪽, 연필+글자 오른쪽)
+    reviewsSection: { paddingHorizontal: 20, paddingTop: 10, marginTop: 6 },
+    reviewsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+    sectionTitle: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
+    writeInline: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    writeInlineText: { fontSize: 14, color: colors.primary, fontWeight: '700' },
   })
 }
