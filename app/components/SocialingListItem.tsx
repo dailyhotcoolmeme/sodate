@@ -83,7 +83,7 @@ export default function SocialingListItem({ event, isFavorite = false, onToggleF
       <View style={styles.info}>
         {group && (
           <View style={styles.catBadge}>
-            <Text style={styles.catBadgeText}>{group.emoji} {group.label}</Text>
+            <Text style={styles.catBadgeText}>{group.label}</Text>
           </View>
         )}
         <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>

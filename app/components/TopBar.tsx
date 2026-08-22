@@ -260,6 +260,9 @@ export default function TopBar({
             />
           </TouchableOpacity>
 
+          {/* 소개팅↔커뮤니티 토글 — 5탭 개편(NEW_TABS_ENABLED)에선 탭으로 이동하므로 제거.
+              운영 앱(2탭)은 그대로 유지. */}
+          {!NEW_TABS_ENABLED && (<>
           <View style={styles.segSwitchWrap}>
             <TouchableOpacity
               activeOpacity={0.85}
@@ -296,6 +299,7 @@ export default function TopBar({
               </TouchableOpacity>
             </View>
           )}
+          </>)}
         </View>
 
         <View style={styles.rightIcons}>

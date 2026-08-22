@@ -112,7 +112,11 @@ class DonghaengScraper(BaseScraper):
         title = sanitize_text(m.get('title', ''), 80)
         tags = m.get('tags') or {}
         region = (tags.get('region') or [None])[0] or m.get('briefLocation') or '서울'
-        salon = (tags.get('salonCategory') or [None])[0]
+        # 카테고리 — salonCategory 없으면 salonFilter, 그래도 없으면 '라이프스타일' 기본
+        # (2026-08-21: 카테고리 없는 모임이 앱에서 배지 없이 떠 소셜링 필터에 안 잡히던 문제).
+        salon = (tags.get('salonCategory') or [None])[0] \
+            or (tags.get('salonFilter') or [None])[0] \
+            or '라이프스타일'
 
         price = m.get('discountPrice') or m.get('price')
         price_val = int(price) if price is not None else None
