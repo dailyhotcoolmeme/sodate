@@ -44,3 +44,10 @@ export function groupForCategory(category?: string | null): SocialingGroup | und
 export function sourcesForGroupKey(key: string): string[] {
   return SOCIALING_GROUPS.find((g) => g.key === key)?.sources ?? []
 }
+
+/** 여러 그룹 key → 원본 카테고리 합집합(다중 선택 필터 .in() 용). */
+export function sourcesForGroupKeys(keys: string[]): string[] {
+  const out = new Set<string>()
+  for (const k of keys) for (const s of sourcesForGroupKey(k)) out.add(s)
+  return Array.from(out)
+}

@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase, type EventWithCompany } from '@/lib/supabase'
 import { useFilterStore, useFilterHydrated } from '@/stores/filterStore'
+import { useSocialingFilterStore, useSocialingFilterHydrated } from '@/stores/socialingFilterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { hoursForTimeSlots } from '@/constants/filters'
-import { sourcesForGroupKey } from '@/constants/socialingCategories'
+import { sourcesForGroupKeys } from '@/constants/socialingCategories'
 
 // 2026-07-26: 예전엔 .limit(100)으로 한 번에 끝까지 가져왔는데, 완성도 작업으로 활성
 // 이벤트 총량이 685건까지 늘면서 100건(날짜 가까운 순)만 보이고 나머지 585건(85%)이
@@ -74,9 +75,6 @@ function searchOrFilter(term: string): string {
 export function useEvents(
   search = '',
   eventType: 'dating' | 'socialing' = 'dating',
-  // 소셜링 통합 카테고리 그룹 key(constants/socialingCategories). undefined=전체.
-  // 그룹 하나가 원본 socialing_category 여러 개를 묶으므로 .in() 으로 조회한다.
-  socialingGroup?: string,
 ) {
   const [events, setEvents] = useState<EventWithCompany[]>([])
   const [loading, setLoading] = useState(true)
@@ -85,15 +83,37 @@ export function useEvents(
   const [error, setError] = useState<string | null>(null)
   const pageRef = useRef(0)
   const didInitialLoad = useRef(false)
+  const isSoc = eventType === 'socialing'
 
-  const hydrated = useFilterHydrated()
-  const { regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed } = useFilterStore()
+  // 소개팅·소셜링 필터는 완전히 분리된 스토어를 쓴다(탭 오갈 때 안 섞이게). 훅은 조건 없이
+  // 둘 다 호출하고, eventType 에 따라 실제 쓸 값(eff*)만 고른다.
+  const datingHydrated = useFilterHydrated()
+  const socHydrated = useSocialingFilterHydrated()
+  const hydrated = isSoc ? socHydrated : datingHydrated
+  const dating = useFilterStore()
+  const soc = useSocialingFilterStore()
   const { myAge, myGender } = useProfileStore()
 
-  // 캐시를 구분하는 키 — buildQuery·applyClientFilters가 실제로 참조하는 필터 전부를 담는다.
+  // 소셜링은 나이·테마·해시태그·시간대·업체·기간 필터가 없다(데이터 없음/미사용) → 빈 값.
+  const regions = isSoc ? soc.regions : dating.regions
+  const maxPrice = isSoc ? soc.maxPrice : dating.maxPrice
+  const days = isSoc ? soc.days : dating.days
+  const sortBy = isSoc ? soc.sortBy : dating.sortBy
+  const excludeClosed = isSoc ? soc.excludeClosed : dating.excludeClosed
+  const socGroups = isSoc ? soc.groups : []
+  const dateStart = isSoc ? null : dating.dateStart
+  const dateEnd = isSoc ? null : dating.dateEnd
+  const themes = isSoc ? [] : dating.themes
+  const hashtags = isSoc ? [] : dating.hashtags
+  const ageGroups = isSoc ? [] : dating.ageGroups
+  const timeSlots = isSoc ? [] : dating.timeSlots
+  const companies = isSoc ? [] : dating.companies
+  const effMyAge = isSoc ? null : myAge   // 소셜링은 내 나이 필터 미적용(나이 데이터 없음)
+
+  // 캐시를 구분하는 키 — buildQuery가 실제로 참조하는 필터 전부를 담는다.
   const cacheKey = useMemo(() => JSON.stringify({
-    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search, eventType, socialingGroup,
-  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge, search, eventType, socialingGroup])
+    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge: effMyAge, search, eventType, socGroups,
+  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, effMyAge, search, eventType, socGroups])
   const cacheSlot = useMemo(() => cacheStoreKey(eventType), [eventType])
 
   const buildQuery = useCallback((from: number, to: number) => {
@@ -112,9 +132,9 @@ export function useEvents(
       // 당일 ~ +1달 하드 상한: 1달 넘는 미래 이벤트는 항상 제외 (매일 자동 롤링)
       .lte('event_date', (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString() })())
 
-    // 소셜링 카테고리 필터 — 통합 그룹 하나가 원본 socialing_category 여러 개를 묶는다.
-    if (eventType === 'socialing' && socialingGroup) {
-      const sources = sourcesForGroupKey(socialingGroup)
+    // 소셜링 카테고리 필터 — 선택한 통합 그룹들의 원본 socialing_category 합집합으로 조회.
+    if (isSoc && socGroups.length > 0) {
+      const sources = sourcesForGroupKeys(socGroups)
       if (sources.length > 0) query = query.in('socialing_category', sources)
     }
 
@@ -178,11 +198,11 @@ export function useEvents(
       }
     }
 
-    // 내 나이 필터 (내 나이가 이벤트 나이 범위 안에 드는 것만)
-    if (myAge !== null) {
+    // 내 나이 필터 (내 나이가 이벤트 나이 범위 안에 드는 것만) — 소셜링은 미적용(effMyAge=null)
+    if (effMyAge !== null) {
       query = query
-        .or(`age_range_min.is.null,age_range_min.lte.${myAge}`)
-        .or(`age_range_max.is.null,age_range_max.gte.${myAge}`)
+        .or(`age_range_min.is.null,age_range_min.lte.${effMyAge}`)
+        .or(`age_range_max.is.null,age_range_max.gte.${effMyAge}`)
     }
 
     // 요일·시간대 — KST 기준 생성 컬럼(event_dow/event_hour)으로 서버에서 직접 거른다.
@@ -207,7 +227,7 @@ export function useEvents(
     }
 
     return query.range(from, to)
-  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, myAge, search, days, timeSlots, eventType, socialingGroup])
+  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, effMyAge, search, days, timeSlots, eventType, isSoc, socGroups])
 
   /**
    * 한 페이지를 받아온다.
