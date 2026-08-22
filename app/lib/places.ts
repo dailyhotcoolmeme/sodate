@@ -39,7 +39,19 @@ export interface InstaMedia {
 
 const COLUMNS =
   'id,name,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
-  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags,socials'
+  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags,socials,keyword_votes'
+
+// 방문자 키워드 투표(사실) → 자연스러운 한 줄 요약. 생성·범용 항목은 제외.
+const SUMMARY_SKIP = new Set(['친절해요', '매장이 청결해요', '화장실이 깨끗해요', '주차', '응대가 좋아요'])
+export function reviewSummary(votes: Record<string, number> | null | undefined, max = 3): string | null {
+  if (!votes) return null
+  const top = Object.entries(votes)
+    .filter(([k]) => !SUMMARY_SKIP.has(k))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+    .map(([k]) => k)
+  return top.length ? top.join(' · ') : null
+}
 
 // 종류별 커버 아이콘(Ionicons — 이모지는 시뮬/기기에서 깨질 수 있어 사용 안 함)·색
 export function categoryCover(category: string | null): { icon: string; bg: string; tint: string } {

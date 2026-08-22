@@ -1,14 +1,14 @@
 import React, { useMemo } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Linking, Image } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { type PlaceRow, openStatus, categoryCover, socialLinks } from '@/lib/places'
+import { type PlaceRow, openStatus, categoryCover, reviewSummary } from '@/lib/places'
 
 /**
- * 혼술바 피드 행. 썸네일=업체 인스타 프로필(원형 아바타). 하트는 소개팅처럼 우측 상단.
- * 영업중 옆에 '오늘(문 여는 요일)' 영업시간을 회색으로. 소셜 아이콘 전부 + 지도 아이콘.
+ * 혼술바 피드 행. 썸네일=업체 인스타 프로필(원형 아바타). 하트는 소개팅과 동일(우상단·size20·#FF6B9D).
+ * 제목 오른쪽에 지도 아이콘(탭→지도탭). 영업중 옆 오늘 영업시간(회색), 그 밑에 방문자 키워드 요약.
  */
 interface Props {
   place: PlaceRow
@@ -26,15 +26,15 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
   const styles = useMemo(() => makeStyles(colors), [colors])
   const { open, hoursLabel } = openStatus(place.hours)
   const cover = categoryCover(place.category)
-  const socials = socialLinks(place)
   const tags = [...place.honsul_badges, ...place.mood_tags]
+  const summary = reviewSummary(place.keyword_votes)
 
   return (
     <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => router.push(`/place/${place.id}`)}>
-      {/* 하트 — 우측 상단(소개팅과 동일) */}
+      {/* 하트 — 소개팅과 동일(우상단·size20·#FF6B9D) */}
       {onToggleFavorite && (
         <TouchableOpacity style={styles.heart} onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }} activeOpacity={0.8} hitSlop={6}>
-          <Ionicons name="heart" size={18} color={isFavorite ? colors.primary : colors.textTertiary} />
+          <Ionicons name="heart" size={20} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
         </TouchableOpacity>
       )}
 
@@ -49,7 +49,16 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
       </View>
 
       <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>{place.name}</Text>
+        {/* 제목 + 오른쪽 지도 아이콘 */}
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>{place.name}</Text>
+          {onMapPress && place.lat && (
+            <TouchableOpacity hitSlop={6} onPress={(e) => { e.stopPropagation?.(); onMapPress(place) }} style={styles.mapBtn}>
+              <Ionicons name="map-outline" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
         {tags.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll} contentContainerStyle={styles.tagRow} keyboardShouldPersistTaps="handled">
             {tags.map((t) => (
@@ -59,23 +68,14 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
             ))}
           </ScrollView>
         )}
+
         <View style={styles.metaRow}>
           {open != null && <Text style={[styles.op, { color: open ? colors.success : colors.textTertiary }]}>{open ? '영업중' : '영업종료'}</Text>}
           {hoursLabel && <Text style={styles.hours}>{'  '}{hoursLabel}</Text>}
           <Text style={styles.meta} numberOfLines={1}>{'  ·  '}{place.region ?? ''}{place.naver_rating ? `  ·  ★ ${place.naver_rating}` : ''}</Text>
         </View>
-        <View style={styles.iconRow}>
-          {socials.map((s) => (
-            <TouchableOpacity key={s.key} hitSlop={5} onPress={(e) => { e.stopPropagation?.(); Linking.openURL(s.url) }}>
-              <Ionicons name={s.icon as any} size={16} color={colors.textTertiary} />
-            </TouchableOpacity>
-          ))}
-          {onMapPress && place.lat && (
-            <TouchableOpacity hitSlop={5} onPress={(e) => { e.stopPropagation?.(); onMapPress(place) }}>
-              <Ionicons name="location-outline" size={16} color={colors.textTertiary} />
-            </TouchableOpacity>
-          )}
-        </View>
+
+        {summary && <Text style={styles.summary} numberOfLines={1}>{summary}</Text>}
       </View>
     </TouchableOpacity>
   )
@@ -84,13 +84,15 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 12, marginHorizontal: 16, marginVertical: 4, paddingVertical: 11, paddingHorizontal: 13, gap: 12 },
-    heart: { position: 'absolute', top: 10, right: 10, zIndex: 2 },
+    heart: { position: 'absolute', top: 8, right: 10, zIndex: 2 },
     avWrap: { position: 'relative' },
     av: { width: AV, height: AV, borderRadius: AV / 2, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.divider },
     avFallback: { alignItems: 'center', justifyContent: 'center' },
     openDot: { position: 'absolute', bottom: 1, right: 1, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.surface },
-    info: { flex: 1, gap: 3, paddingRight: 22 },
-    name: { fontSize: 15.5, color: colors.textPrimary, fontWeight: '800' },
+    info: { flex: 1, gap: 3, paddingRight: 24 },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+    name: { flexShrink: 1, fontSize: 15.5, color: colors.textPrimary, fontWeight: '800' },
+    mapBtn: { padding: 1 },
     tagScroll: { height: 16, flexGrow: 0, flexShrink: 0 },
     tagRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     tag: { color: colors.primary, fontSize: 11, fontWeight: '700', lineHeight: 15 },
@@ -98,6 +100,6 @@ function makeStyles(colors: AppColors) {
     op: { fontSize: 12, fontWeight: '800' },
     hours: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
     meta: { flexShrink: 1, fontSize: 12, color: colors.textSecondary },
-    iconRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2 },
+    summary: { fontSize: 12, color: colors.textTertiary, marginTop: 1 },
   })
 }
