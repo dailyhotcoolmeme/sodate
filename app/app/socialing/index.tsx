@@ -80,13 +80,49 @@ export default function SocialingScreen() {
     <View style={styles.container}>
       <TopBar onSearchPress={() => setSearchVisible(true)} />
 
-      {/* ── 카테고리 빠른칩(다중) ── */}
-      <View style={styles.catBarWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catBar} style={{ flex: 1 }}>
+      {/* ── 카테고리 빠른칩(다중) — 소개팅 지역/나이대 칩과 동일 리듬(height 34, marginBottom 2) ── */}
+      <View style={styles.chipScroll}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
           <Chip label="전체" active={groups.length === 0} onPress={clearGroups} colors={colors} />
           {SOCIALING_GROUPS.map((g) => (
             <Chip key={g.key} label={g.label} active={groups.includes(g.key)} onPress={() => toggleGroup(g.key)} colors={colors} />
           ))}
+        </ScrollView>
+      </View>
+
+      {/* ── 지역 빠른탭(군) + 필터 버튼 — 소개팅 regionScroll 과 동일 ── */}
+      <View style={styles.regionScroll}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} style={{ flex: 1 }}>
+          {hydrated && regionGroupChips.map((g) => {
+            const active = g.ids.every((id) => regions.includes(id))
+            return (
+              <Chip key={g.key} label={g.key} active={active} onPress={() => setRegionsBulk(g.ids, !active)} colors={colors} />
+            )
+          })}
+        </ScrollView>
+        <TouchableOpacity style={[styles.chip, styles.filterBtn]} onPress={() => setFilterVisible(true)} activeOpacity={0.8}>
+          <Ionicons name="funnel-outline" size={13} color={colors.textSecondary} />
+          <Text style={styles.chipText}>필터</Text>
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{activeFilterCount}</Text></View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* ── 정렬 + 마감제외 + 뷰토글 — 소개팅 resultRow 와 동일 ── */}
+      <View style={styles.resultRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow} style={{ flex: 1 }}>
+          {SORT_OPTIONS.map((opt) => (
+            <TouchableOpacity key={opt.id} style={[styles.sortChip, sortBy === opt.id && styles.sortChipActive]} onPress={() => setSortBy(opt.id)}>
+              <Text style={[styles.sortChipText, sortBy === opt.id && styles.sortChipTextActive]}>{opt.label}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={[styles.sortChip, styles.excludeChip, excludeClosed && styles.excludeChipActive]} onPress={() => setExcludeClosed(!excludeClosed)}>
+            <View style={[styles.checkbox, excludeClosed && styles.checkboxOn]}>
+              {excludeClosed && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}
+            </View>
+            <Text style={[styles.sortChipText, excludeClosed && styles.sortChipTextActive]}>마감제외</Text>
+          </TouchableOpacity>
         </ScrollView>
         <View style={styles.viewToggle}>
           <TouchableOpacity style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]} onPress={() => setViewMode('card')}>
@@ -96,42 +132,6 @@ export default function SocialingScreen() {
             <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? colors.textPrimary : colors.textTertiary} />
           </TouchableOpacity>
         </View>
-      </View>
-
-      {/* ── 지역 빠른탭(군) + 필터 버튼 ── */}
-      <View style={styles.regionRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.regionBar} style={{ flex: 1 }}>
-          {hydrated && regionGroupChips.map((g) => {
-            const active = g.ids.every((id) => regions.includes(id))
-            return (
-              <Chip key={g.key} label={g.key} active={active} onPress={() => setRegionsBulk(g.ids, !active)} colors={colors} />
-            )
-          })}
-        </ScrollView>
-        <TouchableOpacity style={styles.filterBtn} onPress={() => setFilterVisible(true)} activeOpacity={0.8}>
-          <Ionicons name="funnel-outline" size={13} color={colors.textSecondary} />
-          <Text style={styles.filterBtnText}>필터</Text>
-          {activeFilterCount > 0 && (
-            <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{activeFilterCount}</Text></View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* ── 정렬 + 마감제외 ── */}
-      <View style={styles.sortRowWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortBar} style={{ flex: 1 }}>
-          {SORT_OPTIONS.map((opt) => (
-            <TouchableOpacity key={opt.id} style={[styles.sortChip, sortBy === opt.id && styles.sortChipOn]} onPress={() => setSortBy(opt.id)}>
-              <Text style={[styles.sortChipText, sortBy === opt.id && styles.sortChipTextOn]}>{opt.label}</Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={[styles.sortChip, styles.excludeChip, excludeClosed && styles.sortChipOn]} onPress={() => setExcludeClosed(!excludeClosed)}>
-            <View style={[styles.checkbox, excludeClosed && styles.checkboxOn]}>
-              {excludeClosed && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}
-            </View>
-            <Text style={[styles.sortChipText, excludeClosed && styles.sortChipTextOn]}>마감제외</Text>
-          </TouchableOpacity>
-        </ScrollView>
       </View>
 
       {/* 검색/필터 활성 안내 */}
@@ -191,42 +191,37 @@ function Chip({ label, active, onPress, colors }: { label: string; active: boole
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    catBarWrap: { flexDirection: 'row', alignItems: 'center', paddingRight: 10 },
-    catBar: { paddingHorizontal: 12, paddingVertical: 9, gap: 7 },
-    regionRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 10 },
-    regionBar: { paddingHorizontal: 12, paddingVertical: 4, gap: 7 },
-    sortRowWrap: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.divider },
-    sortBar: { paddingHorizontal: 12, paddingVertical: 8, gap: 7 },
+    // 필터 칩 줄 — 소개팅과 동일 리듬. 카테고리는 첫 줄(위 여백), 지역은 둘째 줄.
+    chipScroll: { height: 34, marginTop: 6, marginBottom: 2, justifyContent: 'center' },
+    regionScroll: { height: 34, marginBottom: 2, flexDirection: 'row', alignItems: 'center' },
+    chipRow: { paddingHorizontal: 16, alignItems: 'center', gap: 6 },
+    // 소개팅 regionChip 과 동일(pH 13, pV 5, r 18, surfaceHigh)
     chip: {
-      paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider,
+      paddingHorizontal: 13, paddingVertical: 5, borderRadius: 18,
+      backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border,
     },
     chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-    chipText: { fontSize: 12.5, fontWeight: '700', color: colors.textSecondary },
-    chipTextOn: { color: '#fff' },
-    viewToggle: { flexDirection: 'row', gap: 2, flexShrink: 0 },
-    viewBtn: { padding: 6, borderRadius: 8 },
-    viewBtnActive: { backgroundColor: colors.surfaceHigh },
-    filterBtn: {
-      flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0,
-      paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
-      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider,
-    },
-    filterBtnText: { fontSize: 12.5, fontWeight: '700', color: colors.textSecondary },
-    filterBadge: { minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-    filterBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
-    sortChip: {
-      flexDirection: 'row', alignItems: 'center', gap: 5,
-      paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
-      backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider,
-    },
-    sortChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-    sortChipText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
-    sortChipTextOn: { color: '#fff' },
-    excludeChip: {},
+    chipText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
+    chipTextOn: { color: '#fff', fontWeight: '700' },
+    // 필터 버튼 — 소개팅과 동일하게 chip 모양 위에 인라인 배치
+    filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 16, marginLeft: 4 },
+    filterBadge: { minWidth: 15, height: 15, paddingHorizontal: 3, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+    filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+    // 정렬 + 뷰토글 줄 — 소개팅 resultRow 와 동일
+    resultRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 4, paddingVertical: 6 },
+    sortRow: { gap: 6, alignItems: 'center', paddingRight: 12 },
+    sortChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+    sortChipActive: { backgroundColor: '#FF6B9D18', borderColor: colors.primary },
+    sortChipText: { fontSize: 12, color: colors.textTertiary, fontWeight: '500' },
+    sortChipTextActive: { color: colors.primary, fontWeight: '700' },
+    excludeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 2 },
+    excludeChipActive: { backgroundColor: '#FF6B9D18', borderColor: colors.primary, paddingLeft: 10 },
     checkbox: { width: 15, height: 15, borderRadius: 4, borderWidth: 1.5, borderColor: colors.textTertiary, alignItems: 'center', justifyContent: 'center' },
-    checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-    searchInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.divider },
+    checkboxOn: { borderColor: colors.primary, backgroundColor: colors.primary },
+    viewToggle: { flexDirection: 'row', gap: 2, marginLeft: 6, marginRight: 4 },
+    viewBtn: { width: 30, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
+    viewBtnActive: { backgroundColor: colors.surfaceHigh },
+    searchInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 9, borderTopWidth: 1, borderTopColor: colors.divider },
     searchInfoText: { flex: 1, fontSize: 13, color: colors.textSecondary },
     searchClear: { fontSize: 13, color: colors.primary, fontWeight: '700' },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 60 },
