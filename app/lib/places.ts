@@ -24,8 +24,9 @@ export interface PlaceRow {
   profile_image: string | null       // 업체 인스타 프로필 이미지(R2 재호스팅) — 피드 썸네일
   images: string[]                   // 네이버 대표사진(현재 미사용, 인스타로 전환)
   instagram_media: InstaMedia[]      // 업체 인스타 게시물/릴스(사진·영상)
-  honsul_badges: string[]            // 혼술친화·조용·오래머물기·심야
-  mood_tags: string[]                // 아늑·음악·차분·대화
+  honsul_badges: string[]            // 특징 태그(술종류多·대화·음악·심야 …)
+  mood_tags: string[]                // (통합) 현재 미사용
+  socials: Record<string, string>    // {instagram, facebook, x, youtube, homepage}
   keyword_votes?: Record<string, number> | null   // 상세 전용: 네이버 키워드 투표 원본
 }
 
@@ -38,7 +39,7 @@ export interface InstaMedia {
 
 const COLUMNS =
   'id,name,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
-  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags'
+  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags,socials'
 
 // 종류별 커버 아이콘(Ionicons — 이모지는 시뮬/기기에서 깨질 수 있어 사용 안 함)·색
 export function categoryCover(category: string | null): { icon: string; bg: string; tint: string } {
@@ -54,11 +55,16 @@ export function categoryCover(category: string | null): { icon: string; bg: stri
   }
 }
 
-/** 소셜 링크 → 아이콘 목록(피드·상세 공용). Ionicons 이름 반환. */
-export function socialLinks(p: Pick<PlaceRow, 'instagram' | 'naver_url'>): { icon: string; url: string; key: string }[] {
-  const out: { icon: string; url: string; key: string }[] = []
-  if (p.instagram) out.push({ icon: 'logo-instagram', url: p.instagram, key: 'ig' })
-  return out
+/** 소셜 링크 → 아이콘 목록(피드·상세 공용). 있는 소셜은 전부. */
+const SOCIAL_ICON: Record<string, string> = {
+  instagram: 'logo-instagram', facebook: 'logo-facebook', x: 'logo-twitter',
+  youtube: 'logo-youtube', homepage: 'globe-outline',
+}
+export function socialLinks(p: Pick<PlaceRow, 'socials' | 'instagram'>): { icon: string; url: string; key: string }[] {
+  const s = { ...(p.socials ?? {}) }
+  if (!s.instagram && p.instagram) s.instagram = p.instagram
+  const order = ['instagram', 'facebook', 'x', 'youtube', 'homepage']
+  return order.filter((k) => s[k]).map((k) => ({ icon: SOCIAL_ICON[k], url: s[k], key: k }))
 }
 
 export async function fetchPlaces(): Promise<PlaceRow[]> {
@@ -96,13 +102,14 @@ export function cleanImageUrl(url: string | null | undefined): string | undefine
 }
 
 /**
- * 지금 영업중인지 판정. 마감이 새벽(예: 02:00)이면 시작보다 작으므로 자정 넘김으로 처리.
- * 반환: { open, todayLabel } — todayLabel 은 "오늘 19:00~02:00" 형태(없으면 null).
+ * 지금 영업중인지 + '오늘(문 여는 요일 기준)' 영업시간.
+ * "오늘 요일" = 문을 여는 시각이 속한 요일. 새벽엔 어젯밤 세션이 이어질 수 있으므로,
+ * 지금이 어제 세션(자정 넘김) 안이면 그 세션(어제 요일)을 오늘로 본다.
+ * 반환: { open, hoursLabel } — hoursLabel 예: "21:00~05:00" (없으면 null).
  */
-export function openStatus(hours: Record<string, string> | null): { open: boolean | null; todayLabel: string | null } {
-  if (!hours) return { open: null, todayLabel: null }
+export function openStatus(hours: Record<string, string> | null): { open: boolean | null; hoursLabel: string | null } {
+  if (!hours || Object.keys(hours).length === 0) return { open: null, hoursLabel: null }
   const now = new Date()
-  // KST 기준(기기 로케일 무관하게 안전하게 +9)
   const kst = new Date(now.getTime() + (now.getTimezoneOffset() + 540) * 60000)
   const day = DOW[kst.getDay()]
   const prevDay = DOW[(kst.getDay() + 6) % 7]
@@ -114,11 +121,14 @@ export function openStatus(hours: Record<string, string> | null): { open: boolea
     if (!s || !e) return false
     const toM = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0) }
     let start = toM(s), end = toM(e)
-    if (end <= start) end += 1440 // 새벽 마감(자정 넘김)
+    if (end <= start) end += 1440
     const t = mins + offset
     return t >= start && t < end
   }
-  // 오늘 영업시간, 또는 어제 시작해 새벽까지 이어지는 경우(어제 범위 +1440 안에 지금이 드는지)
-  const open = within(hours[day]) || within(hours[prevDay], 1440)
-  return { open, todayLabel: hours[day] ? `오늘 ${hours[day]}` : null }
+  const openToday = within(hours[day])
+  const openPrev = within(hours[prevDay], 1440)   // 어젯밤부터 새벽까지 이어지는 세션
+  const open = openToday || openPrev
+  // 지금이 어제 세션(새벽)이면 어제 시간표를, 아니면 오늘 시간표(문 여는 요일 기준)를 보여준다.
+  const label = openPrev && !openToday ? hours[prevDay] : hours[day]
+  return { open, hoursLabel: label ?? null }
 }
