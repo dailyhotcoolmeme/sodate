@@ -28,6 +28,7 @@ export default function HonsulScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [cat, setCat] = useState<string | null>(null)      // 종류(단일)
   const [region, setRegion] = useState<string | null>(null)
+  const [tag, setTag] = useState<string | null>(null)      // 해시태그 필터(혼술친화·무드 등)
 
   const load = useCallback(async () => {
     try { setAll(await fetchPlaces()) } catch (e) { /* 조용히 */ } finally { setLoading(false) }
@@ -39,8 +40,10 @@ export default function HonsulScreen() {
   const regions = useMemo(() => Array.from(new Set(all.map((p) => p.region).filter(Boolean))) as string[], [all])
 
   const list = useMemo(() => all.filter((p) =>
-    (!cat || p.category === cat) && (!region || p.region === region)
-  ), [all, cat, region])
+    (!cat || p.category === cat) &&
+    (!region || p.region === region) &&
+    (!tag || [...p.honsul_badges, ...p.mood_tags].includes(tag))
+  ), [all, cat, region, tag])
 
   return (
     <View style={styles.container}>
@@ -68,7 +71,15 @@ export default function HonsulScreen() {
         </View>
       </View>
 
-      <View style={styles.countRow}><Text style={styles.countText}>{list.length}곳</Text></View>
+      <View style={styles.countRow}>
+        <Text style={styles.countText}>{list.length}곳</Text>
+        {tag && (
+          <TouchableOpacity style={styles.tagFilterChip} onPress={() => setTag(null)} activeOpacity={0.7}>
+            <Text style={styles.tagFilterText}>#{tag}</Text>
+            <Ionicons name="close" size={12} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+      </View>
 
       {loading ? (
         <View style={styles.center}><AppSpinner /></View>
@@ -82,7 +93,7 @@ export default function HonsulScreen() {
         <FlatList
           data={list}
           keyExtractor={(p) => p.id}
-          renderItem={({ item }) => <PlaceListItem place={item} />}
+          renderItem={({ item }) => <PlaceListItem place={item} onTagPress={setTag} />}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: insets.bottom + 16 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
@@ -118,8 +129,10 @@ function makeStyles(colors: AppColors) {
     viewToggle: { flexDirection: 'row', gap: 2, marginLeft: 6, marginRight: 4 },
     viewBtn: { width: 30, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
     viewBtnActive: { backgroundColor: colors.surfaceHigh },
-    countRow: { paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.divider },
+    countRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.divider },
     countText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+    tagFilterChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: `${colors.primary}1a`, borderRadius: 12, paddingLeft: 9, paddingRight: 6, paddingVertical: 3 },
+    tagFilterText: { fontSize: 12, color: colors.primary, fontWeight: '800' },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 60 },
     emptyText: { fontSize: 15, color: colors.textSecondary, marginTop: 4 },
     emptySub: { fontSize: 13, color: colors.textTertiary },

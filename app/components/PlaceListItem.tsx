@@ -16,12 +16,13 @@ interface Props {
   place: PlaceRow
   isFavorite?: boolean
   onToggleFavorite?: () => void
+  onTagPress?: (tag: string) => void
 }
 
 const AMBER = '#E0A13C'
 const THUMB = 88
 
-export default function PlaceListItem({ place, isFavorite = false, onToggleFavorite }: Props) {
+export default function PlaceListItem({ place, isFavorite = false, onToggleFavorite, onTagPress }: Props) {
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const img = cleanImageUrl(place.thumbnail_url)
@@ -52,9 +53,11 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
         <Text style={styles.name} numberOfLines={1}>{place.name}</Text>
 
         {(place.honsul_badges.length > 0 || place.mood_tags.length > 0) && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll} contentContainerStyle={styles.tagRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll} contentContainerStyle={styles.tagRow} keyboardShouldPersistTaps="handled">
             {[...place.honsul_badges, ...place.mood_tags].map((t) => (
-              <Text key={t} style={styles.tag}>#{t}</Text>
+              <TouchableOpacity key={t} activeOpacity={0.6} onPress={(e) => { e.stopPropagation?.(); onTagPress?.(t) }}>
+                <Text style={styles.tag}>#{t}</Text>
+              </TouchableOpacity>
             ))}
           </ScrollView>
         )}
