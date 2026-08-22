@@ -210,8 +210,9 @@ function makeStyles(colors: AppColors) {
     igEmpty: { alignItems: 'center', justifyContent: 'center' },
     igReel: { position: 'absolute', top: 7, right: 7, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, padding: 3 },
     card: { margin: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.divider, paddingVertical: 6 },
-    infoRow: { flexDirection: 'row', paddingVertical: 8, gap: 12 },
-    infoK: { width: 44, color: colors.textTertiary, fontSize: 13, fontWeight: '700' },
+    // 라벨·내용 첫 줄 baseline 일치 — 같은 fontSize·lineHeight.
+    infoRow: { flexDirection: 'row', paddingVertical: 7, gap: 10 },
+    infoK: { width: 40, color: colors.textTertiary, fontSize: 13.5, fontWeight: '700', lineHeight: 21 },
     infoV: { flex: 1, color: colors.textPrimary, fontSize: 13.5, lineHeight: 21 },
     telRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
     revBox: { marginHorizontal: 16, backgroundColor: colors.surface, borderRadius: 12, padding: 14, marginBottom: 8 },
