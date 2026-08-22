@@ -11,7 +11,7 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import type { ReviewRow } from '@/lib/supabase'
 import {
-  fetchPlace, fetchPlaceReviews, fetchNearbyCoords, openStatus, reviewHashtags,
+  fetchPlace, fetchPlaceReviews, fetchNearbyCoords, openStatus,
   osmTiles, type PlaceRow, type PlaceReview,
 } from '@/lib/places'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
@@ -51,7 +51,6 @@ export default function PlaceDetailScreen() {
 
   const { open, hoursLabel } = openStatus(place.hours)
   const isFav = favoriteIds.has(place.id)
-  const hashtags = reviewHashtags(place.keyword_votes)
   const media = place.instagram_media ?? []
 
   return (
@@ -93,12 +92,7 @@ export default function PlaceDetailScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 업체명 밑 = 피드와 동일 */}
-          {hashtags.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll} contentContainerStyle={styles.tagRow}>
-              {hashtags.map((t) => <Text key={t} style={styles.tag}>#{t}</Text>)}
-            </ScrollView>
-          )}
+          {/* 상세에선 상단 해시태그 대신 아래 정보카드의 '키워드' 행으로 보여준다(오너 지시). */}
           <View style={styles.metaRow}>
             {open != null ? (
               <>
