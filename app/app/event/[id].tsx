@@ -594,15 +594,13 @@ export default function EventDetailScreen() {
           <View style={styles.descSection}>
             {renderCta()}
             <Text style={styles.sectionLabel}>모임 소개</Text>
-            <View style={{ maxHeight: descExpanded ? undefined : DESC_COLLAPSED_H, overflow: 'hidden' }}>
-              <View onLayout={(e) => setDescContentH(e.nativeEvent.layout.height)}>
-                <Text style={styles.socDescText}>{event.description}</Text>
-              </View>
-            </View>
-            {descContentH > DESC_COLLAPSED_H + 40 && (
-              <TouchableOpacity style={styles.descMoreBtn} onPress={() => setDescExpanded((v) => !v)} activeOpacity={0.7}>
-                <Text style={styles.descMoreText}>{descExpanded ? '접기' : '모임 소개 더보기'}</Text>
-                <Ionicons name={descExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={colors.primary} />
+            {/* 소셜링 설명은 창작 표현(저작권) → 앞부분 15줄만 발췌하고, '더보기'는 펼치지 않고
+                업체 원문 페이지로 이동시킨다(전체 복제 회피 + 정당 인용). */}
+            <Text style={styles.socDescText} numberOfLines={15}>{event.description}</Text>
+            {(event.description.length > 260 || (event.description.match(/\n/g)?.length ?? 0) >= 14) && (
+              <TouchableOpacity style={styles.descMoreBtn} onPress={() => openOutlink(event.source_url)} activeOpacity={0.7}>
+                <Text style={styles.descMoreText}>더보기</Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.primary} />
               </TouchableOpacity>
             )}
           </View>

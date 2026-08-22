@@ -113,6 +113,48 @@ def tidy_socialing_desc(text: Optional[str], max_length: int = 6000) -> Optional
     return t or None
 
 
+# 종결어미(문장이 완결된 지점) — 문단 구분 후보. "-거나/-고/-며/쉼표"로 끝난 줄은 제외해
+# 리스트 중간("공부를 하거나, 책을 읽거나.")에서 끊기지 않게 한다.
+_SENT_END_RE = re.compile(r'(다|요|죠|까|함|음|네|셔요|세요|어요|해요)\s*[.!?…]+$')
+_CONNECTIVE_END_RE = re.compile(r'(거나|고|며|서|만|,|\()\s*[.!?…]*$')
+
+
+def format_munto_desc(text: Optional[str], max_length: int = 6000) -> Optional[str]:
+    """문토 설명 포맷 — tidy 후 (1) 빈 줄 제거해 문장 한 줄씩 촘촘하게 만들고,
+    (2) 중간쯤에서 '종결어미로 끝난 문장' 다음에 한 번만 빈 줄을 넣어 문단을 나눈다.
+    문토 호스트들이 문장마다 3~5줄씩 띄우는 과한 여백을 정리하면서도 숨통은 틔우는 규칙."""
+    t = tidy_socialing_desc(text, max_length)
+    if not t:
+        return None
+    lines = [ln for ln in (l.strip() for l in t.split('\n')) if ln]
+    if len(lines) < 6:
+        return '\n'.join(lines) or None
+    mid = len(lines) // 2
+    cands = [
+        i for i in range(1, len(lines) - 1)
+        if _SENT_END_RE.search(lines[i]) and not _CONNECTIVE_END_RE.search(lines[i])
+    ]
+    if not cands:
+        return '\n'.join(lines)
+    best = min(cands, key=lambda i: abs(i - (mid - 1)))
+    return '\n'.join(lines[:best + 1]) + '\n\n' + '\n'.join(lines[best + 1:])
+
+
+def format_donghaeng_desc(text: Optional[str], max_length: int = 6000) -> Optional[str]:
+    """동행클럽 설명 포맷 — tidy 후 [소제목] 문단 구조는 유지하되, 본문 통짜 문단을
+    '마침표 뒤'에서 줄바꿈해 문장 단위로 나눈다(긴 한 덩어리 → 읽기 쉬운 문장들)."""
+    t = tidy_socialing_desc(text, max_length)
+    if not t:
+        return None
+    out = []
+    for line in t.split('\n'):
+        if line.strip().startswith('['):   # [소제목]은 그대로
+            out.append(line)
+        else:
+            out.append(re.sub(r'\.\s+', '.\n', line))
+    return '\n'.join(out) or None
+
+
 def sanitize_url(url: Optional[str], base_url: str = '') -> Optional[str]:
     """URL 유효성 확인 후 반환 (javascript:, data: 등 위험 scheme 제거)"""
     if not url:

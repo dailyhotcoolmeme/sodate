@@ -15,7 +15,7 @@ import httpx
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
-from utils.security import sanitize_text, tidy_socialing_desc
+from utils.security import sanitize_text, format_donghaeng_desc
 from utils.date_filter import is_within_one_month
 
 KST = timezone(timedelta(hours=9))
@@ -169,7 +169,7 @@ class DonghaengScraper(BaseScraper):
             if not (t or b):
                 continue
             cur_parts.append(f'[{t}]\n{b}' if t and b else (t or b))
-        description = tidy_socialing_desc('\n\n'.join(cur_parts)) if cur_parts else None
+        description = format_donghaeng_desc('\n\n'.join(cur_parts)) if cur_parts else None
 
         events.append(EventModel(
             external_id=f'donghaeng_{mid}',
