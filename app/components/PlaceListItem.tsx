@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
@@ -51,12 +51,12 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
         )}
         <Text style={styles.name} numberOfLines={1}>{place.name}</Text>
 
-        {place.honsul_badges.length > 0 && (
-          <View style={styles.badgeRow}>
-            {place.honsul_badges.slice(0, 3).map((b) => (
-              <View key={b} style={styles.honBadge}><Text style={styles.honBadgeText}>{b}</Text></View>
+        {(place.honsul_badges.length > 0 || place.mood_tags.length > 0) && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll} contentContainerStyle={styles.tagRow}>
+            {[...place.honsul_badges, ...place.mood_tags].map((t) => (
+              <Text key={t} style={styles.tag}>#{t}</Text>
             ))}
-          </View>
+          </ScrollView>
         )}
 
         <Text style={styles.meta} numberOfLines={1}>
@@ -100,9 +100,10 @@ function makeStyles(colors: AppColors) {
     catBadge: { alignSelf: 'flex-start', backgroundColor: `${colors.primary}22`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
     catBadgeText: { fontSize: 11, fontWeight: '800', color: colors.primary },
     name: { fontSize: 15, color: colors.textPrimary, fontWeight: '800', lineHeight: 20 },
-    badgeRow: { flexDirection: 'row', gap: 5, flexWrap: 'wrap' },
-    honBadge: { backgroundColor: 'rgba(224,161,60,0.14)', borderWidth: 1, borderColor: 'rgba(224,161,60,0.32)', borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2 },
-    honBadgeText: { fontSize: 10.5, fontWeight: '800', color: AMBER },
+    // 혼술친화·조용·심야·무드 = 해시태그(오너 지시). 소개팅 해시태그와 같은 톤(primary).
+    tagScroll: { height: 17, flexGrow: 0, flexShrink: 0 },
+    tagRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    tag: { color: colors.primary, fontSize: 11, fontWeight: '700', lineHeight: 15 },
     meta: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
     heart: { paddingLeft: 4, paddingTop: 2 },
   })

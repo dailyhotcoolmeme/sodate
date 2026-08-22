@@ -11,15 +11,13 @@ import type { AppColors } from '@/constants/colors'
 import { fetchPlaces, type PlaceRow } from '@/lib/places'
 
 /**
- * 혼술바 탭 — 혼자 술 마시기 좋은 바를 종류·지역·혼술배지로 찾는다(2026-08-22).
- * 이벤트가 아니라 상시 매장(places 테이블). 소개팅·소셜링과 같은 헤더 문법.
- * 차별화 = ★혼술 친화 배지(카운터석·1인·조용·심야). 지도 토글은 카카오맵(키·재빌드 후) 예정.
+ * 혼술바 탭 — 혼자 술 마시기 좋은 바를 종류·지역으로 찾는다(2026-08-22).
+ * 이벤트가 아니라 상시 매장(places 테이블). 헤더는 소개팅과 같은 문법(종류 + 지역 2줄).
+ * 혼술친화·조용·심야 등은 카드에 해시태그로 표시한다(오너 지시). 지도 토글은 카카오맵(키·재빌드 후).
  *
  * ⚠️ NEW_TABS_ENABLED 가 false 인 동안은 이 화면으로 올 길이 없다.
- * (파일럿) 현재는 전부 불러와 클라이언트에서 거른다 — 데이터가 618곳으로 늘면 서버 필터로 전환.
+ * (파일럿) 현재는 전부 불러와 클라이언트에서 거른다 — 618곳으로 늘면 서버 필터로 전환.
  */
-const HONSUL_BADGES = ['혼술친화', '조용', '오래머물기', '심야']
-
 export default function HonsulScreen() {
   const colors = useColors()
   const insets = useSafeAreaInsets()
@@ -29,45 +27,30 @@ export default function HonsulScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [cat, setCat] = useState<string | null>(null)      // 종류(단일)
-  const [badges, setBadges] = useState<string[]>([])         // 혼술배지(다중)
   const [region, setRegion] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try { setAll(await fetchPlaces()) } catch (e) { /* 조용히 */ } finally { setLoading(false) }
   }, [])
   useEffect(() => { load() }, [load])
-
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false) }, [load])
 
   const categories = useMemo(() => Array.from(new Set(all.map((p) => p.category).filter(Boolean))) as string[], [all])
   const regions = useMemo(() => Array.from(new Set(all.map((p) => p.region).filter(Boolean))) as string[], [all])
 
   const list = useMemo(() => all.filter((p) =>
-    (!cat || p.category === cat) &&
-    (!region || p.region === region) &&
-    (badges.length === 0 || badges.every((b) => p.honsul_badges.includes(b)))
-  ), [all, cat, region, badges])
-
-  const toggleBadge = (b: string) => setBadges((v) => v.includes(b) ? v.filter((x) => x !== b) : [...v, b])
+    (!cat || p.category === cat) && (!region || p.region === region)
+  ), [all, cat, region])
 
   return (
     <View style={styles.container}>
       <TopBar onSearchPress={() => {}} />
 
-      {/* 종류 */}
-      <View style={styles.chipScroll}>
+      {/* 종류 (맨 윗줄만 위 여백) — 소개팅 지역/나이대 칩과 동일 리듬 */}
+      <View style={[styles.chipScroll, styles.chipScrollTop]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
           <Chip label="전체" active={cat === null} onPress={() => setCat(null)} colors={colors} />
           {categories.map((c) => <Chip key={c} label={c} active={cat === c} onPress={() => setCat(cat === c ? null : c)} colors={colors} />)}
-        </ScrollView>
-      </View>
-
-      {/* 혼술 친화 배지(앰버) */}
-      <View style={styles.chipScroll}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          {HONSUL_BADGES.map((b) => (
-            <Chip key={b} label={b} active={badges.includes(b)} onPress={() => toggleBadge(b)} colors={colors} amber />
-          ))}
         </ScrollView>
       </View>
 
@@ -111,32 +94,27 @@ export default function HonsulScreen() {
   )
 }
 
-function Chip({ label, active, onPress, colors, amber = false }: { label: string; active: boolean; onPress: () => void; colors: AppColors; amber?: boolean }) {
+function Chip({ label, active, onPress, colors }: { label: string; active: boolean; onPress: () => void; colors: AppColors }) {
   const styles = useMemo(() => makeStyles(colors), [colors])
-  const onStyle = amber ? styles.chipAmberOn : styles.chipOn
-  const onText = amber ? styles.chipAmberTextOn : styles.chipTextOn
   return (
-    <TouchableOpacity style={[styles.chip, amber && styles.chipAmber, active && onStyle]} onPress={onPress} activeOpacity={0.7}>
-      <Text style={[styles.chipText, amber && styles.chipAmberText, active && onText]}>{label}</Text>
+    <TouchableOpacity style={[styles.chip, active && styles.chipOn]} onPress={onPress} activeOpacity={0.7}>
+      <Text style={[styles.chipText, active && styles.chipTextOn]}>{label}</Text>
     </TouchableOpacity>
   )
 }
 
-const AMBER = '#E0A13C'
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    chipScroll: { height: 34, marginTop: 6, marginBottom: 2, justifyContent: 'center' },
+    // 소개팅과 동일: 칩 줄 height 34 + marginBottom 2, 맨 윗줄만 marginTop 6.
+    chipScroll: { height: 34, marginBottom: 2, justifyContent: 'center' },
+    chipScrollTop: { marginTop: 6 },
     regionScroll: { height: 34, marginBottom: 2, flexDirection: 'row', alignItems: 'center' },
     chipRow: { paddingHorizontal: 16, alignItems: 'center', gap: 6 },
     chip: { paddingHorizontal: 13, paddingVertical: 5, borderRadius: 18, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
     chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
     chipTextOn: { color: '#fff', fontWeight: '700' },
-    chipAmber: { backgroundColor: 'rgba(224,161,60,0.12)', borderColor: 'rgba(224,161,60,0.4)' },
-    chipAmberText: { color: AMBER, fontWeight: '700' },
-    chipAmberOn: { backgroundColor: AMBER, borderColor: AMBER },
-    chipAmberTextOn: { color: '#141018', fontWeight: '800' },
     viewToggle: { flexDirection: 'row', gap: 2, marginLeft: 6, marginRight: 4 },
     viewBtn: { width: 30, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
     viewBtnActive: { backgroundColor: colors.surfaceHigh },
