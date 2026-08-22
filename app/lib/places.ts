@@ -21,15 +21,44 @@ export interface PlaceRow {
   naver_rating: number | null
   naver_review_count: number | null
   thumbnail_url: string | null
-  images: string[]                   // 네이버 대표사진 여러 장(상세 갤러리)
+  images: string[]                   // 네이버 대표사진(현재 미사용, 인스타로 전환)
+  instagram_media: InstaMedia[]      // 업체 인스타 게시물/릴스(사진·영상)
   honsul_badges: string[]            // 혼술친화·조용·오래머물기·심야
   mood_tags: string[]                // 아늑·음악·차분·대화
   keyword_votes?: Record<string, number> | null   // 상세 전용: 네이버 키워드 투표 원본
 }
 
+export interface InstaMedia {
+  code: string
+  is_reel: boolean
+  thumb: string | null
+  url: string
+}
+
 const COLUMNS =
   'id,name,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
-  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,images,honsul_badges,mood_tags'
+  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,images,instagram_media,honsul_badges,mood_tags'
+
+// 종류별 커버 아이콘(Ionicons — 이모지는 시뮬/기기에서 깨질 수 있어 사용 안 함)·색
+export function categoryCover(category: string | null): { icon: string; bg: string; tint: string } {
+  switch (category) {
+    case '위스키바': return { icon: 'wine', bg: '#2c2013', tint: '#d9a441' }
+    case '칵테일바': return { icon: 'wine', bg: '#2e1626', tint: '#e06aa0' }
+    case '와인바': return { icon: 'wine', bg: '#2a1420', tint: '#d16a86' }
+    case '이자카야': return { icon: 'restaurant', bg: '#2c1d12', tint: '#dc9152' }
+    case '하이볼바': return { icon: 'beer', bg: '#20261a', tint: '#a9c46a' }
+    case 'LP바': return { icon: 'musical-notes', bg: '#1f1a2c', tint: '#a58cff' }
+    case '펍': return { icon: 'beer', bg: '#2a2410', tint: '#d9c441' }
+    default: return { icon: 'wine', bg: '#20202a', tint: '#c0a0b0' }
+  }
+}
+
+/** 소셜 링크 → 아이콘 목록(피드·상세 공용). Ionicons 이름 반환. */
+export function socialLinks(p: Pick<PlaceRow, 'instagram' | 'naver_url'>): { icon: string; url: string; key: string }[] {
+  const out: { icon: string; url: string; key: string }[] = []
+  if (p.instagram) out.push({ icon: 'logo-instagram', url: p.instagram, key: 'ig' })
+  return out
+}
 
 export async function fetchPlaces(): Promise<PlaceRow[]> {
   // places 는 아직 Database 타입에 없어 any 캐스트(파일럿 단계). 타입 생성은 스키마 확정 후.
