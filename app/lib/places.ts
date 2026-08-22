@@ -21,6 +21,7 @@ export interface PlaceRow {
   naver_rating: number | null
   naver_review_count: number | null
   thumbnail_url: string | null
+  images: string[]                   // 네이버 대표사진 여러 장(상세 갤러리)
   honsul_badges: string[]            // 혼술친화·조용·오래머물기·심야
   mood_tags: string[]                // 아늑·음악·차분·대화
   keyword_votes?: Record<string, number> | null   // 상세 전용: 네이버 키워드 투표 원본
@@ -28,7 +29,7 @@ export interface PlaceRow {
 
 const COLUMNS =
   'id,name,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
-  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,honsul_badges,mood_tags'
+  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,images,honsul_badges,mood_tags'
 
 export async function fetchPlaces(): Promise<PlaceRow[]> {
   // places 는 아직 Database 타입에 없어 any 캐스트(파일럿 단계). 타입 생성은 스키마 확정 후.

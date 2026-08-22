@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Linking } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Linking, Dimensions, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -12,6 +12,7 @@ import { fetchPlace, cleanImageUrl, openStatus, type PlaceRow } from '@/lib/plac
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 
 const DOW = ['월', '화', '수', '목', '금', '토', '일']
+const SCREEN_W = Dimensions.get('window').width
 
 export default function PlaceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -20,6 +21,7 @@ export default function PlaceDetailScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [place, setPlace] = useState<PlaceRow | null>(null)
   const [loading, setLoading] = useState(true)
+  const [imgIdx, setImgIdx] = useState(0)
   const { favoriteIds, toggle } = usePlaceFavorites()
 
   useEffect(() => {
@@ -34,9 +36,15 @@ export default function PlaceDetailScreen() {
   if (loading) return <View style={styles.container}><TopBar showBack /><View style={styles.center}><AppSpinner /></View></View>
   if (!place) return <View style={styles.container}><TopBar showBack /><View style={styles.center}><Text style={styles.muted}>매장을 찾을 수 없어요</Text></View></View>
 
-  const img = cleanImageUrl(place.thumbnail_url)
+  const gallery = (place.images?.length ? place.images : [place.thumbnail_url])
+    .map(cleanImageUrl)
+    .filter((u): u is string => !!u)
   const { open } = openStatus(place.hours)
   const isFav = favoriteIds.has(place.id)
+  const onGalleryScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const i = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W)
+    if (i !== imgIdx) setImgIdx(i)
+  }
   const tags = [...place.honsul_badges, ...place.mood_tags]
   const votes = place.keyword_votes
     ? Object.entries(place.keyword_votes).sort((a, b) => b[1] - a[1]).slice(0, 5)
@@ -46,8 +54,29 @@ export default function PlaceDetailScreen() {
     <View style={styles.container}>
       <TopBar showBack />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}>
-        {/* 히어로 */}
-        {img ? <Image source={{ uri: img }} style={styles.hero} /> : <View style={[styles.hero, styles.heroEmpty]}><Ionicons name="wine-outline" size={44} color={colors.textTertiary} /></View>}
+        {/* 히어로 갤러리 — 네이버 대표사진 여러 장 스와이프 */}
+        {gallery.length > 0 ? (
+          <View>
+            <ScrollView
+              horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+              onScroll={onGalleryScroll} scrollEventThrottle={16}
+            >
+              {gallery.map((u, i) => (
+                <Image key={u + i} source={{ uri: u }} style={styles.heroImg} resizeMode="cover" />
+              ))}
+            </ScrollView>
+            {gallery.length > 1 && (
+              <>
+                <View style={styles.counter}><Text style={styles.counterText}>{imgIdx + 1} / {gallery.length}</Text></View>
+                <View style={styles.dots}>
+                  {gallery.map((_, i) => <View key={i} style={[styles.dot, i === imgIdx && styles.dotOn]} />)}
+                </View>
+              </>
+            )}
+          </View>
+        ) : (
+          <View style={[styles.heroImg, styles.heroEmpty]}><Ionicons name="wine-outline" size={44} color={colors.textTertiary} /></View>
+        )}
 
         <View style={styles.body}>
           {place.category && <View style={styles.catBadge}><Text style={styles.catBadgeText}>{place.category}</Text></View>}
@@ -127,8 +156,13 @@ function makeStyles(colors: AppColors) {
     container: { flex: 1, backgroundColor: colors.background },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     muted: { color: colors.textTertiary, fontSize: 14 },
-    hero: { width: '100%', height: 220, backgroundColor: colors.surfaceHigh },
+    heroImg: { width: SCREEN_W, height: 260, backgroundColor: colors.surfaceHigh },
     heroEmpty: { alignItems: 'center', justifyContent: 'center' },
+    counter: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, paddingHorizontal: 9, paddingVertical: 3 },
+    counterText: { color: '#fff', fontSize: 11.5, fontWeight: '700' },
+    dots: { position: 'absolute', bottom: 10, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 5 },
+    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.45)' },
+    dotOn: { backgroundColor: '#fff', width: 7, height: 7, borderRadius: 3.5 },
     body: { padding: 16 },
     catBadge: { alignSelf: 'flex-start', backgroundColor: `${colors.primary}22`, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 3, marginBottom: 7 },
     catBadgeText: { fontSize: 12, fontWeight: '800', color: colors.primary },
