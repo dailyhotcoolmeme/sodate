@@ -89,6 +89,30 @@ def sanitize_text(text: Optional[str], max_length: int = 1000) -> Optional[str]:
     return cleaned if cleaned else None
 
 
+def tidy_socialing_desc(text: Optional[str], max_length: int = 6000) -> Optional[str]:
+    """소셜링 상세 설명 정리 — sanitize_text 와 달리 **줄바꿈을 보존**한다(소개팅 초기의
+    '줄바꿈 없이 빼곡' 문제 방지). HTML 제거 + 깨진 이미지 자리(￼) 제거 + 장식선(¸.•´¨* 류
+    한글/영숫자 없는 특수문자 라인) 제거 + 연속 빈 줄 축소. 문토·동행클럽 설명에 쓴다."""
+    if not text:
+        return None
+    t = _HTML_TAG_RE.sub(' ', text).replace('￼', '')  # ￼ = U+FFFC
+    lines = []
+    for ln in t.split('\n'):
+        s = ln.rstrip()
+        stripped = s.strip()
+        # 문자(한글/영숫자)가 하나도 없는 라인(장식선 ¸.•´¨*·단독 불릿·이모지만) → 버림
+        if stripped and not re.search(r'[가-힣A-Za-z0-9]', stripped):
+            continue
+        # 줄 안의 가로 공백만 단일화(줄바꿈은 유지)
+        lines.append(re.sub(r'[ \t]+', ' ', s))
+    t = '\n'.join(lines)
+    t = re.sub(r'[ \t]+\n', '\n', t)
+    t = re.sub(r'\n{3,}', '\n\n', t).strip()
+    if len(t) > max_length:
+        t = t[:max_length] + '...'
+    return t or None
+
+
 def sanitize_url(url: Optional[str], base_url: str = '') -> Optional[str]:
     """URL 유효성 확인 후 반환 (javascript:, data: 등 위험 scheme 제거)"""
     if not url:

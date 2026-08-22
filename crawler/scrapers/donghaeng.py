@@ -15,7 +15,7 @@ import httpx
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
-from utils.security import sanitize_text
+from utils.security import sanitize_text, tidy_socialing_desc
 from utils.date_filter import is_within_one_month
 
 KST = timezone(timedelta(hours=9))
@@ -160,9 +160,21 @@ class DonghaengScraper(BaseScraper):
                     thumb = c['thumbnailUrl']
                     break
 
+        # 상세 설명 — 동행클럽은 소개글(description)이 없고 세션 커리큘럼이 본문이다.
+        # 각 세션 [제목]\n본문 을 이어붙여 상세 설명으로 쓴다(앱 소셜링 상세에 표시).
+        cur_parts = []
+        for x in (m.get('curriculums') or []):
+            t = (x.get('title') or '').strip()
+            b = (x.get('body') or '').strip()
+            if not (t or b):
+                continue
+            cur_parts.append(f'[{t}]\n{b}' if t and b else (t or b))
+        description = tidy_socialing_desc('\n\n'.join(cur_parts)) if cur_parts else None
+
         events.append(EventModel(
             external_id=f'donghaeng_{mid}',
             title=title,
+            description=description,
             thumbnail_urls=[thumb] if thumb else [],
             event_date=event_date,
             location_region=region,

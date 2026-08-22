@@ -22,7 +22,7 @@ KST = timezone(timedelta(hours=9))
 
 from .base_scraper import BaseScraper
 from models.event import EventModel
-from utils.security import sanitize_text
+from utils.security import sanitize_text, tidy_socialing_desc
 from utils.date_filter import is_within_one_month
 
 MUNTO_BASE_URL = 'https://www.munto.kr'
@@ -676,7 +676,10 @@ class MuntoScraper(BaseScraper):
                 events.append(EventModel(
                     external_id=f'munto_{socialing_id}',
                     title=title,
-                    description=sanitize_text(introduce, 6000) if introduce else None,
+                    # 소개팅은 상세에서 설명 텍스트를 안 쓰지만(이미지 유형), 소셜링은 이 설명을
+                    # 상세에 그대로 보여준다 → 줄바꿈 보존·장식선 제거하는 tidy 를 쓴다.
+                    description=(tidy_socialing_desc(introduce, 6000) if event_type == 'socialing'
+                                else sanitize_text(introduce, 6000)) if introduce else None,
                     thumbnail_urls=thumbnails,
                     event_date=event_date,
                     location_region=region,

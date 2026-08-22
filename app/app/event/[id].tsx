@@ -33,6 +33,7 @@ import type { ReviewRow } from '@/lib/supabase'
 import AdBanner from '@/components/AdBanner'
 import { daysUntil } from '@/lib/dday'
 import PriceTierValue from '@/components/PriceTierValue'
+import { groupForCategory } from '@/constants/socialingCategories'
 import ThemeBadge from '@/components/ThemeBadge'
 import { getThemeBadge } from '@/constants/themeBadges'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
@@ -199,6 +200,11 @@ export default function EventDetailScreen() {
       color: colors.textSecondary,
       lineHeight: 22,
     },
+    // 소셜링 전용 — 카테고리 배지(업체명 자리), 참여현황, 설명 텍스트(줄바꿈 보존)
+    socCatBadge: { alignSelf: 'flex-start', backgroundColor: `${colors.primary}22`, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 3 },
+    socCatBadgeText: { fontSize: 12, fontWeight: '800', color: colors.primary },
+    socPartText: { fontSize: 14, color: colors.textPrimary, fontWeight: '600' },
+    socDescText: { fontSize: 14.5, color: colors.textPrimary, lineHeight: 23 },
     descPara: { marginBottom: 8 },
     // 기호로 시작한 줄: 줄바꿈 시 텍스트 시작점에 정렬(행잉 인덴트)
     descRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginBottom: 7 },
@@ -417,6 +423,12 @@ export default function EventDetailScreen() {
     </TouchableOpacity>
   )
 
+  // 소셜링(2026-08-21) — 같은 상세화면에서 세 곳만 갈아끼운다: 업체명→카테고리 배지,
+  // 남/여 가격→참여현황, 상세이미지 스택→설명 텍스트(줄바꿈 보존). 나머지는 공통.
+  const isSocialing = event.event_type === 'socialing'
+  const socGroup = isSocialing ? groupForCategory(event.socialing_category) : undefined
+  const ps = event.participant_stats
+
   return (
     <View style={styles.screen}>
       <TopBar showBack />
@@ -449,16 +461,24 @@ export default function EventDetailScreen() {
       </View>
 
       <View style={styles.content}>
-        {/* 업체명 + 하트 */}
+        {/* 업체명 + 하트 (소셜링은 업체명 대신 카테고리 배지) */}
         <View style={styles.titleRow}>
-          {event.companies && (
+          {isSocialing ? (
+            <View style={{ flex: 1 }}>
+              {socGroup && (
+                <View style={styles.socCatBadge}>
+                  <Text style={styles.socCatBadgeText}>{socGroup.label}</Text>
+                </View>
+              )}
+            </View>
+          ) : event.companies ? (
             <TouchableOpacity
               onPress={() => router.push(`/company/${event.companies!.id}`)}
               style={{ flex: 1 }}
             >
               <Text style={styles.company}>{event.companies.name} ›</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
           <TouchableOpacity
             style={[styles.heartBtn, favoriteIds.has(event.id) && styles.heartBtnActive]}
             onPress={() => {
@@ -497,7 +517,30 @@ export default function EventDetailScreen() {
         <View style={styles.infoCard}>
           <InfoRow label="일시" value={formatDate(event.event_date)} styles={styles} />
           <InfoRow label="지역" value={event.location_region} styles={styles} />
-          {(() => {
+          {isSocialing ? (
+            // 소셜링 참여현황 — 성비(문토) > 총정원(동행) > 대기(트레바리). 가격은 별도 행.
+            <>
+              {event.price_male != null && (
+                <InfoRow label="가격" value={`${event.price_male.toLocaleString()}원`} styles={styles} />
+              )}
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>참여</Text>
+                <View style={styles.infoValue}>
+                  {(ps?.male_count != null || ps?.female_count != null) ? (
+                    <Text style={styles.socPartText}>
+                      {ps?.male_count != null && <Text style={{ color: '#3B82F6', fontWeight: '700' }}>남 {ps.male_count}</Text>}
+                      {ps?.male_count != null && ps?.female_count != null && '  '}
+                      {ps?.female_count != null && <Text style={{ color: colors.primary, fontWeight: '700' }}>여 {ps.female_count}</Text>}
+                    </Text>
+                  ) : ps?.total_capacity != null ? (
+                    <Text style={styles.socPartText}>정원 {ps.total_capacity}명 중 <Text style={{ color: colors.primary, fontWeight: '700' }}>{ps.total_count ?? 0}명</Text> 참여</Text>
+                  ) : (
+                    <Text style={[styles.socPartText, { color: colors.textTertiary }]}>신청 · 대기 가능</Text>
+                  )}
+                </View>
+              </View>
+            </>
+          ) : (() => {
             const detail = event.price_detail
             const hasM = event.price_male != null || !!detail?.male || !!event.age_male
             const hasF = event.price_female != null || !!detail?.female || !!event.age_female
@@ -545,8 +588,28 @@ export default function EventDetailScreen() {
           </View>
         )}
 
+        {/* 소셜링 상세 설명 — 크롤 텍스트를 줄바꿈 보존해 그대로 표시(소개팅과 달리 이미지 스택 없음).
+            설명이 없는 소스(트레바리)는 섹션 자체를 숨긴다. */}
+        {isSocialing && !!event.description && (
+          <View style={styles.descSection}>
+            {renderCta()}
+            <Text style={styles.sectionLabel}>모임 소개</Text>
+            <View style={{ maxHeight: descExpanded ? undefined : DESC_COLLAPSED_H, overflow: 'hidden' }}>
+              <View onLayout={(e) => setDescContentH(e.nativeEvent.layout.height)}>
+                <Text style={styles.socDescText}>{event.description}</Text>
+              </View>
+            </View>
+            {descContentH > DESC_COLLAPSED_H + 40 && (
+              <TouchableOpacity style={styles.descMoreBtn} onPress={() => setDescExpanded((v) => !v)} activeOpacity={0.7}>
+                <Text style={styles.descMoreText}>{descExpanded ? '접기' : '모임 소개 더보기'}</Text>
+                <Ionicons name={descExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* 상세 설명 — 업체/일정별로 등록된 이미지 유형으로만 표시. 이미지 없으면 섹션 숨김(크롤 텍스트는 미노출) */}
-        {event.descImages && event.descImages.length > 0 && (
+        {!isSocialing && event.descImages && event.descImages.length > 0 && (
           <View style={styles.descSection}>
             {/* 상세 이미지가 길어 하단 광고가 안 보일 수 있어 설명 시작 위에도 광고 노출 */}
             <AdBanner variant="text" />
