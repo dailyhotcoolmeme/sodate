@@ -41,16 +41,16 @@ const COLUMNS =
   'id,name,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
   'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags,socials,keyword_votes'
 
-// 방문자 키워드 투표(사실) → 자연스러운 한 줄 요약. 생성·범용 항목은 제외.
+// 방문자 키워드 투표(사실) → 해시태그처럼 보여줄 태그 배열(상위순). 생성·범용 항목은 제외.
+// 공백을 없애 해시태그 형태로("술이 다양해요"→"술이다양해요"). 많으면 카드에서 가로 스와이프.
 const SUMMARY_SKIP = new Set(['친절해요', '매장이 청결해요', '화장실이 깨끗해요', '주차', '응대가 좋아요'])
-export function reviewSummary(votes: Record<string, number> | null | undefined, max = 3): string | null {
-  if (!votes) return null
-  const top = Object.entries(votes)
+export function reviewHashtags(votes: Record<string, number> | null | undefined, max = 7): string[] {
+  if (!votes) return []
+  return Object.entries(votes)
     .filter(([k]) => !SUMMARY_SKIP.has(k))
     .sort((a, b) => b[1] - a[1])
     .slice(0, max)
-    .map(([k]) => k)
-  return top.length ? top.join(' · ') : null
+    .map(([k]) => k.replace(/\s+/g, ''))
 }
 
 // 종류별 커버 아이콘(Ionicons — 이모지는 시뮬/기기에서 깨질 수 있어 사용 안 함)·색

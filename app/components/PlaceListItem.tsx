@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { type PlaceRow, openStatus, categoryCover, reviewSummary } from '@/lib/places'
+import { type PlaceRow, openStatus, categoryCover, reviewHashtags } from '@/lib/places'
 
 /**
  * 혼술바 피드 행. 썸네일=업체 인스타 프로필(원형 아바타). 하트는 소개팅과 동일(우상단·size20·#FF6B9D).
@@ -26,8 +26,7 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
   const styles = useMemo(() => makeStyles(colors), [colors])
   const { open, hoursLabel } = openStatus(place.hours)
   const cover = categoryCover(place.category)
-  const tags = [...place.honsul_badges, ...place.mood_tags]
-  const summary = reviewSummary(place.keyword_votes)
+  const hashtags = reviewHashtags(place.keyword_votes)
 
   return (
     <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => router.push(`/place/${place.id}`)}>
@@ -59,9 +58,10 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
           )}
         </View>
 
-        {tags.length > 0 && (
+        {/* 방문자 키워드를 해시태그로 — 많으면 가로 스와이프(소개팅 해시태그와 동일 스펙) */}
+        {hashtags.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll} contentContainerStyle={styles.tagRow} keyboardShouldPersistTaps="handled">
-            {tags.map((t) => (
+            {hashtags.map((t) => (
               <TouchableOpacity key={t} activeOpacity={0.6} onPress={(e) => { e.stopPropagation?.(); onTagPress?.(t) }}>
                 <Text style={styles.tag}>#{t}</Text>
               </TouchableOpacity>
@@ -74,8 +74,6 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
           {hoursLabel && <Text style={styles.hours}>{'  '}{hoursLabel}</Text>}
           <Text style={styles.meta} numberOfLines={1}>{'  ·  '}{place.region ?? ''}{place.naver_rating ? `  ·  ★ ${place.naver_rating}` : ''}</Text>
         </View>
-
-        {summary && <Text style={styles.summary} numberOfLines={1}>{summary}</Text>}
       </View>
     </TouchableOpacity>
   )
@@ -91,15 +89,16 @@ function makeStyles(colors: AppColors) {
     openDot: { position: 'absolute', bottom: 1, right: 1, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.surface },
     info: { flex: 1, gap: 3, paddingRight: 24 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-    name: { flexShrink: 1, fontSize: 15.5, color: colors.textPrimary, fontWeight: '800' },
+    // 소개팅 제목과 동일: fontSize 14 · weight 700 · lineHeight 19
+    name: { flexShrink: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 19 },
     mapBtn: { padding: 1 },
-    tagScroll: { height: 16, flexGrow: 0, flexShrink: 0 },
-    tagRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    // 소개팅 해시태그(sm)와 동일: height 17 · fontSize 11 · primary · weight 700
+    tagScroll: { height: 17, flexGrow: 0, flexShrink: 0 },
+    tagRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     tag: { color: colors.primary, fontSize: 11, fontWeight: '700', lineHeight: 15 },
     metaRow: { flexDirection: 'row', alignItems: 'center' },
     op: { fontSize: 12, fontWeight: '800' },
     hours: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
     meta: { flexShrink: 1, fontSize: 12, color: colors.textSecondary },
-    summary: { fontSize: 12, color: colors.textTertiary, marginTop: 1 },
   })
 }
