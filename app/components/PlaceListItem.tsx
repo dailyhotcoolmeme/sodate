@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { openOutlink } from '@/lib/outlink'
+import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { type PlaceRow, cleanImageUrl, openStatus } from '@/lib/places'
@@ -23,14 +23,14 @@ const AMBER = '#E0A13C'
 const THUMB = 88
 
 export default function PlaceListItem({ place, isFavorite = false, onToggleFavorite, onTagPress }: Props) {
+  const router = useRouter()
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const img = cleanImageUrl(place.thumbnail_url)
   const { open } = openStatus(place.hours)
 
-  // (파일럿) 상세 화면 전이라 탭하면 네이버 원본으로. 상세 만들면 router.push('/place/'+id)로 교체.
   return (
-    <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => place.naver_url && openOutlink(place.naver_url)}>
+    <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => router.push(`/place/${place.id}`)}>
       {/* 썸네일 + 영업상태 */}
       <View style={styles.thumbWrap}>
         {img ? (

@@ -23,6 +23,7 @@ export interface PlaceRow {
   thumbnail_url: string | null
   honsul_badges: string[]            // 혼술친화·조용·오래머물기·심야
   mood_tags: string[]                // 아늑·음악·차분·대화
+  keyword_votes?: Record<string, number> | null   // 상세 전용: 네이버 키워드 투표 원본
 }
 
 const COLUMNS =
@@ -42,6 +43,17 @@ export async function fetchPlaces(): Promise<PlaceRow[]> {
     .order('name')
   if (error) throw error
   return (data ?? []) as PlaceRow[]
+}
+
+export async function fetchPlace(id: string): Promise<PlaceRow | null> {
+  const sb = supabase as unknown as { from: (t: string) => any }
+  const { data, error } = await sb
+    .from('places')
+    .select(COLUMNS + ',keyword_votes')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return (data as PlaceRow) ?? null
 }
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토']

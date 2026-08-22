@@ -108,6 +108,7 @@ export default function RootLayout() {
           name="event/[id]"
           options={{ headerShown: false }}
         />
+        <Stack.Screen name="place/[id]" options={{ headerShown: false }} />
         <Stack.Screen
           name="company/[id]"
           options={{ headerShown: false }}

@@ -5,10 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import BottomNav from '@/components/BottomNav'
 import PlaceListItem from '@/components/PlaceListItem'
+import EventSearchModal from '@/components/EventSearchModal'
 import AppSpinner from '@/components/AppSpinner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { fetchPlaces, type PlaceRow } from '@/lib/places'
+import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
+import { addRecentSearch } from '@/lib/eventSearchHistory'
 
 /**
  * 혼술바 탭 — 혼자 술 마시기 좋은 바를 종류·지역으로 찾는다(2026-08-22).
@@ -29,6 +32,9 @@ export default function HonsulScreen() {
   const [cat, setCat] = useState<string | null>(null)      // 종류(단일)
   const [region, setRegion] = useState<string | null>(null)
   const [tag, setTag] = useState<string | null>(null)      // 해시태그 필터(혼술친화·무드 등)
+  const [search, setSearch] = useState('')
+  const [searchVisible, setSearchVisible] = useState(false)
+  const { favoriteIds, toggle: toggleFav } = usePlaceFavorites()
 
   const load = useCallback(async () => {
     try { setAll(await fetchPlaces()) } catch (e) { /* 조용히 */ } finally { setLoading(false) }
@@ -39,15 +45,19 @@ export default function HonsulScreen() {
   const categories = useMemo(() => Array.from(new Set(all.map((p) => p.category).filter(Boolean))) as string[], [all])
   const regions = useMemo(() => Array.from(new Set(all.map((p) => p.region).filter(Boolean))) as string[], [all])
 
-  const list = useMemo(() => all.filter((p) =>
-    (!cat || p.category === cat) &&
-    (!region || p.region === region) &&
-    (!tag || [...p.honsul_badges, ...p.mood_tags].includes(tag))
-  ), [all, cat, region, tag])
+  const list = useMemo(() => {
+    const q = search.trim()
+    return all.filter((p) =>
+      (!cat || p.category === cat) &&
+      (!region || p.region === region) &&
+      (!tag || [...p.honsul_badges, ...p.mood_tags].includes(tag)) &&
+      (!q || p.name.includes(q) || (p.region ?? '').includes(q) || (p.category ?? '').includes(q))
+    )
+  }, [all, cat, region, tag, search])
 
   return (
     <View style={styles.container}>
-      <TopBar onSearchPress={() => {}} />
+      <TopBar onSearchPress={() => setSearchVisible(true)} />
 
       {/* 종류 (맨 윗줄만 위 여백) — 소개팅 지역/나이대 칩과 동일 리듬 */}
       <View style={[styles.chipScroll, styles.chipScrollTop]}>
@@ -79,6 +89,12 @@ export default function HonsulScreen() {
             <Ionicons name="close" size={12} color={colors.primary} />
           </TouchableOpacity>
         )}
+        {!!search && (
+          <TouchableOpacity style={styles.tagFilterChip} onPress={() => setSearch('')} activeOpacity={0.7}>
+            <Text style={styles.tagFilterText}>‘{search}’</Text>
+            <Ionicons name="close" size={12} color={colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -93,7 +109,9 @@ export default function HonsulScreen() {
         <FlatList
           data={list}
           keyExtractor={(p) => p.id}
-          renderItem={({ item }) => <PlaceListItem place={item} onTagPress={setTag} />}
+          renderItem={({ item }) => (
+            <PlaceListItem place={item} onTagPress={setTag} isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => toggleFav(item.id)} />
+          )}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: insets.bottom + 16 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
@@ -101,6 +119,7 @@ export default function HonsulScreen() {
       )}
 
       <BottomNav current="honsul" />
+      <EventSearchModal visible={searchVisible} onClose={() => setSearchVisible(false)} onSearch={(t) => { setSearch(t); addRecentSearch(t) }} colors={colors} />
     </View>
   )
 }
