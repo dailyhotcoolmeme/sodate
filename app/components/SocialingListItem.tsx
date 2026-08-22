@@ -114,7 +114,7 @@ export default function SocialingListItem({ event, isFavorite = false, onToggleF
           onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }}
           activeOpacity={0.8}
         >
-          <Ionicons name="heart" size={18} color={isFavorite ? colors.primary : colors.textTertiary} />
+          <Ionicons name="heart" size={20} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
         </TouchableOpacity>
       )}
 

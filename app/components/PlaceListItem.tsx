@@ -70,8 +70,14 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
         )}
 
         <View style={styles.metaRow}>
-          {open != null && <Text style={[styles.op, { color: open ? colors.success : colors.textTertiary }]}>{open ? '영업중' : '영업종료'}</Text>}
-          {hoursLabel && <Text style={styles.hours}>{'  '}{hoursLabel}</Text>}
+          {open != null ? (
+            <>
+              <Text style={[styles.op, { color: open ? colors.success : colors.textTertiary }]}>{open ? '영업중' : '영업종료'}</Text>
+              {hoursLabel && <Text style={styles.hours}>{'  '}{hoursLabel}</Text>}
+            </>
+          ) : (
+            <Text style={styles.hours}>영업시간 정보 없음</Text>
+          )}
           <Text style={styles.meta} numberOfLines={1}>{'  ·  '}{place.region ?? ''}{place.naver_rating ? `  ·  ★ ${place.naver_rating}` : ''}</Text>
         </View>
       </View>
