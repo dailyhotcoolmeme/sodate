@@ -21,6 +21,7 @@ export interface PlaceRow {
   naver_rating: number | null
   naver_review_count: number | null
   thumbnail_url: string | null
+  profile_image: string | null       // 업체 인스타 프로필 이미지(R2 재호스팅) — 피드 썸네일
   images: string[]                   // 네이버 대표사진(현재 미사용, 인스타로 전환)
   instagram_media: InstaMedia[]      // 업체 인스타 게시물/릴스(사진·영상)
   honsul_badges: string[]            // 혼술친화·조용·오래머물기·심야
@@ -37,7 +38,7 @@ export interface InstaMedia {
 
 const COLUMNS =
   'id,name,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
-  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,images,instagram_media,honsul_badges,mood_tags'
+  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags'
 
 // 종류별 커버 아이콘(Ionicons — 이모지는 시뮬/기기에서 깨질 수 있어 사용 안 함)·색
 export function categoryCover(category: string | null): { icon: string; bg: string; tint: string } {
