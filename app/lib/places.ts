@@ -94,6 +94,52 @@ export async function fetchPlaces(): Promise<PlaceRow[]> {
   return (data ?? []) as PlaceRow[]
 }
 
+export interface PlaceReview {
+  id: string
+  source: string           // naver_blog / youtube / instagram
+  content: string | null
+  source_url: string | null
+  thumbnail_url: string | null
+  published_at: string | null
+}
+
+export async function fetchPlaceReviews(placeId: string): Promise<PlaceReview[]> {
+  const sb = supabase as unknown as { from: (t: string) => any }
+  const { data } = await sb.from('place_reviews')
+    .select('id,source,content,source_url,thumbnail_url,published_at')
+    .eq('place_id', placeId).eq('is_active', true)
+    .order('published_at', { ascending: false, nullsFirst: false })
+  return (data ?? []) as PlaceReview[]
+}
+
+/**
+ * 무료 OSM 타일로 히어로 지도를 구성(키 불필요·서버 안정). 네이버 지도 SDK 연동(재빌드) 후 교체.
+ * 컨테이너 w×h를 채우는 타일들과, 좌표→컨테이너 픽셀 투영 함수를 돌려준다.
+ */
+export function osmTiles(lat: number, lng: number, w: number, h: number, z = 16) {
+  const n = 2 ** z
+  const toWorld = (la: number, ln: number) => ({
+    x: ((ln + 180) / 360) * n * 256,
+    y: ((1 - Math.log(Math.tan((la * Math.PI) / 180) + 1 / Math.cos((la * Math.PI) / 180)) / Math.PI) / 2) * n * 256,
+  })
+  const c = toWorld(lat, lng)
+  const originX = c.x - w / 2
+  const originY = c.y - h / 2
+  const tiles: { url: string; left: number; top: number }[] = []
+  for (let tx = Math.floor(originX / 256); tx <= Math.floor((originX + w) / 256); tx++)
+    for (let ty = Math.floor(originY / 256); ty <= Math.floor((originY + h) / 256); ty++)
+      tiles.push({ url: `https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`, left: tx * 256 - originX, top: ty * 256 - originY })
+  const project = (la: number, ln: number) => { const p = toWorld(la, ln); return { x: p.x - originX, y: p.y - originY } }
+  return { tiles, project }
+}
+
+export async function fetchNearbyCoords(exceptId: string): Promise<{ lat: number | null; lng: number | null }[]> {
+  const sb = supabase as unknown as { from: (t: string) => any }
+  const { data } = await sb.from('places').select('id,lat,lng')
+    .eq('service', 'honsul').eq('is_active', true).not('lat', 'is', null)
+  return ((data ?? []) as any[]).filter((p) => p.id !== exceptId).map((p) => ({ lat: p.lat, lng: p.lng }))
+}
+
 export async function fetchPlace(id: string): Promise<PlaceRow | null> {
   const sb = supabase as unknown as { from: (t: string) => any }
   const { data, error } = await sb
