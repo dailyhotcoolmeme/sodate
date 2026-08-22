@@ -149,19 +149,18 @@ export default function PlaceDetailScreen() {
             </TouchableOpacity>
           )}
           {place.conveniences.length > 0 && <View style={styles.infoRow}><Text style={styles.infoK}>편의</Text><Text style={styles.infoV}>{place.conveniences.join(' · ')}</Text></View>}
-        </View>
-
-        {/* 방문자 키워드(네이버·사실) */}
-        {place.keyword_votes && (
-          <View style={styles.revBox}>
-            <Text style={styles.revTitle}>방문자 키워드</Text>
-            <View style={styles.revChips}>
-              {Object.entries(place.keyword_votes).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, c]) => (
-                <View key={k} style={styles.revChip}><Text style={styles.revChipText}>{k} <Text style={styles.revCount}>{c}</Text></Text></View>
-              ))}
+          {/* 방문자 키워드 = 네이버 방문자 투표(사실). 별도 박스 대신 같은 라벨-내용 레이어. */}
+          {place.keyword_votes && Object.keys(place.keyword_votes).length > 0 && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoK}>키워드</Text>
+              <View style={styles.kwWrap}>
+                {Object.entries(place.keyword_votes).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, c]) => (
+                  <View key={k} style={styles.kwChip}><Text style={styles.kwChipText}>{k} <Text style={styles.kwCount}>{c}</Text></Text></View>
+                ))}
+              </View>
             </View>
-          </View>
-        )}
+          )}
+        </View>
 
         {/* 후기 — 소개팅과 동일 디자인(ReviewSection) */}
         <View style={{ marginTop: 6 }}>
@@ -211,15 +210,14 @@ function makeStyles(colors: AppColors) {
     igReel: { position: 'absolute', top: 7, right: 7, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, padding: 3 },
     card: { margin: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.divider, paddingVertical: 6 },
     // 라벨·내용 첫 줄 baseline 일치 — 같은 fontSize·lineHeight.
+    // 라벨·내용 첫 줄 baseline 일치. 키워드(3자) 들어가게 폭 46.
     infoRow: { flexDirection: 'row', paddingVertical: 7, gap: 10 },
-    infoK: { width: 40, color: colors.textTertiary, fontSize: 13.5, fontWeight: '700', lineHeight: 21 },
+    infoK: { width: 46, color: colors.textTertiary, fontSize: 13.5, fontWeight: '700', lineHeight: 21 },
     infoV: { flex: 1, color: colors.textPrimary, fontSize: 13.5, lineHeight: 21 },
     telRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-    revBox: { marginHorizontal: 16, backgroundColor: colors.surface, borderRadius: 12, padding: 14, marginBottom: 8 },
-    revTitle: { fontSize: 12, fontWeight: '800', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
-    revChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    revChip: { backgroundColor: colors.surfaceHigh, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 6 },
-    revChipText: { fontSize: 12.5, color: colors.textSecondary, fontWeight: '600' },
-    revCount: { color: colors.primary, fontWeight: '800' },
+    kwWrap: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    kwChip: { backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+    kwChipText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+    kwCount: { color: colors.primary, fontWeight: '800' },
   })
 }
