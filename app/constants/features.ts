@@ -9,4 +9,4 @@
  * ⚠️ true 로 켜기 전 반드시: (1) 소셜링·혼술바 실데이터 채움 (2) 앱 이름/설명/스크린샷 준비
  *    (3) 스토어 심사 통과. 그 전에는 절대 true 로 배포하지 않는다.
  */
-export const NEW_TABS_ENABLED = false
+export const NEW_TABS_ENABLED = true // 테스트 빌드용(main은 false 유지)
