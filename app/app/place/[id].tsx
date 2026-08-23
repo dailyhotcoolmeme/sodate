@@ -8,6 +8,7 @@ import AppSpinner from '@/components/AppSpinner'
 import ReviewSection from '@/components/ReviewSection'
 import ReviewSheet, { type ReviewSheetInitial } from '@/components/ReviewSheet'
 import ReportSheet from '@/components/ReportSheet'
+import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
@@ -87,25 +88,38 @@ export default function PlaceDetailScreen() {
     <View style={styles.container}>
       <TopBar showBack />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-        {/* 히어로 = 지도(무료 OSM 타일. 네이버 지도 SDK 연동[재빌드] 후 교체) */}
+        {/* 히어로 = 네이버 지도(재빌드 후). 아직 네이티브 모듈 없으면 OSM 타일로 폴백. */}
         {place.lat && place.lng ? (
           <View style={styles.mapImg}>
-            {(() => {
-              const { tiles, project } = osmTiles(place.lat, place.lng, MAP_W, MAP_H)
-              const me = project(place.lat, place.lng)
-              return (
-                <>
-                  {tiles.map((t, i) => <Image key={i} source={{ uri: t.url }} style={[styles.tile, { left: t.left, top: t.top }]} />)}
-                  {showNearby && nearby.map((o, i) => {
-                    if (!o.lat || !o.lng) return null
-                    const q = project(o.lat, o.lng)
-                    if (q.x < -8 || q.x > MAP_W + 8 || q.y < -8 || q.y > MAP_H + 8) return null
-                    return <View key={i} style={[styles.pinDot, { left: q.x - 5, top: q.y - 5 }]} />
-                  })}
-                  <View style={[styles.pinMe, { left: me.x - 13, top: me.y - 26 }]}><Ionicons name="location" size={26} color="#FF6B9D" /></View>
-                </>
-              )
-            })()}
+            {NAVER_MAP_AVAILABLE ? (
+              <PlaceMap
+                style={StyleSheet.absoluteFill}
+                focus={{ lat: place.lat, lng: place.lng }}
+                pins={[
+                  { id: place.id, lat: place.lat, lng: place.lng, name: place.name, active: true },
+                  ...(showNearby
+                    ? nearby.flatMap((o, i) => (o.lat && o.lng ? [{ id: `nb-${i}`, lat: o.lat, lng: o.lng }] : []))
+                    : []),
+                ]}
+              />
+            ) : (
+              (() => {
+                const { tiles, project } = osmTiles(place.lat, place.lng, MAP_W, MAP_H)
+                const me = project(place.lat, place.lng)
+                return (
+                  <>
+                    {tiles.map((t, i) => <Image key={i} source={{ uri: t.url }} style={[styles.tile, { left: t.left, top: t.top }]} />)}
+                    {showNearby && nearby.map((o, i) => {
+                      if (!o.lat || !o.lng) return null
+                      const q = project(o.lat, o.lng)
+                      if (q.x < -8 || q.x > MAP_W + 8 || q.y < -8 || q.y > MAP_H + 8) return null
+                      return <View key={i} style={[styles.pinDot, { left: q.x - 5, top: q.y - 5 }]} />
+                    })}
+                    <View style={[styles.pinMe, { left: me.x - 13, top: me.y - 26 }]}><Ionicons name="location" size={26} color="#FF6B9D" /></View>
+                  </>
+                )
+              })()
+            )}
             <TouchableOpacity style={styles.nearbyChk} onPress={() => setShowNearby((v) => !v)} activeOpacity={0.8}>
               <View style={[styles.checkbox, showNearby && styles.checkboxOn]}>{showNearby && <Ionicons name="checkmark-sharp" size={12} color="#fff" />}</View>
               <Text style={styles.nearbyText}>주변 혼술바도 보기</Text>

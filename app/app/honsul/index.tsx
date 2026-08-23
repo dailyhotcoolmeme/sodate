@@ -12,6 +12,8 @@ import type { AppColors } from '@/constants/colors'
 import { fetchPlaces, type PlaceRow } from '@/lib/places'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
+import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
+import { useRouter } from 'expo-router'
 
 /**
  * 혼술바 탭 — 상시 매장(places). 피드/지도 두 탭. 종류는 (현재 2종뿐이라) 헤더칩에서 뺌 →
@@ -35,6 +37,7 @@ export default function HonsulScreen() {
   const [searchVisible, setSearchVisible] = useState(false)
   const [focused, setFocused] = useState<PlaceRow | null>(null)   // 지도탭에서 볼 업체
   const { favoriteIds, toggle: toggleFav } = usePlaceFavorites()
+  const router = useRouter()
 
   const load = useCallback(async () => {
     try { setAll(await fetchPlaces()) } catch (e) { /* 조용히 */ } finally { setLoading(false) }
@@ -107,12 +110,35 @@ export default function HonsulScreen() {
           )}
         </>
       ) : (
-        /* 지도 탭 — 카카오맵 연동(앱키+재빌드) 후 실제 지도. 지금은 안내. */
-        <View style={styles.center}>
-          <Ionicons name="map-outline" size={40} color={colors.textTertiary} />
-          <Text style={styles.emptyText}>지도는 준비 중이에요</Text>
-          <Text style={styles.emptySub}>카카오맵 연동 후 여기에서 위치를 봐요{focused ? `\n(선택: ${focused.name})` : ''}</Text>
-        </View>
+        /* 지도 탭 — 네이버 지도(재빌드 후). 네이티브 모듈 없으면 안내로 폴백. */
+        (() => {
+          const pinned = list.filter((p) => p.lat != null && p.lng != null)
+          const center = focused && focused.lat != null ? focused : pinned[0]
+          if (NAVER_MAP_AVAILABLE && center?.lat != null && center?.lng != null) {
+            return (
+              <PlaceMap
+                style={{ flex: 1 }}
+                focus={{ lat: center.lat, lng: center.lng }}
+                zoom={focused ? 15 : 12}
+                pins={pinned.map((p) => ({
+                  id: p.id,
+                  lat: p.lat!,
+                  lng: p.lng!,
+                  name: p.name,
+                  active: focused?.id === p.id,
+                  onPress: () => router.push(`/place/${p.id}`),
+                }))}
+              />
+            )
+          }
+          return (
+            <View style={styles.center}>
+              <Ionicons name="map-outline" size={40} color={colors.textTertiary} />
+              <Text style={styles.emptyText}>지도는 준비 중이에요</Text>
+              <Text style={styles.emptySub}>네이버 지도 연동(재빌드) 후 여기에서 위치를 봐요{focused ? `\n(선택: ${focused.name})` : ''}</Text>
+            </View>
+          )
+        })()
       )}
 
       <BottomNav current="honsul" />
