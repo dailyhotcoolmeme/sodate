@@ -17,6 +17,9 @@ UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/
 GENERIC = re.compile(r'(혼술집|혼술바|혼술|이자카야|포차|BAR|bar|직영점|본점)')
 # 유튜브는 흔한 상호가 음악·뉴스 영상에 걸리므로 술 관련어도 제목에 있어야 채택.
 DRINK = ['혼술', '술집', '술', '바', '칵테일', '하이볼', '위스키', '이자카야', '포차', '펍', '와인', '사케', '안주', '한잔']
+# 브랜드로 삼기엔 너무 흔한 단어 — 이게 유일한 고유토큰이면 후기 매칭 제외(오매칭 방지).
+BRAND_STOP = {'혼밥', '이유', '대세', '낙원', '분위기', '감성', '오늘', '하루', '한잔', '우리', '그집',
+              '내집', '술한잔', '단골', '주막', '아지트', '쉼표', '휴식', '동네', '골목', '만남'}
 
 
 def run_sql(sql):
@@ -66,9 +69,9 @@ def build_distinctive(names, regions):
         return t in regset or tc in regset    # 정확/접미제거 일치만(브랜드 substring 오제거 방지)
 
     def distinctive(name):
-        # 브랜드 = 맨 앞의 '지역·지점 아닌' 토큰 하나만 요구(오매칭 방지 핵심).
+        # 브랜드 = 맨 앞의 '지역·지점·흔한단어 아닌' 토큰 하나만 요구(오매칭 방지 핵심).
         for t in core_tokens(name):
-            if len(t) < 2 or is_area(t):
+            if len(t) < 2 or is_area(t) or t in BRAND_STOP:
                 continue
             return [t]
         return []
