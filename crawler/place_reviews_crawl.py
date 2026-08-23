@@ -26,9 +26,44 @@ def run_sql(sql):
 
 
 def core_tokens(name):
-    """매장 고유명 토큰(일반어·지역·지점 제거). 매칭에 하나라도 포함되면 관련."""
+    """매장명에서 일반어 뺀 토큰."""
     n = re.sub(r'[^\w가-힣]', ' ', GENERIC.sub(' ', name))
     return [t for t in n.split() if len(t) >= 2]
+
+
+# 상호에 흔히 붙는 지역·역·상권명(브랜드 아님) — 매칭에서 제외해 오매칭 방지.
+AREA_WORDS = {
+    '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', '경기', '강원', '충북', '충남',
+    '전북', '전남', '경북', '경남', '제주', '수원', '성남', '용인', '고양', '일산', '분당', '판교',
+    '청라', '송도', '부천', '안양', '평택', '천안', '청주', '전주', '창원', '김해', '포항', '구미',
+    '강남', '홍대', '건대', '성수', '이태원', '을지로', '종로', '신촌', '잠실', '연남', '망원', '합정',
+    '상수', '대학로', '혜화', '신당', '문래', '영등포', '구로', '가산', '수유', '노원', '왕십리',
+    '선릉', '역삼', '삼성', '교대', '사당', '신림', '노량진', '여의도', '충무로', '동대문', '명동',
+    '서면', '해운대', '광안리', '전포', '남포', '동성로', '유성', '둔산', '봉명', '두정', '불당',
+    '용리단길', '경리단길', '샤로수길', '송리단길', '연트럴파크', '카페거리', '로데오', '지웰시티',
+    '역', '점', '본점', '직영점', '해방촌', '연동', '노형', '중동', '상동',
+}
+
+
+def build_distinctive(names, regions):
+    """상호에서 지역·상권명을 뺀 '브랜드 고유토큰'만. (히토리노미야·제주아홉·미열)"""
+    regset = set(AREA_WORDS)
+    for r in regions:
+        if not r:
+            continue
+        regset.add(r)
+        regset.add(re.sub(r'[동가리]\d*가?$', '', r))   # 청라동→청라, 성수동→성수
+        regset.add(re.sub(r'\d*가$', '', r))            # 을지로3가→을지로
+
+    def distinctive(name):
+        out = []
+        for t in core_tokens(name):
+            tc = re.sub(r'(점|동|역)$', '', t)           # 청라점→청라, 성수동→성수
+            if t in regset or tc in regset or len(tc) < 2:
+                continue
+            out.append(t)
+        return out
+    return distinctive
 
 
 def relates(text, tokens):
@@ -62,11 +97,14 @@ def main():
                      "         and exists(select 1 from place_reviews r where r.place_id=p.id and r.source='youtube')) "
                      "order by p.naver_review_count desc nulls last limit %d;" % limit)
     print(f'대상 {len(places)}곳')
+    # 전 매장명+지역으로 브랜드 고유토큰 판별기 구성(지역명 오매칭 방지)
+    meta = run_sql("select name, region from places where service='honsul';")
+    distinctive = build_distinctive([m['name'] for m in meta], [m['region'] for m in meta])
     total = 0
     for i, p in enumerate(places, 1):
-        toks = core_tokens(p['name'])
-        if not toks:
-            toks = [p['name']]
+        toks = distinctive(p['name'])
+        if not toks:                # 고유 브랜드 토큰 없으면(순수 지역·일반명) 후기 매칭 불가 → 건너뜀
+            continue
         rows = []
         try:
             blog = [] if p.get('has_blog') else fetch_naver_blog_results(p['name'])
