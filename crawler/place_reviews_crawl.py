@@ -13,7 +13,10 @@ from scrapers.review_youtube import fetch_youtube_results
 PROJECT = 'xgcldcnqfqcugkcifyae'
 PAT = open(os.path.expanduser('~/.config/sodate/supabase-pat')).read().strip()
 UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36'
-GENERIC = re.compile(r'(서울|부산|대구|인천|광주|대전|울산|경기|제주|혼술바|혼술|바|BAR|bar|점|본점|직영점)')
+# 업종·일반어만 substring 제거(지역어는 여기서 빼지 않음 — 브랜드 조각남 방지, 지역은 is_area 로 처리)
+GENERIC = re.compile(r'(혼술집|혼술바|혼술|이자카야|포차|BAR|bar|직영점|본점)')
+# 유튜브는 흔한 상호가 음악·뉴스 영상에 걸리므로 술 관련어도 제목에 있어야 채택.
+DRINK = ['혼술', '술집', '술', '바', '칵테일', '하이볼', '위스키', '이자카야', '포차', '펍', '와인', '사케', '안주', '한잔']
 
 
 def run_sql(sql):
@@ -55,14 +58,20 @@ def build_distinctive(names, regions):
         regset.add(re.sub(r'[동가리]\d*가?$', '', r))   # 청라동→청라, 성수동→성수
         regset.add(re.sub(r'\d*가$', '', r))            # 을지로3가→을지로
 
+    # 브랜치 랜드마크 접미사(지역목록에 없어도 지점 표시) — 브랜드 아님
+    LM = re.compile(r'(점|동|역|구청|시장|사거리|오거리|터미널|대학교|캠퍼스|타워|공원|스퀘어|플라자)$')
+
+    def is_area(t):
+        tc = LM.sub('', t)                    # 청라점→청라, 영등포구청점→영등포
+        return t in regset or tc in regset    # 정확/접미제거 일치만(브랜드 substring 오제거 방지)
+
     def distinctive(name):
-        out = []
+        # 브랜드 = 맨 앞의 '지역·지점 아닌' 토큰 하나만 요구(오매칭 방지 핵심).
         for t in core_tokens(name):
-            tc = re.sub(r'(점|동|역)$', '', t)           # 청라점→청라, 성수동→성수
-            if t in regset or tc in regset or len(tc) < 2:
+            if len(t) < 2 or is_area(t):
                 continue
-            out.append(t)
-        return out
+            return [t]
+        return []
     return distinctive
 
 
@@ -114,7 +123,7 @@ def main():
             yt = []
         else:
             try:
-                yt = fetch_youtube_results(p['name'], toks, topics=[])  # 상호 토큰만으로 채택(혼술 도메인)
+                yt = fetch_youtube_results(p['name'], toks, topics=DRINK)  # 브랜드 + 술관련어 둘 다
             except Exception:
                 yt = []
         seen = set()
