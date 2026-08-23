@@ -64,6 +64,8 @@ export async function createPost(p: {
   imageUrls?: string[]
   /** 유튜브 링크(최대 3개) — 서버가 유튜브만 허용, 아니면 에러 문구를 돌려준다. */
   linkUrls?: string[]
+  /** 동영상 URL(숨김 기능, R2). */
+  videoUrls?: string[]
   /** 말머리 id. 안 고르면 undefined — 서버는 "선택 안 함"으로 처리한다. */
   tagId?: string | null
 }): Promise<{ id: string } | { error: string }> {

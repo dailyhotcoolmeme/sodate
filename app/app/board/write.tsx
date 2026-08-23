@@ -15,6 +15,7 @@ import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkIn
 import BoardRichEditor, { RICH_EDITOR_AVAILABLE, type RichEditorHandle } from '@/components/BoardRichEditor'
 import PollEditor, { emptyPollDraft, durationToEndsAt, type PollDraft } from '@/components/PollEditor'
 import { createPoll } from '@/lib/boardPoll'
+import { VIDEO_ENABLED, pickCompressUploadVideo } from '@/lib/boardVideo'
 import { MAX_IMAGES } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
@@ -101,6 +102,9 @@ export default function BoardWriteScreen() {
   const [richText, setRichText] = useState('')
   // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
   const [poll, setPoll] = useState<PollDraft | null>(null)
+  // 동영상(숨김 기능 — VIDEO_ENABLED=false 라 버튼 안 보임). R2 업로드 URL 목록.
+  const [videos, setVideos] = useState<string[]>([])
+  const [videoBusy, setVideoBusy] = useState(false)
 
   useEffect(() => {
     getLastNickname().then((n) => n && setNickname((cur) => cur || n))
@@ -142,7 +146,7 @@ export default function BoardWriteScreen() {
   const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && bodyFilled && !needsAgreement
 
   // 쓰던 게 있으면 닫기 전에 물어본다
-  const dirty = title.trim().length > 0 || bodyFilled || contentBelow.trim().length > 0 || images.length > 0 || links.length > 0 || poll !== null
+  const dirty = title.trim().length > 0 || bodyFilled || contentBelow.trim().length > 0 || images.length > 0 || links.length > 0 || poll !== null || videos.length > 0
   // 입력 중엔 OTA 자동 새로고침을 보류 — 화면을 벗어나면(뒤로가기·등록) 즉시 풀림
   // (lib/appUpdates.ts 참고).
   useEffect(() => {
@@ -172,7 +176,7 @@ export default function BoardWriteScreen() {
     }
     const r = isEdit
       ? await updatePost({ postId: id!, title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, tagId })
-      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, tagId })
+      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, videoUrls: videos, tagId })
     if ('error' in r) { setSaving(false); Alert.alert('알림', r.error); return }
     // 신규글에 투표가 있으면 이어서 저장(항목 2개 이상 채워졌을 때만).
     if (!isEdit && poll && 'id' in r) {
@@ -406,6 +410,26 @@ export default function BoardWriteScreen() {
             <Ionicons name="logo-youtube" size={21} color={colors.textSecondary} />
             <Text style={styles.toolText}>유튜브</Text>
           </TouchableOpacity>
+
+          {/* 동영상 — 숨김 기능(VIDEO_ENABLED=false). 압축→R2 업로드. 재빌드+승인 후 노출. */}
+          {VIDEO_ENABLED && (
+            <TouchableOpacity
+              style={styles.tool}
+              onPress={async () => {
+                if (videoBusy) return
+                setVideoBusy(true)
+                const r = await pickCompressUploadVideo()
+                setVideoBusy(false)
+                if (r && 'error' in r) Alert.alert('알림', r.error)
+                else if (r && 'url' in r) setVideos((v) => [...v, r.url])
+              }}
+              disabled={videoBusy}
+              hitSlop={8}
+            >
+              <Ionicons name="videocam-outline" size={21} color={colors.textSecondary} />
+              <Text style={styles.toolText}>{videoBusy ? '처리중' : '동영상'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardStickyView>
       )}

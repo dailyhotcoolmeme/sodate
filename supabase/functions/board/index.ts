@@ -321,10 +321,12 @@ serve(async (req) => {
       if (await tooSoon('board_posts', cfg?.post_cooldown_seconds ?? 30))
         return json({ error: '잠시 후에 다시 올려주세요.' }, 429)
 
+      const videos: string[] = Array.isArray(body.videoUrls) ? body.videoUrls.slice(0, 3) : []
       const { data, error } = await supabase.from('board_posts').insert({
         nickname: nick, title, content, content_below: contentBelow || null, owner_token: hash,
         image_urls: images.length ? images : null,
         link_urls: linksResult.links.length ? linksResult.links : null,
+        video_urls: videos.length ? videos : null,
         tag_id: tagResult.tagId,
       }).select('id').single()
       if (error) return json({ error: error.message }, 500)
@@ -708,6 +710,19 @@ serve(async (req) => {
       } catch (e) {
         return json({ error: String(e) }, 500)
       }
+    }
+
+    // ── 동영상 업로드용 R2 presigned PUT URL 발급(숨김 기능) ──
+    // 앱이 압축한 영상을 R2로 직접 PUT(서버는 URL만 발급, 파일은 안 거침).
+    if (action === 'videoUploadUrl') {
+      const ext = String(body.ext ?? 'mp4').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'mp4'
+      const key = `board/video/${hash.slice(0, 12)}/${crypto.randomUUID()}.${ext}`
+      const endpoint = (Deno.env.get('R2_ENDPOINT') ?? '').replace(/\/$/, '')
+      const bucket = Deno.env.get('R2_BUCKET') ?? ''
+      const signed = await r2.sign(`${endpoint}/${bucket}/${key}`, {
+        method: 'PUT', aws: { signQuery: true },
+      })
+      return json({ uploadUrl: signed.url, publicUrl: `${Deno.env.get('R2_PUBLIC_BASE')}/media/${key}` })
     }
 
     // ── 조회수 (화면에는 감춰두지만 값은 쌓아둔다) ──

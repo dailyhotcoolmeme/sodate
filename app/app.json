@@ -73,7 +73,9 @@
         "expo-build-properties",
         {
           "android": {
-            "extraMavenRepos": ["https://repository.map.naver.com/archive/maven"]
+            "extraMavenRepos": [
+              "https://repository.map.naver.com/archive/maven"
+            ]
           }
         }
       ],
@@ -82,7 +84,9 @@
         {
           "client_id": "m9gekw6lug"
         }
-      ]
+      ],
+      "expo-video",
+      "react-native-compressor"
     ],
     "scheme": "sodate",
     "extra": {

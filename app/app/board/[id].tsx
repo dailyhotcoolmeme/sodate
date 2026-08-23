@@ -19,6 +19,7 @@ import LoadingOverlay from '@/components/LoadingOverlay'
 import AuthorMenu, { AUTHOR_MENU_ENABLED, type AuthorMenuTarget } from '@/components/AuthorMenu'
 import PostHtmlView from '@/components/PostHtmlView'
 import PollView from '@/components/PollView'
+import PostVideo from '@/components/PostVideo'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
@@ -574,6 +575,8 @@ export default function BoardPostScreen() {
         <View style={styles.postBody}>
           {/* 리치 글(HTML)은 서식대로, 옛 평문 글은 그대로 — PostHtmlView 가 자동 구분 */}
           <PostHtmlView content={post.content} textStyle={styles.bodyText} colors={colors} />
+          {/* 동영상(있는 글만 · 숨김 기능) */}
+          <PostVideo urls={(post as any).video_urls} />
           {/* 투표(있는 글만 렌더) */}
           <PollView postId={id} />
         </View>
