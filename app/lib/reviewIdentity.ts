@@ -91,6 +91,39 @@ export async function setLastNickname(name: string): Promise<void> {
   }
 }
 
+// ── 닉네임 자동생성(한국어 친근형: 형용사+명사(동물·음식·사물)+숫자2자리) ──
+// 데이팅 앱 톤에 맞게 긍정·귀여운 것만. 성적·부정 조합 안 나오게 풀 정제.
+const NICK_ADJ = [
+  '느긋한', '설레는', '포근한', '다정한', '씩씩한', '엉뚱한', '새침한', '발랄한', '든든한', '나른한',
+  '상냥한', '명랑한', '수줍은', '활기찬', '차분한', '사랑스런', '귀여운', '온화한', '따뜻한', '재빠른',
+  '폭신한', '몽글한', '초롱한', '야무진', '싱그런', '보드란', '깜찍한', '해맑은', '느릿한', '반짝이는',
+]
+const NICK_NOUN = [
+  // 동물
+  '너구리', '수달', '다람쥐', '고슴도치', '알파카', '펭귄', '여우', '토끼', '햄스터', '판다',
+  '코알라', '물개', '오리', '참새', '고양이', '강아지', '병아리', '고래', '거북이', '사슴',
+  // 음식
+  '붕어빵', '마카롱', '복숭아', '딸기', '감자', '도넛', '푸딩', '참외', '귤', '만두', '곰젤리', '떡',
+  // 사물
+  '구름', '별', '방울', '풍선', '단추', '도토리', '조약돌', '램프', '솜사탕', '우산',
+]
+
+const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)]
+
+/** 새 랜덤 닉네임 하나 생성(저장은 안 함). 예: "느긋한붕어빵42" */
+export function generateNickname(): string {
+  return `${pick(NICK_ADJ)}${pick(NICK_NOUN)}${10 + Math.floor(Math.random() * 90)}`
+}
+
+/** 닉네임이 없으면 자동 생성해 저장하고 돌려준다(있으면 그대로). 최초 진입 시 호출. */
+export async function ensureNickname(): Promise<string> {
+  const cur = await getLastNickname()
+  if (cur) return cur
+  const gen = generateNickname()
+  await setLastNickname(gen)
+  return gen
+}
+
 /** 마지막으로 후기에 쓴 성별(닉네임과 같은 방식으로 기기에 한 번만 입력) */
 export async function getLastGender(): Promise<ReviewGender | null> {
   try {

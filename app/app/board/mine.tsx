@@ -1,7 +1,7 @@
 import React, { useMemo, useCallback, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter, useFocusEffect } from 'expo-router'
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import AppSpinner from '@/components/AppSpinner'
@@ -23,7 +23,8 @@ export default function MyPostsScreen() {
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(colors), [colors])
-  const [tab, setTab] = useState<'post' | 'comment'>('post')
+  const params = useLocalSearchParams<{ tab?: string }>()
+  const [tab, setTab] = useState<'post' | 'comment'>(params.tab === 'comment' ? 'comment' : 'post')
 
   const { posts, loading: postsLoading, refetch: refetchPosts } = useMyPosts()
   const { comments, loading: commentsLoading, refetch: refetchComments } = useMyComments()

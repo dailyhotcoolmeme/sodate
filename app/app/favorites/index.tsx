@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons'
 import AppSpinner from '@/components/AppSpinner'
 import TopBar from '@/components/TopBar'
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFavoriteEvents, useFavorites } from '@/hooks/useFavorites'
 import EventCard from '@/components/EventCard'
@@ -18,10 +18,18 @@ type ViewMode = 'card' | 'list'
 export default function FavoritesScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const { events, loading, error, refetch } = useFavoriteEvents()
+  const { type } = useLocalSearchParams<{ type?: string }>()
+  const isSocialing = type === 'socialing'
+  const { events: allEvents, loading, error, refetch } = useFavoriteEvents()
+  // 소개팅/소셜링을 event_type으로 나눠 각각 별도 화면으로 보여준다(MY에서 분리 진입).
+  const events = useMemo(
+    () => allEvents.filter((e: any) => (e.event_type === 'socialing') === isSocialing),
+    [allEvents, isSocialing],
+  )
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const { favoriteIds, toggle } = useFavorites()
+  const kind = isSocialing ? '소셜링' : '소개팅'
 
   React.useEffect(() => { track('screen_view', { properties: { screen: 'favorites' } }) }, [])
   const [viewMode, setViewMode] = useState<ViewMode>('list') // 관심 소개팅 기본=리스트형
@@ -70,7 +78,7 @@ export default function FavoritesScreen() {
       <TopBar showBack />
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>관심 소개팅</Text>
+          <Text style={styles.title}>관심 {kind}</Text>
           <View style={styles.toggleRow}>
             <TouchableOpacity
               style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]}
@@ -87,7 +95,7 @@ export default function FavoritesScreen() {
           </View>
         </View>
         <Text style={styles.subtitle}>
-          {loading ? '' : `${events.length}개의 소개팅을 저장했습니다`}
+          {loading ? '' : `${events.length}개의 ${kind}을 저장했습니다`}
         </Text>
       </View>
 
@@ -108,7 +116,7 @@ export default function FavoritesScreen() {
       ) : events.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="heart-outline" size={48} color={colors.primary} />
-          <Text style={styles.emptyText}>아직 관심 소개팅이 없습니다</Text>
+          <Text style={styles.emptyText}>아직 관심 {kind}이 없습니다</Text>
           <Text style={styles.emptySubText}>이벤트 카드의 하트를 눌러 저장하세요</Text>
         </View>
       ) : (

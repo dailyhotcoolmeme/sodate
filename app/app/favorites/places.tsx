@@ -30,7 +30,7 @@ export default function PlaceFavoritesScreen() {
   return (
     <View style={styles.container}>
       <TopBar showBack />
-      <View style={styles.header}><Text style={styles.title}>관심 매장</Text></View>
+      <View style={styles.header}><Text style={styles.title}>관심 혼술바</Text></View>
       {loading ? (
         <View style={styles.center}><AppSpinner /></View>
       ) : list.length === 0 ? (

@@ -23,12 +23,22 @@ BRAND_STOP = {'혼밥', '이유', '대세', '낙원', '분위기', '감성', '�
 
 
 def run_sql(sql):
-    req = urllib.request.Request(
-        f'https://api.supabase.com/v1/projects/{PROJECT}/database/query',
-        data=json.dumps({'query': sql}).encode(), method='POST',
-        headers={'Authorization': f'Bearer {PAT}', 'Content-Type': 'application/json', 'User-Agent': UA})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read().decode())
+    last = None
+    for attempt in range(4):
+        req = urllib.request.Request(
+            f'https://api.supabase.com/v1/projects/{PROJECT}/database/query',
+            data=json.dumps({'query': sql}).encode(), method='POST',
+            headers={'Authorization': f'Bearer {PAT}', 'Content-Type': 'application/json', 'User-Agent': UA})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code in (500, 502, 503, 504, 544, 429):   # 일시 오류 → 재시도
+                last = e; time.sleep(3 * (attempt + 1)); continue
+            raise
+        except Exception as e:
+            last = e; time.sleep(3 * (attempt + 1)); continue
+    raise last
 
 
 def core_tokens(name):
