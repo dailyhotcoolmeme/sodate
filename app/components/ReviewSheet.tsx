@@ -180,7 +180,7 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
   const handleSubmit = async () => {
     if (submitting) return
     // 비활성 대신 무엇이 빠졌는지 안내
-    if (!nickValid) { setError('닉네임을 2~20자로 입력해주세요.'); return }
+    if (!nickValid) { setError('MY에서 닉네임을 먼저 설정해주세요.'); return }
     if (!genderValid) { setError('성별을 선택해주세요.'); return }
     if (!ratingValid) { setError('별점을 선택해주세요.'); return }
     if (!contentValid) { setError('후기를 5자 이상 입력해주세요.'); return }
@@ -243,6 +243,10 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
           borderColor: colors.border,
         },
         textArea: { minHeight: 120, textAlignVertical: 'top' },
+        // 닉네임 읽기전용(MY 공용) — 입력칸과 같은 높이·테두리.
+        nickReadonly: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: colors.border },
+        nickReadonlyText: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
+        nickReadonlyHint: { fontSize: 11, fontWeight: '800', color: colors.textTertiary },
         // 닉네임:성별 = 1.4:1 — 좁은 화면(320)에서도 성별 버튼 하나가 50px 이상 확보돼
         // '남성'/'여성'을 줄임말 없이 온전히 넣을 수 있다.
         identityRow: { flexDirection: 'row', gap: 10 },
@@ -325,17 +329,11 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
               <View style={styles.identityRow}>
                 <View style={styles.nickField}>
                   <Text style={styles.fieldLabel}>닉네임</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="2~20자"
-                    placeholderTextColor={colors.textTertiary}
-                    value={nickname}
-                    onChangeText={setNickname}
-                    maxLength={NICK_MAX}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    editable={!submitting}
-                  />
+                  {/* MY 공용 닉네임(여기선 수정 불가, 2026-08-23 오너 지시). 없으면 MY에서 먼저 설정. */}
+                  <View style={styles.nickReadonly}>
+                    <Text style={styles.nickReadonlyText} numberOfLines={1}>{nickname || '미설정'}</Text>
+                    <Text style={styles.nickReadonlyHint}>MY</Text>
+                  </View>
                 </View>
                 {!isPlace && (
                 <View style={styles.genderField}>

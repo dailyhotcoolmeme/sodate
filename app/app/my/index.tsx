@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react'
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking, Alert } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking, Alert, Modal, Pressable, TextInput } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -11,8 +11,9 @@ import { useThemeStore } from '@/stores/themeStore'
 import { useProfileSheetStore } from '@/stores/profileSheetStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { useFavorites } from '@/hooks/useFavorites'
+import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { useMyPosts } from '@/hooks/useBoard'
-import { getLastNickname } from '@/lib/reviewIdentity'
+import { getLastNickname, setLastNickname } from '@/lib/reviewIdentity'
 
 /**
  * MY 탭 — 개인 활동·설정을 한곳에 모은 화면(2026-08-21, 후배 검토 통과).
@@ -57,17 +58,31 @@ export default function MyScreen() {
   const openProfile = useProfileSheetStore((s) => s.openSheet)
   const { myAge, myGender } = useProfileStore()
   const { favoriteIds } = useFavorites()
+  const { favoriteIds: placeFavoriteIds } = usePlaceFavorites()
   const { posts, refetch: refetchPosts } = useMyPosts()
   const [nickname, setNickname] = useState('')
+  // 닉네임 편집(전 서비스 공용 — 여기서만 바꾼다). 각 작성화면엔 닉네임칸 없음.
+  const [nickEdit, setNickEdit] = useState(false)
+  const [nickDraft, setNickDraft] = useState('')
 
   useFocusEffect(useCallback(() => {
     refetchPosts()
     getLastNickname().then((n) => setNickname(n || ''))
   }, [refetchPosts]))
 
-  // 통계 — 쓴 글 수 / 관심(찜) 수 / 받은 추천 합
+  const openNickEdit = () => { setNickDraft(nickname); setNickEdit(true) }
+  const saveNick = async () => {
+    const v = nickDraft.trim()
+    if (v.length < 2 || v.length > 20) { Alert.alert('알림', '닉네임은 2~20자로 입력해주세요.'); return }
+    await setLastNickname(v)
+    setNickname(v)
+    setNickEdit(false)
+  }
+
+  // 통계 — 쓴 글 수 / 관심(찜=일정+매장) 수 / 받은 추천 합
   const postCount = posts.length
-  const favCount = favoriteIds.size
+  const placeFavCount = placeFavoriteIds.size
+  const favCount = favoriteIds.size + placeFavCount
   const upvoteSum = posts.reduce((s, p) => s + (p.upvotes ?? 0), 0)
 
   const genderLabel = myGender === 'male' ? '남' : myGender === 'female' ? '여' : null
@@ -83,15 +98,21 @@ export default function MyScreen() {
         style={{ flex: 1 }} showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
       >
-        {/* 프로필 요약 */}
-        <TouchableOpacity style={styles.profile} activeOpacity={0.7} onPress={openProfile}>
-          <View style={styles.avatar}><Ionicons name="person" size={26} color="#fff" /></View>
+        {/* 프로필 요약 — 닉네임 탭=닉네임 편집(전 서비스 공용), 나이·성별 탭=내 정보 시트 */}
+        <View style={styles.profile}>
+          <TouchableOpacity style={styles.avatar} activeOpacity={0.7} onPress={openNickEdit}>
+            <Ionicons name="person" size={26} color="#fff" />
+          </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.nickname}>{nickname || '게스트'}</Text>
-            <Text style={styles.profileSub}>{profileSub}</Text>
+            <TouchableOpacity style={styles.nickRow} activeOpacity={0.7} onPress={openNickEdit}>
+              <Text style={styles.nickname}>{nickname || '닉네임 설정'}</Text>
+              <Ionicons name="pencil" size={14} color={colors.textTertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.7} onPress={openProfile}>
+              <Text style={styles.profileSub}>{profileSub} ›</Text>
+            </TouchableOpacity>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-        </TouchableOpacity>
+        </View>
 
         {/* 통계 3분할 */}
         <View style={styles.stats}>
@@ -110,8 +131,8 @@ export default function MyScreen() {
 
         {/* 관심 */}
         <Text style={styles.grpLabel}>관심</Text>
-        <Row colors={colors} icon="heart-outline" label="관심 일정" right={`소개팅·소셜링 ${favCount}`} onPress={() => router.push('/favorites')} />
-        <Row colors={colors} icon="wine-outline" label="관심 매장" right="혼술바 0" onPress={() => router.push('/favorites')} />
+        <Row colors={colors} icon="heart-outline" label="관심 일정" right={`소개팅·소셜링 ${favoriteIds.size}`} onPress={() => router.push('/favorites')} />
+        <Row colors={colors} icon="wine-outline" label="관심 매장" right={`혼술바 ${placeFavCount}`} onPress={() => router.push('/favorites/places')} />
         <Row colors={colors} icon="time-outline" label="최근 본 일정·매장" onPress={() => router.push('/my/recent')} />
 
         {/* 내 활동 */}
@@ -139,6 +160,32 @@ export default function MyScreen() {
         <Row colors={colors} icon="cube-outline" label="버전" right={APP_VERSION} />
       </ScrollView>
       <BottomNav current="my" />
+
+      {/* 닉네임 편집 — 여기서 바꾸면 커뮤·소개팅·소셜링·혼술바 글/후기에 모두 적용된다. */}
+      <Modal visible={nickEdit} transparent animationType="fade" onRequestClose={() => setNickEdit(false)} statusBarTranslucent>
+        <View style={styles.mOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setNickEdit(false)} />
+          <View style={styles.mCard}>
+            <Text style={styles.mTitle}>닉네임 설정</Text>
+            <Text style={styles.mSub}>글·후기에 함께 쓰이는 공용 닉네임이에요.</Text>
+            <TextInput
+              style={styles.mInput}
+              value={nickDraft}
+              onChangeText={setNickDraft}
+              placeholder="2~20자"
+              placeholderTextColor={colors.textTertiary}
+              maxLength={20}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.mBtns}>
+              <TouchableOpacity style={styles.mCancel} onPress={() => setNickEdit(false)}><Text style={styles.mCancelText}>취소</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.mSave} onPress={saveNick}><Text style={styles.mSaveText}>저장</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -152,8 +199,20 @@ function makeStyles(colors: AppColors) {
       width: 52, height: 52, borderRadius: 999, alignItems: 'center', justifyContent: 'center',
       backgroundColor: colors.primary,
     },
+    nickRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
     nickname: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
     profileSub: { fontSize: 13, color: colors.textTertiary, marginTop: 3 },
+    // 닉네임 편집 모달
+    mOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+    mCard: { width: '100%', maxWidth: 360, borderRadius: 16, backgroundColor: colors.surface, padding: 18, gap: 10 },
+    mTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+    mSub: { fontSize: 12.5, color: colors.textTertiary, marginTop: -4 },
+    mInput: { backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: colors.textPrimary, borderWidth: 1, borderColor: colors.border },
+    mBtns: { flexDirection: 'row', gap: 8, marginTop: 4 },
+    mCancel: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: colors.surfaceHigh },
+    mCancelText: { fontSize: 15, fontWeight: '700', color: colors.textSecondary },
+    mSave: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: colors.primary },
+    mSaveText: { fontSize: 15, fontWeight: '800', color: '#fff' },
     // 통계 3분할
     stats: {
       flexDirection: 'row', borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.divider, marginBottom: 4,

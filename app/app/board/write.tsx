@@ -1,10 +1,10 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react'
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView } from 'react-native'
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
@@ -106,9 +106,10 @@ export default function BoardWriteScreen() {
   const [videos, setVideos] = useState<string[]>([])
   const [videoBusy, setVideoBusy] = useState(false)
 
-  useEffect(() => {
-    getLastNickname().then((n) => n && setNickname((cur) => cur || n))
-  }, [])
+  // 닉네임은 MY 공용값. 화면 올 때마다(포커스) 최신값 반영 — MY에서 바꾸고 돌아오면 갱신.
+  useFocusEffect(useCallback(() => {
+    getLastNickname().then((n) => setNickname(n || ''))
+  }, []))
 
   // 최초 게시물 등록 전 약관 동의 확인(애플 1.2, UGC 동의 절차). 한 번 동의하면
   // 기기에 남아 다시 묻지 않는다 — 수정 화면에서는 이미 동의한 뒤라 묻지 않는다.
@@ -222,21 +223,16 @@ export default function BoardWriteScreen() {
         // 비켜준다. 이보다 크게 잡으면 필요 없이 화면이 밀려 올라간다.
         bottomOffset={toolbarH + CARET_GAP}
       >
-        {/* 닉네임 · 말머리 — 한 줄에 둘 다 들어갈 폭이 남아서 같이 배치한다(2026-08-12 오너 지시).
-            말머리는 종류가 늘어도 줄을 안 차지하게 콤보박스(선택 시 목록 팝업)로 고른다. */}
+        {/* 닉네임 · 말머리. 닉네임은 MY에서 정한 공용 닉네임을 그대로 쓴다(여기선 수정 불가,
+            2026-08-23 오너 지시 — 전 서비스 닉네임 통일). 바꾸려면 MY에서. */}
         <View style={styles.topRow}>
           <View style={styles.nickCol}>
             <Text style={styles.label}>닉네임</Text>
-            <TextInput
-              style={styles.input}
-              value={nickname}
-              onChangeText={setNickname}
-              placeholder="2~20자"
-              placeholderTextColor={colors.textTertiary}
-              maxLength={20}
-              editable={!isEdit}
-            />
-            {isEdit && <Text style={styles.hint}>닉네임은 수정할 수 없습니다</Text>}
+            <TouchableOpacity style={styles.nickReadonly} activeOpacity={0.7} onPress={() => router.push('/my')}>
+              <Text style={styles.nickReadonlyText} numberOfLines={1}>{nickname || '미설정'}</Text>
+              <Ionicons name="pencil" size={13} color={colors.textTertiary} />
+            </TouchableOpacity>
+            <Text style={styles.hint}>MY에서 변경</Text>
           </View>
 
           {(boardTags.length > 0 || editingTag) && (
@@ -536,6 +532,9 @@ function makeStyles(colors: AppColors) {
       borderWidth: 1, borderColor: colors.border,
     },
     selectText: { flex: 1, fontSize: 15, color: colors.textPrimary },
+    // 닉네임 읽기전용(MY 공용) — 입력칸과 같은 높이·테두리, 연필로 MY 이동 암시.
+    nickReadonly: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: colors.border },
+    nickReadonlyText: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
     hint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 5 },
     // 아랫글 입력칸 — 본문(BoardEditor.input)과 완전히 같은 값(오너: 위아래 똑같이).
     belowInput: {
