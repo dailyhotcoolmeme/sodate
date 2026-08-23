@@ -53,8 +53,13 @@ def q(v):
 
 def main():
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else 10**9
-    places = run_sql("select p.id, p.name from places p where p.service='honsul' "
-                     "and not exists (select 1 from place_reviews r where r.place_id=p.id and r.source in ('naver_blog','youtube')) "
+    # 각 place 의 blog/youtube 보유 여부까지 함께(이미 있는 소스는 재수집 안 함 → 중복 방지)
+    places = run_sql("select p.id, p.name, "
+                     "exists(select 1 from place_reviews r where r.place_id=p.id and r.source='naver_blog') as has_blog, "
+                     "exists(select 1 from place_reviews r where r.place_id=p.id and r.source='youtube') as has_yt "
+                     "from places p where p.service='honsul' "
+                     "and not (exists(select 1 from place_reviews r where r.place_id=p.id and r.source='naver_blog') "
+                     "         and exists(select 1 from place_reviews r where r.place_id=p.id and r.source='youtube')) "
                      "order by p.naver_review_count desc nulls last limit %d;" % limit)
     print(f'대상 {len(places)}곳')
     total = 0
@@ -64,13 +69,16 @@ def main():
             toks = [p['name']]
         rows = []
         try:
-            blog = fetch_naver_blog_results(p['name'])
+            blog = [] if p.get('has_blog') else fetch_naver_blog_results(p['name'])
         except Exception:
             blog = []
-        try:
-            yt = fetch_youtube_results(p['name'], [])
-        except Exception:
+        if p.get('has_yt'):
             yt = []
+        else:
+            try:
+                yt = fetch_youtube_results(p['name'], toks, topics=[])  # 상호 토큰만으로 채택(혼술 도메인)
+            except Exception:
+                yt = []
         seen = set()
         for r in (blog + yt):
             u = r.get('source_url')

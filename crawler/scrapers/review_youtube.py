@@ -108,8 +108,14 @@ def _walk(o, items: list):
             _walk(x, items)
 
 
-def fetch_youtube_results(keyword: str, aliases: list[str]) -> list[dict]:
-    """유튜브 검색 결과 페이지에서 후기 영상/쇼츠 파싱. 제목에 상호(aliases)가 있어야 채택."""
+def fetch_youtube_results(keyword: str, aliases: list[str], topics: Optional[list[str]] = None) -> list[dict]:
+    """유튜브 검색 결과 페이지에서 후기 영상/쇼츠 파싱. 제목에 상호(aliases)가 있어야 채택.
+
+    topics: 추가로 제목에 있어야 하는 주제어. 미지정이면 소개팅 기본(TOPIC).
+      혼술바 등 다른 도메인은 topics=[] 로 넘겨 상호(aliases)만으로 채택한다.
+    """
+    if topics is None:
+        topics = TOPIC
     results = []
     try:
         resp = httpx.get(
@@ -131,8 +137,10 @@ def fetch_youtube_results(keyword: str, aliases: list[str]) -> list[dict]:
         for kind, vid, title in items:
             if not vid or not title or vid in seen:
                 continue
-            # 상호 + 소개팅/로테이션 둘 다 있어야 채택(오검출 방지)
-            if not (any(a in title for a in aliases) and any(t in title for t in TOPIC)):
+            # 상호(aliases) 필수 + topics 지정 시 주제어도 필수(오검출 방지)
+            alias_ok = (not aliases) or any(a in title for a in aliases)
+            topic_ok = (not topics) or any(t in title for t in topics)
+            if not (alias_ok and topic_ok):
                 continue
             seen.add(vid)
             if kind == 'short':
