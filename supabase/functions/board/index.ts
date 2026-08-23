@@ -1,5 +1,22 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { AwsClient } from 'https://esm.sh/aws4fetch@1.0.20'
+
+// 미디어는 전부 R2(이그레스 무료). 게시판 이미지도 R2 로 업로드한다(공개 서빙=sodate-admin.pages.dev/media/{key}).
+const r2 = new AwsClient({
+  accessKeyId: Deno.env.get('R2_ACCESS_KEY_ID') ?? '',
+  secretAccessKey: Deno.env.get('R2_SECRET_ACCESS_KEY') ?? '',
+  region: 'auto', service: 's3',
+})
+async function r2Put(key: string, bytes: Uint8Array, contentType: string): Promise<string> {
+  const endpoint = (Deno.env.get('R2_ENDPOINT') ?? '').replace(/\/$/, '')
+  const bucket = Deno.env.get('R2_BUCKET') ?? ''
+  const res = await r2.fetch(`${endpoint}/${bucket}/${key}`, {
+    method: 'PUT', body: bytes, headers: { 'Content-Type': contentType },
+  })
+  if (!res.ok) throw new Error(`R2 upload ${res.status}`)
+  return `${Deno.env.get('R2_PUBLIC_BASE')}/media/${key}`
+}
 
 // 게시판(docs/BOARD_SPEC.md) — 글·댓글 작성/수정/삭제, 추천·비추, 신고.
 // 로그인 없음 → 익명 기기 시크릿(ownerToken)의 해시로 소유권을 확인한다(후기와 동일).
@@ -683,12 +700,14 @@ serve(async (req) => {
         }, 400)
       }
       const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : mime === 'image/gif' ? 'gif' : 'jpg'
-      const key = `${hash.slice(0, 12)}/${crypto.randomUUID()}.${ext}`
-      const { error } = await supabase.storage.from('board-images')
-        .upload(key, bytes, { contentType: mime, upsert: false })
-      if (error) return json({ error: error.message }, 500)
-      const { data } = supabase.storage.from('board-images').getPublicUrl(key)
-      return json({ url: data.publicUrl })
+      // R2 로 업로드(이그레스 무료). 키: board/{소유자해시12}/{uuid}.{ext}
+      const key = `board/${hash.slice(0, 12)}/${crypto.randomUUID()}.${ext}`
+      try {
+        const url = await r2Put(key, bytes, mime)
+        return json({ url })
+      } catch (e) {
+        return json({ error: String(e) }, 500)
+      }
     }
 
     // ── 조회수 (화면에는 감춰두지만 값은 쌓아둔다) ──

@@ -34,7 +34,8 @@ def _og_image(post_url: str) -> str | None:
 
 
 def fetch_and_store_thumb(supabase, source_url: str) -> str | None:
-    """인스타 게시물/릴스 썸네일을 Storage에 재호스팅 → 공개 URL. 실패 시 None."""
+    """인스타 게시물/릴스 썸네일을 R2에 재호스팅 → 공개 URL. 실패 시 None.
+    (미디어는 전부 R2 — 이그레스 무료. supabase 인자는 하위호환 위해 남겨두되 안 씀.)"""
     m = re.search(r'/(p|reel|reels|tv)/([^/?#]+)', source_url)
     if not m:
         return None
@@ -47,13 +48,8 @@ def fetch_and_store_thumb(supabase, source_url: str) -> str | None:
                          timeout=12, follow_redirects=True)
         if resp.status_code != 200 or not resp.content:
             return None
-        path = f'insta/{code}.jpg'
-        supabase.storage.from_(THUMB_BUCKET).upload(
-            path, resp.content,
-            {'content-type': 'image/jpeg', 'upsert': 'true'},
-        )
-        base = os.environ['SUPABASE_URL'].rstrip('/')
-        return f'{base}/storage/v1/object/public/{THUMB_BUCKET}/{path}'
+        from utils.r2_client import upload_bytes
+        return upload_bytes(f'review/insta/{code}.jpg', resp.content, 'image/jpeg')
     except Exception as e:
         logger.warning(f'인스타 썸네일 저장 실패 {source_url}: {e}')
         return None
