@@ -314,6 +314,74 @@ serve(async (req) => {
       return json({ post: data })
     }
 
+    // ── 투표 만들기(글 소유자만) ──
+    if (action === 'createPoll') {
+      const postId = String(body.postId ?? '')
+      const ownErr = await mine('board_posts', postId)
+      if (ownErr) return json({ error: ownErr }, 403)
+      const question = String(body.question ?? '').trim()
+      const allowMulti = !!body.allowMulti
+      const endsAt = body.endsAt ? String(body.endsAt) : null
+      const options = (Array.isArray(body.options) ? body.options : [])
+        .map((o: unknown) => String(o ?? '').trim()).filter(Boolean).slice(0, 5)
+      if (options.length < 2) return json({ error: '투표 항목을 2개 이상 입력해주세요.' }, 400)
+      if (question.length > 200) return json({ error: '투표 질문이 너무 깁니다.' }, 400)
+      const bad = moderate(`${question} ${options.join(' ')}`)
+      if (bad) return json({ error: bad }, 400)
+      const { data: poll, error: e1 } = await supabase.from('board_polls')
+        .insert({ post_id: postId, question: question || null, allow_multi: allowMulti, ends_at: endsAt })
+        .select('id').single()
+      if (e1) return json({ error: e1.message }, 500)
+      const rows = options.map((label: string, i: number) => ({ poll_id: poll.id, position: i, label }))
+      const { error: e2 } = await supabase.from('board_poll_options').insert(rows)
+      if (e2) return json({ error: e2.message }, 500)
+      return json({ pollId: poll.id })
+    }
+
+    // ── 투표 조회(옵션·집계·내 표) ──
+    if (action === 'getPoll') {
+      const postId = String(body.postId ?? '')
+      const { data: poll } = await supabase.from('board_polls')
+        .select('id,question,allow_multi,ends_at').eq('post_id', postId).maybeSingle()
+      if (!poll) return json({ poll: null })
+      const { data: opts } = await supabase.from('board_poll_options')
+        .select('id,position,label').eq('poll_id', poll.id).order('position')
+      const { data: votes } = await supabase.from('board_poll_votes')
+        .select('option_id,owner_token').eq('poll_id', poll.id)
+      const counts: Record<string, number> = {}
+      const voters = new Set<string>()
+      const myVotes: string[] = []
+      for (const v of (votes ?? []) as { option_id: string; owner_token: string }[]) {
+        counts[v.option_id] = (counts[v.option_id] ?? 0) + 1
+        voters.add(v.owner_token)
+        if (v.owner_token === hash) myVotes.push(v.option_id)
+      }
+      return json({ poll: {
+        id: poll.id, question: poll.question, allowMulti: poll.allow_multi, endsAt: poll.ends_at,
+        options: (opts ?? []).map((o: any) => ({ id: o.id, label: o.label, count: counts[o.id] ?? 0 })),
+        totalVoters: voters.size, myVotes,
+      } })
+    }
+
+    // ── 투표하기(재투표=변경, 마감 전) ──
+    if (action === 'votePoll') {
+      const pollId = String(body.pollId ?? '')
+      const optionIds = (Array.isArray(body.optionIds) ? body.optionIds : []).map((x: unknown) => String(x))
+      const { data: poll } = await supabase.from('board_polls').select('id,allow_multi,ends_at').eq('id', pollId).maybeSingle()
+      if (!poll) return json({ error: '투표를 찾을 수 없습니다.' }, 404)
+      if (poll.ends_at && new Date(poll.ends_at) < new Date()) return json({ error: '마감된 투표입니다.' }, 400)
+      const { data: validOpts } = await supabase.from('board_poll_options').select('id').eq('poll_id', pollId)
+      const valid = new Set((validOpts ?? []).map((o: any) => o.id))
+      const chosen = optionIds.filter((id: string) => valid.has(id))
+      if (chosen.length === 0) return json({ error: '항목을 선택해주세요.' }, 400)
+      const finalChosen = poll.allow_multi ? chosen : chosen.slice(0, 1)
+      await supabase.from('board_poll_votes').delete().eq('poll_id', pollId).eq('owner_token', hash)
+      const rows = finalChosen.map((oid: string) => ({ poll_id: pollId, option_id: oid, owner_token: hash }))
+      const { error } = await supabase.from('board_poll_votes').insert(rows)
+      if (error) return json({ error: error.message }, 500)
+      return json({ ok: true })
+    }
+
     // ── 글 조회(수정 화면용) ──
     // 앱은 보통 RLS로 직접 읽지만(hooks/useBoard.ts), RLS는 is_active인 글만 보여준다.
     // 신고 누적으로 숨김 처리된 내 글은 본인도 못 읽어와 수정 화면이 빈 채로 뜨고

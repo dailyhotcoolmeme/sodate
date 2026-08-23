@@ -13,6 +13,8 @@ import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import BoardRichEditor, { RICH_EDITOR_AVAILABLE, type RichEditorHandle } from '@/components/BoardRichEditor'
+import PollEditor, { emptyPollDraft, durationToEndsAt, type PollDraft } from '@/components/PollEditor'
+import { createPoll } from '@/lib/boardPoll'
 import { MAX_IMAGES } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
@@ -97,6 +99,8 @@ export default function BoardWriteScreen() {
   // richText 는 서식 뺀 평문 미러 — 등록 가능 여부·글자수 판단용.
   const richRef = useRef<RichEditorHandle>(null)
   const [richText, setRichText] = useState('')
+  // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
+  const [poll, setPoll] = useState<PollDraft | null>(null)
 
   useEffect(() => {
     getLastNickname().then((n) => n && setNickname((cur) => cur || n))
@@ -138,7 +142,7 @@ export default function BoardWriteScreen() {
   const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && bodyFilled && !needsAgreement
 
   // 쓰던 게 있으면 닫기 전에 물어본다
-  const dirty = title.trim().length > 0 || bodyFilled || contentBelow.trim().length > 0 || images.length > 0 || links.length > 0
+  const dirty = title.trim().length > 0 || bodyFilled || contentBelow.trim().length > 0 || images.length > 0 || links.length > 0 || poll !== null
   // 입력 중엔 OTA 자동 새로고침을 보류 — 화면을 벗어나면(뒤로가기·등록) 즉시 풀림
   // (lib/appUpdates.ts 참고).
   useEffect(() => {
@@ -169,8 +173,15 @@ export default function BoardWriteScreen() {
     const r = isEdit
       ? await updatePost({ postId: id!, title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, tagId })
       : await createPost({ nickname: nickname.trim(), title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, tagId })
+    if ('error' in r) { setSaving(false); Alert.alert('알림', r.error); return }
+    // 신규글에 투표가 있으면 이어서 저장(항목 2개 이상 채워졌을 때만).
+    if (!isEdit && poll && 'id' in r) {
+      const opts = poll.options.map((o) => o.trim()).filter(Boolean)
+      if (opts.length >= 2) {
+        await createPoll({ postId: r.id, question: poll.question.trim(), options: opts, allowMulti: poll.allowMulti, endsAt: durationToEndsAt(poll.durationDays) })
+      }
+    }
     setSaving(false)
-    if ('error' in r) { Alert.alert('알림', r.error); return }
     if (!isEdit) await setTermsAgreed()
     router.back()
   }
@@ -310,6 +321,18 @@ export default function BoardWriteScreen() {
             </View>
           )}
         </View>
+
+        {/* 투표 — 신규글에만. 있으면 편집블록, 없으면 '투표 추가' 버튼(당근·X 방식). */}
+        {!isEdit && (
+          poll ? (
+            <PollEditor draft={poll} onChange={setPoll} onRemove={() => setPoll(null)} />
+          ) : (
+            <TouchableOpacity style={styles.addPoll} onPress={() => setPoll(emptyPollDraft())} activeOpacity={0.8}>
+              <Ionicons name="bar-chart-outline" size={18} color={colors.primary} />
+              <Text style={styles.addPollText}>투표 추가</Text>
+            </TouchableOpacity>
+          )
+        )}
 
         <Text style={styles.notice}>
           욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
@@ -500,6 +523,8 @@ function makeStyles(colors: AppColors) {
     belowHint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 6, lineHeight: 17 },
     // 리치에디터 박스(재빌드 후) — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
     richBox: { minHeight: 320, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    addPoll: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed' },
+    addPollText: { fontSize: 14, color: colors.primary, fontWeight: '700' },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {

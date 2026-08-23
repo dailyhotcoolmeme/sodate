@@ -18,6 +18,7 @@ import ReportSheet from '@/components/ReportSheet'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import AuthorMenu, { AUTHOR_MENU_ENABLED, type AuthorMenuTarget } from '@/components/AuthorMenu'
 import PostHtmlView from '@/components/PostHtmlView'
+import PollView from '@/components/PollView'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
@@ -573,6 +574,8 @@ export default function BoardPostScreen() {
         <View style={styles.postBody}>
           {/* 리치 글(HTML)은 서식대로, 옛 평문 글은 그대로 — PostHtmlView 가 자동 구분 */}
           <PostHtmlView content={post.content} textStyle={styles.bodyText} colors={colors} />
+          {/* 투표(있는 글만 렌더) */}
+          <PollView postId={id} />
         </View>
 
         {/* 첨부(사진+링크) 신고 누적 시 이미지처럼 통째로 안 그리고 가림 문구로 대신한다
