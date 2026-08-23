@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useState, useMemo, useEffect } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import AppSpinner from '@/components/AppSpinner'
@@ -18,6 +18,7 @@ import { track } from '@/lib/analytics'
 import { useAllReviews } from '@/hooks/useReviews'
 import { getMyReviewIds } from '@/lib/reviewIdentity'
 import { deleteReview } from '@/lib/reviews'
+import { fetchMyPlaceReviews, deletePlaceReview } from '@/lib/placeReviews'
 import ReviewCard from '@/components/ReviewCard'
 import ReviewSheet, { type ReviewSheetInitial } from '@/components/ReviewSheet'
 import { useColors } from '@/hooks/useColors'
@@ -136,8 +137,10 @@ export default function ReviewsScreen() {
 
   // 내가 작성한 후기 식별용(기기 로컬)
   const [myReviewIds, setMyReviewIds] = useState<string[]>([])
+  const [myPlaceReviews, setMyPlaceReviews] = useState<any[]>([])  // 내가 쓴 혼술바 후기(mine 탭에 병합)
+  const router = useRouter()
   useEffect(() => {
-    getMyReviewIds().then(setMyReviewIds)
+    getMyReviewIds().then((ids) => { setMyReviewIds(ids); fetchMyPlaceReviews(ids).then(setMyPlaceReviews) })
   }, [])
 
   // 내 후기 수정/삭제
@@ -146,12 +149,21 @@ export default function ReviewsScreen() {
   const [editCompanyId, setEditCompanyId] = useState<string>('')
 
   const openEdit = (r: ReviewRow) => {
+    // 매장(혼술바) 후기는 매장 상세의 후기 섹션에서 수정(그쪽 흐름 재사용).
+    if ((r as any)._isPlace) { router.push(`/place/${(r as any)._placeId}`); return }
     setEditTarget({ id: r.id, author_name: r.author_name, rating: r.rating, content: r.content, gender: r.gender })
     setEditCompanyId(r.company_id)
     setSheetVisible(true)
   }
 
   const handleDelete = async (r: ReviewRow) => {
+    if ((r as any)._isPlace) {
+      const res = await deletePlaceReview(r.id)
+      if ('error' in res) return
+      setMyReviewIds((prev) => prev.filter((id) => id !== r.id))
+      setMyPlaceReviews((prev) => prev.filter((x) => x.id !== r.id))
+      return
+    }
     const res = await deleteReview(r.id)
     if ('error' in res) return
     setMyReviewIds((prev) => prev.filter((id) => id !== r.id))
@@ -172,8 +184,8 @@ export default function ReviewsScreen() {
   }, [reviews])
 
   const myCount = useMemo(
-    () => reviews.filter((r) => r.source === 'user' && myReviewIds.includes(r.id)).length,
-    [reviews, myReviewIds]
+    () => reviews.filter((r) => r.source === 'user' && myReviewIds.includes(r.id)).length + myPlaceReviews.length,
+    [reviews, myReviewIds, myPlaceReviews]
   )
 
   // 소개팅모아 탭은 후기가 없어도 항상 표시(작성 유도). 나머지는 데이터 있을 때만. 내 후기는 항상 마지막.
@@ -204,7 +216,7 @@ export default function ReviewsScreen() {
     const dateOf = (r: ReviewWithCompany) => new Date(r.published_at ?? r.created_at ?? 0).getTime()
     const list =
       currentTab === 'mine'
-        ? reviews.filter((r) => r.source === 'user' && myReviewIds.includes(r.id))
+        ? [...reviews.filter((r) => r.source === 'user' && myReviewIds.includes(r.id)), ...myPlaceReviews]
         : reviews.filter((r) => r.source === currentTab)
     if (sortMode === 'company') {
       return list.sort((a, b) => {
@@ -213,7 +225,7 @@ export default function ReviewsScreen() {
       })
     }
     return list.sort((a, b) => (recentDir === 'desc' ? dateOf(b) - dateOf(a) : dateOf(a) - dateOf(b)))
-  }, [reviews, currentTab, sortMode, recentDir, myReviewIds])
+  }, [reviews, currentTab, sortMode, recentDir, myReviewIds, myPlaceReviews])
 
   const onPressRecent = () => {
     if (sortMode !== 'recent') setSortMode('recent')

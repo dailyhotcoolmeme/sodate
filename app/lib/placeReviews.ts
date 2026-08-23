@@ -41,3 +41,19 @@ export async function reportPlaceReview(reviewId: string): Promise<{ ok: true } 
   if (error) return { error: error.message || '신고하지 못했습니다.' }
   return { ok: true }
 }
+
+/** 내가 쓴 매장(혼술바) 후기 — MY '내가 쓴 후기'에 소개팅 후기와 함께 보여준다.
+ *  reviews 화면(company 중심)과 섞으려고 ReviewRow 호환 형태로 만든다(매장명=companies.name). */
+export async function fetchMyPlaceReviews(myReviewIds: string[]): Promise<any[]> {
+  if (!myReviewIds.length) return []
+  const sb = supabase as unknown as { from: (t: string) => any }
+  const { data } = await sb.from('place_reviews')
+    .select('id,place_id,content,rating,author_name,created_at,published_at,places(name)')
+    .in('id', myReviewIds).eq('source', 'user').eq('is_active', true)
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id, content: r.content, rating: r.rating, author_name: r.author_name, gender: null,
+    created_at: r.created_at, published_at: r.published_at, source: 'user', company_id: '',
+    companies: { name: r.places?.name ?? '혼술바', slug: '' },
+    _isPlace: true, _placeId: r.place_id,
+  }))
+}
