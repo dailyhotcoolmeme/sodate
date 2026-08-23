@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView } from 'react-native'
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
@@ -12,6 +12,7 @@ import type { AppColors } from '@/constants/colors'
 import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
+import BoardRichEditor, { RICH_EDITOR_AVAILABLE, type RichEditorHandle } from '@/components/BoardRichEditor'
 import { MAX_IMAGES } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
@@ -20,6 +21,15 @@ import { wideContent } from '@/constants/layout'
 
 const TITLE_MAX = 60
 const CONTENT_MAX = 10000
+
+/** 리치모드 저장 시 본문 HTML 에서 <img src> 를 뽑아 image_urls 로도 넣는다(피드 썸네일·신고용). */
+function extractImageUrls(html: string): string[] {
+  const out: string[] = []
+  const re = /<img[^>]+src=["']([^"']+)["']/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html))) out.push(m[1])
+  return out
+}
 
 /** 커서와 키보드(도구줄 포함) 사이에 둘 여유 */
 const CARET_GAP = 8
@@ -83,6 +93,10 @@ export default function BoardWriteScreen() {
   const [agreedLoaded, setAgreedLoaded] = useState(false)
   const editor = useBoardEditor(images, setImages)
   const linksApi = useBoardLinks(links, setLinks)
+  // 리치에디터(재빌드 후 활성). 본문 HTML 은 저장 시 richRef.getHTML() 로 뽑는다.
+  // richText 는 서식 뺀 평문 미러 — 등록 가능 여부·글자수 판단용.
+  const richRef = useRef<RichEditorHandle>(null)
+  const [richText, setRichText] = useState('')
 
   useEffect(() => {
     getLastNickname().then((n) => n && setNickname((cur) => cur || n))
@@ -119,10 +133,12 @@ export default function BoardWriteScreen() {
   const needsAgreement = !isEdit && agreedLoaded && !agreed
   // 첨부(사진·GIF·유튜브)가 하나라도 있으면 그 아래에 '이어 쓰는 본문' 입력칸을 보여준다.
   const hasAttach = images.length > 0 || links.length > 0
-  const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && content.trim().length > 0 && !needsAgreement
+  // 리치모드에선 본문이 에디터 안에 있으므로 richText(평문 미러)로 판단.
+  const bodyFilled = RICH_EDITOR_AVAILABLE ? richText.trim().length > 0 : content.trim().length > 0
+  const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && bodyFilled && !needsAgreement
 
   // 쓰던 게 있으면 닫기 전에 물어본다
-  const dirty = title.trim().length > 0 || content.trim().length > 0 || contentBelow.trim().length > 0 || images.length > 0 || links.length > 0
+  const dirty = title.trim().length > 0 || bodyFilled || contentBelow.trim().length > 0 || images.length > 0 || links.length > 0
   // 입력 중엔 OTA 자동 새로고침을 보류 — 화면을 벗어나면(뒤로가기·등록) 즉시 풀림
   // (lib/appUpdates.ts 참고).
   useEffect(() => {
@@ -141,9 +157,18 @@ export default function BoardWriteScreen() {
   const save = async () => {
     if (!canSave || saving) return
     setSaving(true)
+    // 리치모드: 본문=에디터 HTML, 사진은 HTML 안에 인라인 → 썸네일·신고용으로 URL만 뽑아 imageUrls 에도 담는다.
+    let bodyContent = content.trim()
+    let bodyImages = images
+    let bodyBelow = hasAttach ? contentBelow.trim() : ''
+    if (RICH_EDITOR_AVAILABLE) {
+      bodyContent = (await richRef.current?.getHTML()) ?? ''
+      bodyImages = extractImageUrls(bodyContent)
+      bodyBelow = ''
+    }
     const r = isEdit
-      ? await updatePost({ postId: id!, title: title.trim(), content: content.trim(), contentBelow: hasAttach ? contentBelow.trim() : '', imageUrls: images, linkUrls: links, tagId })
-      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: content.trim(), contentBelow: hasAttach ? contentBelow.trim() : '', imageUrls: images, linkUrls: links, tagId })
+      ? await updatePost({ postId: id!, title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, tagId })
+      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, tagId })
     setSaving(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
     if (!isEdit) await setTermsAgreed()
@@ -239,22 +264,35 @@ export default function BoardWriteScreen() {
 
         <View>
           <Text style={styles.label}>내용</Text>
-          <BoardEditorInput
-            api={editor}
-            value={content}
-            onChangeText={setContent}
-            images={images}
-            maxLength={CONTENT_MAX}
-            placeholder="내용을 입력하세요"
-          />
+          {RICH_EDITOR_AVAILABLE ? (
+            // 재빌드 후: 리치에디터(tentap). 본문 안에 서식·이미지 인라인. 툴바는 에디터 내부.
+            <View style={styles.richBox}>
+              <BoardRichEditor
+                ref={richRef}
+                colors={colors}
+                initialHTML={content}
+                placeholder="내용을 입력하세요"
+                onChangeText={setRichText}
+              />
+            </View>
+          ) : (
+            <BoardEditorInput
+              api={editor}
+              value={content}
+              onChangeText={setContent}
+              images={images}
+              maxLength={CONTENT_MAX}
+              placeholder="내용을 입력하세요"
+            />
+          )}
           <View style={{ marginTop: 8 }}>
-            <BoardLinkChips api={linksApi} links={links} />
+            {!RICH_EDITOR_AVAILABLE && <BoardLinkChips api={linksApi} links={links} />}
           </View>
 
-          {/* 첨부가 있을 때만 아래에 '이어 쓰는 본문' 입력칸. 스타일은 윗칸(본문)과 동일.
+          {/* 첨부가 있을 때만 아래에 '이어 쓰는 본문' 입력칸(기존 모드 전용). 스타일은 윗칸(본문)과 동일.
               첨부를 다 빼면 칸은 사라지되 입력한 내용은 state 에 남아(hasAttach 로 렌더만
               감춤) 다시 첨부하면 복구된다(오너 결정 2026-08-21). */}
-          {hasAttach && (
+          {!RICH_EDITOR_AVAILABLE && hasAttach && (
             <View style={{ marginTop: 12 }}>
               <TextInput
                 style={styles.belowInput}
@@ -302,7 +340,9 @@ export default function BoardWriteScreen() {
       </KeyboardAwareScrollView>
 
       {/* 사진 첨부 — 화면 맨 아랫줄. 키보드가 올라오면 그 위에 붙는다.
-          네이버 카페의 '기본 도구 막대', 당근 동네생활의 '사진·장소·투표' 줄과 같은 자리. */}
+          네이버 카페의 '기본 도구 막대', 당근 동네생활의 '사진·장소·투표' 줄과 같은 자리.
+          리치모드에선 에디터 자체 툴바가 이 역할을 하므로 숨긴다(재빌드 후). */}
+      {!RICH_EDITOR_AVAILABLE && (
       <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
         <View
           style={[styles.toolbar, { paddingBottom: 8 + insets.bottom }]}
@@ -345,6 +385,7 @@ export default function BoardWriteScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardStickyView>
+      )}
 
       <LinkInputModal api={linksApi} />
 
@@ -457,6 +498,8 @@ function makeStyles(colors: AppColors) {
       borderWidth: 1, borderColor: colors.border, minHeight: 220,
     },
     belowHint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 6, lineHeight: 17 },
+    // 리치에디터 박스(재빌드 후) — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
+    richBox: { minHeight: 320, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {
