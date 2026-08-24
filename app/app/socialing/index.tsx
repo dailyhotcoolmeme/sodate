@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useCallback } from 'react'
-import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl } from 'react-native'
+import React, { useMemo, useState, useCallback, useRef } from 'react'
+import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
@@ -59,6 +59,19 @@ export default function SocialingScreen() {
     return REGION_GROUP_ORDER.filter((g) => buckets[g.key]?.length).map((g) => ({ key: g.key, ids: buckets[g.key] }))
   }, [regionOptions])
 
+  // 스크롤하면 카테고리 칩 줄이 접힌다 — 소개팅과 동일(EXPAND_AT/COLLAPSE_AT 값까지 같게).
+  const chipsAnim = useRef(new Animated.Value(1)).current
+  const chipsExpandedRef = useRef(true)
+  const onFeedScroll = useCallback((e: any) => {
+    const y = e.nativeEvent.contentOffset.y
+    const was = chipsExpandedRef.current
+    const expand = was ? y <= 60 : y <= 8
+    if (expand !== was) {
+      chipsExpandedRef.current = expand
+      Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
+    }
+  }, [chipsAnim])
+
   const [refreshing, setRefreshing] = useState(false)
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -101,13 +114,15 @@ export default function SocialingScreen() {
       <TopBar onSearchPress={() => setSearchVisible(true)} />
 
       {/* ── 카테고리 빠른칩(다중) — 소개팅 지역/나이대 칩과 동일 리듬(height 34, marginBottom 2) ── */}
-      <View style={styles.chipScroll}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          {SOCIALING_GROUPS.map((g) => (
-            <Chip key={g.key} label={g.label} active={groups.includes(g.key)} onPress={() => toggleGroup(g.key)} colors={colors} />
-          ))}
-        </ScrollView>
-      </View>
+      <Animated.View style={{ height: chipsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 36] }), opacity: chipsAnim, overflow: 'hidden' }}>
+        <View style={styles.chipScroll}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {SOCIALING_GROUPS.map((g) => (
+              <Chip key={g.key} label={g.label} active={groups.includes(g.key)} onPress={() => toggleGroup(g.key)} colors={colors} />
+            ))}
+          </ScrollView>
+        </View>
+      </Animated.View>
 
       {/* ── 지역 빠른탭(군) + 필터 버튼 — 소개팅 regionScroll 과 동일 ── */}
       <View style={styles.regionScroll}>
@@ -189,6 +204,8 @@ export default function SocialingScreen() {
               <SocialingListItem event={item} isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => toggleFavorite(item.id)} />
             )
           )}
+          onScroll={onFeedScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}

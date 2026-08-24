@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl } from 'react-native'
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
@@ -98,6 +98,19 @@ export default function HonsulScreen() {
     return filtered
   }, [all, regionGroup, sanggwon, openNow, tag, search, myLoc, sangOf, groupOf])
 
+  // 스크롤하면 지역군 칩 줄이 접힌다 — 소개팅·소셜링과 동일 기준.
+  const chipsAnim = useRef(new Animated.Value(1)).current
+  const chipsExpandedRef = useRef(true)
+  const onFeedScroll = useCallback((e: any) => {
+    const y = e.nativeEvent.contentOffset.y
+    const was = chipsExpandedRef.current
+    const expand = was ? y <= 60 : y <= 8
+    if (expand !== was) {
+      chipsExpandedRef.current = expand
+      Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
+    }
+  }, [chipsAnim])
+
   const openOnMap = (p: PlaceRow) => { setFocused(p); setTab('map') }
 
   // 적용된 필터칩 — 소개팅·소셜링과 완전히 동일한 규격(activeChip + 초기화).
@@ -139,7 +152,8 @@ export default function HonsulScreen() {
 
       {tab === 'feed' ? (
         <>
-          {/* 지역군 칩(강남권·강북권…) — 소개팅·소셜링과 동일 */}
+          {/* 지역군 칩(강남권·강북권…) — 소개팅·소셜링과 동일. 스크롤하면 접힌다. */}
+          <Animated.View style={{ height: chipsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 36] }), opacity: chipsAnim, overflow: 'hidden' }}>
           <View style={styles.regionScroll}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} style={{ flex: 1 }}>
               {regionGroups.map((g) => (
@@ -148,6 +162,7 @@ export default function HonsulScreen() {
               ))}
             </ScrollView>
           </View>
+          </Animated.View>
 
           {/* 상권 칩(홍대·서면…) — 지역군 아래 세부 */}
           <View style={styles.regionScroll}>
@@ -200,6 +215,8 @@ export default function HonsulScreen() {
                 <PlaceListItem place={item} onTagPress={setTag} onMapPress={openOnMap}
                   isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => toggleFav(item.id)} />
               )}
+              onScroll={onFeedScroll}
+              scrollEventThrottle={16}
               contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
               showsVerticalScrollIndicator={false}
