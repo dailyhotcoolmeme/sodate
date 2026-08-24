@@ -17,6 +17,7 @@ import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { useHonsulFilterStore, useHonsulFilterHydrated } from '@/stores/honsulFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
 import { saveScrollOffset, getScrollOffset } from '@/lib/scrollMemory'
+import { confirmFavorite } from '@/lib/confirmToggle'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
 import PlaceMapCard from '@/components/PlaceMapCard'
 import { useRouter } from 'expo-router'
@@ -148,7 +149,6 @@ export default function HonsulScreen() {
   // 나중에 콘텐츠가 더 쌓여도 되돌리지 않는다.
   const feedListRef = useRef<FlatList<PlaceRow>>(null)
   const restoredScrollRef = useRef(false)
-  const programmaticScrollRef = useRef(false)
   // 복원 전 잠깐 맨 위가 보였다가 튀는 게 안 보이게(2026-08-25 오너 지적). 소개팅과 동일 패턴.
   const [listVisible, setListVisible] = useState(() => getScrollOffset('honsul-feed') <= 0)
   useEffect(() => {
@@ -163,8 +163,11 @@ export default function HonsulScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
-    if (!programmaticScrollRef.current) restoredScrollRef.current = true
-    saveScrollOffset('honsul-feed', y)
+    // 복원(onContentSizeChange)이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이
+    // 자체적으로 흘리는 y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로
+    // 덮어써버려서 복원이 조용히 실패한다(2026-08-25 오너 지적: "다른화면 돌아갔다오면
+    // 위치가 안맞다" — 데이터가 늦게 오는 화면일수록 잘 걸린다).
+    if (restoredScrollRef.current) saveScrollOffset('honsul-feed', y)
   }, [chipsAnim])
 
   const openOnMap = (p: PlaceRow) => {
@@ -299,9 +302,10 @@ export default function HonsulScreen() {
               keyExtractor={(p) => p.id}
               renderItem={({ item }) => (
                 <PlaceListItem place={item} onTagPress={setTag} onMapPress={openOnMap}
-                  isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => toggleFav(item.id)} />
+                  isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.id), () => toggleFav(item.id))} />
               )}
               onScroll={onFeedScroll}
+              onScrollBeginDrag={() => { restoredScrollRef.current = true; setListVisible(true) }}
               scrollEventThrottle={16}
               contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 96 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
@@ -316,10 +320,8 @@ export default function HonsulScreen() {
                 // 안 그러면 아직 다 안 그려진 상태에서 스크롤해서 목표보다 한참 위에서
                 // 멈춘다(오너 지적: "원래 있어야할 위치보다 한참 위쪽에 위치한다").
                 if (h < y + 300) return
-                programmaticScrollRef.current = true
                 feedListRef.current?.scrollToOffset({ offset: y, animated: false })
                 restoredScrollRef.current = true
-                setTimeout(() => { programmaticScrollRef.current = false }, 80)
                 requestAnimationFrame(() => setListVisible(true))
               }}
             />
@@ -380,7 +382,7 @@ export default function HonsulScreen() {
                     <PlaceMapCard
                       place={focused}
                       isFavorite={favoriteIds.has(focused.id)}
-                      onToggleFavorite={() => toggleFav(focused.id)}
+                      onToggleFavorite={() => confirmFavorite(favoriteIds.has(focused.id), () => toggleFav(focused.id))}
                       onOpen={() => router.push(`/place/${focused.id}`)}
                       onClose={() => setFocused(null)}
                     />

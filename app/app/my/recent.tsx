@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -55,7 +55,13 @@ export default function RecentScreen() {
 
   const open = (v: RecentView) => router.push(`${KIND_ROUTE[v.kind]}/${v.id}` as never)
 
-  const handleClear = async () => { await clearRecentViews(); setItems([]) }
+  // 누르자마자 바로 비우지 않고 팝업으로 한 번 확인받고 적용한다(2026-08-25 오너 지시).
+  const handleClear = () => {
+    Alert.alert('기록 비우기', '최근 본 기록을 모두 지울까요?', [
+      { text: '취소', style: 'cancel' },
+      { text: '비우기', style: 'destructive', onPress: async () => { await clearRecentViews(); setItems([]) } },
+    ])
+  }
 
   const isEmpty = filtered.length === 0
 

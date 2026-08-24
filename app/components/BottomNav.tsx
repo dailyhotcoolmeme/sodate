@@ -1,11 +1,12 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useRouter, usePathname } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { NEW_TABS_ENABLED } from '@/constants/features'
+import { saveTabRoute, getTabRoute } from '@/lib/tabMemory'
 
 /**
  * 하단 5탭 내비게이션(2026-08-21) — 소개팅·소셜링·[홈]·혼술바·MY.
@@ -31,12 +32,22 @@ export default function BottomNav({ current }: { current: TabKey }) {
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const pathname = usePathname()
   const styles = useMemo(() => makeStyles(colors), [colors])
+
+  // 이 화면이 지금 자기 탭 구역에서 "마지막으로 보던 화면"이 된다 — 상세페이지도 포함.
+  // 나중에 다른 탭 갔다가 이 탭으로 돌아오면 목록이 아니라 여기로 돌아온다.
+  useEffect(() => {
+    if (NEW_TABS_ENABLED) saveTabRoute(current, pathname)
+  }, [current, pathname])
 
   // 플래그가 꺼져 있으면 렌더 자체를 안 한다 — 운영 앱에 영향 0.
   if (!NEW_TABS_ENABLED) return null
 
-  const go = (route: string, active: boolean) => { if (!active) router.replace(route as never) }
+  const go = (key: TabKey, route: string, active: boolean) => {
+    if (active) return
+    router.replace((getTabRoute(key) ?? route) as never)
+  }
   const boardOn = current === 'board'
 
   // 좌우 2개씩 나누고 가운데에 홈을 끼운다.
@@ -48,7 +59,7 @@ export default function BottomNav({ current }: { current: TabKey }) {
     return (
       <TouchableOpacity
         key={t.key} style={styles.tab} activeOpacity={0.7}
-        onPress={() => go(t.route, on)}
+        onPress={() => go(t.key, t.route, on)}
         accessibilityRole="tab" accessibilityState={{ selected: on }}
       >
         <Ionicons
@@ -69,7 +80,7 @@ export default function BottomNav({ current }: { current: TabKey }) {
         <TouchableOpacity
           style={[styles.homeBtn, boardOn && styles.homeBtnOn]}
           activeOpacity={0.85}
-          onPress={() => go('/board', boardOn)}
+          onPress={() => go('board', '/board', boardOn)}
           accessibilityRole="tab" accessibilityLabel="커뮤니티"
           accessibilityState={{ selected: boardOn }}
         >

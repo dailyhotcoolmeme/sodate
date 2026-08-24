@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import BottomNav from '@/components/BottomNav'
+import { confirmScrap } from '@/lib/confirmToggle'
 import AppSpinner from '@/components/AppSpinner'
 import ReportSheet from '@/components/ReportSheet'
 import LoadingOverlay from '@/components/LoadingOverlay'
@@ -264,7 +265,7 @@ export default function BoardPostScreen() {
   // 스크랩 초기 상태(로컬 캐시). NEW_TABS 전환 전엔 버튼이 안 보이므로 굳이 서버 조회 안 함.
   useEffect(() => { if (NEW_TABS_ENABLED) isScrapped(id).then(setScrapOn) }, [id])
 
-  const handleScrap = async () => {
+  const doScrap = async () => {
     if (scrapping) return
     setScrapping(true)
     const prev = scrapOn
@@ -274,6 +275,8 @@ export default function BoardPostScreen() {
     if ('error' in r) { setScrapOn(prev); Alert.alert('알림', r.error); return }
     setScrapOn(r.scrapped)
   }
+  // 누르자마자 바로 적용하지 않고 팝업으로 한 번 확인받고 적용한다(2026-08-25 오너 지시).
+  const handleScrap = () => confirmScrap(scrapOn, doScrap)
 
   const handleDelete = () => {
     Alert.alert('글 삭제', '이 글을 삭제할까요? 댓글도 함께 사라집니다.', [

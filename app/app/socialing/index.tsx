@@ -20,6 +20,7 @@ import { DAY_OPTIONS } from '@/constants/filters'
 import { useSocialingFilterStore, useSocialingFilterHydrated, socialingActiveFilterCount, type SocialingFilterState } from '@/stores/socialingFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
 import { saveScrollOffset, getScrollOffset } from '@/lib/scrollMemory'
+import { confirmFavorite } from '@/lib/confirmToggle'
 
 /**
  * 소셜링 목록 화면(2026-08-21~08-22, 오너 승인). 소개팅 피드와 같은 틀이되 필터 축이 다르다:
@@ -66,7 +67,6 @@ export default function SocialingScreen() {
   // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
   const feedListRef = useRef<FlatList>(null)
   const restoredScrollRef = useRef(false)
-  const programmaticScrollRef = useRef(false)
   // 복원 전 잠깐 맨 위가 보였다가 튀는 게 안 보이게(2026-08-25 오너 지적). 소개팅과 동일 패턴.
   const [listVisible, setListVisible] = useState(() => getScrollOffset('socialing-feed') <= 0)
   useEffect(() => {
@@ -81,8 +81,11 @@ export default function SocialingScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
-    if (!programmaticScrollRef.current) restoredScrollRef.current = true
-    saveScrollOffset('socialing-feed', y)
+    // 복원(onContentSizeChange)이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이
+    // 자체적으로 흘리는 y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로
+    // 덮어써버려서 복원이 조용히 실패한다(2026-08-25 오너 지적: "다른화면 돌아갔다오면
+    // 위치가 안맞다" — 데이터가 늦게 오는 화면일수록 잘 걸린다).
+    if (restoredScrollRef.current) saveScrollOffset('socialing-feed', y)
   }, [chipsAnim])
 
   const [refreshing, setRefreshing] = useState(false)
@@ -221,12 +224,13 @@ export default function SocialingScreen() {
           keyExtractor={(e) => e.id}
           renderItem={({ item }) => (
             viewMode === 'card' ? (
-              <SocialingCard event={item} isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => toggleFavorite(item.id)} />
+              <SocialingCard event={item} isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.id), () => toggleFavorite(item.id))} />
             ) : (
-              <SocialingListItem event={item} isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => toggleFavorite(item.id)} />
+              <SocialingListItem event={item} isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.id), () => toggleFavorite(item.id))} />
             )
           )}
           onScroll={onFeedScroll}
+          onScrollBeginDrag={() => { restoredScrollRef.current = true; setListVisible(true) }}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
           onContentSizeChange={(_w, h) => {
@@ -234,10 +238,8 @@ export default function SocialingScreen() {
             const y = getScrollOffset('socialing-feed')
             if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
             if (h < y + 300) return
-            programmaticScrollRef.current = true
             feedListRef.current?.scrollToOffset({ offset: y, animated: false })
             restoredScrollRef.current = true
-            setTimeout(() => { programmaticScrollRef.current = false }, 80)
             requestAnimationFrame(() => setListVisible(true))
           }}
           onEndReached={loadMore}

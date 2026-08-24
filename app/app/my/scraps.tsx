@@ -9,6 +9,7 @@ import AppSpinner from '@/components/AppSpinner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { fetchMyScraps, toggleScrap, type BoardPost } from '@/lib/board'
+import { confirmScrap } from '@/lib/confirmToggle'
 import { wideContent } from '@/constants/layout'
 
 /**
@@ -37,11 +38,13 @@ export default function ScrapsScreen() {
   useFocusEffect(useCallback(() => { load() }, [load]))
 
   // 스크랩 해제 — 목록에서 바로(2026-08-24 오너 지시: 글 상세까지 안 들어가고 여기서 뺄 수 있어야 함).
-  const handleUnscrap = async (postId: string) => {
+  // 누르자마자 바로 적용하지 않고 팝업으로 한 번 확인받고 적용한다(2026-08-25 오너 지시).
+  const doUnscrap = async (postId: string) => {
     setPosts((prev) => prev.filter((p) => p.id !== postId)) // 낙관적 반영
     const r = await toggleScrap(postId)
     if ('error' in r || r.scrapped) load() // 실패했거나(원래 스크랩 안 된 상태였다면) 서버 상태로 다시 맞춘다
   }
+  const handleUnscrap = (postId: string) => confirmScrap(true, () => doUnscrap(postId))
 
   const isEmpty = posts.length === 0
 

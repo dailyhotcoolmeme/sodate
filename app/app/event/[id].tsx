@@ -4,6 +4,7 @@ import EventThumbnail from '@/components/EventThumbnail'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
 import BottomNav from '@/components/BottomNav'
+import { confirmFavorite } from '@/lib/confirmToggle'
 import {
   View,
   Text,
@@ -483,13 +484,13 @@ export default function EventDetailScreen() {
           ) : null}
           <TouchableOpacity
             style={[styles.heartBtn, favoriteIds.has(event.id) && styles.heartBtnActive]}
-            onPress={() => {
+            onPress={() => confirmFavorite(favoriteIds.has(event.id), () => {
               track(favoriteIds.has(event.id) ? 'event_favorite_remove' : 'event_favorite_add', {
                 eventId: event.id, companyId: event.company_id,
                 properties: { from_screen: 'detail' },
               })
               toggleFavorite(event.id)
-            }}
+            })}
           >
             <Ionicons
               name="bookmark"

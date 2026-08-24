@@ -17,6 +17,7 @@ import type { AppColors } from '@/constants/colors'
 import type { EventWithCompany } from '@/lib/supabase'
 import { track } from '@/lib/analytics'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
+import { confirmFavorite } from '@/lib/confirmToggle'
 
 type ViewMode = 'card' | 'list'
 type Tab = 'dating' | 'socialing' | 'place'
@@ -134,7 +135,7 @@ export default function FavoritesScreen() {
           data={places}
           keyExtractor={(p) => p.id}
           renderItem={({ item }) => (
-            <PlaceListItem place={item} isFavorite onToggleFavorite={() => togglePlace(item.id)} />
+            <PlaceListItem place={item} isFavorite onToggleFavorite={() => confirmFavorite(true, () => togglePlace(item.id))} />
           )}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 16 }}
           showsVerticalScrollIndicator={false}
@@ -148,13 +149,13 @@ export default function FavoritesScreen() {
               <EventCard
                 event={item}
                 isFavorite={favoriteIds.has(item.id)}
-                onToggleFavorite={() => toggle(item.id)}
+                onToggleFavorite={() => confirmFavorite(true, () => toggle(item.id))}
               />
             ) : (
               <EventListItem
                 event={item}
                 isFavorite={favoriteIds.has(item.id)}
-                onToggleFavorite={() => toggle(item.id)}
+                onToggleFavorite={() => confirmFavorite(true, () => toggle(item.id))}
               />
             )
           }

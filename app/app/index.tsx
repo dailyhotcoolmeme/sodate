@@ -47,6 +47,7 @@ import { warmNativeAdPool, getFeedNativeAdUnitId } from '@/lib/ads'
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/eventSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 import { saveScrollOffset, getScrollOffset } from '@/lib/scrollMemory'
+import { confirmFavorite } from '@/lib/confirmToggle'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
 const SORT_OPTIONS: SortOption[] = [
@@ -564,14 +565,16 @@ export default function HomeScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
-    if (!programmaticScrollRef.current) restoredScrollRef.current = true
-    saveScrollOffset('dating-feed', y)
+    // 복원(onContentSizeChange)이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이
+    // 자체적으로 흘리는 y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로
+    // 덮어써버려서 복원이 조용히 실패한다(2026-08-25 오너 지적: 소셜링·혼술바에서
+    // "다른화면 돌아갔다오면 위치가 안맞다" — 데이터가 늦게 오는 화면일수록 잘 걸린다).
+    if (restoredScrollRef.current) saveScrollOffset('dating-feed', y)
   }, [chipsAnim])
   // 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시) — 목록이 준비되면 딱 한 번 복원.
   // 콘텐츠가 목표 위치+여유만큼 쌓이기 전엔 시도하지 않는다(안 그러면 아직 다 안 그려진
   // 상태에서 스크롤해서 목표보다 한참 위에서 멈춘다, 오너 지적).
   const restoredScrollRef = useRef(false)
-  const programmaticScrollRef = useRef(false)
   // 복원 전 목록이 맨 위에서 잠깐 보였다가 목표 위치로 튀는 게 보이면 안 된다(2026-08-25
   // 오너 지적: "그냥 바로 딱 나오면 안되냐?"). 복원할 게 없으면(저장된 위치가 0) 바로
   // 보여주고, 있으면 실제로 그 위치로 옮긴 뒤에야 보여준다. 혹시라도 복원이 영영 안 끝나는
@@ -583,12 +586,14 @@ export default function HomeScreen() {
   }, [])
 
   const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
-    track(isCurrent ? 'event_favorite_remove' : 'event_favorite_add', {
-      eventId,
-      companyId,
-      properties: { from_screen: 'home' },
+    confirmFavorite(isCurrent, () => {
+      track(isCurrent ? 'event_favorite_remove' : 'event_favorite_add', {
+        eventId,
+        companyId,
+        properties: { from_screen: 'home' },
+      })
+      toggleFavorite(eventId)
     })
-    toggleFavorite(eventId)
   }, [toggleFavorite])
 
   const handleSortChange = useCallback((sortId: FilterState['sortBy']) => {
@@ -852,16 +857,15 @@ export default function HomeScreen() {
         <FlatList
           ref={flatListRef}
           onScroll={onScroll}
+          onScrollBeginDrag={() => { restoredScrollRef.current = true; setListVisible(true) }}
           onContentSizeChange={(_w, h) => {
             if (Platform.OS === 'android') setAndroidContentHeight(h)
             if (restoredScrollRef.current) return
             const y = getScrollOffset('dating-feed')
             if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
             if (h < y + 300) return
-            programmaticScrollRef.current = true
             flatListRef.current?.scrollToOffset({ offset: y, animated: false })
             restoredScrollRef.current = true
-            setTimeout(() => { programmaticScrollRef.current = false }, 80)
             requestAnimationFrame(() => setListVisible(true))
           }}
           onLayout={(e) => { if (Platform.OS === 'android') setAndroidListHeight(e.nativeEvent.layout.height) }}

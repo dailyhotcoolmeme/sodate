@@ -23,6 +23,7 @@ import { deletePlaceReview } from '@/lib/placeReviews'
 import { getMyReviewIds } from '@/lib/reviewIdentity'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { addRecentView } from '@/lib/recentViews'
+import { confirmFavorite } from '@/lib/confirmToggle'
 
 const DOW = ['월', '화', '수', '목', '금', '토', '일']
 const MAP_W = Dimensions.get('window').width
@@ -172,7 +173,7 @@ export default function PlaceDetailScreen() {
               <PlaceMapCard
                 place={previewPlace}
                 isFavorite={favoriteIds.has(previewPlace.id)}
-                onToggleFavorite={() => toggle(previewPlace.id)}
+                onToggleFavorite={() => confirmFavorite(favoriteIds.has(previewPlace.id), () => toggle(previewPlace.id))}
                 onOpen={() => { const pid = previewPlace.id; closePreview(); router.push(`/place/${pid}`) }}
                 onClose={closePreview}
                 compact
@@ -188,7 +189,7 @@ export default function PlaceDetailScreen() {
           {/* 업체명 + 찜(오른쪽 끝) */}
           <View style={styles.nameRow}>
             <Text style={styles.name}>{place.name}</Text>
-            <TouchableOpacity onPress={() => toggle(place.id)} hitSlop={8} activeOpacity={0.8}>
+            <TouchableOpacity onPress={() => confirmFavorite(isFav, () => toggle(place.id))} hitSlop={8} activeOpacity={0.8}>
               <Ionicons name="bookmark" size={22} color={isFav ? '#FF6B9D' : colors.textTertiary} />
             </TouchableOpacity>
           </View>
