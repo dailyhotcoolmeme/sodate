@@ -169,6 +169,7 @@ export default function PlaceDetailScreen() {
                 onToggleFavorite={() => toggle(previewPlace.id)}
                 onOpen={() => { const pid = previewPlace.id; setPreviewPlace(null); router.push(`/place/${pid}`) }}
                 onClose={() => setPreviewPlace(null)}
+                compact
               />
             )}
           </View>
