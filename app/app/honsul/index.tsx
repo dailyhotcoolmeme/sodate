@@ -135,23 +135,8 @@ export default function HonsulScreen() {
     <View style={styles.container}>
       <TopBar onSearchPress={() => setSearchVisible(true)} />
 
-      {/* 피드 / 지도 탭 + 내 주변(오른쪽) */}
-      <View style={styles.tabs}>
-        <TouchableOpacity style={[styles.tab, tab === 'feed' && styles.tabOn]} onPress={() => setTab('feed')} activeOpacity={0.8}>
-          <Text style={[styles.tabText, tab === 'feed' && styles.tabTextOn]}>피드</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tab, tab === 'map' && styles.tabOn]} onPress={() => setTab('map')} activeOpacity={0.8}>
-          <Text style={[styles.tabText, tab === 'map' && styles.tabTextOn]}>지도</Text>
-        </TouchableOpacity>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity style={[styles.nearBtn, myLoc && styles.nearBtnOn]} onPress={toggleNearby} activeOpacity={0.8} disabled={locBusy}>
-          <Ionicons name={myLoc ? 'navigate' : 'navigate-outline'} size={14} color={myLoc ? colors.primary : colors.textSecondary} />
-          <Text style={[styles.nearText, myLoc && styles.nearTextOn]}>{locBusy ? '위치 확인…' : '내 주변'}</Text>
-        </TouchableOpacity>
-      </View>
-
       {tab === 'feed' ? (
-        <>
+        <View style={{ flex: 1 }}>
           {/* 지역군 칩 + 상권 칩 2줄 — 소개팅처럼 스크롤하면 통째로 접힌다(영업중 줄만 남는다). */}
           <Animated.View style={{ height: chipsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 72] }), opacity: chipsAnim, overflow: 'hidden' }}>
           <View style={styles.regionScroll}>
@@ -216,56 +201,82 @@ export default function HonsulScreen() {
               )}
               onScroll={onFeedScroll}
               scrollEventThrottle={16}
-              contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
+              contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 96 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
               showsVerticalScrollIndicator={false}
             />
           )}
-        </>
+
+          {/* 보기 전환 FAB — 예전엔 상단 고정 탭이었다(2026-08-24 오너 지시로 하단 플로팅으로
+              이동, 혼술맵 실제 앱 방식: 확대/내위치/목록 3버튼을 우하단에 쌓는 것 참고).
+              지도 탭엔 네이티브 지도 SDK 자체 '내 위치' 버튼이 있어(showLocationButton)
+              여기 내 주변 버튼은 피드 쪽에만 둔다. */}
+          <View style={[styles.fabStack, { bottom: insets.bottom + 14 }]}>
+            <TouchableOpacity
+              style={[styles.fabSmall, myLoc && styles.fabSmallOn]}
+              onPress={toggleNearby} activeOpacity={0.8} disabled={locBusy}
+            >
+              <Ionicons name={myLoc ? 'navigate' : 'navigate-outline'} size={18} color={myLoc ? colors.primary : colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.fabPrimary} onPress={() => setTab('map')} activeOpacity={0.85}>
+              <Ionicons name="map-outline" size={22} color={colors.background} />
+            </TouchableOpacity>
+          </View>
+        </View>
       ) : (
         /* 지도 탭 — 네이버 지도(재빌드 후). 네이티브 모듈 없으면 안내로 폴백. */
-        (() => {
-          const pinned = list.filter((p) => p.lat != null && p.lng != null)
-          const center = focused && focused.lat != null ? focused : pinned[0]
-          if (NAVER_MAP_AVAILABLE && center?.lat != null && center?.lng != null) {
-            return (
-              <View style={{ flex: 1 }}>
-                <PlaceMap
-                  style={{ flex: 1 }}
-                  focus={{ lat: center.lat, lng: center.lng }}
-                  zoom={focused ? 16 : 12}
-                  showLocationButton
-                  cluster
-                  onTapPin={(id) => setFocused(pinned.find((p) => p.id === id) ?? null)}
-                  pins={pinned.map((p) => ({
-                    id: p.id,
-                    lat: p.lat!,
-                    lng: p.lng!,
-                    name: p.name,
-                    markerUrl: placeMarkerUrl(p),
-                    active: focused?.id === p.id,
-                  }))}
-                />
-                {focused && (
-                  <PlaceMapCard
-                    place={focused}
-                    isFavorite={favoriteIds.has(focused.id)}
-                    onToggleFavorite={() => toggleFav(focused.id)}
-                    onOpen={() => router.push(`/place/${focused.id}`)}
-                    onClose={() => setFocused(null)}
+        <View style={{ flex: 1 }}>
+          {(() => {
+            const pinned = list.filter((p) => p.lat != null && p.lng != null)
+            const center = focused && focused.lat != null ? focused : pinned[0]
+            if (NAVER_MAP_AVAILABLE && center?.lat != null && center?.lng != null) {
+              return (
+                <>
+                  <PlaceMap
+                    style={{ flex: 1 }}
+                    focus={{ lat: center.lat, lng: center.lng }}
+                    zoom={focused ? 16 : 12}
+                    showLocationButton
+                    cluster
+                    onTapPin={(id) => setFocused(pinned.find((p) => p.id === id) ?? null)}
+                    pins={pinned.map((p) => ({
+                      id: p.id,
+                      lat: p.lat!,
+                      lng: p.lng!,
+                      name: p.name,
+                      markerUrl: placeMarkerUrl(p),
+                      active: focused?.id === p.id,
+                    }))}
                   />
-                )}
+                  {focused && (
+                    <PlaceMapCard
+                      place={focused}
+                      isFavorite={favoriteIds.has(focused.id)}
+                      onToggleFavorite={() => toggleFav(focused.id)}
+                      onOpen={() => router.push(`/place/${focused.id}`)}
+                      onClose={() => setFocused(null)}
+                    />
+                  )}
+                </>
+              )
+            }
+            return (
+              <View style={styles.center}>
+                <Ionicons name="map-outline" size={40} color={colors.textTertiary} />
+                <Text style={styles.emptyText}>지도는 준비 중이에요</Text>
+                <Text style={styles.emptySub}>네이버 지도 연동(재빌드) 후 여기에서 위치를 봐요{focused ? `\n(선택: ${focused.name})` : ''}</Text>
               </View>
             )
-          }
-          return (
-            <View style={styles.center}>
-              <Ionicons name="map-outline" size={40} color={colors.textTertiary} />
-              <Text style={styles.emptyText}>지도는 준비 중이에요</Text>
-              <Text style={styles.emptySub}>네이버 지도 연동(재빌드) 후 여기에서 위치를 봐요{focused ? `\n(선택: ${focused.name})` : ''}</Text>
-            </View>
-          )
-        })()
+          })()}
+
+          {/* 피드로 돌아가기 — 지도엔 네이티브 SDK 자체 내 위치 버튼이 있어(showLocationButton) 이거 하나만.
+              마커 선택 시 뜨는 PlaceMapCard(바닥 카드, 사진 92 높이)와 겹치지 않게 그만큼 올린다. */}
+          <View style={[styles.fabStack, { bottom: insets.bottom + (focused ? 140 : 14) }]}>
+            <TouchableOpacity style={styles.fabPrimary} onPress={() => setTab('feed')} activeOpacity={0.85}>
+              <Ionicons name="list-outline" size={22} color={colors.background} />
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
 
       <BottomNav current="honsul" />
@@ -286,18 +297,22 @@ function Chip({ label, active, onPress, colors }: { label: string; active: boole
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    tabs: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 6, gap: 18, borderBottomWidth: 1, borderBottomColor: colors.divider },
-    tab: { paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-    tabOn: { borderBottomColor: colors.primary },
-    tabText: { fontSize: 15, fontWeight: '700', color: colors.textTertiary },
-    tabTextOn: { color: colors.textPrimary, fontWeight: '800' },
     regionScroll: { height: 34, marginBottom: 2, flexDirection: 'row', alignItems: 'center' },
     chipRow: { paddingHorizontal: 16, alignItems: 'center', gap: 6 },
-    // 내 주변 — 피드/지도 탭 오른쪽
-    nearBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4, paddingVertical: 5, marginBottom: 8 },
-    nearBtnOn: {},
-    nearText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-    nearTextOn: { color: colors.primary, fontWeight: '800' },
+    // 보기 전환 FAB — 우하단 세로 스택(2026-08-24 오너 지시, 혼술맵 실제 앱 방식 참고).
+    // 콘텐츠 위에 뜨는 플로팅이라 board 글쓰기 FAB과 같은 그림자를 준다(하단 고정바와는 다름).
+    fabStack: { position: 'absolute', right: 16, alignItems: 'center', gap: 10 },
+    fabSmall: {
+      width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surface,
+      alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border,
+      shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+    },
+    fabSmallOn: { borderColor: colors.primary },
+    fabPrimary: {
+      width: 52, height: 52, borderRadius: 26, backgroundColor: colors.textPrimary,
+      alignItems: 'center', justifyContent: 'center',
+      shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
+    },
     // 활성 필터칩 — 소개팅·소셜링과 완전히 동일한 값
     activeFilterRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 8, paddingVertical: 6, gap: 8 },
     activeChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary + '22', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: colors.primary + '44' },
