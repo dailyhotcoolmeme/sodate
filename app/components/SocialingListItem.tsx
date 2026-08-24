@@ -94,21 +94,22 @@ export default function SocialingListItem({ event, isFavorite = false, onToggleF
         <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
         <Text style={styles.meta}>{formatDate(event.event_date)} · {event.location_region}</Text>
 
-        {/* 참가비 + 마감 / 정원·남녀 참여현황. */}
+        {/* 참가비 + 정원·남녀 참여현황을 한 줄에 — 마감 표시는 소개팅과 동일하게
+            카드 전체 오버레이(아래 closedOverlay) 하나로 통일한다(2026-08-24 오너 지시,
+            가격 옆 별도 "마감" 배지는 중복이라 없앰). 마감이어도 정원·참여 숫자는 그대로 보여준다. */}
         <View style={styles.partBlock}>
           <View style={styles.partRow}>
             {fee != null && (
               <Text style={styles.priceText}>{fee === 0 ? '무료' : `${fee.toLocaleString()}원`}</Text>
             )}
-            {closed && <Text style={styles.closedTag}>마감</Text>}
+            {(hasGender || cap != null) && (
+              <Text style={styles.partMuted}>
+                {hasGender
+                  ? `${cap != null ? `정원 ${cap}명 · ` : ''}남 ${mc ?? 0} · 여 ${fc ?? 0}`
+                  : `정원 ${cap}명${cur != null ? ` · ${cur}명 참여` : ''}`}
+              </Text>
+            )}
           </View>
-          {(hasGender || cap != null) && (
-            <Text style={styles.partMuted}>
-              {hasGender
-                ? `${cap != null ? `정원 ${cap}명 · ` : ''}남 ${mc ?? 0} · 여 ${fc ?? 0}`
-                : `정원 ${cap}명${cur != null ? ` · ${cur}명 참여` : ''}`}
-            </Text>
-          )}
         </View>
       </View>
 
@@ -123,8 +124,9 @@ export default function SocialingListItem({ event, isFavorite = false, onToggleF
         </TouchableOpacity>
       )}
 
-      {/* 마감 오버레이 — 소개팅과 동일 */}
-      {event.is_closed && (
+      {/* 마감 오버레이 — 소개팅과 동일 형태(가격 옆 배지는 없앰). 서버 플래그뿐 아니라
+          정원이 다 찬 경우(집계가 아직 안 왔을 때)도 여기서 같이 잡는다. */}
+      {closed && (
         <View style={styles.closedOverlay} pointerEvents="none">
           <View style={styles.closedBadge}>
             <Text style={styles.closedBadgeText}>마감</Text>
@@ -155,7 +157,6 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     partBlock: { marginTop: 3, gap: 2 },
     partRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
     priceText: { fontSize: 13.5, fontWeight: '800', color: colors.textPrimary },
-    closedTag: { fontSize: 10.5, fontWeight: '800', color: colors.textTertiary, backgroundColor: colors.surfaceHigh, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden' },
     gtag: { fontSize: 11, fontWeight: '800', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, overflow: 'hidden' },
     gMale: { color: '#7fb3e0', backgroundColor: 'rgba(91,155,213,0.16)' },
     gFemale: { color: colors.primary, backgroundColor: `${colors.primary}1f` },

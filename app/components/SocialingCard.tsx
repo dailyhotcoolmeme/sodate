@@ -88,21 +88,21 @@ export default function SocialingCard({ event, isFavorite = false, onToggleFavor
           <Text style={styles.meta}>{event.location_region}</Text>
         </View>
 
-        {/* 참가비 + 마감 / 정원·남녀 — 리스트형과 동일 */}
+        {/* 참가비 + 정원·남녀를 한 줄에 — 리스트형과 동일(마감 배지는 없애고 카드
+            전체 오버레이로 통일, 2026-08-24 오너 지시). 마감이어도 정원·참여 숫자는 그대로. */}
         <View style={styles.partBlock}>
           <View style={styles.partRow}>
             {fee != null && (
               <Text style={styles.priceText}>{fee === 0 ? '무료' : `${fee.toLocaleString()}원`}</Text>
             )}
-            {closed && <Text style={styles.closedTag}>마감</Text>}
+            {(hasGender || cap != null) && (
+              <Text style={styles.partMuted}>
+                {hasGender
+                  ? `${cap != null ? `정원 ${cap}명 · ` : ''}남 ${mc ?? 0} · 여 ${fc ?? 0}`
+                  : `정원 ${cap}명${cur != null ? ` · ${cur}명 참여` : ''}`}
+              </Text>
+            )}
           </View>
-          {(hasGender || cap != null) && (
-            <Text style={styles.partMuted}>
-              {hasGender
-                ? `${cap != null ? `정원 ${cap}명 · ` : ''}남 ${mc ?? 0} · 여 ${fc ?? 0}`
-                : `정원 ${cap}명${cur != null ? ` · ${cur}명 참여` : ''}`}
-            </Text>
-          )}
         </View>
 
         {/* 신청 */}
@@ -115,7 +115,7 @@ export default function SocialingCard({ event, isFavorite = false, onToggleFavor
         </View>
       </View>
 
-      {event.is_closed && (
+      {closed && (
         <View style={styles.closedOverlay} pointerEvents="none">
           <View style={styles.closedBadge}><Text style={styles.closedBadgeText}>마감</Text></View>
         </View>
@@ -146,9 +146,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     meta: { fontSize: 13, color: colors.textSecondary },
     metaDot: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 5 },
     priceText: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
-    closedTag: { fontSize: 10.5, fontWeight: '800', color: colors.textTertiary, backgroundColor: colors.surfaceHigh, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden' },
     partBlock: { marginTop: 2, minHeight: 22, justifyContent: 'center' },
-    partRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    partRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
     gtag: { fontSize: 12, fontWeight: '800', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 5, overflow: 'hidden' },
     gMale: { color: '#7fb3e0', backgroundColor: 'rgba(91,155,213,0.16)' },
     gFemale: { color: colors.primary, backgroundColor: `${colors.primary}1f` },
