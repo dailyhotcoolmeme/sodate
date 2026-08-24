@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { useRegions } from '@/hooks/useRegions'
 import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
-import TopBar from '@/components/TopBar'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { DAY_OPTIONS } from '@/constants/filters'
 import { SOCIALING_GROUPS } from '@/constants/socialingCategories'
@@ -68,7 +68,7 @@ export default function SocialingFilterSheet({ visible, onClose }: Props) {
     return REGION_GROUP_ORDER.filter((g) => buckets[g.key]?.length).map((g) => ({ ...g, items: buckets[g.key] }))
   }, [regionOptions])
 
-  const styles = useMemo(() => makeStyles(colors, insets.bottom), [colors, insets.bottom])
+  const styles = useMemo(() => makeStyles(colors, insets), [colors, insets.top, insets.bottom])
 
   const handleApply = () => { applyDraft(draft); onClose() }
   const handleReset = () => { resetFilters(); setDraft({ groups: [], regions: [], maxPrice: null, days: [] }) }
@@ -76,8 +76,18 @@ export default function SocialingFilterSheet({ visible, onClose }: Props) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.container}>
-        <TopBar onBeforeNavigate={onClose} noSafeTop />
-        <View style={styles.header}><Text style={styles.headerTitle}>필터</Text></View>
+        {/* 헤더 — 소개팅 FilterSheet·MY "알림 설정"과 동일 규격(2026-08-24 오너 지시) */}
+        <View style={styles.topRow}>
+          <View style={styles.topLeft}>
+            <TouchableOpacity onPress={onClose} style={styles.topBack} hitSlop={8}>
+              <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.topTitle}>필터</Text>
+          </View>
+          <TouchableOpacity onPress={handleReset} hitSlop={8}>
+            <Text style={styles.topReset}>초기화</Text>
+          </TouchableOpacity>
+        </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 96 }}>
           {/* 카테고리 */}
@@ -135,10 +145,7 @@ export default function SocialingFilterSheet({ visible, onClose }: Props) {
         </ScrollView>
 
         <View style={[styles.applyBar, { paddingBottom: insets.bottom + 10 }]}>
-          <TouchableOpacity style={[styles.barBtn, styles.resetBtn]} onPress={handleReset} activeOpacity={0.85}>
-            <Text style={styles.resetBtnText}>초기화</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.barBtn, styles.applyFab]} onPress={handleApply} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.applyFab} onPress={handleApply} activeOpacity={0.85}>
             <Text style={styles.applyFabText}>적용하기</Text>
           </TouchableOpacity>
         </View>
@@ -155,11 +162,19 @@ function Chip({ label, selected, onPress, styles }: { label: string; selected: b
   )
 }
 
-function makeStyles(colors: ReturnType<typeof useColors>, _bottom: number) {
+function makeStyles(colors: ReturnType<typeof useColors>, insets: { top: number }) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-    headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+    // 헤더 — 소개팅 FilterSheet와 동일 규격(알림 설정 TopBar showBack+title 규격).
+    topRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 14, paddingTop: Platform.OS === 'android' ? insets.top + 10 : 10,
+      paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.divider,
+    },
+    topLeft: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    topBack: { paddingRight: 2 },
+    topTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.3 },
+    topReset: { fontSize: 14, fontWeight: '700', color: colors.textTertiary },
     chipGrid: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
     groupTop: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginTop: 12, marginBottom: 2 },
     groupRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, gap: 8 },
@@ -171,11 +186,9 @@ function makeStyles(colors: ReturnType<typeof useColors>, _bottom: number) {
     chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
     chipTextSelected: { color: '#fff', fontWeight: '700' },
-    applyBar: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 10, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
-    barBtn: { flex: 1, borderRadius: 14, paddingVertical: 15, alignItems: 'center', justifyContent: 'center' },
-    resetBtn: { backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
-    resetBtnText: { color: colors.textPrimary, fontSize: 16, fontWeight: '700' },
-    applyFab: { backgroundColor: colors.primary, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
-    applyFabText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+    // 그림자 없앰(오너 지시 2026-08-24) — 알림 설정 "저장" 버튼과 동일하게 flat.
+    applyBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 10, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
+    applyFab: { borderRadius: 12, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+    applyFabText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   })
 }
