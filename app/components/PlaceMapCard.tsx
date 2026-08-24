@@ -6,9 +6,10 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { openStatus, reviewHashtags, type PlaceRow } from '@/lib/places'
 
-// compact 카드 고정 가로폭 — 내용에 따라 넓었다 좁았다 하면 "왜 첫번째 이미지는 가로가
-// 짧지?"처럼 매번 다르게 보인다(2026-08-24 오너 지적). 항상 같은 폭으로 고정.
-const COMPACT_W = 300
+// compact 카드 최대 가로폭 — 고정폭이 아니라 상한선이다(2026-08-24 오너 지시: "이름 길이에
+// 맞게 자동으로 줄어들게, 넘으면 줄바꿈"). 실제 폭은 이름 길이에 따라 이보다 좁을 수 있다.
+// B안(오너 승인, 시안 3종 중 240 선택) — anchor 중앙정렬 계산은 이 값을 상한 기준으로 쓴다.
+const COMPACT_MAX_W = 240
 // 카드 높이 추정치(패딩+사진) — anchor 기준 위/아래 뒤집을지 판단용. 실측은 아니고 대략치.
 const COMPACT_H_EST = 84
 
@@ -41,7 +42,7 @@ export default function PlaceMapCard({
     if (!compact || !anchor || !containerWidth) return styles.wrap
     const cw = containerWidth
     const ch = containerHeight ?? 9999
-    const left = Math.min(Math.max(anchor.x - COMPACT_W / 2, 8), Math.max(8, cw - COMPACT_W - 8))
+    const left = Math.min(Math.max(anchor.x - COMPACT_MAX_W / 2, 8), Math.max(8, cw - COMPACT_MAX_W - 8))
     const spaceBelow = ch - anchor.y
     const top = spaceBelow >= COMPACT_H_EST + 14
       ? anchor.y + 14
@@ -95,9 +96,8 @@ function makeStyles(colors: AppColors, compact: boolean) {
     card: {
       flexDirection: 'row', gap: compact ? 8 : 12, backgroundColor: colors.surface, borderRadius: compact ? 12 : 16, padding: compact ? 8 : 12,
       shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: compact ? 8 : 14, shadowOffset: { width: 0, height: compact ? 3 : 6 }, elevation: compact ? 5 : 8,
-      // 내용에 따라 폭이 오락가락하면 "왜 첫번째는 가로가 짧지?"처럼 매번 달라 보인다
-      // (오너 지적) — maxWidth 대신 고정 width 로 항상 같은 크기.
-      ...(compact ? { width: COMPACT_W } : null),
+      // 고정폭이 아니라 상한선(오너 지시: 이름 짧으면 그만큼만, 상한 넘으면 줄바꿈).
+      ...(compact ? { maxWidth: COMPACT_MAX_W } : null),
     },
     photo: { width: compact ? 52 : 92, height: compact ? 52 : 92, borderRadius: compact ? 8 : 12, backgroundColor: colors.surfaceHigh },
     info: compact
