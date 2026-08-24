@@ -62,13 +62,19 @@ export default function PlaceMapCard({
 
 function makeStyles(colors: AppColors, compact: boolean) {
   return StyleSheet.create({
-    wrap: compact ? { position: 'absolute', left: 8, right: 8, bottom: 8 } : { position: 'absolute', left: 12, right: 12, bottom: 14 },
+    // compact: 히어로 지도(작음) 폭에 맞게 카드도 내용만큼만 — 예전엔 사진만 줄고 카드 가로는
+    // 그대로 화면 끝까지 늘어나서 텍스트 옆에 빈 공간만 넓었다(오너 지적: "박스 가로사이즈는
+    // 왜 그대로냐"). right 를 안 주고 maxWidth 로 내용에 맞게 줄인다.
+    wrap: compact ? { position: 'absolute', left: 8, bottom: 8 } : { position: 'absolute', left: 12, right: 12, bottom: 14 },
     card: {
       flexDirection: 'row', gap: compact ? 8 : 12, backgroundColor: colors.surface, borderRadius: compact ? 12 : 16, padding: compact ? 8 : 12,
       shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: compact ? 8 : 14, shadowOffset: { width: 0, height: compact ? 3 : 6 }, elevation: compact ? 5 : 8,
+      ...(compact ? { maxWidth: 230 } : null),
     },
     photo: { width: compact ? 52 : 92, height: compact ? 52 : 92, borderRadius: compact ? 8 : 12, backgroundColor: colors.surfaceHigh },
-    info: { flex: 1, minWidth: 0, gap: compact ? 1 : 3, justifyContent: 'center' },
+    info: compact
+      ? { flexShrink: 1, minWidth: 0, gap: 1, justifyContent: 'center' }
+      : { flex: 1, minWidth: 0, gap: 3, justifyContent: 'center' },
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: compact ? 6 : 8 },
     name: { flex: 1, fontSize: compact ? 13.5 : 16, fontWeight: '800', color: colors.textPrimary },
     meta: { fontSize: compact ? 11 : 12.5, color: colors.textTertiary },

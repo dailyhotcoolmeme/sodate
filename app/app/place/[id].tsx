@@ -132,7 +132,7 @@ export default function PlaceDetailScreen() {
                 pins={[
                   { id: place.id, lat: place.lat, lng: place.lng, name: place.name, active: true },
                   ...(showNearby
-                    ? nearby.flatMap((o) => (o.lat && o.lng ? [{ id: o.id, lat: o.lat, lng: o.lng }] : []))
+                    ? nearby.flatMap((o) => (o.lat && o.lng ? [{ id: o.id, lat: o.lat, lng: o.lng, selected: o.id === previewPlace?.id }] : []))
                     : []),
                 ]}
               />

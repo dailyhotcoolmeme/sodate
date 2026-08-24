@@ -35,7 +35,10 @@ export interface MapPin {
   lng: number
   name?: string
   markerUrl?: string     // 원형 대표사진 마커 이미지(R2). 없으면 기본 핀.
-  active?: boolean       // 선택된 매장 = 크게 강조
+  active?: boolean       // 선택된 매장(히어로의 진짜 주인공) = 크게 강조
+  /** 주변 핀 중 지금 미리보기 카드로 열려 있는 것(2026-08-24 오너 지적: "선택한 점이
+   *  표시는 안되냐?") — active 는 아니지만 다른 주변 점보다는 크게 그려 구분한다. */
+  selected?: boolean
   onPress?: () => void
 }
 
@@ -119,7 +122,7 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
     >
       {/* 확대 구간이면 개별 사진 마커 전부, 축소 구간이면 선택된 것만(나머지는 클러스터가 그림) */}
       {(expanded ? pins : activePin ? [activePin] : []).map((p) => {
-        const size = compactPins ? (p.active ? 24 : 12) : p.active ? 62 : 44
+        const size = compactPins ? (p.active ? 24 : p.selected ? 20 : 12) : p.active ? 62 : 44
         // ⚠️(2026-08-24) 기본 'pink'/'blue' 심벌은 둘 다 물방울(세로로 긴) 모양이라 정사각형
         // 크기로 찍으면 눌려서 "짜부된" 모양이 된다(오너 지적 — 처음엔 선택 마커만 고쳤다가
         // "주변 점은 짜부가 안되겠냐"고 또 지적받음). compactPins 에선 선택·주변 둘 다 원형 점
@@ -137,7 +140,7 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
             onTap={() => (onTapPin ? onTapPin(p.id) : p.onPress?.())}
             width={size}
             height={size}
-            zIndex={p.active ? 100 : 0}
+            zIndex={p.active ? 100 : p.selected ? 50 : 0}
             caption={
               !cluster && p.name && (!compactPins || p.active)
                 ? { text: p.name, textSize: 12, haloColor: '#fff' }
