@@ -107,6 +107,7 @@ export default function PlaceDetailScreen() {
                 style={StyleSheet.absoluteFill}
                 focus={{ lat: place.lat, lng: place.lng }}
                 hideBasePoi
+                compactPins
                 pins={[
                   { id: place.id, lat: place.lat, lng: place.lng, name: place.name, active: true },
                   ...(showNearby

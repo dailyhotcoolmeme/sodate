@@ -51,9 +51,13 @@ interface Props {
    *  꺼서 우리 핀만 깔끔하게 보이게 한다(2026-08-24 오너 지적: "히어로 지도가 저딴식이냐").
    *  symbolScale=0 이면 기본 심벌이 전부 숨겨진다 — 지도탭(전체 지도)에선 그대로 둔다. */
   hideBasePoi?: boolean
+  /** 상세 히어로 전용 축소 마커(2026-08-24, 오너 승인 A안) — 기본 62px 물방울 핀이 200px
+   *  히어로 지도엔 과하게 커서("대가리 큰 병신처럼") 선택 매장은 26px 소형 핀+이름표,
+   *  주변 매장은 12px 파랑 점으로 훨씬 작게 그린다. 지도탭(cluster 모드)은 그대로 둔다. */
+  compactPins?: boolean
 }
 
-export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, hideBasePoi = false }: Props) {
+export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, hideBasePoi = false, compactPins = false }: Props) {
   const ref = useRef<any>(null)
   // 현재 카메라 줌 — 이 값으로 "숫자만" / "사진만"을 딱 갈라 한 화면에 섞이지 않게 한다.
   const [camZoom, setCamZoom] = useState(zoom)
@@ -110,19 +114,26 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
       onCameraChanged={cluster ? (e: { zoom: number }) => setCamZoom(e.zoom) : undefined}
     >
       {/* 확대 구간이면 개별 사진 마커 전부, 축소 구간이면 선택된 것만(나머지는 클러스터가 그림) */}
-      {(expanded ? pins : activePin ? [activePin] : []).map((p) => (
-        <NaverMapMarkerOverlay
-          key={p.id}
-          latitude={p.lat}
-          longitude={p.lng}
-          onTap={() => (onTapPin ? onTapPin(p.id) : p.onPress?.())}
-          width={p.active ? 62 : 44}
-          height={p.active ? 62 : 44}
-          zIndex={p.active ? 100 : 0}
-          caption={!cluster && p.name ? { text: p.name, textSize: 12 } : undefined}
-          image={p.markerUrl ? { httpUri: p.markerUrl } : { symbol: p.active ? 'pink' : 'blue' }}
-        />
-      ))}
+      {(expanded ? pins : activePin ? [activePin] : []).map((p) => {
+        const size = compactPins ? (p.active ? 26 : 12) : p.active ? 62 : 44
+        return (
+          <NaverMapMarkerOverlay
+            key={p.id}
+            latitude={p.lat}
+            longitude={p.lng}
+            onTap={() => (onTapPin ? onTapPin(p.id) : p.onPress?.())}
+            width={size}
+            height={size}
+            zIndex={p.active ? 100 : 0}
+            caption={
+              !cluster && p.name && (!compactPins || p.active)
+                ? { text: p.name, textSize: 12, haloColor: '#fff' }
+                : undefined
+            }
+            image={p.markerUrl ? { httpUri: p.markerUrl } : { symbol: p.active ? 'pink' : 'blue' }}
+          />
+        )
+      })}
     </NaverMapView>
   )
 }
