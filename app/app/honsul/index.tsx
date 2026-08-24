@@ -147,13 +147,14 @@ export default function HonsulScreen() {
   const resetAll = () => { setRegionGroup(null); setSanggwon(null); setTag(null); setOpenNow(false); setSearch('') }
 
   // 현재 위치 — 필터 줄 오른쪽 버튼(예전엔 FAB였다, 2026-08-24 오너 지시로 이동).
-  // 다시 누르면 해제 — 거리순 정렬 중이었으면 기본 정렬로 되돌린다(위치 없이는 거리순 불가).
+  // 위치를 잡으면 거리순도 같이 켠다(오너 지시: "현재위치 누르면 자동으로 거리순") —
+  // 다시 누르면 해제, 거리순 정렬 중이었으면 기본 정렬로 되돌린다(위치 없이는 거리순 불가).
   const toggleNearby = useCallback(async () => {
     if (myLoc) { setMyLoc(null); if (sortMode === 'distance') setSortMode('default'); return }
     setLocBusy(true)
     const loc = await getMyLocation()
     setLocBusy(false)
-    if (loc) setMyLoc(loc)
+    if (loc) { setMyLoc(loc); setSortMode('distance') }
   }, [myLoc, sortMode, setSortMode])
 
   // 거리순 — 위치 없으면 먼저 요청하고 나서 적용.
@@ -369,7 +370,9 @@ function makeStyles(colors: AppColors) {
     resetBtn: { paddingHorizontal: 8, paddingVertical: 4 },
     resetText: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
     // 영업중 — 소개팅 '마감제외'와 동일 규격
-    resultRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 4, paddingVertical: 6 },
+    // paddingRight 16 — 아래 카드(PlaceListItem)가 marginHorizontal:16 이라 오른쪽 끝이
+    // 카드와 일직선으로 맞아야 한다(2026-08-24 오너 지적: "빈공간이 카드슬롯이랑 라인이 안맞다").
+    resultRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 16, paddingVertical: 6 },
     sortChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
     sortChipActive: { backgroundColor: '#FF6B9D18', borderColor: colors.primary },
     sortChipText: { fontSize: 12, color: colors.textTertiary, fontWeight: '500' },
@@ -377,8 +380,9 @@ function makeStyles(colors: AppColors) {
     excludeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 2 },
     excludeChipActive: { backgroundColor: '#FF6B9D18', borderColor: colors.primary, paddingLeft: 10 },
     // 현재 위치 — 정렬·영업중과 같은 줄 가장 오른쪽(2026-08-24 오너 지시, FAB에서 이동).
-    locBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-    locBtnOn: { backgroundColor: '#FF6B9D18' },
+    // sortChip과 완전히 같은 규격(테두리·패딩)으로 통일(오너 지적: "거리순 칩이랑 디자인이 다르다").
+    locBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+    locBtnOn: { backgroundColor: '#FF6B9D18', borderColor: colors.primary },
     checkbox: { width: 15, height: 15, borderRadius: 4, borderWidth: 1.5, borderColor: colors.textTertiary, alignItems: 'center', justifyContent: 'center' },
     checkboxOn: { borderColor: colors.primary, backgroundColor: colors.primary },
     chip: { paddingHorizontal: 13, paddingVertical: 5, borderRadius: 18, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
