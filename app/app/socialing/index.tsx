@@ -52,7 +52,7 @@ export default function SocialingScreen() {
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
 
   // 지역 빠른탭 = 군(강남권·강북권…) — 소개팅과 동일 계산.
-  const regionOptions = useRegions()
+  const regionOptions = useRegions('socialing')
   const regionGroupChips = useMemo(() => {
     const buckets: Record<string, string[]> = {}
     for (const r of regionOptions) (buckets[regionGroupKey(r.label)] ??= []).push(r.id)

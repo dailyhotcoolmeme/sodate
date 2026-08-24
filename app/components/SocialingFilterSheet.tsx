@@ -40,7 +40,7 @@ function draftFromStore(): Draft {
 export default function SocialingFilterSheet({ visible, onClose }: Props) {
   const colors = useColors()
   const insets = useSafeAreaInsets()
-  const regionOptions = useRegions()
+  const regionOptions = useRegions('socialing')
   const { applyDraft, resetFilters } = useSocialingFilterStore()
 
   const [draft, setDraft] = useState<Draft>(() => draftFromStore())

@@ -77,7 +77,7 @@ export default function HomeScreen() {
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const [filterVisible, setFilterVisible] = useState(false)
   const { regions, themes, maxPrice, dateStart, dateEnd, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, setRegionsBulk, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
-  const regionOptions = useRegions()
+  const regionOptions = useRegions('dating')
   const filterHydrated = useFilterHydrated()  // persist 로드 완료 전엔 필터칩 렌더 보류(깜빡임 방지)
 
   // 홈 지역 빠른탭 = 군(강남권·강북권·강서권·경기·인천·충청·호남·경북·경남·기타) 순서

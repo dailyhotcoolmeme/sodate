@@ -81,24 +81,26 @@ export default function FavoritesScreen() {
       </View>
 
       <View style={styles.header}>
-        {tab !== 'place' && (
-          <View style={styles.headerRow}>
-            <View style={styles.toggleRow}>
-              <TouchableOpacity
-                style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]}
-                onPress={() => setViewMode('card')}
-              >
-                <Ionicons name="grid-outline" size={18} color={viewMode === 'card' ? colors.textPrimary : colors.textTertiary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
-                onPress={() => setViewMode('list')}
-              >
-                <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? colors.textPrimary : colors.textTertiary} />
-              </TouchableOpacity>
-            </View>
+        {/* 혼술바 탭엔 카드/리스트 토글이 없지만(장소는 리스트형뿐), 자리 자체를 없애면
+            소개팅·소셜링 탭과 시작 줄이 어긋난다(2026-08-24 오너 지적: "라인이 안 맞다").
+            투명하게만 만들어 같은 자리를 그대로 차지하게 한다 — 완전히 같은 요소라 픽셀
+            단위로 딱 맞는다. */}
+        <View style={styles.headerRow} pointerEvents={tab === 'place' ? 'none' : 'auto'}>
+          <View style={[styles.toggleRow, tab === 'place' && { opacity: 0 }]}>
+            <TouchableOpacity
+              style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]}
+              onPress={() => setViewMode('card')}
+            >
+              <Ionicons name="grid-outline" size={18} color={viewMode === 'card' ? colors.textPrimary : colors.textTertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewBtn, viewMode === 'list' && styles.viewBtnActive]}
+              onPress={() => setViewMode('list')}
+            >
+              <Ionicons name="list-outline" size={18} color={viewMode === 'list' ? colors.textPrimary : colors.textTertiary} />
+            </TouchableOpacity>
           </View>
-        )}
+        </View>
         <Text style={styles.subtitle}>
           {loading ? '' : `${count}개의 ${kind}${eul} 저장했습니다`}
         </Text>

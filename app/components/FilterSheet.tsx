@@ -118,7 +118,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
 
   const colors = useColors()
   const insets = useSafeAreaInsets()
-  const regionOptions = useRegions()
+  const regionOptions = useRegions('dating')
   const companyOptions = useCompanies()
   const hashtagOptions = useHashtags()
   const [hashtagQuery, setHashtagQuery] = useState('')

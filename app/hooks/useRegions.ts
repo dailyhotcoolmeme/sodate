@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 export type RegionOption = { id: string; label: string }
 
 const REGION_CACHE_KEY = 'sodate-regions-cache'
+const REGION_CACHE_KEY_SOC = 'sodate-regions-cache-socialing'
 
 // 서울·수도권으로 보는 지역들
 const SEOUL_METRO = new Set([
@@ -23,14 +24,21 @@ function rankOf(region: string): number {
 // 실제 크롤링된(활성·미래) 이벤트의 지역을 그대로 필터칩으로 — 항상 데이터와 일치.
 // 순서: 서울·수도권 먼저(서울 최우선) → 지방 → 기타 끝. 그룹 안에서는 건수 많은 순. '미정' 제외.
 // 다중 선택이라 '전체' 칩은 없음(아무것도 안 고르면 전체).
-export function useRegions(): RegionOption[] {
+//
+// ⚠️(2026-08-24 오너 지적: "소개팅 필터랑 소셜링 필터가 똑같은거야?") 예전엔 event_type
+// 구분 없이 전체 이벤트에서 지역을 뽑아 소개팅·소셜링 필터가 완전히 같은 목록을 보여줬다
+// (그래서 서로 안 쓰는 지역이 섞여 들어와 '기타'도 불필요하게 커졌다). eventType 을 넘기면
+// 그 종류의 이벤트에서만 지역을 뽑는다.
+export function useRegions(eventType?: 'dating' | 'socialing'): RegionOption[] {
   const [regions, setRegions] = useState<RegionOption[]>([])
   const gotFresh = useRef(false)
+  const cacheKey = eventType === 'socialing' ? REGION_CACHE_KEY_SOC : REGION_CACHE_KEY
 
   useEffect(() => {
     let alive = true
+    gotFresh.current = false
     // 1) 캐시 먼저 즉시 표시(칩 늦게 뜨는 것 방지). DB 응답 오면 덮어씀.
-    AsyncStorage.getItem(REGION_CACHE_KEY).then((raw) => {
+    AsyncStorage.getItem(cacheKey).then((raw) => {
       if (!alive || gotFresh.current || !raw) return
       try {
         setRegions(JSON.parse(raw))
@@ -45,12 +53,14 @@ export function useRegions(): RegionOption[] {
       const PAGE = 1000
       const rows: { location_region?: string }[] = []
       for (let from = 0; ; from += PAGE) {
-        const { data } = await supabase
+        let query = supabase
           .from('events')
           .select('location_region')
           .eq('is_active', true)
           .gte('event_date', new Date().toISOString())
-          .range(from, from + PAGE - 1)
+        // 소개팅 쪽은 event_type이 비어있는 옛 행도 소개팅으로 본다(다른 화면들과 같은 규칙).
+        query = eventType === 'socialing' ? query.eq('event_type', 'socialing') : query.neq('event_type', 'socialing')
+        const { data } = await query.range(from, from + PAGE - 1)
         if (!alive) return
         if (data) rows.push(...(data as { location_region?: string }[]))
         if (!data || data.length < PAGE) break
@@ -72,12 +82,12 @@ export function useRegions(): RegionOption[] {
         .map(([r]) => ({ id: r, label: r }))
       gotFresh.current = true
       setRegions(sorted)
-      AsyncStorage.setItem(REGION_CACHE_KEY, JSON.stringify(sorted)).catch(() => {})
+      AsyncStorage.setItem(cacheKey, JSON.stringify(sorted)).catch(() => {})
     })()
     return () => {
       alive = false
     }
-  }, [])
+  }, [cacheKey, eventType])
 
   return regions
 }

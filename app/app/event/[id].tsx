@@ -647,12 +647,10 @@ export default function EventDetailScreen() {
         {/* 신청 버튼 (마감 시 회색 비활성) */}
         {renderCta()}
 
-        {/* 업체 후기 섹션 */}
+        {/* 후기 섹션 — 업체명 붙이지 않고 "후기"로 통일(오너 지시 2026-08-24, "문토 후기"·"프립 후기" 등 제각각이던 것) */}
         <View style={styles.reviewsSection}>
           <View style={styles.reviewsHeader}>
-            <Text style={styles.sectionTitle}>
-              {event.companies?.name ?? '업체'} 후기
-            </Text>
+            <Text style={styles.sectionTitle}>후기</Text>
             {/* 후기 작성 — 제목 라인 오른쪽 끝에 연필+글자만(박스 없음) */}
             {companyId && (
               <TouchableOpacity style={styles.writeInline} onPress={openWrite} hitSlop={8} activeOpacity={0.7}>

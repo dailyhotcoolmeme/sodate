@@ -141,7 +141,12 @@ export default function AlertsScreen() {
     alertTabTextOn: { color: colors.textPrimary, fontWeight: '800' },
   }), [colors])
 
-  const regionOptions = useRegions()
+  // 소개팅/소셜링 탭 — 한 기기가 둘을 따로 구독한다(서버는 (token,event_type) 로 각각 저장).
+  // 지역 목록도 이 탭에 맞춰 각각 다르게 받는다(2026-08-24 오너 지적: 필터가 소개팅·소셜링
+  // 구분 없이 똑같이 보이던 문제 — 여기 알림 설정도 같은 훅을 써서 동일하게 겪고 있었다).
+  const [alertTab, setAlertTab] = useState<'dating' | 'socialing'>('dating')
+  const isSoc = alertTab === 'socialing'
+  const regionOptions = useRegions(isSoc ? 'socialing' : 'dating')
   const hashtagOptions = useHashtags()
   const companyOptions = useCompanies()
 
@@ -169,9 +174,6 @@ export default function AlertsScreen() {
     for (const t of hashtagOptions) (buckets[tagGroupKey(t)] ??= []).push(t)
     return TAG_GROUP_ORDER.filter((k) => buckets[k]?.length).map((k) => ({ key: k, items: buckets[k] }))
   }, [hashtagOptions])
-  // 소개팅/소셜링 탭 — 한 기기가 둘을 따로 구독한다(서버는 (token,event_type) 로 각각 저장).
-  const [alertTab, setAlertTab] = useState<'dating' | 'socialing'>('dating')
-  const isSoc = alertTab === 'socialing'
   const [selectedRegions, setSelectedRegions] = useState<string[]>([])
   const [selectedHashtags, setSelectedHashtags] = useState<string[]>([])
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
