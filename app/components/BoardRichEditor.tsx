@@ -1,22 +1,35 @@
-import React, { forwardRef, useImperativeHandle, useRef } from 'react'
-import { TurboModuleRegistry, UIManager, View, TextInput, StyleSheet } from 'react-native'
+import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, Component, type ReactNode } from 'react'
+import { View, TextInput, StyleSheet } from 'react-native'
 import type { AppColors } from '@/constants/colors'
 
 /**
  * 게시판 본문 리치텍스트 에디터(tentap). 네이버카페급 서식.
  *
- * ⚠️ tentap 은 react-native-webview(네이티브)에 의존한다. webview 등록 여부를 감지해
- * 있을 때만 tentap 구현체를 require 한다. 없으면 평문 입력칸으로 폴백.
+ * ⚠️ tentap 은 react-native-webview(네이티브)에 의존한다. 없으면 평문 입력칸으로 폴백.
  *
- * ⚠️(2026-08-24) UIManager.getViewManagerConfig 단독으로는 감지가 안 됐다 — 네이버
- * 지도(PlaceMap.tsx)와 똑같은 원인. Fabric/신규 아키텍처에서 등록된 뷰는 이 API가
- * 못 잡는다. TurboModuleRegistry(react-native-webview 의 실제 모듈명 RNCWebViewModule)
- * 로 먼저 확인하고, 구버전 아키텍처 대비 UIManager 도 같이 본다. webview는 이미
- * 빌드에 들어가 있었는데(2026-08-23 빌드) 감지 실패로 계속 평문 폴백만 뜨고 있었다
- * (오너 제보: "글쓰기에서 에디터가 전혀 안나온다").
+ * ⚠️(2026-08-24, 두 번째 정정) 원래는 TurboModuleRegistry/UIManager로 "미리" 감지해서
+ * 있을 때만 require 했는데, ipa를 직접 열어 바이너리 안 RNCWebView 심볼을 확인해보니
+ * 네이티브 코드는 확실히 들어가 있었다 — 그런데도 두 감지 방법 다 계속 false를
+ * 돌려줬다(오너 제보: "글쓰기에서 에디터가 전혀 안나온다", 감지 수정 후에도 재현).
+ * WebView(RNCWebView)는 Fabric에서 **뷰 컴포넌트**로 등록되고(codegenNativeComponent),
+ * TurboModuleRegistry는 **네이티브 모듈**용이라 애초에 확인 대상이 다르다 — 컴파일은
+ * 됐어도 이 방법으로는 못 잡을 수 있다는 뜻. 미리 감지하는 대신, 항상 먼저 시도해보고
+ * Impl이 마운트 중 실제로 에러를 던지면 그때 평문으로 자동 전환한다(아래 ErrorBoundary).
  */
-export const RICH_EDITOR_AVAILABLE =
-  !!TurboModuleRegistry.get?.('RNCWebViewModule') || !!UIManager.getViewManagerConfig?.('RNCWebView')
+let Impl: React.ComponentType<any> | null = null
+try {
+  Impl = require('./BoardRichEditorImpl').default
+} catch {
+  Impl = null
+}
+export const RICH_EDITOR_AVAILABLE = Impl !== null
+
+class RichEditorBoundary extends Component<{ onFallback: () => void; children: ReactNode }, { crashed: boolean }> {
+  state = { crashed: false }
+  static getDerivedStateFromError() { return { crashed: true } }
+  componentDidCatch() { this.props.onFallback() }
+  render() { return this.state.crashed ? null : this.props.children }
+}
 
 export interface RichEditorHandle {
   getHTML: () => Promise<string>
@@ -30,11 +43,10 @@ export interface RichEditorProps {
   onChangeText?: (plainText: string) => void
   onReady?: () => void
   onEditorReady?: (editor: unknown) => void   // tentap editor 인스턴스(하단 고정 툴바용)
-}
-
-let Impl: React.ComponentType<any> | null = null
-if (RICH_EDITOR_AVAILABLE) {
-  Impl = require('./BoardRichEditorImpl').default
+  /** require 실패했거나(모듈 자체 로드 실패) 렌더 중 죽었을 때 한 번 호출된다 — 상위(write.tsx)가
+   *  이걸 받아 자기 화면 전체를 예전 평문 모드로 바꿔야 한다(이 컴포넌트 안에서만 조용히
+   *  폴백하면 상위의 첨부 툴바가 안 뜬 채로 남아 "에디터도 안 뜨고 툴바도 없다" 상태가 된다). */
+  onUnavailable?: () => void
 }
 
 /** 폴백(평문) — webview 없는 현재 바이너리용. getHTML 은 평문을 문단으로 감싼다. */
@@ -64,7 +76,18 @@ const Fallback = forwardRef<RichEditorHandle, RichEditorProps & { colors: AppCol
 
 export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColors }>(
   function BoardRichEditor(props, ref) {
-    if (Impl) return <Impl ref={ref} {...props} />
+    const [crashed, setCrashed] = useState(false)
+    const { onUnavailable } = props
+    useEffect(() => {
+      if (!Impl) onUnavailable?.()
+    }, [])
+    if (Impl && !crashed) {
+      return (
+        <RichEditorBoundary onFallback={() => { setCrashed(true); onUnavailable?.() }}>
+          <Impl ref={ref} {...props} />
+        </RichEditorBoundary>
+      )
+    }
     return <Fallback ref={ref} {...props} />
   }
 )

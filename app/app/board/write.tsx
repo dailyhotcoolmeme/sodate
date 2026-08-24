@@ -103,6 +103,25 @@ export default function BoardWriteScreen() {
   const [richText, setRichText] = useState('')
   // tentap editor 인스턴스 — 하단 고정 툴바(BoardRichToolbar)에 넘긴다.
   const [richEditor, setRichEditor] = useState<unknown>(null)
+  // 리치에디터를 실제로 쓸지 — require() 성공 여부(RICH_EDITOR_AVAILABLE)로 낙관적으로 시작하되,
+  // (1) 렌더 중 에러가 나거나 (2) 마운트 후 일정 시간 안에 onEditorReady 가 안 오면(=웹뷰가
+  // 조용히 죽어서 에디터 브릿지가 안 뜬 것) 예전 평문 입력칸+툴바로 자동 전환한다.
+  // (2026-08-24: RICH_EDITOR_AVAILABLE 이 true 인데도 에디터도 안 뜨고 툴바도 하나도 안
+  // 뜨는 버그 — require는 성공했지만 웹뷰가 예외 없이 조용히 실패하는 케이스라 감지 방법을
+  // "미리 체크" 대신 "타임아웃"으로 바꿨다.)
+  const [richMode, setRichMode] = useState(RICH_EDITOR_AVAILABLE)
+  const fallbackToLegacy = useCallback(() => {
+    setRichMode((prev) => {
+      if (!prev) return prev
+      setContent((c) => c || richText)
+      return false
+    })
+  }, [richText])
+  useEffect(() => {
+    if (!richMode) return
+    const t = setTimeout(() => { if (!richEditor) fallbackToLegacy() }, 4000)
+    return () => clearTimeout(t)
+  }, [richMode, richEditor, fallbackToLegacy])
   // 키보드가 올라와 있을 때만 리치 툴바 바를 그린다(내려가면 빈 바 안 남게).
   const [kbUp, setKbUp] = useState(false)
   useEffect(() => {
@@ -163,7 +182,7 @@ export default function BoardWriteScreen() {
   // 첨부(사진·GIF·유튜브)가 하나라도 있으면 그 아래에 '이어 쓰는 본문' 입력칸을 보여준다.
   const hasAttach = images.length > 0 || links.length > 0
   // 리치모드에선 본문이 에디터 안에 있으므로 richText(평문 미러)로 판단.
-  const bodyFilled = RICH_EDITOR_AVAILABLE ? richText.trim().length > 0 : content.trim().length > 0
+  const bodyFilled = richMode ? richText.trim().length > 0 : content.trim().length > 0
   const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && bodyFilled && !needsAgreement
 
   // 쓰던 게 있으면 닫기 전에 물어본다
@@ -190,7 +209,7 @@ export default function BoardWriteScreen() {
     let bodyContent = content.trim()
     let bodyImages = images
     let bodyBelow = hasAttach ? contentBelow.trim() : ''
-    if (RICH_EDITOR_AVAILABLE) {
+    if (richMode) {
       bodyContent = (await richRef.current?.getHTML()) ?? ''
       bodyImages = extractImageUrls(bodyContent)
       bodyBelow = ''
@@ -293,7 +312,7 @@ export default function BoardWriteScreen() {
 
         <View>
           <Text style={styles.label}>내용</Text>
-          {RICH_EDITOR_AVAILABLE ? (
+          {richMode ? (
             // 재빌드 후: 리치에디터(tentap). 본문 안에 서식·이미지 인라인. 툴바는 에디터 내부.
             <View style={styles.richBox}>
               <BoardRichEditor
@@ -303,6 +322,7 @@ export default function BoardWriteScreen() {
                 placeholder="내용을 입력하세요"
                 onChangeText={setRichText}
                 onEditorReady={setRichEditor}
+                onUnavailable={fallbackToLegacy}
               />
             </View>
           ) : (
@@ -322,7 +342,7 @@ export default function BoardWriteScreen() {
           {/* 첨부가 있을 때만 아래에 '이어 쓰는 본문' 입력칸(기존 모드 전용). 스타일은 윗칸(본문)과 동일.
               첨부를 다 빼면 칸은 사라지되 입력한 내용은 state 에 남아(hasAttach 로 렌더만
               감춤) 다시 첨부하면 복구된다(오너 결정 2026-08-21). */}
-          {!RICH_EDITOR_AVAILABLE && hasAttach && (
+          {!richMode && hasAttach && (
             <View style={{ marginTop: 12 }}>
               <TextInput
                 style={styles.belowInput}
@@ -378,7 +398,7 @@ export default function BoardWriteScreen() {
       {/* 사진 첨부 — 화면 맨 아랫줄. 키보드가 올라오면 그 위에 붙는다.
           네이버 카페의 '기본 도구 막대', 당근 동네생활의 '사진·장소·투표' 줄과 같은 자리.
           리치모드에선 에디터 자체 툴바가 이 역할을 하므로 숨긴다(재빌드 후). */}
-      {!RICH_EDITOR_AVAILABLE && (
+      {!richMode && (
       <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
         <View
           style={[styles.toolbar, { paddingBottom: 8 + insets.bottom }]}
@@ -463,7 +483,7 @@ export default function BoardWriteScreen() {
 
       {/* 리치에디터 하단 고정 툴바 — 키보드 위에 붙는다(서식·이미지 등). 에디터 본체와 분리해
           화면 최하단에서 그려야 키보드에 안 가린다(2026-08-24 개판 수정). */}
-      {RICH_EDITOR_AVAILABLE && !!richEditor && kbUp && (
+      {richMode && !!richEditor && kbUp && (
         <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
           {/* 한 줄: 사진·GIF(왼쪽) + 서식 툴바(오른쪽 스크롤) — 네이버 카페처럼 한 줄에 */}
           <View
