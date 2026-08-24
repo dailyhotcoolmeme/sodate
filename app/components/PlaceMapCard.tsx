@@ -32,9 +32,13 @@ export default function PlaceMapCard({
         <View style={styles.info}>
           <View style={styles.titleRow}>
             <Text style={styles.name} numberOfLines={compact ? 2 : 1}>{place.name}</Text>
-            <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }} hitSlop={8}>
-              <Ionicons name="bookmark" size={compact ? 17 : 22} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
-            </TouchableOpacity>
+            {/* compact(히어로 지도 미리보기)에선 즐겨찾기 뺀다 — 안 그래도 좁은데 더 좁아진다
+                (2026-08-24 오너 지적). 상세로 들어가면 거기서 찜하면 된다. */}
+            {!compact && (
+              <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }} hitSlop={8}>
+                <Ionicons name="bookmark" size={22} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
+              </TouchableOpacity>
+            )}
           </View>
           {!compact && open != null && (
             <Text style={styles.meta}>
