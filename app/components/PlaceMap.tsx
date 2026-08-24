@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { TurboModuleRegistry, UIManager, View, Text, type StyleProp, type ViewStyle } from 'react-native'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { TurboModuleRegistry, UIManager, View, Text, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native'
 
 /**
  * 혼술바 지도(네이버 지도). 히어로(단일 핀)·지도탭(다수 핀·클러스터) 공용.
@@ -26,12 +26,28 @@ if (NAVER_MAP_AVAILABLE) {
   NaverMapMarkerOverlay = m.NaverMapMarkerOverlay
 }
 
-// 이 줌 이하 = 전부 숫자 클러스터, 초과 = 전부 개별 사진 마커. 한 화면에 둘을 절대 안 섞는다
-// (2026-08-25, 두 번째 정정 — screenDistance 만으로 풀려다가 도시 전체 줌(12)에서 "14"
-// 클러스터 바로 옆에 사진 마커 두 개가 따로 떠서 뒤죽박죽으로 보였다. 오너 지적: "숫자 2는
-// 뭐고, 14 옆에는 왜 업체 이미지가 나오냐"). 기본 진입 줌이 12(도시 전체), 매장 선택 시
-// 16(블록 단위)이라 그 사이인 15를 경계로 잡는다 — 15 이하는 항상 전부 클러스터.
-const CLUSTER_MAX_ZOOM = 15
+// ⚠️(2026-08-25, 세 번째 재작업) 네이버 지도 라이브러리 자체 클러스터링(clusters prop)은
+// screenDistance(고정 px)+minZoom/maxZoom 조합인데, 몇 번을 조정해도 "카메라 줌이 몇일 때
+// 몇 px가 실제로 몇 미터인지"를 추측해서 맞춰야 했고 계속 틀렸다(오너: "제발 외부 조사를
+// 하라니까"). 네이버 공식 문서(android-map-sdk 가이드)를 보면 클러스터링을 쓰는 이유 자체가
+// "여러 마커가 겹쳐 나타나 시인성이 떨어지기 때문"이라고 명시돼 있다 — 즉 기준은 "동네
+// 단위로 묶기"가 아니라 "마커 아이콘끼리 화면에서 실제로 겹치는가"여야 한다. 그래서 네이티브
+// 클러스터링을 버리고, 마커 하나 크기(44px)를 기준으로 직접(웹 메르카토르 투영, 모든
+// 슬리피맵 표준 — 네이버도 이 방식이라고 같은 문서에서 확인함) 화면 픽셀 거리를 계산해서
+// 겹칠 만큼 가까운 것만 묶는다. 추가로 오너가 지적한 "갯수 2도 숫자로 나오는게 이상하다"를
+// 반영해 3개 미만이면 절대 숫자로 안 묶고 그냥 개별로 다 보여준다.
+const CLUSTER_PX = 50
+const MIN_CLUSTER_COUNT = 3
+const TILE_SIZE = 256
+
+function worldX(lng: number, zoom: number): number {
+  return ((lng + 180) / 360) * TILE_SIZE * Math.pow(2, zoom)
+}
+function worldY(lat: number, zoom: number): number {
+  const sin = Math.sin((lat * Math.PI) / 180)
+  const y = 0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)
+  return y * TILE_SIZE * Math.pow(2, zoom)
+}
 
 export interface MapPin {
   id: string
@@ -74,45 +90,65 @@ interface Props {
   resolveTapScreen?: boolean
 }
 
+/** 카메라가 멈췄을 때(onCameraIdle)의 중심좌표+줌 — 이 값 기준으로 클러스터를 다시 계산한다.
+ *  제스처 도중 계속 재계산하면 무겁고 떨려 보인다 — 네이버 SDK 문서에도 "제스처가 완전히
+ *  끝날 때까지는 연속 이동으로 간주돼 이벤트가 발생하지 않는다"고 onCameraIdle 을 이 용도로
+ *  쓰라고 나와 있다. */
+interface CameraState { lat: number; lng: number; zoom: number }
+
 export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false, resolveTapScreen = false }: Props) {
   const ref = useRef<any>(null)
-  const [camZoom, setCamZoom] = useState(zoom)
+  const [camera, setCamera] = useState<CameraState>({ lat: focus.lat, lng: focus.lng, zoom })
+  const [size, setSize] = useState({ width: 0, height: 0 })
   useEffect(() => {
     ref.current?.animateCameraTo?.({ latitude: focus.lat, longitude: focus.lng, zoom })
-    setCamZoom(zoom)
+    setCamera({ lat: focus.lat, lng: focus.lng, zoom })
   }, [focus.lat, focus.lng, zoom])
+
+  // 클러스터 그룹 계산 — 활성(주인공) 핀은 제외, 나머지를 화면 픽셀 거리로 묶는다.
+  const { groups, singles } = useMemo(() => {
+    if (!cluster || !size.width) return { groups: [] as { id: string; lat: number; lng: number; count: number }[], singles: pins.filter((p) => !p.active) }
+    const rest = pins.filter((p) => !p.active)
+    const cx = worldX(camera.lng, camera.zoom)
+    const cy = worldY(camera.lat, camera.zoom)
+    const points = rest.map((p) => ({
+      pin: p,
+      x: size.width / 2 + (worldX(p.lng, camera.zoom) - cx),
+      y: size.height / 2 + (worldY(p.lat, camera.zoom) - cy),
+    }))
+    const used = new Array(points.length).fill(false)
+    const rawGroups: (typeof points)[] = []
+    for (let i = 0; i < points.length; i++) {
+      if (used[i]) continue
+      const g = [points[i]]
+      used[i] = true
+      for (let j = i + 1; j < points.length; j++) {
+        if (used[j]) continue
+        const dx = points[j].x - points[i].x
+        const dy = points[j].y - points[i].y
+        if (Math.sqrt(dx * dx + dy * dy) <= CLUSTER_PX) { g.push(points[j]); used[j] = true }
+      }
+      rawGroups.push(g)
+    }
+    const bigGroups = rawGroups
+      .filter((g) => g.length >= MIN_CLUSTER_COUNT)
+      .map((g) => ({
+        id: `cl-${g.map((m) => m.pin.id).join('-')}`,
+        lat: g.reduce((s, m) => s + m.pin.lat, 0) / g.length,
+        lng: g.reduce((s, m) => s + m.pin.lng, 0) / g.length,
+        count: g.length,
+      }))
+    const singlePins = rawGroups.filter((g) => g.length < MIN_CLUSTER_COUNT).flatMap((g) => g.map((m) => m.pin))
+    return { groups: bigGroups, singles: singlePins }
+  }, [cluster, pins, camera, size])
 
   if (!NaverMapView) return null
 
   const activePin = pins.find((p) => p.active)
-  const expanded = !cluster || camZoom > CLUSTER_MAX_ZOOM
-
-  // screenDistance 는 "이 줌 구간 안에서 클러스터가 얼마나 잘게 쪼개지는지"만 결정한다
-  // (예: 6/10/7/2/14 처럼 지역별로 나뉘는 것) — 개별 사진으로 풀리는 시점은 위 expanded
-  // (줌 경계)가 전담한다. 100px 정도면 도시 스케일에서 역세권 단위로 자연스럽게 갈린다.
-  const clusterProps = cluster && !expanded
-    ? [{
-        width: 52,
-        height: 52,
-        screenDistance: 100,
-        minZoom: 0,
-        maxZoom: CLUSTER_MAX_ZOOM,
-        animate: true,
-        markers: pins
-          .filter((p) => !p.active)
-          .map((p) => ({
-            identifier: p.id,
-            latitude: p.lat,
-            longitude: p.lng,
-            width: 22,
-            height: 22,
-            image: require('../assets/map-dot.png'),
-          })),
-      }]
-    : undefined
+  const individualPins = cluster ? [...(activePin ? [activePin] : []), ...singles] : pins
 
   return (
-    <View style={style}>
+    <View style={style} onLayout={(e: LayoutChangeEvent) => setSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
     <NaverMapView
       ref={ref}
       style={{ flex: 1 }}
@@ -121,15 +157,32 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
       isShowZoomControls={cluster}
       isShowScaleBar={false}
       symbolScale={hideBasePoi ? 0 : 1}
-      clusters={clusterProps}
-      onTapClusterLeaf={cluster ? (e: { markerIdentifier: string }) => onTapPin?.(e.markerIdentifier) : undefined}
-      onCameraChanged={cluster ? (e: { zoom: number }) => setCamZoom(e.zoom) : undefined}
+      onCameraIdle={cluster ? (e: { latitude: number; longitude: number; zoom: number }) => setCamera({ lat: e.latitude, lng: e.longitude, zoom: e.zoom }) : undefined}
       onTapMap={onTapBackground}
     >
-      {/* expanded(줌 15 초과)면 전부 개별 사진 마커, 아니면 선택된 매장만(나머지는 클러스터가 그림) —
-          한 화면에 숫자뭉치와 사진마커를 절대 안 섞는다(2026-08-25). */}
-      {(expanded ? pins : activePin ? [activePin] : []).map((p) => {
-        const size = compactPins ? (p.active ? 24 : p.selected ? 20 : 12) : p.active ? 62 : 44
+      {/* 클러스터 배지 — 3개 이상 겹칠 때만. 직접 그린 원형 뱃지(숫자) + 탭하면 그 지점으로 확대. */}
+      {groups.map((g) => (
+        <NaverMapMarkerOverlay
+          key={g.id}
+          latitude={g.lat}
+          longitude={g.lng}
+          width={52}
+          height={52}
+          onTap={() => ref.current?.animateCameraTo?.({ latitude: g.lat, longitude: g.lng, zoom: camera.zoom + 3 })}
+        >
+          <View style={{
+            width: 52, height: 52, borderRadius: 26, backgroundColor: '#FF9F43',
+            alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff',
+            shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+          }}>
+            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>{g.count}</Text>
+          </View>
+        </NaverMapMarkerOverlay>
+      ))}
+
+      {/* 개별 마커 — 히어로에선 전부, 지도탭에선 선택된 매장 + 3개 미만이라 안 뭉친 매장들. */}
+      {individualPins.map((p) => {
+        const size2 = compactPins ? (p.active ? 24 : p.selected ? 20 : 12) : p.active ? 62 : 44
         // ⚠️(2026-08-24) 기본 'pink'/'blue' 심벌은 둘 다 물방울(세로로 긴) 모양이라 정사각형
         // 크기로 찍으면 눌려서 "짜부된" 모양이 된다(오너 지적 — 처음엔 선택 마커만 고쳤다가
         // "주변 점은 짜부가 안되겠냐"고 또 지적받음). compactPins 에선 선택·주변 둘 다 원형 점
@@ -150,8 +203,8 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
               const pos = await ref.current?.coordinateToScreen?.({ latitude: p.lat, longitude: p.lng })
               onTapPin(p.id, pos?.isValid ? { x: pos.screenX, y: pos.screenY } : undefined)
             }}
-            width={size}
-            height={size}
+            width={size2}
+            height={size2}
             zIndex={p.active ? 100 : p.selected ? 50 : 0}
             caption={
               !cluster && p.name && (!compactPins || p.active)
@@ -163,16 +216,6 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
         )
       })}
     </NaverMapView>
-    {/* 임시 디버그 — 실제 기기에서 CLUSTER_MAX_ZOOM 값을 눈으로 보면서 맞는 숫자를 잡기 위함
-        (2026-08-25). 여러 번 숫자를 추측했다가 계속 틀려서, 이번엔 오너가 화면으로 직접
-        실제 zoom 값을 보고 알려주면 그 값으로 정확히 맞춘다. 값 확정되면 이 블록은 지운다. */}
-    {cluster && (
-      <View pointerEvents="none" style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-        <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
-          zoom {camZoom.toFixed(2)} (경계 {CLUSTER_MAX_ZOOM})
-        </Text>
-      </View>
-    )}
     </View>
   )
 }
