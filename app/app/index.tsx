@@ -572,6 +572,15 @@ export default function HomeScreen() {
   // 상태에서 스크롤해서 목표보다 한참 위에서 멈춘다, 오너 지적).
   const restoredScrollRef = useRef(false)
   const programmaticScrollRef = useRef(false)
+  // 복원 전 목록이 맨 위에서 잠깐 보였다가 목표 위치로 튀는 게 보이면 안 된다(2026-08-25
+  // 오너 지적: "그냥 바로 딱 나오면 안되냐?"). 복원할 게 없으면(저장된 위치가 0) 바로
+  // 보여주고, 있으면 실제로 그 위치로 옮긴 뒤에야 보여준다. 혹시라도 복원이 영영 안 끝나는
+  // 경우(콘텐츠가 목표 높이까지 못 자라는 등)를 대비해 안전장치로 늦어도 곧 보여준다.
+  const [listVisible, setListVisible] = useState(() => getScrollOffset('dating-feed') <= 0)
+  useEffect(() => {
+    const t = setTimeout(() => setListVisible(true), 600)
+    return () => clearTimeout(t)
+  }, [])
 
   const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
     track(isCurrent ? 'event_favorite_remove' : 'event_favorite_add', {
@@ -839,7 +848,7 @@ export default function HomeScreen() {
           <AppSpinner />
         </View>
       ) : (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, opacity: listVisible ? 1 : 0 }}>
         <FlatList
           ref={flatListRef}
           onScroll={onScroll}
@@ -847,12 +856,13 @@ export default function HomeScreen() {
             if (Platform.OS === 'android') setAndroidContentHeight(h)
             if (restoredScrollRef.current) return
             const y = getScrollOffset('dating-feed')
-            if (y <= 0) { restoredScrollRef.current = true; return }
+            if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
             if (h < y + 300) return
             programmaticScrollRef.current = true
             flatListRef.current?.scrollToOffset({ offset: y, animated: false })
             restoredScrollRef.current = true
             setTimeout(() => { programmaticScrollRef.current = false }, 80)
+            requestAnimationFrame(() => setListVisible(true))
           }}
           onLayout={(e) => { if (Platform.OS === 'android') setAndroidListHeight(e.nativeEvent.layout.height) }}
           scrollEventThrottle={100}

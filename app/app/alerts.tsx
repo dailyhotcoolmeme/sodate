@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import {
   View,
@@ -660,6 +661,7 @@ export default function AlertsScreen() {
 
     </ScrollView>
     <LoadingOverlay visible={saving || unsubscribing} />
+    <BottomNav current="my" />
     </View>
   )
 }

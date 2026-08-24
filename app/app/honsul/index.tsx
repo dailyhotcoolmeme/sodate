@@ -149,6 +149,12 @@ export default function HonsulScreen() {
   const feedListRef = useRef<FlatList<PlaceRow>>(null)
   const restoredScrollRef = useRef(false)
   const programmaticScrollRef = useRef(false)
+  // 복원 전 잠깐 맨 위가 보였다가 튀는 게 안 보이게(2026-08-25 오너 지적). 소개팅과 동일 패턴.
+  const [listVisible, setListVisible] = useState(() => getScrollOffset('honsul-feed') <= 0)
+  useEffect(() => {
+    const t = setTimeout(() => setListVisible(true), 600)
+    return () => clearTimeout(t)
+  }, [])
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -288,6 +294,7 @@ export default function HonsulScreen() {
           ) : (
             <FlatList
               ref={feedListRef}
+              style={{ opacity: listVisible ? 1 : 0 }}
               data={list}
               keyExtractor={(p) => p.id}
               renderItem={({ item }) => (
@@ -304,7 +311,7 @@ export default function HonsulScreen() {
               onContentSizeChange={(_w, h) => {
                 if (restoredScrollRef.current) return
                 const y = getScrollOffset('honsul-feed')
-                if (y <= 0) { restoredScrollRef.current = true; return }
+                if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
                 // 목표 위치보다 콘텐츠가 충분히(여유 300px) 쌓이기 전엔 시도하지 않는다 —
                 // 안 그러면 아직 다 안 그려진 상태에서 스크롤해서 목표보다 한참 위에서
                 // 멈춘다(오너 지적: "원래 있어야할 위치보다 한참 위쪽에 위치한다").
@@ -313,6 +320,7 @@ export default function HonsulScreen() {
                 feedListRef.current?.scrollToOffset({ offset: y, animated: false })
                 restoredScrollRef.current = true
                 setTimeout(() => { programmaticScrollRef.current = false }, 80)
+                requestAnimationFrame(() => setListVisible(true))
               }}
             />
           )}

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import { useColors } from '@/hooks/useColors'
 import { wideContent } from '@/constants/layout'
 import { getBlockedAuthors, unblockAuthor, type BlockedAuthor } from '@/lib/boardIdentity'
@@ -47,6 +48,7 @@ export default function BlockedAuthorsScreen() {
           ))}
         </ScrollView>
       )}
+      <BottomNav current="my" />
     </View>
   )
 }

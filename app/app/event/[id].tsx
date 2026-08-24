@@ -3,6 +3,7 @@ import AppSpinner from '@/components/AppSpinner'
 import EventThumbnail from '@/components/EventThumbnail'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import {
   View,
   Text,
@@ -696,6 +697,7 @@ export default function EventDetailScreen() {
         Alert.alert('신고되었습니다', already ? '이미 신고한 후기입니다.' : '검토 후 조치하겠습니다.')
       }}
     />
+    <BottomNav current={isSocialing ? 'socialing' : 'event'} />
     </View>
   )
 }

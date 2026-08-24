@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import AppSpinner from '@/components/AppSpinner'
 import ReviewSection from '@/components/ReviewSection'
 import ReviewSheet, { type ReviewSheetInitial } from '@/components/ReviewSheet'
@@ -311,6 +312,7 @@ export default function PlaceDetailScreen() {
           Alert.alert('신고되었습니다', already ? '이미 신고한 후기입니다.' : '검토 후 조치하겠습니다.')
         }}
       />
+      <BottomNav current="honsul" />
     </View>
   )
 }

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react'
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -67,6 +67,12 @@ export default function SocialingScreen() {
   const feedListRef = useRef<FlatList>(null)
   const restoredScrollRef = useRef(false)
   const programmaticScrollRef = useRef(false)
+  // 복원 전 잠깐 맨 위가 보였다가 튀는 게 안 보이게(2026-08-25 오너 지적). 소개팅과 동일 패턴.
+  const [listVisible, setListVisible] = useState(() => getScrollOffset('socialing-feed') <= 0)
+  useEffect(() => {
+    const t = setTimeout(() => setListVisible(true), 600)
+    return () => clearTimeout(t)
+  }, [])
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -210,6 +216,7 @@ export default function SocialingScreen() {
       ) : (
         <FlatList
           ref={feedListRef}
+          style={{ opacity: listVisible ? 1 : 0 }}
           data={events}
           keyExtractor={(e) => e.id}
           renderItem={({ item }) => (
@@ -225,12 +232,13 @@ export default function SocialingScreen() {
           onContentSizeChange={(_w, h) => {
             if (restoredScrollRef.current) return
             const y = getScrollOffset('socialing-feed')
-            if (y <= 0) { restoredScrollRef.current = true; return }
+            if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
             if (h < y + 300) return
             programmaticScrollRef.current = true
             feedListRef.current?.scrollToOffset({ offset: y, animated: false })
             restoredScrollRef.current = true
             setTimeout(() => { programmaticScrollRef.current = false }, 80)
+            requestAnimationFrame(() => setListVisible(true))
           }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}

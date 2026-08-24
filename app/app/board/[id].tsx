@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import AppSpinner from '@/components/AppSpinner'
 import ReportSheet from '@/components/ReportSheet'
 import LoadingOverlay from '@/components/LoadingOverlay'
@@ -813,6 +814,7 @@ export default function BoardPostScreen() {
           refetch()
         }}
       />
+      <BottomNav current="board" />
     </View>
   )
 }
