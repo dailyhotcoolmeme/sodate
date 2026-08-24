@@ -666,7 +666,9 @@ export default function EventDetailScreen() {
             <View style={{ alignItems: 'center', marginVertical: 16 }}><AppSpinner size={32} /></View>
           ) : (
             <ReviewSection
-              reviews={reviews}
+              // 소셜링은 자체 후기만 — 외부 크롤링 후기(블로그·인스타·유튜브)는 소개팅
+              // 업체 위주로 모은 것이라 소셜링과 안 맞는다(오너 지시 2026-08-24: "빼기로 했잖아").
+              reviews={isSocialing ? reviews.filter((r) => r.source === 'user') : reviews}
               myReviewIds={myReviewIds}
               onEdit={openEdit}
               onDelete={handleDelete}
