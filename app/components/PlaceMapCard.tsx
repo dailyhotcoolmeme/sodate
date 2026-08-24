@@ -6,12 +6,21 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { openStatus, reviewHashtags, type PlaceRow } from '@/lib/places'
 
-/** 지도에서 마커 탭 시 하단에 뜨는 매장 정보카드(혼술맵 참고, 우리 스타일).
+// compact 카드 고정 가로폭 — 내용에 따라 넓었다 좁았다 하면 "왜 첫번째 이미지는 가로가
+// 짧지?"처럼 매번 다르게 보인다(2026-08-24 오너 지적). 항상 같은 폭으로 고정.
+const COMPACT_W = 300
+// 카드 높이 추정치(패딩+사진) — anchor 기준 위/아래 뒤집을지 판단용. 실측은 아니고 대략치.
+const COMPACT_H_EST = 84
+
+/** 지도에서 마커 탭 시 뜨는 매장 정보카드(혼술맵 참고, 우리 스타일).
  *  compact — 상세페이지 히어로(200px 높이)처럼 지도 자체가 작은 곳에 쓸 때(2026-08-24
  *  오너 지적: "히어로 지도 전체 사이즈 비율 고려해서 맞춰야 할 거 아니야"). 전체화면
- *  지도탭(honsul/index.tsx)은 기본(큰) 크기 그대로 쓴다. */
+ *  지도탭(honsul/index.tsx)은 기본(큰) 크기 그대로 쓴다.
+ *  anchor — 탭한 마커의 화면 좌표. 있으면 그 점 바로 아래(넘치면 위)에 띄운다(2026-08-24
+ *  오너 지적: "업체박스 왜 왼쪽 밑에 고정이냐, 누른 점 바로 밑에 떠야지"). 없으면(좌표를
+ *  못 구했을 때) 예전처럼 좌하단 고정. */
 export default function PlaceMapCard({
-  place, isFavorite, onToggleFavorite, onOpen, onClose, compact = false,
+  place, isFavorite, onToggleFavorite, onOpen, onClose, compact = false, anchor = null, containerWidth, containerHeight,
 }: {
   place: PlaceRow
   isFavorite: boolean
@@ -19,14 +28,29 @@ export default function PlaceMapCard({
   onOpen: () => void
   onClose: () => void
   compact?: boolean
+  anchor?: { x: number; y: number } | null
+  containerWidth?: number
+  containerHeight?: number
 }) {
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors, compact), [colors, compact])
   const { open, hoursLabel } = openStatus(place.hours)
   const tag = reviewHashtags(place.keyword_votes, 1)[0]
 
+  const wrapStyle = useMemo(() => {
+    if (!compact || !anchor || !containerWidth) return styles.wrap
+    const cw = containerWidth
+    const ch = containerHeight ?? 9999
+    const left = Math.min(Math.max(anchor.x - COMPACT_W / 2, 8), Math.max(8, cw - COMPACT_W - 8))
+    const spaceBelow = ch - anchor.y
+    const top = spaceBelow >= COMPACT_H_EST + 14
+      ? anchor.y + 14
+      : Math.max(8, anchor.y - COMPACT_H_EST - 14)
+    return [styles.wrap, { left, top, bottom: undefined }]
+  }, [compact, anchor, containerWidth, containerHeight, styles.wrap])
+
   return (
-    <View style={styles.wrap}>
+    <View style={wrapStyle}>
       <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={onOpen}>
         <Image source={{ uri: place.profile_image ?? place.thumbnail_url ?? undefined }} style={styles.photo} contentFit="cover" />
         <View style={styles.info}>
@@ -66,16 +90,14 @@ export default function PlaceMapCard({
 
 function makeStyles(colors: AppColors, compact: boolean) {
   return StyleSheet.create({
-    // compact: 히어로 지도(작음) 폭에 맞게 카드도 내용만큼만 — 예전엔 사진만 줄고 카드 가로는
-    // 그대로 화면 끝까지 늘어나서 텍스트 옆에 빈 공간만 넓었다(오너 지적: "박스 가로사이즈는
-    // 왜 그대로냐"). right 를 안 주고 maxWidth 로 내용에 맞게 줄인다.
+    // compact 기본값(anchor 없을 때 폴백) — 좌하단 고정.
     wrap: compact ? { position: 'absolute', left: 8, bottom: 8 } : { position: 'absolute', left: 12, right: 12, bottom: 14 },
     card: {
       flexDirection: 'row', gap: compact ? 8 : 12, backgroundColor: colors.surface, borderRadius: compact ? 12 : 16, padding: compact ? 8 : 12,
       shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: compact ? 8 : 14, shadowOffset: { width: 0, height: compact ? 3 : 6 }, elevation: compact ? 5 : 8,
-      // 230은 너무 좁아서 가게 이름이 "서울혼..."처럼 잘렸다(오너 지적) — 이름은 2줄까지
-      // 허용하고(위 numberOfLines) 폭도 넉넉히 늘렸다. 그래도 화면 끝까지는 안 늘어난다.
-      ...(compact ? { maxWidth: 300 } : null),
+      // 내용에 따라 폭이 오락가락하면 "왜 첫번째는 가로가 짧지?"처럼 매번 달라 보인다
+      // (오너 지적) — maxWidth 대신 고정 width 로 항상 같은 크기.
+      ...(compact ? { width: COMPACT_W } : null),
     },
     photo: { width: compact ? 52 : 92, height: compact ? 52 : 92, borderRadius: compact ? 8 : 12, backgroundColor: colors.surfaceHigh },
     info: compact

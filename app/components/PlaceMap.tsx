@@ -49,7 +49,9 @@ interface Props {
   style?: StyleProp<ViewStyle>
   showLocationButton?: boolean
   cluster?: boolean
-  onTapPin?: (id: string) => void
+  /** screen — 탭한 마커의 화면 좌표(가능하면). 미리보기 카드를 그 점 바로 아래에 띄우려고
+   *  (2026-08-24 오너 지적: "업체박스 왜 왼쪽 밑에 고정이냐, 누른 점 바로 밑에 떠야지"). */
+  onTapPin?: (id: string, screen?: { x: number; y: number }) => void
   /** 마커가 아닌 지도 빈 공간을 탭했을 때 — 미리보기 카드를 열어놨으면 닫아야 한다
    *  (2026-08-24 오너 지적: "박스 바깥쪽 누르면 박스가 닫혀야 한다"). */
   onTapBackground?: () => void
@@ -137,7 +139,11 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
             key={p.id}
             latitude={p.lat}
             longitude={p.lng}
-            onTap={() => (onTapPin ? onTapPin(p.id) : p.onPress?.())}
+            onTap={async () => {
+              if (!onTapPin) { p.onPress?.(); return }
+              const pos = await ref.current?.coordinateToScreen?.({ latitude: p.lat, longitude: p.lng })
+              onTapPin(p.id, pos?.isValid ? { x: pos.screenX, y: pos.screenY } : undefined)
+            }}
             width={size}
             height={size}
             zIndex={p.active ? 100 : p.selected ? 50 : 0}

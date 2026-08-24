@@ -46,11 +46,15 @@ export default function PlaceDetailScreen() {
   // 눌러야 이동한다(2026-08-24 오너 지적 — "이 가게가 어느 가게인지 보고 이동할지 선택해야
   // 할 거 아니야"). 지도탭(honsul/index.tsx)의 PlaceMapCard 와 완전히 같은 패턴 재사용.
   const [previewPlace, setPreviewPlace] = useState<PlaceRow | null>(null)
-  const onTapNearbyPin = useCallback((tappedId: string) => {
+  // 탭한 점의 화면 좌표 — 카드를 그 점 바로 아래에 띄운다(2026-08-24 오너 지적: "왼쪽 밑에
+  // 고정이냐, 누른 점 바로 밑에 떠야지"). 좌표를 못 구하면(null) 카드는 예전처럼 좌하단 고정.
+  const [previewAnchor, setPreviewAnchor] = useState<{ x: number; y: number } | null>(null)
+  const onTapNearbyPin = useCallback((tappedId: string, screen?: { x: number; y: number }) => {
     if (!place || tappedId === place.id) return
     const p = nearby.find((n) => n.id === tappedId)
-    if (p) setPreviewPlace(p)
+    if (p) { setPreviewPlace(p); setPreviewAnchor(screen ?? null) }
   }, [place, nearby])
+  const closePreview = useCallback(() => { setPreviewPlace(null); setPreviewAnchor(null) }, [])
 
   // 후기 작성/수정 시트 + 내 후기 식별 + 신고 (소개팅 event/[id] 와 동일 흐름)
   const [sheetVisible, setSheetVisible] = useState(false)
@@ -65,7 +69,7 @@ export default function PlaceDetailScreen() {
 
   useEffect(() => {
     // 화면(id)이 바뀌는 순간 이전 화면의 미리보기 카드·주변 표시가 남아있으면 안 된다.
-    setPreviewPlace(null)
+    closePreview()
     setShowNearby(false)
     let alive = true
     ;(async () => {
@@ -128,7 +132,7 @@ export default function PlaceDetailScreen() {
                 // 주변 점 누르면 바로 이동이 아니라 미리보기 카드부터(2026-08-24 오너 지적).
                 onTapPin={onTapNearbyPin}
                 // 박스 바깥(지도 빈 공간) 누르면 미리보기 카드 닫힘(2026-08-24 오너 지적).
-                onTapBackground={() => setPreviewPlace(null)}
+                onTapBackground={closePreview}
                 pins={[
                   { id: place.id, lat: place.lat, lng: place.lng, name: place.name, active: true },
                   ...(showNearby
@@ -156,7 +160,7 @@ export default function PlaceDetailScreen() {
             )}
             <TouchableOpacity
               style={styles.nearbyChk}
-              onPress={() => { setShowNearby((v) => !v); setPreviewPlace(null) }}
+              onPress={() => { setShowNearby((v) => !v); closePreview() }}
               activeOpacity={0.8}
             >
               <View style={[styles.checkbox, showNearby && styles.checkboxOn]}>{showNearby && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}</View>
@@ -167,9 +171,12 @@ export default function PlaceDetailScreen() {
                 place={previewPlace}
                 isFavorite={favoriteIds.has(previewPlace.id)}
                 onToggleFavorite={() => toggle(previewPlace.id)}
-                onOpen={() => { const pid = previewPlace.id; setPreviewPlace(null); router.push(`/place/${pid}`) }}
-                onClose={() => setPreviewPlace(null)}
+                onOpen={() => { const pid = previewPlace.id; closePreview(); router.push(`/place/${pid}`) }}
+                onClose={closePreview}
                 compact
+                anchor={previewAnchor}
+                containerWidth={MAP_W}
+                containerHeight={MAP_H}
               />
             )}
           </View>
