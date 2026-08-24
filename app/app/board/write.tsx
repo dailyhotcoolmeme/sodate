@@ -21,6 +21,7 @@ import { MAX_IMAGES, pickAndUpload } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
 import { setUpdateHold } from '@/lib/appUpdates'
+import { track } from '@/lib/analytics'
 import { wideContent } from '@/constants/layout'
 
 const TITLE_MAX = 60
@@ -106,10 +107,27 @@ export default function BoardWriteScreen() {
   // 리치에디터(tentap/webview) 강제 OFF(2026-08-24). require()는 성공하고 onEditorReady도
   // 곧바로 불려서(웹뷰가 실제로 뜨는지와 무관하게 tentap 쪽 JS 브릿지 객체 자체는 항상
   // 즉시 생기는 듯하다) "안 뜨면 자동 전환" 타임아웃이 전혀 안 걸렸다 — richEditor 가 이미
-  // truthy라 조건을 못 탄 것. 리치에디터를 왜 못 띄우는지는 기기 로그로 직접 봐야 하는
-  // 문제라 여기서 더 추측성 수정을 반복하지 않고, 확실히 동작하는 예전 평문+툴바로 고정한다.
+  // truthy라 조건을 못 탄 것. 화면엔 확실히 되는 예전 평문+툴바를 고정해서 쓰고,
+  // 원인 파악은 아래 '숨은 진단 마운트'로 기기 연결 없이 원격으로 수집한다.
   const richMode = false
-  const fallbackToLegacy = useCallback(() => { setContent((c) => c || richText) }, [richText])
+  const fallbackToLegacy = useCallback((_reason?: string) => { setContent((c) => c || richText) }, [richText])
+
+  // 숨은 진단 마운트 — 실제 화면엔 안 보이고(0크기·터치불가) 등록/글쓰기에도 전혀 영향 없다.
+  // 오너가 매번 케이블 연결해서 재현해줄 수 없으니, 이 화면을 열 때마다 리치에디터가
+  // 실제로 뜨는지·왜 안 뜨는지를 DB(analytics_events)로 자동 수집한다(2026-08-24).
+  // 원인 잡히면 이 블록은 지운다.
+  const diagMountedAt = useRef(0)
+  const diagReported = useRef(false)
+  const diagReport = useCallback((eventType: 'rich_editor_ready' | 'rich_editor_fail', reason?: string) => {
+    if (diagReported.current) return
+    diagReported.current = true
+    track(eventType, { properties: { reason, ms: Date.now() - diagMountedAt.current } })
+  }, [])
+  useEffect(() => {
+    diagMountedAt.current = Date.now()
+    const t = setTimeout(() => diagReport('rich_editor_fail', 'timeout_no_signal_10s'), 10000)
+    return () => clearTimeout(t)
+  }, [diagReport])
   // 키보드가 올라와 있을 때만 리치 툴바 바를 그린다(내려가면 빈 바 안 남게).
   const [kbUp, setKbUp] = useState(false)
   useEffect(() => {
@@ -322,6 +340,18 @@ export default function BoardWriteScreen() {
               maxLength={CONTENT_MAX}
               placeholder="내용을 입력하세요"
             />
+          )}
+          {/* 숨은 진단 마운트(2026-08-24, 임시) — 화면엔 안 보이고 등록 흐름과 완전히 분리.
+              리치에디터가 실제로 뜨는지 원격으로 자동 확인하기 위함. 원인 잡히면 삭제. */}
+          {!richMode && (
+            <View pointerEvents="none" style={styles.diagHidden}>
+              <BoardRichEditor
+                colors={colors}
+                placeholder=""
+                onEditorReady={() => diagReport('rich_editor_ready')}
+                onUnavailable={(reason) => diagReport('rich_editor_fail', reason)}
+              />
+            </View>
           )}
           <View style={{ marginTop: 8 }}>
             <BoardLinkChips api={linksApi} links={links} />
@@ -621,6 +651,8 @@ function makeStyles(colors: AppColors) {
     belowHint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 6, lineHeight: 17 },
     // 리치에디터 박스(재빌드 후) — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
     richBox: { minHeight: 320, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // 숨은 진단 마운트용 — 화면에 전혀 영향 없어야 하므로 0크기+overflow hidden(임시, 위 참고).
+    diagHidden: { position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0 },
     // 배경 없음(투명) — tentap 툴바가 흰 직사각형이라 라운드 사이에 빈틈이 보였다(2026-08-24).
     richToolbarBar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingLeft: 10, borderTopWidth: 1, borderTopColor: colors.divider },
     richMediaBtn: { paddingHorizontal: 8, height: 48, justifyContent: 'center' },

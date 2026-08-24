@@ -40,6 +40,10 @@ export type AnalyticsEventType =
   | 'ad_load_fail'
   // 자체 홍보 배너(AdMob 아님) 탭 — 커뮤니티 피드 맨 위(2026-08-19).
   | 'promo_banner_tap'
+  // 글쓰기 리치에디터(tentap/webview) 진단용 — 기기에 직접 연결 못 할 때도 원인 파악하려고
+  // DB로 남긴다(2026-08-24, "에디터가 안 뜬다" 반복 재현 실패 계기).
+  | 'rich_editor_fail'
+  | 'rich_editor_ready'
 
 interface AnalyticsPayload {
   event_type: AnalyticsEventType
