@@ -12,7 +12,16 @@ export async function getMyLocation(): Promise<{ lat: number; lng: number } | nu
       Alert.alert('위치 권한 필요', '내 주변 혼술바를 보려면 위치 권한을 허용해주세요.')
       return null
     }
-    const pos = await Location.getCurrentPositionAsync({ accuracy: 3 })
+    // GPS 신호가 안 잡히면(실내 등) getCurrentPositionAsync 가 끝없이 대기한다 — "위치
+    // 확인중"이 영영 안 풀리던 버그(2026-08-24 오너 제보). 10초 넘으면 포기하고 null.
+    const pos = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: 3 }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
+    ])
+    if (!pos) {
+      Alert.alert('위치를 찾을 수 없어요', '잠시 후 다시 시도해주세요.')
+      return null
+    }
     return { lat: pos.coords.latitude, lng: pos.coords.longitude }
   } catch {
     return null

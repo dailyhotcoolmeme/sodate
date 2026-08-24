@@ -143,7 +143,6 @@ export default function HonsulScreen() {
   if (regionGroup) activeChips.push({ label: regionGroup, onRemove: () => { setRegionGroup(null); setSanggwon(null) } })
   if (sanggwon) activeChips.push({ label: sanggwon, onRemove: () => setSanggwon(null) })
   if (tag) activeChips.push({ label: tag, onRemove: () => setTag(null) })
-  if (openNow) activeChips.push({ label: '영업중', onRemove: () => setOpenNow(false) })
   if (search) activeChips.push({ label: `‘${search}’`, onRemove: () => setSearch('') })
   const resetAll = () => { setRegionGroup(null); setSanggwon(null); setTag(null); setOpenNow(false); setSearch('') }
 

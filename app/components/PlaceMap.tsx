@@ -47,9 +47,13 @@ interface Props {
   showLocationButton?: boolean
   cluster?: boolean
   onTapPin?: (id: string) => void
+  /** 상세페이지 히어로용 — 네이버 기본 지도가 자체로 그리는 주변 업체 숫자 심벌(노란 원)들을
+   *  꺼서 우리 핀만 깔끔하게 보이게 한다(2026-08-24 오너 지적: "히어로 지도가 저딴식이냐").
+   *  symbolScale=0 이면 기본 심벌이 전부 숨겨진다 — 지도탭(전체 지도)에선 그대로 둔다. */
+  hideBasePoi?: boolean
 }
 
-export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin }: Props) {
+export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, hideBasePoi = false }: Props) {
   const ref = useRef<any>(null)
   // 현재 카메라 줌 — 이 값으로 "숫자만" / "사진만"을 딱 갈라 한 화면에 섞이지 않게 한다.
   const [camZoom, setCamZoom] = useState(zoom)
@@ -100,6 +104,7 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
       isShowLocationButton={showLocationButton}
       isShowZoomControls={cluster}
       isShowScaleBar={false}
+      symbolScale={hideBasePoi ? 0 : 1}
       clusters={clusterProps}
       onTapClusterLeaf={cluster ? (e: { markerIdentifier: string }) => onTapPin?.(e.markerIdentifier) : undefined}
       onCameraChanged={cluster ? (e: { zoom: number }) => setCamZoom(e.zoom) : undefined}
