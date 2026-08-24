@@ -127,6 +127,8 @@ export default function PlaceDetailScreen() {
                 compactPins
                 // 주변 점 누르면 바로 이동이 아니라 미리보기 카드부터(2026-08-24 오너 지적).
                 onTapPin={onTapNearbyPin}
+                // 박스 바깥(지도 빈 공간) 누르면 미리보기 카드 닫힘(2026-08-24 오너 지적).
+                onTapBackground={() => setPreviewPlace(null)}
                 pins={[
                   { id: place.id, lat: place.lat, lng: place.lng, name: place.name, active: true },
                   ...(showNearby

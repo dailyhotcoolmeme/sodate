@@ -294,6 +294,7 @@ export default function HonsulScreen() {
                     showLocationButton
                     cluster
                     onTapPin={(id) => setFocused(pinned.find((p) => p.id === id) ?? null)}
+                    onTapBackground={() => setFocused(null)}
                     pins={pinned.map((p) => ({
                       id: p.id,
                       lat: p.lat!,
