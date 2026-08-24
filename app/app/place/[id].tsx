@@ -132,7 +132,7 @@ export default function PlaceDetailScreen() {
           <View style={styles.nameRow}>
             <Text style={styles.name}>{place.name}</Text>
             <TouchableOpacity onPress={() => toggle(place.id)} hitSlop={8} activeOpacity={0.8}>
-              <Ionicons name="heart" size={22} color={isFav ? '#FF6B9D' : colors.textTertiary} />
+              <Ionicons name="bookmark" size={22} color={isFav ? '#FF6B9D' : colors.textTertiary} />
             </TouchableOpacity>
           </View>
 

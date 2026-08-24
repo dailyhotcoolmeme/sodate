@@ -40,7 +40,6 @@ export default function ScrapsScreen() {
   return (
     <View style={styles.container}>
       <TopBar showBack onLogoPress={() => router.replace('/board')} />
-      <Text style={styles.heading}>스크랩한 글</Text>
 
       {loading && isEmpty ? (
         <View style={styles.center}><AppSpinner /></View>

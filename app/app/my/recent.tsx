@@ -37,9 +37,8 @@ export default function RecentScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack />
+      <TopBar showBack title="최근 본 것" />
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>최근 본 것</Text>
         {!isEmpty && (
           <TouchableOpacity onPress={handleClear} hitSlop={8}>
             <Text style={styles.clear}>기록 비우기</Text>

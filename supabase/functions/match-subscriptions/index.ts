@@ -1,6 +1,26 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+/** 소셜링 그룹키 → 원본 socialing_category 목록. 앱 constants/socialingCategories.ts 와 같은 표. */
+const SOCIALING_GROUP_SOURCES: Record<string, string[]> = {
+  reading: ['독서·성장', '글쓰기', '사유의 확장', '자아와 관계'],
+  culture: ['문화·예술', '음악과 OST'],
+  movie: ['영화', '영화와 넷플릭스'],
+  active: ['등산·아웃도어'],
+  cooking: ['쿠킹·다이닝'],
+  travel: ['여행·캠핑'],
+  career: ['재테크·경제', '일과 커리어'],
+  language: ['외국어'],
+  game: ['게임'],
+  lifestyle: ['라이프스타일'],
+}
+function socialingSourcesFor(groups: string[]): string[] {
+  const out: string[] = []
+  for (const g of groups) for (const src of SOCIALING_GROUP_SOURCES[g] ?? []) out.push(src)
+  return out
+}
+
+
 serve(async (req) => {
   // ⚠️ verify_jwt는 "유효한 JWT 아무거나"만 요구한다. 앱에 내장된 anon 키도 유효한 JWT라
   // 사실상 인증이 안 되는 상태였고, 공개키만으로 임의의 record를 넣어 전 구독자에게 가짜
@@ -73,6 +93,18 @@ serve(async (req) => {
   for (const sub of subscriptions) {
     const token = sub.push_tokens?.token
     if (!token) continue
+
+    // 이벤트 타입 조건 — 소개팅 구독자에게 소셜링이 가면 안 된다(2026-08-24).
+    // 옛 구독행은 event_type 이 'dating' 기본값이라 그대로 소개팅만 받는다.
+    const subType = sub.event_type ?? 'dating'
+    const evType = event.event_type ?? 'dating'
+    if (subType !== evType) continue
+
+    // 소셜링 카테고리 조건 — 구독자가 고른 그룹의 원본 카테고리 중 하나여야 매칭.
+    if (evType === 'socialing' && sub.socialing_groups && sub.socialing_groups.length > 0) {
+      const sources = socialingSourcesFor(sub.socialing_groups)
+      if (sources.length > 0 && !sources.includes(event.socialing_category)) continue
+    }
 
     // 지역 조건
     if (sub.regions && sub.regions.length > 0) {

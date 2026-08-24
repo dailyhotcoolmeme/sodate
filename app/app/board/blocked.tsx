@@ -29,7 +29,6 @@ export default function BlockedAuthorsScreen() {
   return (
     <View style={styles.container}>
       <TopBar showBack onLogoPress={() => router.replace('/board')} />
-      <Text style={styles.heading}>차단 목록</Text>
 
       {list.length === 0 ? (
         <View style={styles.center}>

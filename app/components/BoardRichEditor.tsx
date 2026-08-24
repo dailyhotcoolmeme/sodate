@@ -23,6 +23,7 @@ export interface RichEditorProps {
   placeholder?: string
   onChangeText?: (plainText: string) => void
   onReady?: () => void
+  onEditorReady?: (editor: unknown) => void   // tentap editor 인스턴스(하단 고정 툴바용)
 }
 
 let Impl: React.ComponentType<any> | null = null

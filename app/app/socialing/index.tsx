@@ -16,6 +16,7 @@ import { useFavorites } from '@/hooks/useFavorites'
 import { useRegions } from '@/hooks/useRegions'
 import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
 import { SOCIALING_GROUPS } from '@/constants/socialingCategories'
+import { DAY_OPTIONS } from '@/constants/filters'
 import { useSocialingFilterStore, useSocialingFilterHydrated, socialingActiveFilterCount, type SocialingFilterState } from '@/stores/socialingFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
 
@@ -28,10 +29,10 @@ import { addRecentSearch } from '@/lib/eventSearchHistory'
  * ⚠️ NEW_TABS_ENABLED 가 false 인 동안은 이 화면으로 올 길이 없다(바텀 내비가 안 뜸).
  */
 const SORT_OPTIONS: { id: SocialingFilterState['sortBy']; label: string }[] = [
+  // 소개팅과 동일하게 3개 — '최신순'까지 넣으면 줄이 넘쳐 '마감제외'가 화면 밖으로 밀린다(2026-08-24).
   { id: 'date', label: '날짜순' },
-  { id: 'created', label: '최신순' },
-  { id: 'price_low', label: '가격낮은순' },
-  { id: 'price_high', label: '가격높은순' },
+  { id: 'price_low', label: '가격 낮은순' },
+  { id: 'price_high', label: '가격 높은순' },
 ]
 
 export default function SocialingScreen() {
@@ -45,13 +46,8 @@ export default function SocialingScreen() {
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
 
   const hydrated = useSocialingFilterHydrated()
-  const { groups, regions, maxPrice, days, sortBy, excludeClosed, toggleGroup, setRegionsBulk, setSortBy, setExcludeClosed, applyDraft, resetFilters } = useSocialingFilterStore()
+  const { groups, regions, maxPrice, days, sortBy, excludeClosed, toggleGroup, setRegionsBulk, setSortBy, setExcludeClosed, setMaxPrice, toggleDay, applyDraft, resetFilters } = useSocialingFilterStore()
   const activeFilterCount = socialingActiveFilterCount({ groups, regions, maxPrice, days })
-  // '전체' 카테고리 칩 = 카테고리만 비운다(지역·가격·요일·정렬은 유지).
-  const clearGroups = useCallback(() => {
-    if (groups.length > 0) applyDraft({ groups: [], regions, maxPrice, days })
-  }, [applyDraft, groups.length, regions, maxPrice, days])
-
   const { events, loading, loadingMore, refetch, loadMore } = useEvents(search, 'socialing')
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
 
@@ -76,6 +72,30 @@ export default function SocialingScreen() {
   const isEmpty = !loading && events.length === 0
   const anyFilterActive = activeFilterCount > 0 || !!search
 
+  // 적용된 필터를 제거 가능한 칩으로(소개팅과 동일). 지역은 완전선택 군은 군 이름으로 묶음.
+  const activeChips: { label: string; onRemove: () => void }[] = []
+  const _remain = new Set(regions)
+  for (const g of regionGroupChips) {
+    if (g.ids.every((id) => _remain.has(id))) {
+      activeChips.push({ label: g.key, onRemove: () => setRegionsBulk(g.ids, false) })
+      g.ids.forEach((id) => _remain.delete(id))
+    }
+  }
+  _remain.forEach((id) => {
+    const lbl = regionOptions.find((r) => r.id === id)?.label ?? id
+    activeChips.push({ label: lbl, onRemove: () => setRegionsBulk([id], false) })
+  })
+  groups.forEach((k) => {
+    const lbl = SOCIALING_GROUPS.find((g) => g.key === k)?.label ?? k
+    activeChips.push({ label: lbl, onRemove: () => toggleGroup(k) })
+  })
+  days.forEach((d) => {
+    const lbl = (DAY_OPTIONS.find((o) => o.id === d)?.label ?? '') + '요일'
+    activeChips.push({ label: lbl, onRemove: () => toggleDay(d) })
+  })
+  if (maxPrice !== null) activeChips.push({ label: `${(maxPrice / 10000).toFixed(0)}만원 이하`, onRemove: () => setMaxPrice(null) })
+  if (search) activeChips.push({ label: `‘${search}’`, onRemove: clearSearch })
+
   return (
     <View style={styles.container}>
       <TopBar onSearchPress={() => setSearchVisible(true)} />
@@ -83,7 +103,6 @@ export default function SocialingScreen() {
       {/* ── 카테고리 빠른칩(다중) — 소개팅 지역/나이대 칩과 동일 리듬(height 34, marginBottom 2) ── */}
       <View style={styles.chipScroll}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          <Chip label="전체" active={groups.length === 0} onPress={clearGroups} colors={colors} />
           {SOCIALING_GROUPS.map((g) => (
             <Chip key={g.key} label={g.label} active={groups.includes(g.key)} onPress={() => toggleGroup(g.key)} colors={colors} />
           ))}
@@ -108,6 +127,23 @@ export default function SocialingScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* ── 활성 필터 칩 + 초기화 — 소개팅과 같은 자리(정렬줄 위) ── */}
+      {activeChips.length > 0 && (
+        <View style={styles.activeFilterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingRight: 8 }}>
+            {activeChips.map((chip, i) => (
+              <TouchableOpacity key={i} style={styles.activeChip} onPress={chip.onRemove}>
+                <Text style={styles.activeChipText}>{chip.label}</Text>
+                <Ionicons name="close" size={11} color={colors.primary} style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity onPress={() => { resetFilters(); clearSearch() }} style={styles.resetBtn}>
+            <Text style={styles.resetText}>초기화</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── 정렬 + 마감제외 + 뷰토글 — 소개팅 resultRow 와 동일 ── */}
       <View style={styles.resultRow}>
@@ -134,16 +170,6 @@ export default function SocialingScreen() {
         </View>
       </View>
 
-      {/* 검색/필터 활성 안내 */}
-      {anyFilterActive && (
-        <View style={styles.searchInfo}>
-          <Text style={styles.searchInfoText} numberOfLines={1}>
-            {search ? `‘${search}’ 검색 결과 ` : '필터 적용 '}{events.length}건
-          </Text>
-          <TouchableOpacity onPress={() => { resetFilters(); clearSearch() }} hitSlop={8}><Text style={styles.searchClear}>초기화</Text></TouchableOpacity>
-        </View>
-      )}
-
       {loading && events.length === 0 ? (
         <View style={styles.center}><AppSpinner /></View>
       ) : isEmpty ? (
@@ -163,7 +189,7 @@ export default function SocialingScreen() {
               <SocialingListItem event={item} isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => toggleFavorite(item.id)} />
             )
           )}
-          contentContainerStyle={{ paddingTop: 4, paddingBottom: insets.bottom + 16 }}
+          contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
@@ -192,7 +218,7 @@ function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     // 필터 칩 줄 — 소개팅과 동일 리듬. 카테고리는 첫 줄(위 여백), 지역은 둘째 줄.
-    chipScroll: { height: 34, marginTop: 6, marginBottom: 2, justifyContent: 'center' },
+    chipScroll: { height: 34, marginBottom: 2, justifyContent: 'center' },
     regionScroll: { height: 34, marginBottom: 2, flexDirection: 'row', alignItems: 'center' },
     chipRow: { paddingHorizontal: 16, alignItems: 'center', gap: 6 },
     // 소개팅 regionChip 과 동일(pH 13, pV 5, r 18, surfaceHigh)
@@ -221,6 +247,11 @@ function makeStyles(colors: AppColors) {
     viewToggle: { flexDirection: 'row', gap: 2, marginLeft: 6, marginRight: 4 },
     viewBtn: { width: 30, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
     viewBtnActive: { backgroundColor: colors.surfaceHigh },
+    activeFilterRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 8, paddingVertical: 6, gap: 8 },
+    activeChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary + '22', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: colors.primary + '44' },
+    activeChipText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
+    resetBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+    resetText: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
     searchInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 9, borderTopWidth: 1, borderTopColor: colors.divider },
     searchInfoText: { flex: 1, fontSize: 13, color: colors.textSecondary },
     searchClear: { fontSize: 13, color: colors.primary, fontWeight: '700' },

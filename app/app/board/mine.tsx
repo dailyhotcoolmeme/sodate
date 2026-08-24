@@ -39,8 +39,7 @@ export default function MyPostsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack onLogoPress={() => router.replace('/board')} />
-      <Text style={styles.heading}>내가 쓴 글</Text>
+      <TopBar showBack title="내가 쓴 글" onLogoPress={() => router.replace('/board')} />
 
       <View style={styles.tabWrap}>
         <TouchableOpacity

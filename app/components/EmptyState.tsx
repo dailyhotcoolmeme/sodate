@@ -64,7 +64,7 @@ export default function EmptyState({ error, onRetry }: { error?: string | null; 
 
   return (
     <View style={styles.container}>
-      <Ionicons name="heart" size={48} color="#FF6B9D" style={{ marginBottom: 16 }} />
+      <Ionicons name="bookmark" size={48} color="#FF6B9D" style={{ marginBottom: 16 }} />
       <Text style={styles.title}>조건에 맞는 소개팅이 없어요</Text>
       <Text style={styles.subtitle}>
         필터를 변경하거나 다른 지역을 선택해보세요

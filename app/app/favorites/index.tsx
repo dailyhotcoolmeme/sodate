@@ -75,10 +75,9 @@ export default function FavoritesScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack />
+      <TopBar showBack title={`관심 ${kind}`} />
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>관심 {kind}</Text>
           <View style={styles.toggleRow}>
             <TouchableOpacity
               style={[styles.viewBtn, viewMode === 'card' && styles.viewBtnActive]}
@@ -115,7 +114,7 @@ export default function FavoritesScreen() {
         </View>
       ) : events.length === 0 ? (
         <View style={styles.center}>
-          <Ionicons name="heart-outline" size={48} color={colors.primary} />
+          <Ionicons name="bookmark" size={48} color={colors.primary} />
           <Text style={styles.emptyText}>아직 관심 {kind}이 없습니다</Text>
           <Text style={styles.emptySubText}>이벤트 카드의 하트를 눌러 저장하세요</Text>
         </View>

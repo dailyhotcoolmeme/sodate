@@ -490,7 +490,7 @@ export default function EventDetailScreen() {
             }}
           >
             <Ionicons
-              name="heart"
+              name="bookmark"
               size={20}
               color={favoriteIds.has(event.id) ? '#FF6B9D' : colors.textTertiary}
             />

@@ -14,6 +14,8 @@ import { sourcesForGroupKeys } from '@/constants/socialingCategories'
 // 페이지네이션(스크롤시 추가 로드)으로 전환 — DB 부하도 한 번에 몰리지 않고 분산됨
 // (마침 그날 Supabase Disk IO 예산 경고 메일도 받아 한 번에 다 끌어오는 걸 피하는 게 유리).
 const PAGE_SIZE = 60
+// 렌더마다 새로 만들면 안 되는 빈 배열(참조 고정) — deps 안정화용. 위 주석 참고.
+const EMPTY_ARR: string[] = []
 
 // 2026-08-07: select('*')가 피드 카드에서 안 쓰는 필드(특히 description — 평균 1,300자,
 // 최대 6,000자 크롤 텍스트)까지 매번 끌고 와서 페이지당 응답이 258KB였다. 카드가 실제로
@@ -95,19 +97,22 @@ export function useEvents(
   const { myAge, myGender } = useProfileStore()
 
   // 소셜링은 나이·테마·해시태그·시간대·업체·기간 필터가 없다(데이터 없음/미사용) → 빈 값.
+  // ⚠️ 빈 배열은 반드시 상수(EMPTY_ARR)를 써야 한다. `isSoc ? [] : x` 처럼 매 렌더 새 배열을
+  //    만들면 cacheKey/useCallback deps 가 매번 달라져 fetch 가 무한 반복된다(스피너가 계속
+  //    돌아 화면이 깜빡이는 것처럼 보였다 — 2026-08-24 오너 지적).
   const regions = isSoc ? soc.regions : dating.regions
   const maxPrice = isSoc ? soc.maxPrice : dating.maxPrice
   const days = isSoc ? soc.days : dating.days
   const sortBy = isSoc ? soc.sortBy : dating.sortBy
   const excludeClosed = isSoc ? soc.excludeClosed : dating.excludeClosed
-  const socGroups = isSoc ? soc.groups : []
+  const socGroups = isSoc ? soc.groups : EMPTY_ARR
   const dateStart = isSoc ? null : dating.dateStart
   const dateEnd = isSoc ? null : dating.dateEnd
-  const themes = isSoc ? [] : dating.themes
-  const hashtags = isSoc ? [] : dating.hashtags
-  const ageGroups = isSoc ? [] : dating.ageGroups
-  const timeSlots = isSoc ? [] : dating.timeSlots
-  const companies = isSoc ? [] : dating.companies
+  const themes = isSoc ? EMPTY_ARR : dating.themes
+  const hashtags = isSoc ? EMPTY_ARR : dating.hashtags
+  const ageGroups = isSoc ? EMPTY_ARR : dating.ageGroups
+  const timeSlots = isSoc ? EMPTY_ARR : dating.timeSlots
+  const companies = isSoc ? EMPTY_ARR : dating.companies
   const effMyAge = isSoc ? null : myAge   // 소셜링은 내 나이 필터 미적용(나이 데이터 없음)
 
   // 캐시를 구분하는 키 — buildQuery가 실제로 참조하는 필터 전부를 담는다.
@@ -215,7 +220,9 @@ export function useEvents(
       query = query.in('event_hour', hoursForTimeSlots(timeSlots))
     }
 
-    // 정렬
+    // 정렬. 값이 같은 행끼리는 DB가 매 요청마다 순서를 다르게 줄 수 있어(정렬 불안정),
+    // 캐시로 먼저 그린 목록과 서버 응답의 순서가 달라 카드가 자리를 바꾸며 깜빡였다
+    // (2026-08-24 오너 지적: 소셜링 상단 2개가 왔다갔다). id 를 마지막 기준으로 넣어 고정한다.
     if (sortBy === 'created') {
       query = query.order('created_at', { ascending: false })
     } else if (sortBy === 'price_low') {
@@ -225,6 +232,7 @@ export function useEvents(
     } else {
       query = query.order('event_date', { ascending: true })
     }
+    query = query.order('id', { ascending: true })
 
     return query.range(from, to)
   }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, effMyAge, search, days, timeSlots, eventType, isSoc, socGroups])

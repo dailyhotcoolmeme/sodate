@@ -152,7 +152,7 @@ export default function MyScreen() {
 
         {/* 관심 — 소개팅·소셜링·혼술바 각각 분리, 오른쪽엔 개수만 */}
         <Text style={styles.grpLabel}>관심</Text>
-        <Row colors={colors} icon="heart-outline" label="관심 소개팅" right={`${datingFavCount}`} onPress={() => router.push('/favorites')} />
+        <Row colors={colors} icon="bookmark" label="관심 소개팅" right={`${datingFavCount}`} onPress={() => router.push('/favorites')} />
         <Row colors={colors} icon="people-outline" label="관심 소셜링" right={`${socialingFavCount}`} onPress={() => router.push({ pathname: '/favorites', params: { type: 'socialing' } })} />
         <Row colors={colors} icon="wine-outline" label="관심 혼술바" right={`${placeFavCount}`} onPress={() => router.push('/favorites/places')} />
         <Row colors={colors} icon="time-outline" label="최근 본 일정·매장" onPress={() => router.push('/my/recent')} />

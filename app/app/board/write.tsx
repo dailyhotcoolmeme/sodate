@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView } from 'react-native'
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Keyboard } from 'react-native'
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
@@ -13,10 +13,11 @@ import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import BoardRichEditor, { RICH_EDITOR_AVAILABLE, type RichEditorHandle } from '@/components/BoardRichEditor'
+import BoardRichToolbar from '@/components/BoardRichToolbar'
 import PollEditor, { emptyPollDraft, durationToEndsAt, type PollDraft } from '@/components/PollEditor'
 import { createPoll } from '@/lib/boardPoll'
 import { VIDEO_ENABLED, pickCompressUploadVideo } from '@/lib/boardVideo'
-import { MAX_IMAGES } from '@/lib/boardImage'
+import { MAX_IMAGES, pickAndUpload } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
 import { setUpdateHold } from '@/lib/appUpdates'
@@ -100,6 +101,25 @@ export default function BoardWriteScreen() {
   // richText 는 서식 뺀 평문 미러 — 등록 가능 여부·글자수 판단용.
   const richRef = useRef<RichEditorHandle>(null)
   const [richText, setRichText] = useState('')
+  // tentap editor 인스턴스 — 하단 고정 툴바(BoardRichToolbar)에 넘긴다.
+  const [richEditor, setRichEditor] = useState<unknown>(null)
+  // 키보드가 올라와 있을 때만 리치 툴바 바를 그린다(내려가면 빈 바 안 남게).
+  const [kbUp, setKbUp] = useState(false)
+  useEffect(() => {
+    const s = Keyboard.addListener('keyboardWillShow', () => setKbUp(true))
+    const h = Keyboard.addListener('keyboardWillHide', () => setKbUp(false))
+    return () => { s.remove(); h.remove() }
+  }, [])
+  // 리치모드 사진·GIF — 골라 R2 업로드 후 에디터 본문에 인라인 삽입.
+  const [richUploading, setRichUploading] = useState(false)
+  const insertRichMedia = async (mode: 'photo' | 'gif') => {
+    if (richUploading) return
+    setRichUploading(true)
+    const r = await pickAndUpload(mode)
+    setRichUploading(false)
+    if (r && 'url' in r) richRef.current?.insertImage(r.url)
+    else if (r && 'error' in r) Alert.alert('알림', r.error)
+  }
   // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
   const [poll, setPoll] = useState<PollDraft | null>(null)
   // 동영상(숨김 기능 — VIDEO_ENABLED=false 라 버튼 안 보임). R2 업로드 URL 목록.
@@ -232,18 +252,16 @@ export default function BoardWriteScreen() {
               <Text style={styles.nickReadonlyText} numberOfLines={1}>{nickname || '미설정'}</Text>
               <Ionicons name="pencil" size={13} color={colors.textTertiary} />
             </TouchableOpacity>
-            <Text style={styles.hint}>MY에서 변경</Text>
           </View>
 
-          {(boardTags.length > 0 || editingTag) && (
-            <View style={styles.tagCol}>
-              <Text style={styles.label}>말머리</Text>
-              <TouchableOpacity style={styles.select} onPress={() => setTagPickerOpen(true)} activeOpacity={0.75}>
-                <Text style={styles.selectText} numberOfLines={1}>{selectedTagLabel}</Text>
-                <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          )}
+          {/* 말머리 — 항상 보이게(로딩 레이스로 사라지던 문제 수정 2026-08-24). 목록 비어도 '선택 안함'. */}
+          <View style={styles.tagCol}>
+            <Text style={styles.label}>말머리</Text>
+            <TouchableOpacity style={styles.select} onPress={() => setTagPickerOpen(true)} activeOpacity={0.75}>
+              <Text style={styles.selectText} numberOfLines={1}>{selectedTagLabel}</Text>
+              <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TagPickerModal
@@ -284,6 +302,7 @@ export default function BoardWriteScreen() {
                 initialHTML={content}
                 placeholder="내용을 입력하세요"
                 onChangeText={setRichText}
+                onEditorReady={setRichEditor}
               />
             </View>
           ) : (
@@ -430,6 +449,32 @@ export default function BoardWriteScreen() {
       </KeyboardStickyView>
       )}
 
+      {/* 리치에디터 하단 고정 툴바 — 키보드 위에 붙는다(서식·이미지 등). 에디터 본체와 분리해
+          화면 최하단에서 그려야 키보드에 안 가린다(2026-08-24 개판 수정). */}
+      {RICH_EDITOR_AVAILABLE && !!richEditor && kbUp && (
+        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
+          {/* 한 줄: 사진·GIF(왼쪽) + 서식 툴바(오른쪽 스크롤) — 네이버 카페처럼 한 줄에 */}
+          <View
+            style={styles.richToolbarBar}
+            onLayout={(e) => setToolbarH(e.nativeEvent.layout.height)}
+          >
+            <TouchableOpacity style={styles.richMediaBtn} onPress={() => insertRichMedia('photo')} disabled={richUploading} hitSlop={6}>
+              <Ionicons name="image-outline" size={23} color={richUploading ? colors.textTertiary : colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.richMediaBtn} onPress={() => insertRichMedia('gif')} disabled={richUploading} hitSlop={6}>
+              <Text style={[styles.richGifText, richUploading && { color: colors.textTertiary }]}>GIF</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.richMediaBtn} onPress={linksApi.openAdd} hitSlop={6}>
+              <Ionicons name="logo-youtube" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <View style={styles.richDivider} />
+            <View style={styles.richToolbarInner}>
+              <BoardRichToolbar editor={richEditor} />
+            </View>
+          </View>
+        </KeyboardStickyView>
+      )}
+
       <LinkInputModal api={linksApi} />
 
       <LoadingOverlay visible={saving || loading} />
@@ -546,6 +591,12 @@ function makeStyles(colors: AppColors) {
     belowHint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 6, lineHeight: 17 },
     // 리치에디터 박스(재빌드 후) — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
     richBox: { minHeight: 320, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // 배경 없음(투명) — tentap 툴바가 흰 직사각형이라 라운드 사이에 빈틈이 보였다(2026-08-24).
+    richToolbarBar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingLeft: 10, borderTopWidth: 1, borderTopColor: colors.divider },
+    richMediaBtn: { paddingHorizontal: 8, height: 48, justifyContent: 'center' },
+    richGifText: { fontSize: 15, fontWeight: '800', color: colors.textSecondary, letterSpacing: 0.3 },
+    richDivider: { width: 1, height: 22, backgroundColor: colors.divider, marginHorizontal: 6 },
+    richToolbarInner: { flex: 1, height: 48 },
     addPoll: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed' },
     addPollText: { fontSize: 14, color: colors.primary, fontWeight: '700' },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },

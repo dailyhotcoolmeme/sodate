@@ -21,9 +21,8 @@ export default function TermsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack />
+      <TopBar showBack title="이용약관" />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
-        <Text style={styles.title}>이용약관</Text>
         <Text style={styles.date}>시행일: 2026년 8월 13일 (직전 개정: 2026년 7월 20일)</Text>
 
         <Text style={styles.sectionTitle}>제1조 (목적)</Text>

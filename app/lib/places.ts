@@ -44,6 +44,13 @@ const COLUMNS =
 // 방문자 키워드 투표(사실) → 해시태그처럼 보여줄 태그 배열(상위순). 생성·범용 항목은 제외.
 // 공백을 없애 해시태그 형태로("술이 다양해요"→"술이다양해요"). 많으면 카드에서 가로 스와이프.
 const SUMMARY_SKIP = new Set(['친절해요', '매장이 청결해요', '화장실이 깨끗해요', '주차', '응대가 좋아요'])
+/** 지도 원형 마커 이미지 URL — 대표사진(naverpic)에서 파생(honsul/marker/{id}.png, gen_map_markers.py로 생성). */
+export function placeMarkerUrl(p: Pick<PlaceRow, 'profile_image'>): string | undefined {
+  const u = p.profile_image
+  if (!u || !u.includes('/naverpic/')) return undefined
+  return u.replace('/naverpic/', '/marker/').replace(/\.webp$/, '.png')
+}
+
 export function reviewHashtags(votes: Record<string, number> | null | undefined, max = 7): string[] {
   if (!votes) return []
   return Object.entries(votes)

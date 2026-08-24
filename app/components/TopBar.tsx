@@ -26,6 +26,7 @@ const SEG_THUMB_INSET = 2
  */
 export default function TopBar({
   showBack = false,
+  title,
   onLogoPress,
   onBeforeNavigate,
   segment,
@@ -36,6 +37,9 @@ export default function TopBar({
   onCloseToggleTip,
 }: {
   showBack?: boolean
+  /** 서브페이지 인라인 제목(2026-08-24 조사·오너 A안 확정). 주면 로고·토글 대신
+   *  가운데 작은 제목을 그린다 — Apple HIG·문토 방식(하위 화면은 큰 제목 안 씀). */
+  title?: string
   onLogoPress?: () => void
   onBeforeNavigate?: () => void // 메뉴 이동 직전(예: 열린 모달 닫기)
   // 일정 ↔ 게시판 전환. 지금 있는 화면에 따라 알아서 정해지므로 보통 안 넘겨도 된다.
@@ -132,6 +136,8 @@ export default function TopBar({
     },
     left: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0, flexShrink: 1 },
     backBtn: { paddingRight: 2 },
+    // 서브페이지 인라인 제목 — 큰 제목 대신(A안). 뒤로가기 옆, 본문 좌측선과 맞춘다.
+    inlineTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.3 },
     logoBtn: { flexDirection: 'row', alignItems: 'center' },
     // 하트+"소개팅모아"가 한 이미지로 된 워드마크(원본 1042x231 = 4.51:1).
     // 라이트·다크 양쪽에서 보이는 핑크 버전만 사용(검정/흰색은 한쪽에서 사라짐).
@@ -222,7 +228,7 @@ export default function TopBar({
       ? [{ label: '차단 목록', icon: 'eye-off-outline', action: () => router.push('/board/blocked') }]
       : [
           { label: '후기 모음', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
-          { label: '관심 모임', icon: 'heart-outline', action: () => router.push('/favorites') },
+          { label: '관심 모임', icon: 'bookmark', action: () => router.push('/favorites') },
           { label: '알림 설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
           { label: '내 정보', icon: 'person-outline', action: () => useProfileSheetStore.getState().openSheet() },
         ]),
@@ -248,6 +254,9 @@ export default function TopBar({
               <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
           )}
+          {title ? (
+            <Text style={styles.inlineTitle} numberOfLines={1}>{title}</Text>
+          ) : (
           <TouchableOpacity style={styles.logoBtn} activeOpacity={0.7}
             // 게시판 안에서는 게시판 홈으로 간다. 로고를 눌렀다고 일정으로 튕기면
             // 쓰던 흐름이 끊긴다(2026-07-31 오너 지적).
@@ -259,10 +268,11 @@ export default function TopBar({
               accessibilityLabel="소개팅모아"
             />
           </TouchableOpacity>
+          )}
 
           {/* 소개팅↔커뮤니티 토글 — 5탭 개편(NEW_TABS_ENABLED)에선 탭으로 이동하므로 제거.
               운영 앱(2탭)은 그대로 유지. */}
-          {!NEW_TABS_ENABLED && (<>
+          {!NEW_TABS_ENABLED && !title && (<>
           <View style={styles.segSwitchWrap}>
             <TouchableOpacity
               activeOpacity={0.85}

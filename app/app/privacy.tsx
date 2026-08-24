@@ -21,9 +21,8 @@ export default function PrivacyScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack />
+      <TopBar showBack title="개인정보처리방침" />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
-        <Text style={styles.title}>개인정보처리방침</Text>
         <Text style={styles.date}>시행일: 2026년 8월 19일 (직전 개정: 2026년 8월 13일)</Text>
 
         <Text style={styles.body}>

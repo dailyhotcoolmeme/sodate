@@ -9,10 +9,14 @@ import EventSearchModal from '@/components/EventSearchModal'
 import AppSpinner from '@/components/AppSpinner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { fetchPlaces, type PlaceRow } from '@/lib/places'
+import { fetchPlaces, placeMarkerUrl, openStatus, type PlaceRow } from '@/lib/places'
+import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
+import { sanggwonFor } from '@/constants/honsulSanggwon'
+import { getMyLocation, distanceKm } from '@/lib/nearby'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
+import PlaceMapCard from '@/components/PlaceMapCard'
 import { useRouter } from 'expo-router'
 
 /**
@@ -31,7 +35,11 @@ export default function HonsulScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [tab, setTab] = useState<Tab>('feed')
-  const [region, setRegion] = useState<string | null>(null)
+  const [regionGroup, setRegionGroup] = useState<string | null>(null)   // 지역군(강남권…) — 소개팅·소셜링과 동일
+  const [sanggwon, setSanggwon] = useState<string | null>(null)         // 상권(홍대·서면…) — 지역군 아래 세부
+  const [openNow, setOpenNow] = useState(false)                    // 영업중만
+  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null) // 내 주변(거리정렬)
+  const [locBusy, setLocBusy] = useState(false)
   const [tag, setTag] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
@@ -45,23 +53,76 @@ export default function HonsulScreen() {
   useEffect(() => { load() }, [load])
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false) }, [load])
 
-  const regions = useMemo(() => Array.from(new Set(all.map((p) => p.region).filter(Boolean))) as string[], [all])
+  // 매장별 상권·지역군 1회 계산. 지역군은 주소(도로명) 기준 — region(동)은 분류가 안 된다.
+  const sangOf = useMemo(() => {
+    const m = new Map<string, string | null>()
+    for (const p of all) m.set(p.id, sanggwonFor(p.lat, p.lng))
+    return m
+  }, [all])
+  const groupOf = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of all) m.set(p.id, regionGroupKey(p.address_road ?? p.region ?? ''))
+    return m
+  }, [all])
+  // 지역군 칩 — 소개팅·소셜링과 같은 순서(강남권·강북권·강서권·경기…), 매장 있는 것만.
+  const regionGroups = useMemo(() => {
+    const has = new Set([...all].map((p) => groupOf.get(p.id)))
+    return REGION_GROUP_ORDER.map((g) => g.key).filter((k) => has.has(k))
+  }, [all, groupOf])
+  // 상권 목록 = 매장 있는 상권만, 매장수 많은 순. 지역군 선택 시 그 안의 상권만.
+  const sanggwons = useMemo(() => {
+    const c = new Map<string, number>()
+    for (const p of all) {
+      if (regionGroup && groupOf.get(p.id) !== regionGroup) continue
+      const s = sangOf.get(p.id); if (s) c.set(s, (c.get(s) ?? 0) + 1)
+    }
+    return [...c.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
+  }, [all, sangOf, groupOf, regionGroup])
+
   const list = useMemo(() => {
     const q = search.trim()
-    return all.filter((p) =>
-      (!region || p.region === region) &&
+    const filtered = all.filter((p) =>
+      (!regionGroup || groupOf.get(p.id) === regionGroup) &&
+      (!sanggwon || sangOf.get(p.id) === sanggwon) &&
+      (!openNow || openStatus(p.hours).open === true) &&
       (!tag || [...p.honsul_badges, ...p.mood_tags].includes(tag)) &&
-      (!q || p.name.includes(q) || (p.region ?? '').includes(q))
+      (!q || p.name.includes(q) || (p.region ?? '').includes(q)),
     )
-  }, [all, region, tag, search])
+    // 내 주변이면 거리순, 아니면 원래 순서.
+    if (myLoc) {
+      return filtered
+        .map((p) => ({ p, d: p.lat != null && p.lng != null ? distanceKm(myLoc.lat, myLoc.lng, p.lat, p.lng) : Infinity }))
+        .sort((a, b) => a.d - b.d)
+        .map((x) => x.p)
+    }
+    return filtered
+  }, [all, regionGroup, sanggwon, openNow, tag, search, myLoc, sangOf, groupOf])
 
   const openOnMap = (p: PlaceRow) => { setFocused(p); setTab('map') }
+
+  // 적용된 필터칩 — 소개팅·소셜링과 완전히 동일한 규격(activeChip + 초기화).
+  const activeChips: { label: string; onRemove: () => void }[] = []
+  if (regionGroup) activeChips.push({ label: regionGroup, onRemove: () => { setRegionGroup(null); setSanggwon(null) } })
+  if (sanggwon) activeChips.push({ label: sanggwon, onRemove: () => setSanggwon(null) })
+  if (tag) activeChips.push({ label: tag, onRemove: () => setTag(null) })
+  if (openNow) activeChips.push({ label: '영업중', onRemove: () => setOpenNow(false) })
+  if (search) activeChips.push({ label: `‘${search}’`, onRemove: () => setSearch('') })
+  const resetAll = () => { setRegionGroup(null); setSanggwon(null); setTag(null); setOpenNow(false); setSearch('') }
+
+  // 내 주변 — 위치 얻어 거리순 정렬. 다시 누르면 해제.
+  const toggleNearby = useCallback(async () => {
+    if (myLoc) { setMyLoc(null); return }
+    setLocBusy(true)
+    const loc = await getMyLocation()
+    setLocBusy(false)
+    if (loc) setMyLoc(loc)
+  }, [myLoc])
 
   return (
     <View style={styles.container}>
       <TopBar onSearchPress={() => setSearchVisible(true)} />
 
-      {/* 피드 / 지도 탭 */}
+      {/* 피드 / 지도 탭 + 내 주변(오른쪽) */}
       <View style={styles.tabs}>
         <TouchableOpacity style={[styles.tab, tab === 'feed' && styles.tabOn]} onPress={() => setTab('feed')} activeOpacity={0.8}>
           <Text style={[styles.tabText, tab === 'feed' && styles.tabTextOn]}>피드</Text>
@@ -69,22 +130,58 @@ export default function HonsulScreen() {
         <TouchableOpacity style={[styles.tab, tab === 'map' && styles.tabOn]} onPress={() => setTab('map')} activeOpacity={0.8}>
           <Text style={[styles.tabText, tab === 'map' && styles.tabTextOn]}>지도</Text>
         </TouchableOpacity>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity style={[styles.nearBtn, myLoc && styles.nearBtnOn]} onPress={toggleNearby} activeOpacity={0.8} disabled={locBusy}>
+          <Ionicons name={myLoc ? 'navigate' : 'navigate-outline'} size={14} color={myLoc ? colors.primary : colors.textSecondary} />
+          <Text style={[styles.nearText, myLoc && styles.nearTextOn]}>{locBusy ? '위치 확인…' : '내 주변'}</Text>
+        </TouchableOpacity>
       </View>
 
       {tab === 'feed' ? (
         <>
-          {/* 지역 칩 */}
+          {/* 지역군 칩(강남권·강북권…) — 소개팅·소셜링과 동일 */}
           <View style={styles.regionScroll}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} style={{ flex: 1 }}>
-              <Chip label="전체" active={region === null} onPress={() => setRegion(null)} colors={colors} />
-              {regions.map((r) => <Chip key={r} label={r} active={region === r} onPress={() => setRegion(region === r ? null : r)} colors={colors} />)}
+              {regionGroups.map((g) => (
+                <Chip key={g} label={g} active={regionGroup === g}
+                  onPress={() => { const next = regionGroup === g ? null : g; setRegionGroup(next); setSanggwon(null) }} colors={colors} />
+              ))}
             </ScrollView>
           </View>
 
-          <View style={styles.countRow}>
-            <Text style={styles.countText}>{list.length}곳</Text>
-            {tag && <FilterChip label={`#${tag}`} onClear={() => setTag(null)} styles={styles} colors={colors} />}
-            {!!search && <FilterChip label={`‘${search}’`} onClear={() => setSearch('')} styles={styles} colors={colors} />}
+          {/* 상권 칩(홍대·서면…) — 지역군 아래 세부 */}
+          <View style={styles.regionScroll}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} style={{ flex: 1 }}>
+              {sanggwons.map((s) => <Chip key={s} label={s} active={sanggwon === s} onPress={() => setSanggwon(sanggwon === s ? null : s)} colors={colors} />)}
+            </ScrollView>
+          </View>
+
+          {/* ── 활성 필터 칩 + 초기화 — 소개팅·소셜링과 동일(정렬줄 위, 같은 규격) ── */}
+          {activeChips.length > 0 && (
+            <View style={styles.activeFilterRow}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingRight: 8 }}>
+                {activeChips.map((chip, i) => (
+                  <TouchableOpacity key={i} style={styles.activeChip} onPress={chip.onRemove}>
+                    <Text style={styles.activeChipText}>{chip.label}</Text>
+                    <Ionicons name="close" size={11} color={colors.primary} style={{ marginLeft: 4 }} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity onPress={resetAll} style={styles.resetBtn}>
+                <Text style={styles.resetText}>초기화</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* 영업중 — 소개팅 '마감제외'와 같은 체크박스 방식 */}
+          <View style={styles.resultRow}>
+            <TouchableOpacity style={[styles.sortChip, styles.excludeChip, openNow && styles.excludeChipActive]} onPress={() => setOpenNow((v) => !v)}>
+              <View style={[styles.checkbox, openNow && styles.checkboxOn]}>
+                {openNow && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}
+              </View>
+              <Text style={[styles.sortChipText, openNow && styles.sortChipTextActive]}>영업중</Text>
+            </TouchableOpacity>
+            {myLoc && <Text style={styles.countText}>가까운순</Text>}
           </View>
 
           {loading ? (
@@ -103,7 +200,7 @@ export default function HonsulScreen() {
                 <PlaceListItem place={item} onTagPress={setTag} onMapPress={openOnMap}
                   isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => toggleFav(item.id)} />
               )}
-              contentContainerStyle={{ paddingTop: 4, paddingBottom: insets.bottom + 16 }}
+              contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
               showsVerticalScrollIndicator={false}
             />
@@ -116,19 +213,33 @@ export default function HonsulScreen() {
           const center = focused && focused.lat != null ? focused : pinned[0]
           if (NAVER_MAP_AVAILABLE && center?.lat != null && center?.lng != null) {
             return (
-              <PlaceMap
-                style={{ flex: 1 }}
-                focus={{ lat: center.lat, lng: center.lng }}
-                zoom={focused ? 15 : 12}
-                pins={pinned.map((p) => ({
-                  id: p.id,
-                  lat: p.lat!,
-                  lng: p.lng!,
-                  name: p.name,
-                  active: focused?.id === p.id,
-                  onPress: () => router.push(`/place/${p.id}`),
-                }))}
-              />
+              <View style={{ flex: 1 }}>
+                <PlaceMap
+                  style={{ flex: 1 }}
+                  focus={{ lat: center.lat, lng: center.lng }}
+                  zoom={focused ? 16 : 12}
+                  showLocationButton
+                  cluster
+                  onTapPin={(id) => setFocused(pinned.find((p) => p.id === id) ?? null)}
+                  pins={pinned.map((p) => ({
+                    id: p.id,
+                    lat: p.lat!,
+                    lng: p.lng!,
+                    name: p.name,
+                    markerUrl: placeMarkerUrl(p),
+                    active: focused?.id === p.id,
+                  }))}
+                />
+                {focused && (
+                  <PlaceMapCard
+                    place={focused}
+                    isFavorite={favoriteIds.has(focused.id)}
+                    onToggleFavorite={() => toggleFav(focused.id)}
+                    onOpen={() => router.push(`/place/${focused.id}`)}
+                    onClose={() => setFocused(null)}
+                  />
+                )}
+              </View>
             )
           }
           return (
@@ -155,25 +266,37 @@ function Chip({ label, active, onPress, colors }: { label: string; active: boole
     </TouchableOpacity>
   )
 }
-function FilterChip({ label, onClear, styles, colors }: { label: string; onClear: () => void; styles: any; colors: AppColors }) {
-  return (
-    <TouchableOpacity style={styles.tagFilterChip} onPress={onClear} activeOpacity={0.7}>
-      <Text style={styles.tagFilterText}>{label}</Text>
-      <Ionicons name="close" size={12} color={colors.primary} />
-    </TouchableOpacity>
-  )
-}
 
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    tabs: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 6, gap: 18, borderBottomWidth: 1, borderBottomColor: colors.divider },
+    tabs: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 6, gap: 18, borderBottomWidth: 1, borderBottomColor: colors.divider },
     tab: { paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
     tabOn: { borderBottomColor: colors.primary },
     tabText: { fontSize: 15, fontWeight: '700', color: colors.textTertiary },
     tabTextOn: { color: colors.textPrimary, fontWeight: '800' },
-    regionScroll: { height: 34, marginTop: 6, marginBottom: 2, flexDirection: 'row', alignItems: 'center' },
+    regionScroll: { height: 34, marginBottom: 2, flexDirection: 'row', alignItems: 'center' },
     chipRow: { paddingHorizontal: 16, alignItems: 'center', gap: 6 },
+    // 내 주변 — 피드/지도 탭 오른쪽
+    nearBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4, paddingVertical: 5, marginBottom: 8 },
+    nearBtnOn: {},
+    nearText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+    nearTextOn: { color: colors.primary, fontWeight: '800' },
+    // 활성 필터칩 — 소개팅·소셜링과 완전히 동일한 값
+    activeFilterRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 8, paddingVertical: 6, gap: 8 },
+    activeChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary + '22', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: colors.primary + '44' },
+    activeChipText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
+    resetBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+    resetText: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
+    // 영업중 — 소개팅 '마감제외'와 동일 규격
+    resultRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 4, paddingVertical: 6 },
+    sortChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+    sortChipText: { fontSize: 12, color: colors.textTertiary, fontWeight: '500' },
+    sortChipTextActive: { color: colors.primary, fontWeight: '700' },
+    excludeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 2 },
+    excludeChipActive: { backgroundColor: '#FF6B9D18', borderColor: colors.primary, paddingLeft: 10 },
+    checkbox: { width: 15, height: 15, borderRadius: 4, borderWidth: 1.5, borderColor: colors.textTertiary, alignItems: 'center', justifyContent: 'center' },
+    checkboxOn: { borderColor: colors.primary, backgroundColor: colors.primary },
     chip: { paddingHorizontal: 13, paddingVertical: 5, borderRadius: 18, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
     chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },

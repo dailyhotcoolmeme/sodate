@@ -59,9 +59,8 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack />
+      <TopBar showBack title="알림" />
       <View style={styles.header}>
-        <Text style={styles.title}>알림</Text>
         {items.length > 0 && (
           <TouchableOpacity onPress={confirmDeleteAll} hitSlop={8}>
             <Text style={styles.clearAll}>전체 삭제</Text>
@@ -98,7 +97,7 @@ export default function NotificationsScreen() {
               delayLongPress={350}
             >
               <View style={styles.iconWrap}>
-                <Ionicons name="heart" size={18} color={colors.primary} />
+                <Ionicons name="bookmark" size={18} color={colors.primary} />
                 {!n.read && <View style={styles.dot} />}
               </View>
               <View style={styles.rowText}>

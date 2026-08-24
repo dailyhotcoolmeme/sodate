@@ -68,7 +68,7 @@ export default function SocialingCard({ event, isFavorite = false, onToggleFavor
             onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }}
             activeOpacity={0.8}
           >
-            <Ionicons name="heart" size={18} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
+            <Ionicons name="bookmark" size={18} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
           </TouchableOpacity>
         )}
       </View>

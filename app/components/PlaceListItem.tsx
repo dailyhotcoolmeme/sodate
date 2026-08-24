@@ -33,7 +33,7 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
       {/* 하트 — 소개팅과 동일(우상단·size20·#FF6B9D) */}
       {onToggleFavorite && (
         <TouchableOpacity style={styles.heart} onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }} activeOpacity={0.8} hitSlop={6}>
-          <Ionicons name="heart" size={20} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
+          <Ionicons name="bookmark" size={20} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
         </TouchableOpacity>
       )}
 
@@ -87,7 +87,7 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
 
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 12, marginHorizontal: 16, marginVertical: 4, paddingVertical: 11, paddingHorizontal: 13, gap: 12 },
+    row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 12, marginHorizontal: 16, marginVertical: 5, paddingVertical: 11, paddingHorizontal: 13, gap: 12 },
     heart: { position: 'absolute', top: 8, right: 10, zIndex: 2 },
     avWrap: { position: 'relative' },
     av: { width: AV, height: AV, borderRadius: AV / 2, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.divider },

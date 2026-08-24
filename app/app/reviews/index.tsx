@@ -244,9 +244,8 @@ export default function ReviewsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack />
+      <TopBar showBack title="후기 모아보기" />
       <View style={styles.header}>
-        <Text style={styles.title}>후기 모아보기</Text>
         <Text style={styles.subtitle}>실제 참여자들의 솔직한 후기</Text>
       </View>
 

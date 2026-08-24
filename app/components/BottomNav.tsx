@@ -73,7 +73,7 @@ export default function BottomNav({ current }: { current: TabKey }) {
           accessibilityRole="tab" accessibilityLabel="커뮤니티"
           accessibilityState={{ selected: boardOn }}
         >
-          <Ionicons name="chatbubble-ellipses" size={27} color="#fff" />
+          <Ionicons name="chatbubble-ellipses" size={32} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -96,10 +96,10 @@ function makeStyles(colors: AppColors) {
     },
     label: { fontSize: 10, color: colors.textTertiary },
     labelOn: { color: colors.primary, fontWeight: '800' },
-    // 가운데 홈 — 바 위로 16 튀어나온다. margin-top 음수로 끌어올린다.
-    homeSlot: { flexShrink: 0, marginHorizontal: 6, marginTop: -16 },
+    // 가운데 홈(메인) — 바 위쪽 선을 넘치게 크게 튀어나온다. margin-top 음수로 끌어올린다.
+    homeSlot: { flexShrink: 0, marginHorizontal: 6, marginTop: -24 },
     homeBtn: {
-      width: 56, height: 56, borderRadius: 999,
+      width: 64, height: 64, borderRadius: 999,
       backgroundColor: `${colors.primary}CC`,   // 비선택: 살짝 연하게
       alignItems: 'center', justifyContent: 'center',
       borderWidth: 3, borderColor: colors.background,
