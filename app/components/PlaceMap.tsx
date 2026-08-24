@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { TurboModuleRegistry, UIManager, type StyleProp, type ViewStyle } from 'react-native'
+import { TurboModuleRegistry, UIManager, View, Text, type StyleProp, type ViewStyle } from 'react-native'
 
 /**
  * 혼술바 지도(네이버 지도). 히어로(단일 핀)·지도탭(다수 핀·클러스터) 공용.
@@ -112,9 +112,10 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
     : undefined
 
   return (
+    <View style={style}>
     <NaverMapView
       ref={ref}
-      style={style}
+      style={{ flex: 1 }}
       initialCamera={{ latitude: focus.lat, longitude: focus.lng, zoom }}
       isShowLocationButton={showLocationButton}
       isShowZoomControls={cluster}
@@ -162,5 +163,16 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
         )
       })}
     </NaverMapView>
+    {/* 임시 디버그 — 실제 기기에서 CLUSTER_MAX_ZOOM 값을 눈으로 보면서 맞는 숫자를 잡기 위함
+        (2026-08-25). 여러 번 숫자를 추측했다가 계속 틀려서, 이번엔 오너가 화면으로 직접
+        실제 zoom 값을 보고 알려주면 그 값으로 정확히 맞춘다. 값 확정되면 이 블록은 지운다. */}
+    {cluster && (
+      <View pointerEvents="none" style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+        <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
+          zoom {camZoom.toFixed(2)} (경계 {CLUSTER_MAX_ZOOM})
+        </Text>
+      </View>
+    )}
+    </View>
   )
 }
