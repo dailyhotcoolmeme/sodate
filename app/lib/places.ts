@@ -145,11 +145,19 @@ export function osmTiles(lat: number, lng: number, w: number, h: number, z = 16)
 /** 주변 매장 — 히어로 지도 미리보기 카드에 필요한 필드까지 전부 한 번에 가져온다.
  *  예전엔 좌표만 가져와서, 점을 누를 때마다 fetchPlace() 로 또 네트워크를 타서 카드가
  *  "한참 뒤에" 떴다(2026-08-24 오너 지적) — 탭하는 순간 이미 메모리에 있는 값을 바로
- *  보여주도록 한 번에 미리 받아둔다. */
-export async function fetchNearbyPlaces(exceptId: string): Promise<PlaceRow[]> {
+ *  보여주도록 한 번에 미리 받아둔다.
+ *
+ *  ⚠️(2026-08-24, 두 번째 지적: "점 누를때 뜨는게 느려터졌다") — 원인은 이 함수 자체였다.
+ *  radiusDeg 없이 전국 모든 honsul 매장을 이미지·소셜 등 전체 컬럼까지 다 긁어오고
+ *  있었다 — "주변"인데 전국을 다 받아오니 느릴 수밖에. lat/lng 기준 대략 5km 박스로
+ *  좁힌다(위경도 1도 ≈ 111km, 0.045 ≈ 5km).
+ */
+export async function fetchNearbyPlaces(exceptId: string, lat: number, lng: number, radiusDeg = 0.045): Promise<PlaceRow[]> {
   const sb = supabase as unknown as { from: (t: string) => any }
   const { data } = await sb.from('places').select(COLUMNS)
     .eq('service', 'honsul').eq('is_active', true).not('lat', 'is', null)
+    .gte('lat', lat - radiusDeg).lte('lat', lat + radiusDeg)
+    .gte('lng', lng - radiusDeg).lte('lng', lng + radiusDeg)
   return ((data ?? []) as PlaceRow[]).filter((p) => p.id !== exceptId)
 }
 

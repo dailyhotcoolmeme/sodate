@@ -31,7 +31,7 @@ export default function PlaceMapCard({
         <Image source={{ uri: place.profile_image ?? place.thumbnail_url ?? undefined }} style={styles.photo} contentFit="cover" />
         <View style={styles.info}>
           <View style={styles.titleRow}>
-            <Text style={styles.name} numberOfLines={1}>{place.name}</Text>
+            <Text style={styles.name} numberOfLines={compact ? 2 : 1}>{place.name}</Text>
             <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }} hitSlop={8}>
               <Ionicons name="bookmark" size={compact ? 17 : 22} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
             </TouchableOpacity>
@@ -69,7 +69,9 @@ function makeStyles(colors: AppColors, compact: boolean) {
     card: {
       flexDirection: 'row', gap: compact ? 8 : 12, backgroundColor: colors.surface, borderRadius: compact ? 12 : 16, padding: compact ? 8 : 12,
       shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: compact ? 8 : 14, shadowOffset: { width: 0, height: compact ? 3 : 6 }, elevation: compact ? 5 : 8,
-      ...(compact ? { maxWidth: 230 } : null),
+      // 230은 너무 좁아서 가게 이름이 "서울혼..."처럼 잘렸다(오너 지적) — 이름은 2줄까지
+      // 허용하고(위 numberOfLines) 폭도 넉넉히 늘렸다. 그래도 화면 끝까지는 안 늘어난다.
+      ...(compact ? { maxWidth: 300 } : null),
     },
     photo: { width: compact ? 52 : 92, height: compact ? 52 : 92, borderRadius: compact ? 8 : 12, backgroundColor: colors.surfaceHigh },
     info: compact

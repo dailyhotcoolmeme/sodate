@@ -74,7 +74,7 @@ export default function PlaceDetailScreen() {
         if (!alive) return
         setPlace(p)
         setReviews(await fetchPlaceReviews(String(id)))
-        if (p?.lat) setNearby(await fetchNearbyPlaces(String(id)))
+        if (p?.lat && p?.lng) setNearby(await fetchNearbyPlaces(String(id), p.lat, p.lng))
       } catch { /* 무시 */ } finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
