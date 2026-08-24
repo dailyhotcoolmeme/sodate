@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pres
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
+import * as Updates from 'expo-updates'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -371,6 +372,12 @@ export default function BoardWriteScreen() {
           욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
         </Text>
 
+        {/* 임시 디버그 표시 — 지금 이 화면이 실제로 몇 번째 OTA를 실행 중인지 스크린샷만으로
+            바로 확인하기 위함(2026-08-24, "배포했는데 똑같다" 반복 확인용). 확인 끝나면 제거. */}
+        <Text style={styles.debugTag}>
+          build: {Updates.updateId ? Updates.updateId.slice(0, 8) : '내장(embedded)'}
+        </Text>
+
         {!isEdit && agreedLoaded && !initiallyAgreed && (
           <View style={styles.agreeRow}>
             <TouchableOpacity
@@ -640,6 +647,7 @@ function makeStyles(colors: AppColors) {
     richDivider: { width: 1, height: 22, backgroundColor: colors.divider, marginHorizontal: 6 },
     richToolbarInner: { flex: 1, height: 48 },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
+    debugTag: { fontSize: 10, color: colors.textTertiary, textAlign: 'center', opacity: 0.5 },
 
     agreeRow: {
       flexDirection: 'row', alignItems: 'flex-start', gap: 8,
