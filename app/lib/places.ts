@@ -142,13 +142,15 @@ export function osmTiles(lat: number, lng: number, w: number, h: number, z = 16)
   return { tiles, project }
 }
 
-export async function fetchNearbyCoords(exceptId: string): Promise<{ id: string; lat: number | null; lng: number | null }[]> {
+/** 주변 매장 — 히어로 지도 미리보기 카드에 필요한 필드까지 전부 한 번에 가져온다.
+ *  예전엔 좌표만 가져와서, 점을 누를 때마다 fetchPlace() 로 또 네트워크를 타서 카드가
+ *  "한참 뒤에" 떴다(2026-08-24 오너 지적) — 탭하는 순간 이미 메모리에 있는 값을 바로
+ *  보여주도록 한 번에 미리 받아둔다. */
+export async function fetchNearbyPlaces(exceptId: string): Promise<PlaceRow[]> {
   const sb = supabase as unknown as { from: (t: string) => any }
-  const { data } = await sb.from('places').select('id,lat,lng')
+  const { data } = await sb.from('places').select(COLUMNS)
     .eq('service', 'honsul').eq('is_active', true).not('lat', 'is', null)
-  // id 를 여기서 버리고 있었다 — 상세페이지 히어로 지도에서 주변 핀을 눌러도 아무 반응이
-  // 없던 원인(2026-08-24 오너 지적: "선택하면 해당 가게 상세보기로 이동해야 할 거 아니야").
-  return ((data ?? []) as any[]).filter((p) => p.id !== exceptId).map((p) => ({ id: p.id, lat: p.lat, lng: p.lng }))
+  return ((data ?? []) as PlaceRow[]).filter((p) => p.id !== exceptId)
 }
 
 export async function fetchPlace(id: string): Promise<PlaceRow | null> {

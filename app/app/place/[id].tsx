@@ -15,7 +15,7 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import type { ReviewRow } from '@/lib/supabase'
 import {
-  fetchPlace, fetchPlaceReviews, fetchNearbyCoords, openStatus,
+  fetchPlace, fetchPlaceReviews, fetchNearbyPlaces, openStatus,
   osmTiles, type PlaceRow, type PlaceReview,
 } from '@/lib/places'
 import { deletePlaceReview } from '@/lib/placeReviews'
@@ -35,7 +35,10 @@ export default function PlaceDetailScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [place, setPlace] = useState<PlaceRow | null>(null)
   const [reviews, setReviews] = useState<PlaceReview[]>([])
-  const [nearby, setNearby] = useState<{ id: string; lat: number | null; lng: number | null }[]>([])
+  // 주변 매장 — 전체 정보(이름·사진·평점 등)를 좌표와 함께 한 번에 받아둔다. 예전엔
+  // 좌표만 받고 탭할 때마다 fetchPlace() 로 또 네트워크를 타서 카드가 "한참 뒤에" 떴다
+  // (2026-08-24 오너 지적) — 이제 탭하면 이미 메모리에 있는 값을 즉시 보여준다.
+  const [nearby, setNearby] = useState<PlaceRow[]>([])
   const [showNearby, setShowNearby] = useState(false)
   const [loading, setLoading] = useState(true)
   const { favoriteIds, toggle } = usePlaceFavorites()
@@ -43,11 +46,11 @@ export default function PlaceDetailScreen() {
   // 눌러야 이동한다(2026-08-24 오너 지적 — "이 가게가 어느 가게인지 보고 이동할지 선택해야
   // 할 거 아니야"). 지도탭(honsul/index.tsx)의 PlaceMapCard 와 완전히 같은 패턴 재사용.
   const [previewPlace, setPreviewPlace] = useState<PlaceRow | null>(null)
-  const onTapNearbyPin = useCallback(async (tappedId: string) => {
+  const onTapNearbyPin = useCallback((tappedId: string) => {
     if (!place || tappedId === place.id) return
-    const p = await fetchPlace(tappedId)
+    const p = nearby.find((n) => n.id === tappedId)
     if (p) setPreviewPlace(p)
-  }, [place])
+  }, [place, nearby])
 
   // 후기 작성/수정 시트 + 내 후기 식별 + 신고 (소개팅 event/[id] 와 동일 흐름)
   const [sheetVisible, setSheetVisible] = useState(false)
@@ -61,6 +64,9 @@ export default function PlaceDetailScreen() {
   }, [id])
 
   useEffect(() => {
+    // 화면(id)이 바뀌는 순간 이전 화면의 미리보기 카드·주변 표시가 남아있으면 안 된다.
+    setPreviewPlace(null)
+    setShowNearby(false)
     let alive = true
     ;(async () => {
       try {
@@ -68,7 +74,7 @@ export default function PlaceDetailScreen() {
         if (!alive) return
         setPlace(p)
         setReviews(await fetchPlaceReviews(String(id)))
-        if (p?.lat) setNearby(await fetchNearbyCoords(String(id)))
+        if (p?.lat) setNearby(await fetchNearbyPlaces(String(id)))
       } catch { /* 무시 */ } finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
