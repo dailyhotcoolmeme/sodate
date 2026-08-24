@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { TurboModuleRegistry, UIManager, type StyleProp, type ViewStyle } from 'react-native'
 
 /**
@@ -25,9 +25,6 @@ if (NAVER_MAP_AVAILABLE) {
   NaverMapView = m.NaverMapView
   NaverMapMarkerOverlay = m.NaverMapMarkerOverlay
 }
-
-/** 이 줌 이하 = 숫자 클러스터만, 초과 = 원형 대표사진 마커만(섞이지 않게). */
-const CLUSTER_MAX_ZOOM = 14
 
 export interface MapPin {
   id: string
@@ -63,47 +60,47 @@ interface Props {
    *  히어로 지도엔 과하게 커서("대가리 큰 병신처럼") 선택 매장은 26px 소형 핀+이름표,
    *  주변 매장은 12px 파랑 점으로 훨씬 작게 그린다. 지도탭(cluster 모드)은 그대로 둔다. */
   compactPins?: boolean
+  /** true면 마커 탭마다 coordinateToScreen 네이티브 호출로 화면좌표를 구해 onTapPin 에
+   *  같이 넘긴다(히어로 미리보기 카드 위치용). 이 호출은 비동기라 콜백이 한 프레임 늦게
+   *  온다 — 지도탭(honsul/index.tsx)처럼 좌표가 필요 없는 곳까지 기본으로 켜뒀더니
+   *  "여기는 왜 이렇게 느리냐"는 지적을 받았다(2026-08-24). 필요한 곳에서만 켠다. */
+  resolveTapScreen?: boolean
 }
 
-export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false }: Props) {
+export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false, resolveTapScreen = false }: Props) {
   const ref = useRef<any>(null)
-  // 현재 카메라 줌 — 이 값으로 "숫자만" / "사진만"을 딱 갈라 한 화면에 섞이지 않게 한다.
-  const [camZoom, setCamZoom] = useState(zoom)
   useEffect(() => {
     ref.current?.animateCameraTo?.({ latitude: focus.lat, longitude: focus.lng, zoom })
-    setCamZoom(zoom)
   }, [focus.lat, focus.lng, zoom])
 
   if (!NaverMapView) return null
 
   const activePin = pins.find((p) => p.active)
-  // 확대 상태(= 사진 마커 구간)인지. 지도탭에서만 의미 있다.
-  const expanded = !cluster || camZoom > CLUSTER_MAX_ZOOM
 
-  // 지도탭: 클러스터링. 선택된 매장은 클러스터에서 빼고 위에 크게 따로 그린다.
-  // 한 화면엔 항상 한 종류만 보이게 한다 — 네이버지도·카카오맵도 같은 배율에서 마커 모양을
-  // 섞지 않는다(2026-08-24 조사). screenDistance 를 크게 잡아 CLUSTER_MAX_ZOOM 이하에선
-  // 사실상 전부 뭉쳐 숫자로, 그보다 확대하면 전부 원형 대표사진으로 펼쳐진다.
-  const clusterProps = cluster && !expanded
+  // ⚠️(2026-08-25 재작업) 예전엔 "카메라 줌이 14 넘었냐"로 전체를 숫자냐 사진이냐 통째로
+  // 갈랐는데, screenDistance 를 400px(화면 거의 절반)로 잡아놔서 아무리 확대해도 안 풀렸다
+  // (오너 지적: "갯수가 줄어도 숫자로 무조건 보여주는게 이상하다"). 공식 문서
+  // (rnnavermap.mjstudio.net/docs/marker-clustering) 예제 값은 40~80px 대 — 그 정도면
+  // 화면상 실제로 겹칠 만큼 가까운 매장만 뭉치고, 나머지는 라이브러리가 자체적으로
+  // leaf(개별)로 뿌린다. 그 leaf 마커에 직접 대표사진을 줘서 "조금만 확대해도 자연히
+  // 사진으로 풀린다"를 인위적인 줌 컷오프 없이 라이브러리가 알아서 하게 맡긴다.
+  const clusterProps = cluster
     ? [{
         width: 52,
         height: 52,
-        screenDistance: 400,
+        screenDistance: 60,
         minZoom: 0,
-        maxZoom: 21,          // 이 구간에선 무조건 뭉친다(사진 마커가 섞이지 않게)
+        maxZoom: 21,
         animate: true,
-        // 축소 구간의 개별(혼자 떨어진) 매장은 라이브러리가 leaf 로 직접 그린다 — 여기에
-        // 대표사진을 주면 숫자 뭉치와 사진이 한 화면에 섞인다. 그래서 이 구간에선 전부
-        // 같은 핑크 점으로 통일한다(확대하면 사진 마커로 바뀜).
         markers: pins
           .filter((p) => !p.active)
           .map((p) => ({
             identifier: p.id,
             latitude: p.lat,
             longitude: p.lng,
-            width: 22,
-            height: 22,
-            image: require('../assets/map-dot.png'),
+            width: 44,
+            height: 44,
+            image: p.markerUrl ? { httpUri: p.markerUrl } : { symbol: 'blue' },
           })),
       }]
     : undefined
@@ -119,11 +116,11 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
       symbolScale={hideBasePoi ? 0 : 1}
       clusters={clusterProps}
       onTapClusterLeaf={cluster ? (e: { markerIdentifier: string }) => onTapPin?.(e.markerIdentifier) : undefined}
-      onCameraChanged={cluster ? (e: { zoom: number }) => setCamZoom(e.zoom) : undefined}
       onTapMap={onTapBackground}
     >
-      {/* 확대 구간이면 개별 사진 마커 전부, 축소 구간이면 선택된 것만(나머지는 클러스터가 그림) */}
-      {(expanded ? pins : activePin ? [activePin] : []).map((p) => {
+      {/* 클러스터 모드에선 선택된 매장만 직접 그린다(나머지는 위 clusters 가 처리) —
+          히어로(!cluster)에선 전부 여기서 직접 그린다. */}
+      {(cluster ? (activePin ? [activePin] : []) : pins).map((p) => {
         const size = compactPins ? (p.active ? 24 : p.selected ? 20 : 12) : p.active ? 62 : 44
         // ⚠️(2026-08-24) 기본 'pink'/'blue' 심벌은 둘 다 물방울(세로로 긴) 모양이라 정사각형
         // 크기로 찍으면 눌려서 "짜부된" 모양이 된다(오너 지적 — 처음엔 선택 마커만 고쳤다가
@@ -141,6 +138,7 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
             longitude={p.lng}
             onTap={async () => {
               if (!onTapPin) { p.onPress?.(); return }
+              if (!resolveTapScreen) { onTapPin(p.id); return }
               const pos = await ref.current?.coordinateToScreen?.({ latitude: p.lat, longitude: p.lng })
               onTapPin(p.id, pos?.isValid ? { x: pos.screenX, y: pos.screenY } : undefined)
             }}

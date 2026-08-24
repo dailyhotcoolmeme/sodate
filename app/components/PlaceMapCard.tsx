@@ -19,7 +19,9 @@ const COMPACT_H_EST = 84
  *  지도탭(honsul/index.tsx)은 기본(큰) 크기 그대로 쓴다.
  *  anchor — 탭한 마커의 화면 좌표. 있으면 그 점 바로 아래(넘치면 위)에 띄운다(2026-08-24
  *  오너 지적: "업체박스 왜 왼쪽 밑에 고정이냐, 누른 점 바로 밑에 떠야지"). 없으면(좌표를
- *  못 구했을 때) 예전처럼 좌하단 고정. */
+ *  못 구했을 때) 예전처럼 좌하단 고정.
+ *  ⚠️(2026-08-24) X 닫기 버튼은 뺐다 — 즐겨찾기 버튼이랑 겹쳤고("업체박스에 x 닫기 버튼이랑
+ *  즐겨찾기 버튼이 겹치잖아"), 지도 빈 곳 탭하면 어차피 닫힌다(onClose 는 그 경로로만 쓰임). */
 export default function PlaceMapCard({
   place, isFavorite, onToggleFavorite, onOpen, onClose, compact = false, anchor = null, containerWidth, containerHeight,
 }: {
@@ -81,9 +83,6 @@ export default function PlaceMapCard({
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity style={styles.close} onPress={(e) => { e.stopPropagation?.(); onClose() }} hitSlop={8}>
-          <Ionicons name="close" size={compact ? 15 : 18} color={colors.textTertiary} />
-        </TouchableOpacity>
       </TouchableOpacity>
     </View>
   )
@@ -108,6 +107,5 @@ function makeStyles(colors: AppColors, compact: boolean) {
     meta: { fontSize: compact ? 11 : 12.5, color: colors.textTertiary },
     detailBtn: { marginTop: 5, alignSelf: 'flex-start', backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 7 },
     detailText: { fontSize: 13, fontWeight: '800', color: '#fff' },
-    close: { position: 'absolute', top: compact ? 5 : 8, right: compact ? 5 : 8, padding: 2 },
   })
 }
