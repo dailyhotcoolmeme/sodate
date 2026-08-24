@@ -19,6 +19,7 @@ import { SOCIALING_GROUPS } from '@/constants/socialingCategories'
 import { DAY_OPTIONS } from '@/constants/filters'
 import { useSocialingFilterStore, useSocialingFilterHydrated, socialingActiveFilterCount, type SocialingFilterState } from '@/stores/socialingFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
+import { saveScrollOffset, getScrollOffset } from '@/lib/scrollMemory'
 
 /**
  * 소셜링 목록 화면(2026-08-21~08-22, 오너 승인). 소개팅 피드와 같은 틀이되 필터 축이 다르다:
@@ -62,6 +63,9 @@ export default function SocialingScreen() {
   // 스크롤하면 카테고리 칩 줄이 접힌다 — 소개팅과 동일(EXPAND_AT/COLLAPSE_AT 값까지 같게).
   const chipsAnim = useRef(new Animated.Value(1)).current
   const chipsExpandedRef = useRef(true)
+  // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
+  const feedListRef = useRef<FlatList>(null)
+  const restoredScrollRef = useRef(false)
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -70,6 +74,7 @@ export default function SocialingScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
+    saveScrollOffset('socialing-feed', y)
   }, [chipsAnim])
 
   const [refreshing, setRefreshing] = useState(false)
@@ -202,6 +207,7 @@ export default function SocialingScreen() {
         </View>
       ) : (
         <FlatList
+          ref={feedListRef}
           data={events}
           keyExtractor={(e) => e.id}
           renderItem={({ item }) => (
@@ -214,6 +220,12 @@ export default function SocialingScreen() {
           onScroll={onFeedScroll}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
+          onContentSizeChange={() => {
+            if (restoredScrollRef.current) return
+            const y = getScrollOffset('socialing-feed')
+            if (y > 0) feedListRef.current?.scrollToOffset({ offset: y, animated: false })
+            restoredScrollRef.current = true
+          }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}

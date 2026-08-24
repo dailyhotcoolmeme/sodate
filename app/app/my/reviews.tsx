@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import AppSpinner from '@/components/AppSpinner'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -135,6 +136,7 @@ export default function MyReviewsScreen() {
         initial={editTarget}
         onDone={onEditDone}
       />
+      <BottomNav current="my" />
     </View>
   )
 }

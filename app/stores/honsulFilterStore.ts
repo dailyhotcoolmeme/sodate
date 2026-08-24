@@ -21,6 +21,13 @@ interface HonsulFilterState {
   openNow: boolean
   sortMode: 'default' | 'distance' | 'rating' | 'reviewCount'
   hasAutoInit: boolean
+  /** 피드/지도 보기 — 예전엔 로컬 useState라 다른 탭 갔다 오면 무조건 피드로 되돌아갔다
+   *  (2026-08-25 오너 지적: "지도보기 상태에서 다른 메뉴 갔다가 돌아오면 피드보기로
+   *  바껴있다"). 필터랑 같은 스토어에 담아 화면을 나갔다 돌아와도 유지한다. */
+  tab: 'feed' | 'map'
+  /** 지도 카메라 위치 — 마커 선택 시에만 갱신(카드 닫기로는 안 바뀜, honsul/index.tsx 참고).
+   *  다른 탭 갔다가 돌아와도 "애써 맞춰놓은 위치"가 유지되도록 여기 담는다(2026-08-25). */
+  mapView: { lat: number; lng: number; zoom: number } | null
 
   setRegionGroup: (v: string | null) => void
   setSanggwon: (v: string | null) => void
@@ -28,6 +35,8 @@ interface HonsulFilterState {
   setOpenNow: (v: boolean) => void
   setSortMode: (v: HonsulFilterState['sortMode']) => void
   setHasAutoInit: (v: boolean) => void
+  setTab: (v: HonsulFilterState['tab']) => void
+  setMapView: (v: HonsulFilterState['mapView']) => void
   resetFilters: () => void
 }
 
@@ -40,6 +49,8 @@ export const useHonsulFilterStore = create<HonsulFilterState>()(
       openNow: false,
       sortMode: 'default',
       hasAutoInit: false,
+      tab: 'feed',
+      mapView: null,
 
       setRegionGroup: (regionGroup) => set({ regionGroup }),
       setSanggwon: (sanggwon) => set({ sanggwon }),
@@ -47,6 +58,8 @@ export const useHonsulFilterStore = create<HonsulFilterState>()(
       setOpenNow: (openNow) => set({ openNow }),
       setSortMode: (sortMode) => set({ sortMode }),
       setHasAutoInit: (hasAutoInit) => set({ hasAutoInit }),
+      setTab: (tab) => set({ tab }),
+      setMapView: (mapView) => set({ mapView }),
       resetFilters: () => set({ regionGroup: null, sanggwon: null, tag: null, openNow: false }),
     }),
     {

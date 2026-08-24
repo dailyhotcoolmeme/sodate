@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import AppSpinner from '@/components/AppSpinner'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -162,6 +163,7 @@ export default function FavoritesScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+      <BottomNav current="my" />
     </View>
   )
 }

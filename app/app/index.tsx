@@ -46,6 +46,7 @@ import { track } from '@/lib/analytics'
 import { warmNativeAdPool, getFeedNativeAdUnitId } from '@/lib/ads'
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/eventSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
+import { saveScrollOffset, getScrollOffset } from '@/lib/scrollMemory'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
 const SORT_OPTIONS: SortOption[] = [
@@ -563,7 +564,10 @@ export default function HomeScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
+    saveScrollOffset('dating-feed', y)
   }, [chipsAnim])
+  // 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시) — 목록이 준비되면 딱 한 번 복원.
+  const restoredScrollRef = useRef(false)
 
   const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
     track(isCurrent ? 'event_favorite_remove' : 'event_favorite_add', {
@@ -835,7 +839,14 @@ export default function HomeScreen() {
         <FlatList
           ref={flatListRef}
           onScroll={onScroll}
-          onContentSizeChange={(_w, h) => { if (Platform.OS === 'android') setAndroidContentHeight(h) }}
+          onContentSizeChange={(_w, h) => {
+            if (Platform.OS === 'android') setAndroidContentHeight(h)
+            if (!restoredScrollRef.current) {
+              const y = getScrollOffset('dating-feed')
+              if (y > 0) flatListRef.current?.scrollToOffset({ offset: y, animated: false })
+              restoredScrollRef.current = true
+            }
+          }}
           onLayout={(e) => { if (Platform.OS === 'android') setAndroidListHeight(e.nativeEvent.layout.height) }}
           scrollEventThrottle={100}
           data={listData}

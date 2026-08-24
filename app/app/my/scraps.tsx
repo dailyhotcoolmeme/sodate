@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import AppSpinner from '@/components/AppSpinner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
@@ -87,6 +88,7 @@ export default function ScrapsScreen() {
           ))}
         </ScrollView>
       )}
+      <BottomNav current="my" />
     </View>
   )
 }

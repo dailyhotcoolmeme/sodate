@@ -16,6 +16,7 @@ import { getMyLocation, distanceKm } from '@/lib/nearby'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { useHonsulFilterStore, useHonsulFilterHydrated } from '@/stores/honsulFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
+import { saveScrollOffset, getScrollOffset } from '@/lib/scrollMemory'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
 import PlaceMapCard from '@/components/PlaceMapCard'
 import { useRouter } from 'expo-router'
@@ -25,8 +26,6 @@ import { useRouter } from 'expo-router'
  * 필요하면 상세 필터로. 지도는 카카오맵(앱키+재빌드) 연동 후 채운다. 카드 지도아이콘 → 지도탭.
  * ⚠️ NEW_TABS_ENABLED=false 동안은 접근 경로 없음. (파일럿) 전부 불러와 클라 필터.
  */
-type Tab = 'feed' | 'map'
-
 export default function HonsulScreen() {
   const colors = useColors()
   const insets = useSafeAreaInsets()
@@ -35,26 +34,26 @@ export default function HonsulScreen() {
   const [all, setAll] = useState<PlaceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [tab, setTab] = useState<Tab>('feed')
-  // 지역군·상권·영업중·정렬 — 예전엔 로컬 useState라 화면을 나갔다 돌아오면 필터가 전부
-  // 풀렸다(오너 지적: "화면 나갔다 돌아오면 해제되냐"). 소개팅·소셜링처럼 persist 스토어로
-  // 옮겼다(2026-08-24). myLoc(좌표)·locBusy 는 세션마다 새로 재는 게 맞아서 로컬로 남긴다.
+  // 지역군·상권·영업중·정렬·피드/지도 탭 — 예전엔 전부 로컬 useState라 화면을 나갔다
+  // 돌아오면 다 풀렸다(오너 지적: "지도보기 상태에서 다른 메뉴 갔다가 돌아오면 피드보기로
+  // 바껴있다"). 소개팅·소셜링처럼 persist 스토어로 옮겼다(2026-08-24/25). myLoc(좌표)·
+  // locBusy 는 세션마다 새로 재는 게 맞아서 로컬로 남긴다.
   const hydrated = useHonsulFilterHydrated()
   const {
-    regionGroup, sanggwon, tag, openNow, sortMode, hasAutoInit,
-    setRegionGroup, setSanggwon, setTag, setOpenNow, setSortMode, setHasAutoInit,
+    regionGroup, sanggwon, tag, openNow, sortMode, hasAutoInit, tab, mapView,
+    setRegionGroup, setSanggwon, setTag, setOpenNow, setSortMode, setHasAutoInit, setTab, setMapView,
   } = useHonsulFilterStore()
   const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null) // 현재 위치(거리정렬용)
   const [locBusy, setLocBusy] = useState(false)
   const [search, setSearch] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
   const [focused, setFocused] = useState<PlaceRow | null>(null)   // 지도탭에서 볼 업체
-  // 지도 카메라 위치 — focused(선택된 업체=미리보기 카드 표시 여부)와 분리했다. 예전엔
-  // focus/zoom을 focused 로 바로 계산해서, 카드를 닫기만(바깥 탭) 해도 focused=null이 되며
-  // 카메라가 zoom12·pinned[0]로 확 되돌아갔다(오너 지적: "닫으면 지도 배율이 축소되면서
-  // 애써 맞춰놓은 위치가 원복된다"). 이제 마커를 새로 선택할 때만 갱신하고, 카드를 닫는
-  // 것만으로는 카메라를 절대 안 건드린다.
-  const [mapView, setMapView] = useState<{ lat: number; lng: number; zoom: number } | null>(null)
+  // 지도 카메라 위치(mapView) — focused(선택된 업체=미리보기 카드 표시 여부)와 분리했다.
+  // 예전엔 focus/zoom을 focused 로 바로 계산해서, 카드를 닫기만(바깥 탭) 해도 focused=null
+  // 이 되며 카메라가 zoom12·pinned[0]로 확 되돌아갔다(오너 지적: "닫으면 지도 배율이
+  // 축소되면서 애써 맞춰놓은 위치가 원복된다"). 마커를 새로 선택할 때만 갱신하고, 카드를
+  // 닫는 것만으로는 카메라를 절대 안 건드린다 — 스토어에 담아 다른 탭 갔다 와도 유지된다
+  // (2026-08-25, "다른 메뉴 갔다가 돌아오면" 지적 반영).
   const { favoriteIds, toggle: toggleFav } = usePlaceFavorites()
   const router = useRouter()
 
@@ -132,6 +131,9 @@ export default function HonsulScreen() {
   // 스크롤하면 지역군 칩 줄이 접힌다 — 소개팅·소셜링과 동일 기준.
   const chipsAnim = useRef(new Animated.Value(1)).current
   const chipsExpandedRef = useRef(true)
+  // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
+  const feedListRef = useRef<FlatList<PlaceRow>>(null)
+  const restoredScrollRef = useRef(false)
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -140,6 +142,7 @@ export default function HonsulScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
+    saveScrollOffset('honsul-feed', y)
   }, [chipsAnim])
 
   const openOnMap = (p: PlaceRow) => {
@@ -264,6 +267,7 @@ export default function HonsulScreen() {
             </View>
           ) : (
             <FlatList
+              ref={feedListRef}
               data={list}
               keyExtractor={(p) => p.id}
               renderItem={({ item }) => (
@@ -275,6 +279,14 @@ export default function HonsulScreen() {
               contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 96 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
               showsVerticalScrollIndicator={false}
+              // 목록이 준비되면 저장해둔 위치로 딱 한 번 복원(2026-08-25) — 다른 탭 갔다가
+              // 돌아왔을 때 맨 위로 안 돌아가고 보던 자리 그대로.
+              onContentSizeChange={() => {
+                if (restoredScrollRef.current) return
+                const y = getScrollOffset('honsul-feed')
+                if (y > 0) feedListRef.current?.scrollToOffset({ offset: y, animated: false })
+                restoredScrollRef.current = true
+              }}
             />
           )}
 

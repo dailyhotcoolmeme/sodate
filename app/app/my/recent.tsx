@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { getRecentViews, clearRecentViews, type RecentView, type RecentKind } from '@/lib/recentViews'
@@ -104,6 +105,7 @@ export default function RecentScreen() {
           ))}
         </ScrollView>
       )}
+      <BottomNav current="my" />
     </View>
   )
 }
