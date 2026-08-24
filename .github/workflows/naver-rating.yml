@@ -1,0 +1,36 @@
+name: Crawl Naver Ratings
+
+# 혼술바 매장의 네이버 방문자 평점·리뷰수만 가져온다(리뷰 본문은 안 긁음, 2026-08-24
+# 오너 지시). 리뷰와 마찬가지로 비핵심(장식용) 정보라 주기를 길게 둔다 — 주 1회,
+# 후기 크롤(reviews.yml, 월요일 08:00 KST)과 겹치지 않게 수요일로.
+on:
+  schedule:
+    - cron: '0 18 * * 2'   # 매주 수요일 03:00 KST (UTC 화요일 18:00)
+  workflow_dispatch:
+
+concurrency:
+  group: naver-rating
+  cancel-in-progress: false
+
+jobs:
+  naver-rating:
+    runs-on: ubuntu-22.04
+    # 500곳 기준 약 0.65~0.95초 간격으로 순차 요청 — 여유 있게.
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run naver rating crawler
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          node naver_rating_crawl.mjs

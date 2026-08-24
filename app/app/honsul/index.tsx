@@ -38,8 +38,10 @@ export default function HonsulScreen() {
   const [regionGroup, setRegionGroup] = useState<string | null>(null)   // 지역군(강남권…) — 소개팅·소셜링과 동일
   const [sanggwon, setSanggwon] = useState<string | null>(null)         // 상권(홍대·서면…) — 지역군 아래 세부
   const [openNow, setOpenNow] = useState(false)                    // 영업중만
-  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null) // 내 주변(거리정렬)
+  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null) // 현재 위치(거리정렬용)
   const [locBusy, setLocBusy] = useState(false)
+  // 정렬 — 거리순은 위치 필요, 평점순은 네이버 평점(naver_rating) 기준(2026-08-24 오너 지시).
+  const [sortMode, setSortMode] = useState<'default' | 'distance' | 'rating'>('default')
   const [tag, setTag] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
@@ -88,15 +90,17 @@ export default function HonsulScreen() {
       (!tag || [...p.honsul_badges, ...p.mood_tags].includes(tag)) &&
       (!q || p.name.includes(q) || (p.region ?? '').includes(q)),
     )
-    // 내 주변이면 거리순, 아니면 원래 순서.
-    if (myLoc) {
+    if (sortMode === 'distance' && myLoc) {
       return filtered
         .map((p) => ({ p, d: p.lat != null && p.lng != null ? distanceKm(myLoc.lat, myLoc.lng, p.lat, p.lng) : Infinity }))
         .sort((a, b) => a.d - b.d)
         .map((x) => x.p)
     }
+    if (sortMode === 'rating') {
+      return [...filtered].sort((a, b) => (b.naver_rating ?? -1) - (a.naver_rating ?? -1))
+    }
     return filtered
-  }, [all, regionGroup, sanggwon, openNow, tag, search, myLoc, sangOf, groupOf])
+  }, [all, regionGroup, sanggwon, openNow, tag, search, sortMode, myLoc, sangOf, groupOf])
 
   // 스크롤하면 지역군 칩 줄이 접힌다 — 소개팅·소셜링과 동일 기준.
   const chipsAnim = useRef(new Animated.Value(1)).current
@@ -122,14 +126,27 @@ export default function HonsulScreen() {
   if (search) activeChips.push({ label: `‘${search}’`, onRemove: () => setSearch('') })
   const resetAll = () => { setRegionGroup(null); setSanggwon(null); setTag(null); setOpenNow(false); setSearch('') }
 
-  // 내 주변 — 위치 얻어 거리순 정렬. 다시 누르면 해제.
+  // 현재 위치 — 필터 줄 오른쪽 버튼(예전엔 FAB였다, 2026-08-24 오너 지시로 이동).
+  // 다시 누르면 해제 — 거리순 정렬 중이었으면 기본 정렬로 되돌린다(위치 없이는 거리순 불가).
   const toggleNearby = useCallback(async () => {
-    if (myLoc) { setMyLoc(null); return }
+    if (myLoc) { setMyLoc(null); setSortMode((m) => (m === 'distance' ? 'default' : m)); return }
     setLocBusy(true)
     const loc = await getMyLocation()
     setLocBusy(false)
     if (loc) setMyLoc(loc)
   }, [myLoc])
+
+  // 거리순 — 위치 없으면 먼저 요청하고 나서 적용.
+  const selectDistanceSort = useCallback(async () => {
+    if (sortMode === 'distance') { setSortMode('default'); return }
+    if (myLoc) { setSortMode('distance'); return }
+    setLocBusy(true)
+    const loc = await getMyLocation()
+    setLocBusy(false)
+    if (loc) { setMyLoc(loc); setSortMode('distance') }
+  }, [sortMode, myLoc])
+
+  const selectRatingSort = () => setSortMode((m) => (m === 'rating' ? 'default' : 'rating'))
 
   return (
     <View style={styles.container}>
@@ -172,15 +189,30 @@ export default function HonsulScreen() {
             </View>
           )}
 
-          {/* 영업중 — 소개팅 '마감제외'와 같은 체크박스 방식 */}
+          {/* 정렬(거리순·평점순, 왼쪽) + 영업중(체크박스) + 현재 위치(오른쪽) — 2026-08-24 오너 지시로
+              보기 전환 FAB에 있던 위치 버튼을 여기로 옮기고, 정렬 개념을 새로 추가했다. */}
           <View style={styles.resultRow}>
+            <TouchableOpacity onPress={selectDistanceSort} disabled={locBusy}>
+              <Text style={[styles.sortChipText, sortMode === 'distance' && styles.sortChipTextActive]}>
+                {locBusy && sortMode !== 'distance' ? '위치 확인중' : '거리순'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={selectRatingSort}>
+              <Text style={[styles.sortChipText, sortMode === 'rating' && styles.sortChipTextActive]}>평점순</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.sortChip, styles.excludeChip, openNow && styles.excludeChipActive]} onPress={() => setOpenNow((v) => !v)}>
               <View style={[styles.checkbox, openNow && styles.checkboxOn]}>
                 {openNow && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}
               </View>
               <Text style={[styles.sortChipText, openNow && styles.sortChipTextActive]}>영업중</Text>
             </TouchableOpacity>
-            {myLoc && <Text style={styles.countText}>가까운순</Text>}
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity style={[styles.locBtn, myLoc && styles.locBtnOn]} onPress={toggleNearby} activeOpacity={0.8} disabled={locBusy}>
+              <Ionicons name={myLoc ? 'navigate' : 'navigate-outline'} size={13} color={myLoc ? colors.primary : colors.textSecondary} />
+              <Text style={[styles.sortChipText, myLoc && styles.sortChipTextActive]}>
+                {locBusy && !myLoc ? '위치 확인중' : '현재 위치'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {loading ? (
@@ -207,19 +239,13 @@ export default function HonsulScreen() {
             />
           )}
 
-          {/* 보기 전환 FAB — 예전엔 상단 고정 탭이었다(2026-08-24 오너 지시로 하단 플로팅으로
-              이동, 혼술맵 실제 앱 방식: 확대/내위치/목록 3버튼을 우하단에 쌓는 것 참고).
-              지도 탭엔 네이티브 지도 SDK 자체 '내 위치' 버튼이 있어(showLocationButton)
-              여기 내 주변 버튼은 피드 쪽에만 둔다. */}
+          {/* 지도 보기 FAB — 예전엔 상단 고정 탭이었다(2026-08-24 오너 지시로 하단 플로팅으로
+              이동). 배경은 앱 전체 FAB 규격(board 글쓰기 버튼)과 동일하게 primary 핑크로
+              통일 — 처음에 검정/흰색으로 했던 건 오너 지적으로 되돌림. 내 주변 버튼은
+              필터 줄(현재 위치)로 옮겼다. */}
           <View style={[styles.fabStack, { bottom: insets.bottom + 14 }]}>
-            <TouchableOpacity
-              style={[styles.fabSmall, myLoc && styles.fabSmallOn]}
-              onPress={toggleNearby} activeOpacity={0.8} disabled={locBusy}
-            >
-              <Ionicons name={myLoc ? 'navigate' : 'navigate-outline'} size={18} color={myLoc ? colors.primary : colors.textSecondary} />
-            </TouchableOpacity>
             <TouchableOpacity style={styles.fabPrimary} onPress={() => setTab('map')} activeOpacity={0.85}>
-              <Ionicons name="map-outline" size={22} color={colors.background} />
+              <Ionicons name="map-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -273,7 +299,7 @@ export default function HonsulScreen() {
               마커 선택 시 뜨는 PlaceMapCard(바닥 카드, 사진 92 높이)와 겹치지 않게 그만큼 올린다. */}
           <View style={[styles.fabStack, { bottom: insets.bottom + (focused ? 140 : 14) }]}>
             <TouchableOpacity style={styles.fabPrimary} onPress={() => setTab('feed')} activeOpacity={0.85}>
-              <Ionicons name="list-outline" size={22} color={colors.background} />
+              <Ionicons name="list-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -299,17 +325,12 @@ function makeStyles(colors: AppColors) {
     container: { flex: 1, backgroundColor: colors.background },
     regionScroll: { height: 34, marginBottom: 2, flexDirection: 'row', alignItems: 'center' },
     chipRow: { paddingHorizontal: 16, alignItems: 'center', gap: 6 },
-    // 보기 전환 FAB — 우하단 세로 스택(2026-08-24 오너 지시, 혼술맵 실제 앱 방식 참고).
-    // 콘텐츠 위에 뜨는 플로팅이라 board 글쓰기 FAB과 같은 그림자를 준다(하단 고정바와는 다름).
+    // 지도 보기 FAB — 우하단(2026-08-24 오너 지시). 콘텐츠 위에 뜨는 플로팅이라
+    // board 글쓰기 FAB과 같은 그림자를 준다(하단 고정바와는 다름). 배경은 앱 전체
+    // FAB 규격(colors.primary)과 통일 — 처음 검정/흰색으로 했던 건 오너 지적으로 되돌림.
     fabStack: { position: 'absolute', right: 16, alignItems: 'center', gap: 10 },
-    fabSmall: {
-      width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surface,
-      alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border,
-      shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4,
-    },
-    fabSmallOn: { borderColor: colors.primary },
     fabPrimary: {
-      width: 52, height: 52, borderRadius: 26, backgroundColor: colors.textPrimary,
+      width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary,
       alignItems: 'center', justifyContent: 'center',
       shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
     },
@@ -326,6 +347,9 @@ function makeStyles(colors: AppColors) {
     sortChipTextActive: { color: colors.primary, fontWeight: '700' },
     excludeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 2 },
     excludeChipActive: { backgroundColor: '#FF6B9D18', borderColor: colors.primary, paddingLeft: 10 },
+    // 현재 위치 — 정렬·영업중과 같은 줄 가장 오른쪽(2026-08-24 오너 지시, FAB에서 이동).
+    locBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+    locBtnOn: { backgroundColor: '#FF6B9D18' },
     checkbox: { width: 15, height: 15, borderRadius: 4, borderWidth: 1.5, borderColor: colors.textTertiary, alignItems: 'center', justifyContent: 'center' },
     checkboxOn: { borderColor: colors.primary, backgroundColor: colors.primary },
     chip: { paddingHorizontal: 13, paddingVertical: 5, borderRadius: 18, backgroundColor: colors.surfaceHigh, borderWidth: 1, borderColor: colors.border },
@@ -333,7 +357,6 @@ function makeStyles(colors: AppColors) {
     chipText: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
     chipTextOn: { color: '#fff', fontWeight: '700' },
     countRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.divider },
-    countText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
     tagFilterChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: `${colors.primary}1a`, borderRadius: 12, paddingLeft: 9, paddingRight: 6, paddingVertical: 3 },
     tagFilterText: { fontSize: 12, color: colors.primary, fontWeight: '800' },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 60, paddingHorizontal: 30 },

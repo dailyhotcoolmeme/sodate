@@ -155,8 +155,28 @@ export default function PlaceDetailScreen() {
                 {hoursLabel && <Text style={styles.hours}>{'  '}{hoursLabel}</Text>}
               </>
             ) : <Text style={styles.hours}>영업시간 정보 없음</Text>}
-            <Text style={styles.meta}>{'  ·  '}{place.region ?? ''}{place.naver_rating ? `  ·  ★ ${place.naver_rating}` : ''}</Text>
+            <Text style={styles.meta}>{'  ·  '}{place.region ?? ''}</Text>
           </View>
+
+          {/* 평점 — 네이버 플레이스에서 점수·리뷰수만 가져온다(내용은 안 긁음, 2026-08-24
+              오너 지시). 리뷰 내용이 궁금하면 네이버 플레이스로 보낸다. */}
+          {place.naver_rating != null && (
+            <TouchableOpacity
+              style={styles.ratingRow}
+              activeOpacity={place.naver_url ? 0.7 : 1}
+              disabled={!place.naver_url}
+              onPress={() => place.naver_url && openOutlink(place.naver_url)}
+            >
+              <Ionicons name="star" size={14} color="#FFB800" />
+              <Text style={styles.ratingScore}>{place.naver_rating.toFixed(1)}</Text>
+              {place.naver_review_count != null && (
+                <Text style={styles.ratingCount}>리뷰 {place.naver_review_count.toLocaleString()}개</Text>
+              )}
+              {place.naver_url && (
+                <Text style={styles.ratingLink}>네이버 플레이스에서 보기 ›</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* 이 가게 인스타 */}
@@ -274,6 +294,11 @@ function makeStyles(colors: AppColors) {
     op: { fontSize: 13, fontWeight: '800' },
     hours: { fontSize: 13, color: colors.textTertiary, fontWeight: '600' },
     meta: { fontSize: 13, color: colors.textSecondary },
+    // 평점 줄 — 네이버 플레이스 점수·리뷰수 + 링크(2026-08-24 오너 지시)
+    ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+    ratingScore: { fontSize: 13.5, fontWeight: '800', color: colors.textPrimary },
+    ratingCount: { fontSize: 12.5, color: colors.textTertiary, marginLeft: 2 },
+    ratingLink: { fontSize: 12, color: colors.primary, fontWeight: '700', marginLeft: 6 },
     igSection: { paddingTop: 6, paddingBottom: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.divider },
     igHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 10, marginTop: 8 },
     igTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },

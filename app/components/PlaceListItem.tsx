@@ -78,8 +78,21 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
           ) : (
             <Text style={styles.hours}>영업시간 정보 없음</Text>
           )}
-          <Text style={styles.meta} numberOfLines={1}>{'  ·  '}{place.region ?? ''}{place.naver_rating ? `  ·  ★ ${place.naver_rating}` : ''}</Text>
+          <Text style={styles.meta} numberOfLines={1}>{'  ·  '}{place.region ?? ''}</Text>
         </View>
+
+        {/* 평점 — 별도 줄(2026-08-24 오너 지시). 소개팅·소셜링은 참여현황이 한 줄 더 있어서
+            혼술바만 카드가 짧고 어색했는데, 이걸로 줄 수가 맞는다. 네이버 평점 없는(백필 전/
+            리뷰 없는) 매장은 이 줄 자체가 안 뜬다. */}
+        {place.naver_rating != null && (
+          <View style={styles.ratingRow}>
+            <Ionicons name="star" size={12} color="#FFB800" />
+            <Text style={styles.ratingScore}>{place.naver_rating.toFixed(1)}</Text>
+            {place.naver_review_count != null && (
+              <Text style={styles.ratingCount}>리뷰 {place.naver_review_count.toLocaleString()}</Text>
+            )}
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   )
@@ -106,5 +119,9 @@ function makeStyles(colors: AppColors) {
     op: { fontSize: 12, fontWeight: '800' },
     hours: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
     meta: { flexShrink: 1, fontSize: 12, color: colors.textSecondary },
+    // 평점 줄 — 소개팅·소셜링의 참여현황 줄과 같은 자리(2026-08-24 오너 지시).
+    ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+    ratingScore: { fontSize: 12.5, fontWeight: '800', color: colors.textPrimary },
+    ratingCount: { fontSize: 11.5, color: colors.textTertiary, marginLeft: 2 },
   })
 }
