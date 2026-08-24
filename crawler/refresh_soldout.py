@@ -316,13 +316,23 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
                 client, f'{MUNTO_API_BASE}/socialing/{sid}/members', params={'status': 'APPROVE'}
             )
             members = members_data.get('members', []) if members_data else []
+            male_current = detail.get('maleCurrentCount') or 0
+            female_current = detail.get('femaleCurrentCount') or 0
             stats, _cm, _cf, sm, sf = _build_participant_stats(
                 members,
                 detail.get('maleMaximumCount') or 0,
                 detail.get('femaleMaximumCount') or 0,
-                detail.get('maleCurrentCount') or 0,
-                detail.get('femaleCurrentCount') or 0,
+                male_current,
+                female_current,
             )
+            # ⚠️(2026-08-24) munto.py 크롤러는 소셜링에 total_capacity/total_count 를 채워
+            # 저장하는데, 이 임박분 경량 갱신은 그 로직이 빠진 채 participant_stats를
+            # 통째로 덮어써서 정원이 10분마다 사라졌다(오너 제보: "정원이 거의 안 보인다").
+            # 이 함수는 socialing?id= URL만 대상으로 하므로(위 정규식) 무조건 소셜링이다.
+            total_cap = detail.get('maximumPerson')
+            if total_cap:
+                stats['total_capacity'] = int(total_cap)
+                stats['total_count'] = male_current + female_current
             closed = detail.get('status', '') in ('CLOSED', 'CONFIRM', 'CANCEL') \
                 or bool(detail.get('stopRecruit', False))
             if sm is not None and sm < 0:
