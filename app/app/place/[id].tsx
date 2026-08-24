@@ -168,7 +168,7 @@ export default function PlaceDetailScreen() {
               onPress={() => place.naver_url && openOutlink(place.naver_url)}
             >
               <Ionicons name="star" size={14} color="#FFB800" />
-              <Text style={styles.ratingScore}>{place.naver_rating.toFixed(1)}</Text>
+              <Text style={styles.ratingScore}>{place.naver_rating.toFixed(2)}</Text>
               {place.naver_review_count != null && (
                 <Text style={styles.ratingCount}>리뷰 {place.naver_review_count.toLocaleString()}개</Text>
               )}

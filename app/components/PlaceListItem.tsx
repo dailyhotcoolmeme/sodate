@@ -87,7 +87,7 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
         {place.naver_rating != null && (
           <View style={styles.ratingRow}>
             <Ionicons name="star" size={12} color="#FFB800" />
-            <Text style={styles.ratingScore}>{place.naver_rating.toFixed(1)}</Text>
+            <Text style={styles.ratingScore}>{place.naver_rating.toFixed(2)}</Text>
             {place.naver_review_count != null && (
               <Text style={styles.ratingCount}>리뷰 {place.naver_review_count.toLocaleString()}</Text>
             )}
