@@ -48,12 +48,20 @@ export default function HonsulScreen() {
   const [search, setSearch] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
   const [focused, setFocused] = useState<PlaceRow | null>(null)   // 지도탭에서 볼 업체
-  // 지도 카메라 위치(mapView) — focused(선택된 업체=미리보기 카드 표시 여부)와 분리했다.
-  // 예전엔 focus/zoom을 focused 로 바로 계산해서, 카드를 닫기만(바깥 탭) 해도 focused=null
-  // 이 되며 카메라가 zoom12·pinned[0]로 확 되돌아갔다(오너 지적: "닫으면 지도 배율이
-  // 축소되면서 애써 맞춰놓은 위치가 원복된다"). 마커를 새로 선택할 때만 갱신하고, 카드를
-  // 닫는 것만으로는 카메라를 절대 안 건드린다 — 스토어에 담아 다른 탭 갔다 와도 유지된다
-  // (2026-08-25, "다른 메뉴 갔다가 돌아오면" 지적 반영).
+  // 지도 카메라 — cameraTarget(지도에 실제로 "여기로 가라"고 명령하는 값, PlaceMap 의 focus
+  // prop 으로 들어감)과 mapView(그냥 기억만 해두는 값, 스토어에 저장)를 분리했다. 처음엔
+  // 하나로 같이 썼다가 onCameraIdle→setMapView→focus prop 변경→다시 이동 명령→다시 idle…
+  // 무한루프에 빠져 "확대한 위치 안에서 혼자 왔다갔다 움직인다"는 버그가 났다(오너 지적,
+  // 2026-08-25). cameraTarget 은 마커를 명시적으로 눌렀을 때만 바뀐다 — 자유 팬/줌은
+  // mapView(기억용)만 갱신하고 cameraTarget/focus prop 은 절대 안 건드려서 루프를 막는다.
+  // 최초 진입 값은 하이드레이션 끝난 뒤 저장된 mapView 에서 딱 한 번만 읽어온다.
+  const [cameraTarget, setCameraTarget] = useState<{ lat: number; lng: number; zoom: number } | null>(null)
+  const cameraInitedRef = useRef(false)
+  useEffect(() => {
+    if (!hydrated || cameraInitedRef.current) return
+    cameraInitedRef.current = true
+    if (mapView) setCameraTarget(mapView)
+  }, [hydrated, mapView])
   const { favoriteIds, toggle: toggleFav } = usePlaceFavorites()
   const router = useRouter()
 
@@ -155,7 +163,11 @@ export default function HonsulScreen() {
 
   const openOnMap = (p: PlaceRow) => {
     setFocused(p)
-    if (p.lat != null && p.lng != null) setMapView({ lat: p.lat, lng: p.lng, zoom: 16 })
+    // 명시적 이동 의도 — cameraTarget(실제로 지도를 그리로 옮김)과 mapView(기억용) 둘 다 갱신.
+    if (p.lat != null && p.lng != null) {
+      setCameraTarget({ lat: p.lat, lng: p.lng, zoom: 16 })
+      setMapView({ lat: p.lat, lng: p.lng, zoom: 16 })
+    }
     setTab('map')
   }
 
@@ -320,9 +332,15 @@ export default function HonsulScreen() {
         <View style={{ flex: 1 }}>
           {(() => {
             const pinned = list.filter((p) => p.lat != null && p.lng != null)
-            // 카메라 위치 — mapView(마커 선택 + 자유 팬/줌 둘 다 반영)가 있으면 그걸, 없으면
-            // (첫 진입) pinned[0] 기준 기본 위치. focused 를 지워도(카드 닫기) 안 바뀐다.
-            const center = mapView ?? (pinned[0]?.lat != null ? { lat: pinned[0].lat!, lng: pinned[0].lng!, zoom: 12 } : null)
+            // ⚠️(2026-08-25) cameraTarget(지도에 "여기로 가라"고 명령하는 값)과 mapView(그냥
+            // 기억만 해두는 값)를 반드시 분리해야 한다 — 처음엔 같은 값(mapView)을 both로
+            // 쓰다가 무한루프에 빠졌다: onCameraIdle → setMapView → center 재계산 → focus
+            // prop 변경 → PlaceMap이 "다시 이동해라"로 착각 → animateCameraTo → 또 idle →
+            // 또 setMapView… 그 결과가 "확대한 위치 안에서 혼자 왔다갔다"였다(오너 지적).
+            // cameraTarget은 오직 "마커를 명시적으로 눌렀을 때"만 바뀐다(최초 진입 값은 mount
+            // 시점에 한 번만 mapView 에서 읽어온다) — 자유 팬/줌은 mapView(기억용)만 갱신하고
+            // cameraTarget/focus prop 은 절대 건드리지 않는다.
+            const center = cameraTarget ?? (pinned[0]?.lat != null ? { lat: pinned[0].lat!, lng: pinned[0].lng!, zoom: 12 } : null)
             if (NAVER_MAP_AVAILABLE && center) {
               return (
                 <>
@@ -335,12 +353,11 @@ export default function HonsulScreen() {
                     onTapPin={(id) => {
                       const p = pinned.find((p) => p.id === id) ?? null
                       setFocused(p)
-                      if (p?.lat != null && p?.lng != null) setMapView({ lat: p.lat, lng: p.lng, zoom: 16 })
+                      if (p?.lat != null && p?.lng != null) setCameraTarget({ lat: p.lat, lng: p.lng, zoom: 16 })
                     }}
                     onTapBackground={() => setFocused(null)}
-                    // 마커를 안 눌러도 자유롭게 팬/줌한 위치까지 그대로 기억한다(2026-08-25
-                    // 오너 지적: "그냥 지도로 나오기만 할뿐 확대해서 보고 있던 상태가 아니다"
-                    // — 예전엔 마커 탭 때만 저장해서 자유 팬/줌은 기억이 안 됐다).
+                    // 마커를 안 눌러도 자유롭게 팬/줌한 위치까지 "기억만"(mapView, 다음에 다시
+                    // 들어올 때 복원용) — cameraTarget 은 안 건드려서 루프를 안 만든다.
                     onCameraIdle={setMapView}
                     pins={pinned.map((p) => ({
                       id: p.id,
