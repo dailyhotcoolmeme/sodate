@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pres
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
-import * as Updates from 'expo-updates'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -13,7 +12,7 @@ import type { AppColors } from '@/constants/colors'
 import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
-import BoardRichEditor, { RICH_EDITOR_AVAILABLE, type RichEditorHandle } from '@/components/BoardRichEditor'
+import BoardRichEditor, { type RichEditorHandle } from '@/components/BoardRichEditor'
 import BoardRichToolbar from '@/components/BoardRichToolbar'
 import PollEditor, { emptyPollDraft, durationToEndsAt, type PollDraft } from '@/components/PollEditor'
 import { createPoll } from '@/lib/boardPoll'
@@ -104,25 +103,13 @@ export default function BoardWriteScreen() {
   const [richText, setRichText] = useState('')
   // tentap editor 인스턴스 — 하단 고정 툴바(BoardRichToolbar)에 넘긴다.
   const [richEditor, setRichEditor] = useState<unknown>(null)
-  // 리치에디터를 실제로 쓸지 — require() 성공 여부(RICH_EDITOR_AVAILABLE)로 낙관적으로 시작하되,
-  // (1) 렌더 중 에러가 나거나 (2) 마운트 후 일정 시간 안에 onEditorReady 가 안 오면(=웹뷰가
-  // 조용히 죽어서 에디터 브릿지가 안 뜬 것) 예전 평문 입력칸+툴바로 자동 전환한다.
-  // (2026-08-24: RICH_EDITOR_AVAILABLE 이 true 인데도 에디터도 안 뜨고 툴바도 하나도 안
-  // 뜨는 버그 — require는 성공했지만 웹뷰가 예외 없이 조용히 실패하는 케이스라 감지 방법을
-  // "미리 체크" 대신 "타임아웃"으로 바꿨다.)
-  const [richMode, setRichMode] = useState(RICH_EDITOR_AVAILABLE)
-  const fallbackToLegacy = useCallback(() => {
-    setRichMode((prev) => {
-      if (!prev) return prev
-      setContent((c) => c || richText)
-      return false
-    })
-  }, [richText])
-  useEffect(() => {
-    if (!richMode) return
-    const t = setTimeout(() => { if (!richEditor) fallbackToLegacy() }, 4000)
-    return () => clearTimeout(t)
-  }, [richMode, richEditor, fallbackToLegacy])
+  // 리치에디터(tentap/webview) 강제 OFF(2026-08-24). require()는 성공하고 onEditorReady도
+  // 곧바로 불려서(웹뷰가 실제로 뜨는지와 무관하게 tentap 쪽 JS 브릿지 객체 자체는 항상
+  // 즉시 생기는 듯하다) "안 뜨면 자동 전환" 타임아웃이 전혀 안 걸렸다 — richEditor 가 이미
+  // truthy라 조건을 못 탄 것. 리치에디터를 왜 못 띄우는지는 기기 로그로 직접 봐야 하는
+  // 문제라 여기서 더 추측성 수정을 반복하지 않고, 확실히 동작하는 예전 평문+툴바로 고정한다.
+  const richMode = false
+  const fallbackToLegacy = useCallback(() => { setContent((c) => c || richText) }, [richText])
   // 키보드가 올라와 있을 때만 리치 툴바 바를 그린다(내려가면 빈 바 안 남게).
   const [kbUp, setKbUp] = useState(false)
   useEffect(() => {
@@ -370,12 +357,6 @@ export default function BoardWriteScreen() {
 
         <Text style={styles.notice}>
           욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
-        </Text>
-
-        {/* 임시 디버그 표시 — 지금 이 화면이 실제로 몇 번째 OTA를 실행 중인지 스크린샷만으로
-            바로 확인하기 위함(2026-08-24, "배포했는데 똑같다" 반복 확인용). 확인 끝나면 제거. */}
-        <Text style={styles.debugTag}>
-          build: {Updates.updateId ? Updates.updateId.slice(0, 8) : '내장(embedded)'}
         </Text>
 
         {!isEdit && agreedLoaded && !initiallyAgreed && (
@@ -647,7 +628,6 @@ function makeStyles(colors: AppColors) {
     richDivider: { width: 1, height: 22, backgroundColor: colors.divider, marginHorizontal: 6 },
     richToolbarInner: { flex: 1, height: 48 },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
-    debugTag: { fontSize: 10, color: colors.textTertiary, textAlign: 'center', opacity: 0.5 },
 
     agreeRow: {
       flexDirection: 'row', alignItems: 'flex-start', gap: 8,
