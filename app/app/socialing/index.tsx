@@ -66,6 +66,7 @@ export default function SocialingScreen() {
   // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
   const feedListRef = useRef<FlatList>(null)
   const restoredScrollRef = useRef(false)
+  const programmaticScrollRef = useRef(false)
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -74,6 +75,7 @@ export default function SocialingScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
+    if (!programmaticScrollRef.current) restoredScrollRef.current = true
     saveScrollOffset('socialing-feed', y)
   }, [chipsAnim])
 
@@ -220,11 +222,15 @@ export default function SocialingScreen() {
           onScroll={onFeedScroll}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
-          onContentSizeChange={() => {
+          onContentSizeChange={(_w, h) => {
             if (restoredScrollRef.current) return
             const y = getScrollOffset('socialing-feed')
-            if (y > 0) feedListRef.current?.scrollToOffset({ offset: y, animated: false })
+            if (y <= 0) { restoredScrollRef.current = true; return }
+            if (h < y + 300) return
+            programmaticScrollRef.current = true
+            feedListRef.current?.scrollToOffset({ offset: y, animated: false })
             restoredScrollRef.current = true
+            setTimeout(() => { programmaticScrollRef.current = false }, 80)
           }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}

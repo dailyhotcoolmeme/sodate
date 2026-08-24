@@ -564,10 +564,14 @@ export default function HomeScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
+    if (!programmaticScrollRef.current) restoredScrollRef.current = true
     saveScrollOffset('dating-feed', y)
   }, [chipsAnim])
   // 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시) — 목록이 준비되면 딱 한 번 복원.
+  // 콘텐츠가 목표 위치+여유만큼 쌓이기 전엔 시도하지 않는다(안 그러면 아직 다 안 그려진
+  // 상태에서 스크롤해서 목표보다 한참 위에서 멈춘다, 오너 지적).
   const restoredScrollRef = useRef(false)
+  const programmaticScrollRef = useRef(false)
 
   const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
     track(isCurrent ? 'event_favorite_remove' : 'event_favorite_add', {
@@ -841,11 +845,14 @@ export default function HomeScreen() {
           onScroll={onScroll}
           onContentSizeChange={(_w, h) => {
             if (Platform.OS === 'android') setAndroidContentHeight(h)
-            if (!restoredScrollRef.current) {
-              const y = getScrollOffset('dating-feed')
-              if (y > 0) flatListRef.current?.scrollToOffset({ offset: y, animated: false })
-              restoredScrollRef.current = true
-            }
+            if (restoredScrollRef.current) return
+            const y = getScrollOffset('dating-feed')
+            if (y <= 0) { restoredScrollRef.current = true; return }
+            if (h < y + 300) return
+            programmaticScrollRef.current = true
+            flatListRef.current?.scrollToOffset({ offset: y, animated: false })
+            restoredScrollRef.current = true
+            setTimeout(() => { programmaticScrollRef.current = false }, 80)
           }}
           onLayout={(e) => { if (Platform.OS === 'android') setAndroidListHeight(e.nativeEvent.layout.height) }}
           scrollEventThrottle={100}

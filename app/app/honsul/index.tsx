@@ -132,8 +132,15 @@ export default function HonsulScreen() {
   const chipsAnim = useRef(new Animated.Value(1)).current
   const chipsExpandedRef = useRef(true)
   // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
+  // ⚠️ 처음엔 onContentSizeChange 첫 호출에서 바로 복원했는데, 그 시점엔 리스트가 아직
+  // 다 안 그려져서(이미지·광고 로딩 전) 실제 목표 위치보다 훨씬 못 미친 높이라 스크롤이
+  // "한참 위쪽"에서 멈췄다(오너 지적). 목표 위치+여유를 채울 만큼 콘텐츠가 실제로 쌓일
+  // 때까지 여러 번의 onContentSizeChange 호출에 걸쳐 기다렸다가 복원한다. 또 복원 전에
+  // 사용자가 직접 스크롤을 시작하면(우리가 만든 프로그램적 스크롤이 아니면) 그걸로 끝 —
+  // 나중에 콘텐츠가 더 쌓여도 되돌리지 않는다.
   const feedListRef = useRef<FlatList<PlaceRow>>(null)
   const restoredScrollRef = useRef(false)
+  const programmaticScrollRef = useRef(false)
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -142,6 +149,7 @@ export default function HonsulScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
+    if (!programmaticScrollRef.current) restoredScrollRef.current = true
     saveScrollOffset('honsul-feed', y)
   }, [chipsAnim])
 
@@ -281,11 +289,18 @@ export default function HonsulScreen() {
               showsVerticalScrollIndicator={false}
               // 목록이 준비되면 저장해둔 위치로 딱 한 번 복원(2026-08-25) — 다른 탭 갔다가
               // 돌아왔을 때 맨 위로 안 돌아가고 보던 자리 그대로.
-              onContentSizeChange={() => {
+              onContentSizeChange={(_w, h) => {
                 if (restoredScrollRef.current) return
                 const y = getScrollOffset('honsul-feed')
-                if (y > 0) feedListRef.current?.scrollToOffset({ offset: y, animated: false })
+                if (y <= 0) { restoredScrollRef.current = true; return }
+                // 목표 위치보다 콘텐츠가 충분히(여유 300px) 쌓이기 전엔 시도하지 않는다 —
+                // 안 그러면 아직 다 안 그려진 상태에서 스크롤해서 목표보다 한참 위에서
+                // 멈춘다(오너 지적: "원래 있어야할 위치보다 한참 위쪽에 위치한다").
+                if (h < y + 300) return
+                programmaticScrollRef.current = true
+                feedListRef.current?.scrollToOffset({ offset: y, animated: false })
                 restoredScrollRef.current = true
+                setTimeout(() => { programmaticScrollRef.current = false }, 80)
               }}
             />
           )}
@@ -305,7 +320,7 @@ export default function HonsulScreen() {
         <View style={{ flex: 1 }}>
           {(() => {
             const pinned = list.filter((p) => p.lat != null && p.lng != null)
-            // 카메라 위치 — mapView(명시적으로 선택했을 때만 갱신)가 있으면 그걸, 없으면
+            // 카메라 위치 — mapView(마커 선택 + 자유 팬/줌 둘 다 반영)가 있으면 그걸, 없으면
             // (첫 진입) pinned[0] 기준 기본 위치. focused 를 지워도(카드 닫기) 안 바뀐다.
             const center = mapView ?? (pinned[0]?.lat != null ? { lat: pinned[0].lat!, lng: pinned[0].lng!, zoom: 12 } : null)
             if (NAVER_MAP_AVAILABLE && center) {
@@ -323,6 +338,10 @@ export default function HonsulScreen() {
                       if (p?.lat != null && p?.lng != null) setMapView({ lat: p.lat, lng: p.lng, zoom: 16 })
                     }}
                     onTapBackground={() => setFocused(null)}
+                    // 마커를 안 눌러도 자유롭게 팬/줌한 위치까지 그대로 기억한다(2026-08-25
+                    // 오너 지적: "그냥 지도로 나오기만 할뿐 확대해서 보고 있던 상태가 아니다"
+                    // — 예전엔 마커 탭 때만 저장해서 자유 팬/줌은 기억이 안 됐다).
+                    onCameraIdle={setMapView}
                     pins={pinned.map((p) => ({
                       id: p.id,
                       lat: p.lat!,

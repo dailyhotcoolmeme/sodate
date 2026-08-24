@@ -88,6 +88,11 @@ interface Props {
    *  온다 — 지도탭(honsul/index.tsx)처럼 좌표가 필요 없는 곳까지 기본으로 켜뒀더니
    *  "여기는 왜 이렇게 느리냐"는 지적을 받았다(2026-08-24). 필요한 곳에서만 켠다. */
   resolveTapScreen?: boolean
+  /** 카메라가 멈출 때마다(줌·이동 다 포함) 현재 위치를 그대로 올려보낸다 — 마커를 안 눌러도
+   *  자유롭게 팬/줌한 위치를 호출부가 기억해뒀다가 화면을 나갔다 돌아와도 그대로 복원할 수
+   *  있게(2026-08-25 오너 지적: "지도 상태 유지가 확대해서 보고 있던 상태가 아니다" —
+   *  예전엔 마커를 탭했을 때만 위치를 저장해서 자유 팬/줌은 기억되지 않았다). */
+  onCameraIdle?: (camera: { lat: number; lng: number; zoom: number }) => void
 }
 
 /** 카메라가 멈췄을 때(onCameraIdle)의 중심좌표+줌 — 이 값 기준으로 클러스터를 다시 계산한다.
@@ -96,7 +101,7 @@ interface Props {
  *  쓰라고 나와 있다. */
 interface CameraState { lat: number; lng: number; zoom: number }
 
-export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false, resolveTapScreen = false }: Props) {
+export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false, resolveTapScreen = false, onCameraIdle }: Props) {
   const ref = useRef<any>(null)
   const [camera, setCamera] = useState<CameraState>({ lat: focus.lat, lng: focus.lng, zoom })
   const [size, setSize] = useState({ width: 0, height: 0 })
@@ -157,7 +162,10 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
       isShowZoomControls={cluster}
       isShowScaleBar={false}
       symbolScale={hideBasePoi ? 0 : 1}
-      onCameraIdle={cluster ? (e: { latitude: number; longitude: number; zoom: number }) => setCamera({ lat: e.latitude, lng: e.longitude, zoom: e.zoom }) : undefined}
+      onCameraIdle={cluster ? (e: { latitude: number; longitude: number; zoom: number }) => {
+        setCamera({ lat: e.latitude, lng: e.longitude, zoom: e.zoom })
+        onCameraIdle?.({ lat: e.latitude, lng: e.longitude, zoom: e.zoom })
+      } : undefined}
       onTapMap={onTapBackground}
     >
       {/* 클러스터 배지 — 3개 이상 겹칠 때만. 직접 그린 원형 뱃지(숫자) + 탭하면 그 지점으로 확대. */}
