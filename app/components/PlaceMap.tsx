@@ -115,7 +115,16 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
     >
       {/* 확대 구간이면 개별 사진 마커 전부, 축소 구간이면 선택된 것만(나머지는 클러스터가 그림) */}
       {(expanded ? pins : activePin ? [activePin] : []).map((p) => {
-        const size = compactPins ? (p.active ? 26 : 12) : p.active ? 62 : 44
+        const size = compactPins ? (p.active ? 24 : 12) : p.active ? 62 : 44
+        // ⚠️(2026-08-24) 기본 'pink' 심벌은 물방울(세로로 긴) 모양이라 정사각형 크기로
+        // 찍으면 억지로 눌려서 "짜부된" 모양이 된다(오너 지적) — 62px처럼 큰 사이즈에선
+        // 덜 티났을 뿐, compactPins(작은 사이즈)에선 원형 점(map-dot.png, 이미 정원이라
+        // 어떤 정사각형 크기로 찍어도 안 눌린다)으로 바꿔 근본적으로 피한다.
+        const image = p.markerUrl
+          ? { httpUri: p.markerUrl }
+          : compactPins && p.active
+            ? require('../assets/map-dot.png')
+            : { symbol: p.active ? 'pink' : 'blue' }
         return (
           <NaverMapMarkerOverlay
             key={p.id}
@@ -130,7 +139,7 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
                 ? { text: p.name, textSize: 12, haloColor: '#fff' }
                 : undefined
             }
-            image={p.markerUrl ? { httpUri: p.markerUrl } : { symbol: p.active ? 'pink' : 'blue' }}
+            image={image}
           />
         )
       })}

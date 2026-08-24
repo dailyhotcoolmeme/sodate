@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Linking, Dimensions, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import AppSpinner from '@/components/AppSpinner'
@@ -28,12 +28,13 @@ const MAP_H = 200
 
 export default function PlaceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
+  const router = useRouter()
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [place, setPlace] = useState<PlaceRow | null>(null)
   const [reviews, setReviews] = useState<PlaceReview[]>([])
-  const [nearby, setNearby] = useState<{ lat: number | null; lng: number | null }[]>([])
+  const [nearby, setNearby] = useState<{ id: string; lat: number | null; lng: number | null }[]>([])
   const [showNearby, setShowNearby] = useState(false)
   const [loading, setLoading] = useState(true)
   const { favoriteIds, toggle } = usePlaceFavorites()
@@ -108,10 +109,13 @@ export default function PlaceDetailScreen() {
                 focus={{ lat: place.lat, lng: place.lng }}
                 hideBasePoi
                 compactPins
+                // 주변 점 누르면 그 가게 상세로 이동(2026-08-24 오너 지적 — 예전엔 점을 눌러도
+                // 아무 반응이 없었다. fetchNearbyCoords 가 id 를 버리고 있던 게 원인).
+                onTapPin={(tappedId) => { if (tappedId !== place.id) router.push(`/place/${tappedId}`) }}
                 pins={[
                   { id: place.id, lat: place.lat, lng: place.lng, name: place.name, active: true },
                   ...(showNearby
-                    ? nearby.flatMap((o, i) => (o.lat && o.lng ? [{ id: `nb-${i}`, lat: o.lat, lng: o.lng }] : []))
+                    ? nearby.flatMap((o) => (o.lat && o.lng ? [{ id: o.id, lat: o.lat, lng: o.lng }] : []))
                     : []),
                 ]}
               />

@@ -142,11 +142,13 @@ export function osmTiles(lat: number, lng: number, w: number, h: number, z = 16)
   return { tiles, project }
 }
 
-export async function fetchNearbyCoords(exceptId: string): Promise<{ lat: number | null; lng: number | null }[]> {
+export async function fetchNearbyCoords(exceptId: string): Promise<{ id: string; lat: number | null; lng: number | null }[]> {
   const sb = supabase as unknown as { from: (t: string) => any }
   const { data } = await sb.from('places').select('id,lat,lng')
     .eq('service', 'honsul').eq('is_active', true).not('lat', 'is', null)
-  return ((data ?? []) as any[]).filter((p) => p.id !== exceptId).map((p) => ({ lat: p.lat, lng: p.lng }))
+  // id 를 여기서 버리고 있었다 — 상세페이지 히어로 지도에서 주변 핀을 눌러도 아무 반응이
+  // 없던 원인(2026-08-24 오너 지적: "선택하면 해당 가게 상세보기로 이동해야 할 거 아니야").
+  return ((data ?? []) as any[]).filter((p) => p.id !== exceptId).map((p) => ({ id: p.id, lat: p.lat, lng: p.lng }))
 }
 
 export async function fetchPlace(id: string): Promise<PlaceRow | null> {
