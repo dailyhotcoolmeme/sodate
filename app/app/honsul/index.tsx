@@ -189,24 +189,27 @@ export default function HonsulScreen() {
             </View>
           )}
 
-          {/* 정렬(거리순·평점순, 왼쪽) + 영업중(체크박스) + 현재 위치(오른쪽) — 2026-08-24 오너 지시로
-              보기 전환 FAB에 있던 위치 버튼을 여기로 옮기고, 정렬 개념을 새로 추가했다. */}
+          {/* 정렬(거리순·평점순, 왼쪽) + 영업중·현재 위치(오른쪽) — 소개팅 정렬칩(날짜순 등)과
+              완전히 동일한 규격(2026-08-24 오너 지시: "날짜순 그거랑 같게"). */}
           <View style={styles.resultRow}>
-            <TouchableOpacity onPress={selectDistanceSort} disabled={locBusy}>
+            <TouchableOpacity
+              style={[styles.sortChip, sortMode === 'distance' && styles.sortChipActive]}
+              onPress={selectDistanceSort} disabled={locBusy}
+            >
               <Text style={[styles.sortChipText, sortMode === 'distance' && styles.sortChipTextActive]}>
                 {locBusy && sortMode !== 'distance' ? '위치 확인중' : '거리순'}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={selectRatingSort}>
+            <TouchableOpacity style={[styles.sortChip, sortMode === 'rating' && styles.sortChipActive]} onPress={selectRatingSort}>
               <Text style={[styles.sortChipText, sortMode === 'rating' && styles.sortChipTextActive]}>평점순</Text>
             </TouchableOpacity>
+            <View style={{ flex: 1 }} />
             <TouchableOpacity style={[styles.sortChip, styles.excludeChip, openNow && styles.excludeChipActive]} onPress={() => setOpenNow((v) => !v)}>
               <View style={[styles.checkbox, openNow && styles.checkboxOn]}>
                 {openNow && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}
               </View>
               <Text style={[styles.sortChipText, openNow && styles.sortChipTextActive]}>영업중</Text>
             </TouchableOpacity>
-            <View style={{ flex: 1 }} />
             <TouchableOpacity style={[styles.locBtn, myLoc && styles.locBtnOn]} onPress={toggleNearby} activeOpacity={0.8} disabled={locBusy}>
               <Ionicons name={myLoc ? 'navigate' : 'navigate-outline'} size={13} color={myLoc ? colors.primary : colors.textSecondary} />
               <Text style={[styles.sortChipText, myLoc && styles.sortChipTextActive]}>
@@ -343,6 +346,7 @@ function makeStyles(colors: AppColors) {
     // 영업중 — 소개팅 '마감제외'와 동일 규격
     resultRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 4, paddingVertical: 6 },
     sortChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+    sortChipActive: { backgroundColor: '#FF6B9D18', borderColor: colors.primary },
     sortChipText: { fontSize: 12, color: colors.textTertiary, fontWeight: '500' },
     sortChipTextActive: { color: colors.primary, fontWeight: '700' },
     excludeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 2 },

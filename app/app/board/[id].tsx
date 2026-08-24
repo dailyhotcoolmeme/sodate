@@ -33,6 +33,7 @@ import { NEW_TABS_ENABLED } from '@/constants/features'
 import { wideContent } from '@/constants/layout'
 import { openOutlink } from '@/lib/outlink'
 import { youtubeThumbnail } from '@/lib/youtube'
+import { isInstagramUrl } from '@/lib/instagram'
 import type { BoardComment } from '@/lib/board'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
@@ -592,14 +593,25 @@ export default function BoardPostScreen() {
                 <Text style={styles.imageBlockedText}>첨부 검수 중</Text>
                 <Text style={styles.imageBlockedSub}>신고가 접수되어 확인하고 있습니다</Text>
               </View>
-            ) : post.link_urls.map((u) => (
-              <TouchableOpacity key={u} style={styles.imageWrap} onPress={() => openOutlink(u)} activeOpacity={0.85}>
-                <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.image} contentFit="cover" />
-                <View style={styles.linkPlayBadge}>
-                  <Ionicons name="play" size={22} color="#fff" />
-                </View>
-              </TouchableOpacity>
-            ))}
+            ) : post.link_urls.map((u) => {
+              const ig = isInstagramUrl(u)
+              return (
+                <TouchableOpacity key={u} style={styles.imageWrap} onPress={() => openOutlink(u)} activeOpacity={0.85}>
+                  {ig ? (
+                    <View style={[styles.image, styles.igLinkPlaceholder]}>
+                      <Ionicons name="logo-instagram" size={30} color={colors.textSecondary} />
+                    </View>
+                  ) : (
+                    <>
+                      <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.image} contentFit="cover" />
+                      <View style={styles.linkPlayBadge}>
+                        <Ionicons name="play" size={22} color="#fff" />
+                      </View>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )
+            })}
           </View>
         )}
 
@@ -1074,6 +1086,8 @@ function makeStyles(colors: AppColors) {
     images: { paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
     imageWrap: { position: 'relative', borderRadius: 10, overflow: 'hidden' },
     image: { width: '100%', height: 220, backgroundColor: colors.surfaceHigh },
+    // 인스타는 공개 썸네일 규칙이 없어 아이콘 자리표시로 대신한다(2026-08-24).
+    igLinkPlaceholder: { alignItems: 'center', justifyContent: 'center' },
     // 가림 = 사진을 아예 안 그리고 이 자리를 대신 채운다
     imageBlocked: {
       height: 220, alignItems: 'center', justifyContent: 'center', gap: 5,

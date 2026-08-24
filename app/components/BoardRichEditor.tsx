@@ -1,16 +1,22 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react'
-import { UIManager, View, TextInput, StyleSheet } from 'react-native'
+import { TurboModuleRegistry, UIManager, View, TextInput, StyleSheet } from 'react-native'
 import type { AppColors } from '@/constants/colors'
 
 /**
  * 게시판 본문 리치텍스트 에디터(tentap). 네이버카페급 서식.
  *
- * ⚠️ tentap 은 react-native-webview(네이티브)에 의존한다. 재빌드 전 바이너리엔
- * webview 가 없어 import 시점에 크래시하므로(네이버 지도와 동일), webview 등록
- * 여부를 감지해 있을 때만 tentap 구현체를 require 한다. 없으면 평문 입력칸으로 폴백.
- * → 현재 앱은 폴백(평문), 재빌드 후 리치에디터 활성. 이후 에디터는 OTA 로 다듬는다.
+ * ⚠️ tentap 은 react-native-webview(네이티브)에 의존한다. webview 등록 여부를 감지해
+ * 있을 때만 tentap 구현체를 require 한다. 없으면 평문 입력칸으로 폴백.
+ *
+ * ⚠️(2026-08-24) UIManager.getViewManagerConfig 단독으로는 감지가 안 됐다 — 네이버
+ * 지도(PlaceMap.tsx)와 똑같은 원인. Fabric/신규 아키텍처에서 등록된 뷰는 이 API가
+ * 못 잡는다. TurboModuleRegistry(react-native-webview 의 실제 모듈명 RNCWebViewModule)
+ * 로 먼저 확인하고, 구버전 아키텍처 대비 UIManager 도 같이 본다. webview는 이미
+ * 빌드에 들어가 있었는데(2026-08-23 빌드) 감지 실패로 계속 평문 폴백만 뜨고 있었다
+ * (오너 제보: "글쓰기에서 에디터가 전혀 안나온다").
  */
-export const RICH_EDITOR_AVAILABLE = !!UIManager.getViewManagerConfig?.('RNCWebView')
+export const RICH_EDITOR_AVAILABLE =
+  !!TurboModuleRegistry.get?.('RNCWebViewModule') || !!UIManager.getViewManagerConfig?.('RNCWebView')
 
 export interface RichEditorHandle {
   getHTML: () => Promise<string>

@@ -316,7 +316,7 @@ export default function BoardWriteScreen() {
             />
           )}
           <View style={{ marginTop: 8 }}>
-            {!RICH_EDITOR_AVAILABLE && <BoardLinkChips api={linksApi} links={links} />}
+            <BoardLinkChips api={linksApi} links={links} />
           </View>
 
           {/* 첨부가 있을 때만 아래에 '이어 쓰는 본문' 입력칸(기존 모드 전용). 스타일은 윗칸(본문)과 동일.
@@ -341,16 +341,10 @@ export default function BoardWriteScreen() {
           )}
         </View>
 
-        {/* 투표 — 신규글에만. 있으면 편집블록, 없으면 '투표 추가' 버튼(당근·X 방식). */}
-        {!isEdit && (
-          poll ? (
-            <PollEditor draft={poll} onChange={setPoll} onRemove={() => setPoll(null)} />
-          ) : (
-            <TouchableOpacity style={styles.addPoll} onPress={() => setPoll(emptyPollDraft())} activeOpacity={0.8}>
-              <Ionicons name="bar-chart-outline" size={18} color={colors.primary} />
-              <Text style={styles.addPollText}>투표 추가</Text>
-            </TouchableOpacity>
-          )
+        {/* 투표 — 신규글에만. 추가 버튼은 아래 첨부 툴바(사진·GIF·유튜브 옆)로 옮겼다
+            (2026-08-24 오너 지시: "이미지·gif·유튜브 옆에"). 여기는 켰을 때 편집블록만. */}
+        {!isEdit && poll && (
+          <PollEditor draft={poll} onChange={setPoll} onRemove={() => setPoll(null)} />
         )}
 
         <Text style={styles.notice}>
@@ -419,12 +413,30 @@ export default function BoardWriteScreen() {
               카운트는 안 보여준다(2026-08-14 오너 지시 — "0" 자체가 필요 없다는 지적). */}
           <TouchableOpacity
             style={styles.tool}
-            onPress={linksApi.openAdd}
+            onPress={() => linksApi.openAdd('youtube')}
             hitSlop={8}
           >
             <Ionicons name="logo-youtube" size={21} color={colors.textSecondary} />
             <Text style={styles.toolText}>유튜브</Text>
           </TouchableOpacity>
+
+          {/* 인스타 링크 — 유튜브 옆(2026-08-24 오너 지시: "깜빡했었다"). 아이콘만(폭 절약,
+              이 폴백 툴바는 리치에디터 감지 성공 후엔 사실상 안 쓰인다). */}
+          <TouchableOpacity
+            style={styles.tool}
+            onPress={() => linksApi.openAdd('instagram')}
+            hitSlop={8}
+          >
+            <Ionicons name="logo-instagram" size={21} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          {/* 투표 — 신규글에만, 이미 추가했으면 다시 안 뜸(2026-08-24: 사진·GIF·유튜브 옆으로 이동). */}
+          {!isEdit && !poll && (
+            <TouchableOpacity style={styles.tool} onPress={() => setPoll(emptyPollDraft())} hitSlop={8}>
+              <Ionicons name="bar-chart-outline" size={21} color={colors.textSecondary} />
+              <Text style={styles.toolText}>투표</Text>
+            </TouchableOpacity>
+          )}
 
           {/* 동영상 — 숨김 기능(VIDEO_ENABLED=false). 압축→R2 업로드. 재빌드+승인 후 노출. */}
           {VIDEO_ENABLED && (
@@ -464,9 +476,19 @@ export default function BoardWriteScreen() {
             <TouchableOpacity style={styles.richMediaBtn} onPress={() => insertRichMedia('gif')} disabled={richUploading} hitSlop={6}>
               <Text style={[styles.richGifText, richUploading && { color: colors.textTertiary }]}>GIF</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.richMediaBtn} onPress={linksApi.openAdd} hitSlop={6}>
+            <TouchableOpacity style={styles.richMediaBtn} onPress={() => linksApi.openAdd('youtube')} hitSlop={6}>
               <Ionicons name="logo-youtube" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
+            {/* 인스타 링크 — 유튜브 옆(2026-08-24 오너 지시: "깜빡했었다"). */}
+            <TouchableOpacity style={styles.richMediaBtn} onPress={() => linksApi.openAdd('instagram')} hitSlop={6}>
+              <Ionicons name="logo-instagram" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+            {/* 투표 — 신규글에만, 이미 추가했으면 다시 안 뜸(2026-08-24: 사진·GIF·유튜브 옆으로 이동). */}
+            {!isEdit && !poll && (
+              <TouchableOpacity style={styles.richMediaBtn} onPress={() => setPoll(emptyPollDraft())} hitSlop={6}>
+                <Ionicons name="bar-chart-outline" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
             <View style={styles.richDivider} />
             <View style={styles.richToolbarInner}>
               <BoardRichToolbar editor={richEditor} />
@@ -597,8 +619,6 @@ function makeStyles(colors: AppColors) {
     richGifText: { fontSize: 15, fontWeight: '800', color: colors.textSecondary, letterSpacing: 0.3 },
     richDivider: { width: 1, height: 22, backgroundColor: colors.divider, marginHorizontal: 6 },
     richToolbarInner: { flex: 1, height: 48 },
-    addPoll: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed' },
-    addPollText: { fontSize: 14, color: colors.primary, fontWeight: '700' },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {

@@ -6,6 +6,7 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { pickAndUpload, pickAndUploadMany, MAX_IMAGES, isGifUrl } from '@/lib/boardImage'
 import { youtubeId, youtubeThumbnail } from '@/lib/youtube'
+import { isInstagramUrl } from '@/lib/instagram'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
 /**
@@ -157,27 +158,37 @@ function makeStyles(colors: AppColors) {
 }
 
 /**
- * 게시판 유튜브 링크 첨부(2026-08-13). 인앱 재생은 안 하고 외부(유튜브 앱/브라우저)에서
- * 재생 — 오너 결정으로 1단계는 유튜브만. 썸네일은 img.youtube.com URL 패턴으로
- * API 호출 없이 바로 만든다.
+ * 게시판 유튜브·인스타그램 링크 첨부(2026-08-13 유튜브, 2026-08-24 인스타 추가). 인앱
+ * 재생은 안 하고 외부(유튜브/인스타 앱 또는 브라우저)에서 열람. 유튜브는 썸네일을
+ * img.youtube.com URL 패턴으로 API 호출 없이 바로 만들고, 인스타는 공개 썸네일 규칙이
+ * 없어 아이콘 자리표시로 대신한다(lib/instagram.ts 참고).
  *
  * 갯수 제한은 두지 않는다(2026-08-13 오너 지시) — 아웃링크라 서버 비용이 없고,
  * 스팸 여부는 신고·차단 등 admin 운영으로 관리한다.
  */
+export type LinkMode = 'youtube' | 'instagram'
+
 export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) => void) {
   const [modalVisible, setModalVisible] = useState(false)
+  const [mode, setMode] = useState<LinkMode>('youtube')
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const openAdd = () => {
+  const openAdd = (m: LinkMode = 'youtube') => {
+    setMode(m)
     setInput('')
     setError(null)
     setModalVisible(true)
   }
   const confirmAdd = () => {
     const url = input.trim()
-    if (!youtubeId(url)) {
-      setError('유튜브 링크만 첨부할 수 있어요. (youtube.com, youtu.be)')
+    const valid = mode === 'youtube' ? !!youtubeId(url) : isInstagramUrl(url)
+    if (!valid) {
+      setError(
+        mode === 'youtube'
+          ? '유튜브 링크만 첨부할 수 있어요. (youtube.com, youtu.be)'
+          : '인스타그램 게시물·릴스 링크만 첨부할 수 있어요. (instagram.com/p/... 또는 /reel/...)'
+      )
       return
     }
     if (!links.includes(url)) onChangeLinks([...links, url])
@@ -185,7 +196,7 @@ export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) =
   }
 
   return {
-    modalVisible, input, setInput, error, openAdd, confirmAdd,
+    modalVisible, mode, input, setInput, error, openAdd, confirmAdd,
     cancel: () => setModalVisible(false),
     removeLink: (u: string) => onChangeLinks(links.filter((x) => x !== u)),
   }
@@ -193,43 +204,55 @@ export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) =
 
 export type BoardLinksApi = ReturnType<typeof useBoardLinks>
 
-/** 첨부된 링크를 이미지 썸네일과 같은 자리에 재생 배지 붙여 보여준다. */
+/** 첨부된 링크를 이미지 썸네일과 같은 자리에 보여준다. 유튜브=썸네일+재생배지, 인스타=아이콘 자리표시. */
 export function BoardLinkChips({ api, links }: { api: BoardLinksApi; links: string[] }) {
   const colors = useColors()
   const styles = useMemo(() => makeLinkStyles(colors), [colors])
   if (links.length === 0) return null
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
-      {links.map((u) => (
-        <View key={u} style={styles.thumbWrap}>
-          <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.thumb} contentFit="cover" />
-          <View style={styles.playBadge}>
-            <Ionicons name="play" size={12} color="#fff" />
+      {links.map((u) => {
+        const ig = isInstagramUrl(u)
+        return (
+          <View key={u} style={styles.thumbWrap}>
+            {ig ? (
+              <View style={[styles.thumb, styles.igThumb]}>
+                <Ionicons name="logo-instagram" size={26} color={colors.textSecondary} />
+              </View>
+            ) : (
+              <>
+                <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.thumb} contentFit="cover" />
+                <View style={styles.playBadge}>
+                  <Ionicons name="play" size={12} color="#fff" />
+                </View>
+              </>
+            )}
+            <TouchableOpacity style={styles.thumbX} onPress={() => api.removeLink(u)} hitSlop={6}>
+              <Ionicons name="close" size={13} color="#fff" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.thumbX} onPress={() => api.removeLink(u)} hitSlop={6}>
-            <Ionicons name="close" size={13} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      ))}
+        )
+      })}
     </ScrollView>
   )
 }
 
-/** 유튜브 URL 붙여넣기 팝업 — write.tsx의 말머리 선택 팝업과 같은 방식(화면 가운데 카드). */
+/** 유튜브·인스타 URL 붙여넣기 팝업 — write.tsx의 말머리 선택 팝업과 같은 방식(화면 가운데 카드). */
 export function LinkInputModal({ api }: { api: BoardLinksApi }) {
   const colors = useColors()
   const styles = useMemo(() => makeLinkStyles(colors), [colors])
+  const isYoutube = api.mode === 'youtube'
   return (
     <Modal visible={api.modalVisible} transparent animationType="fade" onRequestClose={api.cancel} statusBarTranslucent>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={api.cancel} />
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>유튜브 링크 추가</Text>
+          <Text style={styles.modalTitle}>{isYoutube ? '유튜브 링크 추가' : '인스타그램 링크 추가'}</Text>
           <TextInput
             style={styles.modalInput}
             value={api.input}
             onChangeText={api.setInput}
-            placeholder="https://youtube.com/watch?v=..."
+            placeholder={isYoutube ? 'https://youtube.com/watch?v=...' : 'https://instagram.com/p/...'}
             placeholderTextColor={colors.textTertiary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -256,6 +279,8 @@ function makeLinkStyles(colors: AppColors) {
     thumbs: { gap: 8, paddingTop: 8, paddingBottom: 2, paddingRight: 8 },
     thumbWrap: { position: 'relative' },
     thumb: { width: 76, height: 76, borderRadius: 8, backgroundColor: colors.surfaceHigh },
+    // 인스타는 공개 썸네일 규칙이 없어 아이콘 자리표시로 대신한다.
+    igThumb: { alignItems: 'center', justifyContent: 'center' },
     playBadge: {
       position: 'absolute', right: 4, bottom: 4,
       width: 20, height: 20, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.72)',
