@@ -14,6 +14,7 @@ import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
 import { sanggwonFor } from '@/constants/honsulSanggwon'
 import { getMyLocation, distanceKm } from '@/lib/nearby'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
+import { useHonsulFilterStore, useHonsulFilterHydrated } from '@/stores/honsulFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
 import PlaceMapCard from '@/components/PlaceMapCard'
@@ -35,14 +36,16 @@ export default function HonsulScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [tab, setTab] = useState<Tab>('feed')
-  const [regionGroup, setRegionGroup] = useState<string | null>(null)   // 지역군(강남권…) — 소개팅·소셜링과 동일
-  const [sanggwon, setSanggwon] = useState<string | null>(null)         // 상권(홍대·서면…) — 지역군 아래 세부
-  const [openNow, setOpenNow] = useState(false)                    // 영업중만
+  // 지역군·상권·영업중·정렬 — 예전엔 로컬 useState라 화면을 나갔다 돌아오면 필터가 전부
+  // 풀렸다(오너 지적: "화면 나갔다 돌아오면 해제되냐"). 소개팅·소셜링처럼 persist 스토어로
+  // 옮겼다(2026-08-24). myLoc(좌표)·locBusy 는 세션마다 새로 재는 게 맞아서 로컬로 남긴다.
+  const hydrated = useHonsulFilterHydrated()
+  const {
+    regionGroup, sanggwon, tag, openNow, sortMode, hasAutoInit,
+    setRegionGroup, setSanggwon, setTag, setOpenNow, setSortMode, setHasAutoInit,
+  } = useHonsulFilterStore()
   const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null) // 현재 위치(거리정렬용)
   const [locBusy, setLocBusy] = useState(false)
-  // 정렬 — 거리순은 위치 필요, 평점순은 네이버 평점(naver_rating) 기준(2026-08-24 오너 지시).
-  const [sortMode, setSortMode] = useState<'default' | 'distance' | 'rating'>('default')
-  const [tag, setTag] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
   const [focused, setFocused] = useState<PlaceRow | null>(null)   // 지도탭에서 볼 업체
@@ -54,6 +57,21 @@ export default function HonsulScreen() {
   }, [])
   useEffect(() => { load() }, [load])
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false) }, [load])
+
+  // 최초 진입 자동 위치요청(2026-08-24 오너 지시) — 이 화면에 평생 딱 한 번(hasAutoInit),
+  // 들어오자마자 위치 권한을 물어서 허용하면 거리순, 거부하면 리뷰많은순으로 기본 정렬을
+  // 잡는다. hydrated 되기 전엔 hasAutoInit 이 기본값(false)이라 오판할 수 있어 기다린다.
+  useEffect(() => {
+    if (!hydrated || hasAutoInit) return
+    setHasAutoInit(true)
+    ;(async () => {
+      setLocBusy(true)
+      const loc = await getMyLocation()
+      setLocBusy(false)
+      if (loc) { setMyLoc(loc); setSortMode('distance') }
+      else setSortMode('reviewCount')
+    })()
+  }, [hydrated, hasAutoInit, setHasAutoInit, setSortMode])
 
   // 매장별 상권·지역군 1회 계산. 지역군은 주소(도로명) 기준 — region(동)은 분류가 안 된다.
   const sangOf = useMemo(() => {
@@ -99,6 +117,9 @@ export default function HonsulScreen() {
     if (sortMode === 'rating') {
       return [...filtered].sort((a, b) => (b.naver_rating ?? -1) - (a.naver_rating ?? -1))
     }
+    if (sortMode === 'reviewCount') {
+      return [...filtered].sort((a, b) => (b.naver_review_count ?? -1) - (a.naver_review_count ?? -1))
+    }
     return filtered
   }, [all, regionGroup, sanggwon, openNow, tag, search, sortMode, myLoc, sangOf, groupOf])
 
@@ -129,12 +150,12 @@ export default function HonsulScreen() {
   // 현재 위치 — 필터 줄 오른쪽 버튼(예전엔 FAB였다, 2026-08-24 오너 지시로 이동).
   // 다시 누르면 해제 — 거리순 정렬 중이었으면 기본 정렬로 되돌린다(위치 없이는 거리순 불가).
   const toggleNearby = useCallback(async () => {
-    if (myLoc) { setMyLoc(null); setSortMode((m) => (m === 'distance' ? 'default' : m)); return }
+    if (myLoc) { setMyLoc(null); if (sortMode === 'distance') setSortMode('default'); return }
     setLocBusy(true)
     const loc = await getMyLocation()
     setLocBusy(false)
     if (loc) setMyLoc(loc)
-  }, [myLoc])
+  }, [myLoc, sortMode, setSortMode])
 
   // 거리순 — 위치 없으면 먼저 요청하고 나서 적용.
   const selectDistanceSort = useCallback(async () => {
@@ -144,9 +165,11 @@ export default function HonsulScreen() {
     const loc = await getMyLocation()
     setLocBusy(false)
     if (loc) { setMyLoc(loc); setSortMode('distance') }
-  }, [sortMode, myLoc])
+  }, [sortMode, myLoc, setSortMode])
 
-  const selectRatingSort = () => setSortMode((m) => (m === 'rating' ? 'default' : 'rating'))
+  const selectRatingSort = () => setSortMode(sortMode === 'rating' ? 'default' : 'rating')
+  // 리뷰많은순 — 위치 필요 없음, naver_review_count 기준(2026-08-24 오너 지시).
+  const selectReviewCountSort = () => setSortMode(sortMode === 'reviewCount' ? 'default' : 'reviewCount')
 
   return (
     <View style={styles.container}>
@@ -203,8 +226,11 @@ export default function HonsulScreen() {
             <TouchableOpacity style={[styles.sortChip, sortMode === 'rating' && styles.sortChipActive]} onPress={selectRatingSort}>
               <Text style={[styles.sortChipText, sortMode === 'rating' && styles.sortChipTextActive]}>평점순</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={[styles.sortChip, sortMode === 'reviewCount' && styles.sortChipActive]} onPress={selectReviewCountSort}>
+              <Text style={[styles.sortChipText, sortMode === 'reviewCount' && styles.sortChipTextActive]}>리뷰많은순</Text>
+            </TouchableOpacity>
             <View style={{ flex: 1 }} />
-            <TouchableOpacity style={[styles.sortChip, styles.excludeChip, openNow && styles.excludeChipActive]} onPress={() => setOpenNow((v) => !v)}>
+            <TouchableOpacity style={[styles.sortChip, styles.excludeChip, openNow && styles.excludeChipActive]} onPress={() => setOpenNow(!openNow)}>
               <View style={[styles.checkbox, openNow && styles.checkboxOn]}>
                 {openNow && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}
               </View>

@@ -132,8 +132,8 @@ export default function PlaceDetailScreen() {
               })()
             )}
             <TouchableOpacity style={styles.nearbyChk} onPress={() => setShowNearby((v) => !v)} activeOpacity={0.8}>
-              <View style={[styles.checkbox, showNearby && styles.checkboxOn]}>{showNearby && <Ionicons name="checkmark-sharp" size={12} color="#fff" />}</View>
-              <Text style={styles.nearbyText}>주변 혼술바도 보기</Text>
+              <View style={[styles.checkbox, showNearby && styles.checkboxOn]}>{showNearby && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}</View>
+              <Text style={styles.nearbyText}>주변 혼술바</Text>
             </TouchableOpacity>
           </View>
         ) : <View style={[styles.mapImg, styles.mapEmpty]}><Ionicons name="map-outline" size={40} color={colors.textTertiary} /></View>}
@@ -280,10 +280,18 @@ function makeStyles(colors: AppColors) {
     tile: { position: 'absolute', width: 256, height: 256 },
     pinMe: { position: 'absolute' },
     pinDot: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#5b9dff', borderWidth: 1.5, borderColor: '#fff' },
-    nearbyChk: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 16, paddingLeft: 8, paddingRight: 12, paddingVertical: 6 },
-    checkbox: { width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+    // 지도 위 오버레이 칩 — 예전엔 검은 반투명 알약이라 앱 전체 톤(밝은 카드+테두리)과
+    // 따로 놀았다("완전 개판", 2026-08-24 오너 지적). 혼술바 필터줄의 '영업중' 칩과 같은
+    // 흰 카드+테두리+그림자로 통일.
+    nearbyChk: {
+      position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6,
+      backgroundColor: colors.surface, borderRadius: 16, paddingLeft: 8, paddingRight: 12, paddingVertical: 6,
+      borderWidth: 1, borderColor: colors.border,
+      shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 3,
+    },
+    checkbox: { width: 15, height: 15, borderRadius: 4, borderWidth: 1.5, borderColor: colors.textTertiary, alignItems: 'center', justifyContent: 'center' },
     checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-    nearbyText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+    nearbyText: { color: colors.textPrimary, fontSize: 12, fontWeight: '700' },
     body: { padding: 16, paddingBottom: 6 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     name: { flex: 1, fontSize: 20, fontWeight: '800', color: colors.textPrimary },
