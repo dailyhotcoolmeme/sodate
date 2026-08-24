@@ -49,6 +49,12 @@ export default function HonsulScreen() {
   const [search, setSearch] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
   const [focused, setFocused] = useState<PlaceRow | null>(null)   // 지도탭에서 볼 업체
+  // 지도 카메라 위치 — focused(선택된 업체=미리보기 카드 표시 여부)와 분리했다. 예전엔
+  // focus/zoom을 focused 로 바로 계산해서, 카드를 닫기만(바깥 탭) 해도 focused=null이 되며
+  // 카메라가 zoom12·pinned[0]로 확 되돌아갔다(오너 지적: "닫으면 지도 배율이 축소되면서
+  // 애써 맞춰놓은 위치가 원복된다"). 이제 마커를 새로 선택할 때만 갱신하고, 카드를 닫는
+  // 것만으로는 카메라를 절대 안 건드린다.
+  const [mapView, setMapView] = useState<{ lat: number; lng: number; zoom: number } | null>(null)
   const { favoriteIds, toggle: toggleFav } = usePlaceFavorites()
   const router = useRouter()
 
@@ -136,7 +142,11 @@ export default function HonsulScreen() {
     }
   }, [chipsAnim])
 
-  const openOnMap = (p: PlaceRow) => { setFocused(p); setTab('map') }
+  const openOnMap = (p: PlaceRow) => {
+    setFocused(p)
+    if (p.lat != null && p.lng != null) setMapView({ lat: p.lat, lng: p.lng, zoom: 16 })
+    setTab('map')
+  }
 
   // 적용된 필터칩 — 소개팅·소셜링과 완전히 동일한 규격(activeChip + 초기화).
   const activeChips: { label: string; onRemove: () => void }[] = []
@@ -283,17 +293,23 @@ export default function HonsulScreen() {
         <View style={{ flex: 1 }}>
           {(() => {
             const pinned = list.filter((p) => p.lat != null && p.lng != null)
-            const center = focused && focused.lat != null ? focused : pinned[0]
-            if (NAVER_MAP_AVAILABLE && center?.lat != null && center?.lng != null) {
+            // 카메라 위치 — mapView(명시적으로 선택했을 때만 갱신)가 있으면 그걸, 없으면
+            // (첫 진입) pinned[0] 기준 기본 위치. focused 를 지워도(카드 닫기) 안 바뀐다.
+            const center = mapView ?? (pinned[0]?.lat != null ? { lat: pinned[0].lat!, lng: pinned[0].lng!, zoom: 12 } : null)
+            if (NAVER_MAP_AVAILABLE && center) {
               return (
                 <>
                   <PlaceMap
                     style={{ flex: 1 }}
                     focus={{ lat: center.lat, lng: center.lng }}
-                    zoom={focused ? 16 : 12}
+                    zoom={center.zoom}
                     showLocationButton
                     cluster
-                    onTapPin={(id) => setFocused(pinned.find((p) => p.id === id) ?? null)}
+                    onTapPin={(id) => {
+                      const p = pinned.find((p) => p.id === id) ?? null
+                      setFocused(p)
+                      if (p?.lat != null && p?.lng != null) setMapView({ lat: p.lat, lng: p.lng, zoom: 16 })
+                    }}
                     onTapBackground={() => setFocused(null)}
                     pins={pinned.map((p) => ({
                       id: p.id,
