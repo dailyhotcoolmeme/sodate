@@ -135,7 +135,7 @@ function makeStyles(colors: AppColors) {
     // 톱바 소개팅/커뮤니티 알약 탭은 톱바 전용 — 여기는 후기 섹션(ReviewSection)의
     // 밑줄 탭과 같은 방식을 쓴다(2026-08-01 오너 지적: 같은 표현을 두 군데 쓰지 않는다).
     tabWrap: {
-      flexDirection: 'row', marginHorizontal: 16, marginBottom: 12,
+      flexDirection: 'row', marginHorizontal: 16, marginTop: 8, marginBottom: 12,
       borderBottomWidth: 1, borderBottomColor: colors.divider,
     },
     tabBtn: {

@@ -1,15 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 /**
- * 최근 본 것 — MY 탭 "최근 본 것"의 저장소(2026-08-21). 완전히 로컬(AsyncStorage).
- * 이벤트/업체 상세에 들어갈 때마다 여기 한 줄을 남긴다. 서버로 안 나간다.
+ * 최근 본 것 — MY 탭 "최근 본 기록"의 저장소(2026-08-21, 2026-08-24 kind 세분화).
+ * 완전히 로컬(AsyncStorage). 일정/업체/매장 상세에 들어갈 때마다 여기 한 줄을 남긴다.
+ * 서버로 안 나간다.
  *
- * 소셜링·혼술바가 붙으면 kind 를 늘려 같은 목록에 섞어 보여줄 수 있게 kind 로 구분한다.
+ * kind 로 소개팅·소셜링·혼술바·업체를 구분한다("전체" 탭에서 종류별 아이콘 표시,
+ * 소개팅/소셜링/혼술바 탭에서 필터링에 쓴다). 'company'(업체 소개 페이지)는 특정
+ * 소개팅/소셜링 이벤트가 아니라 업체 단위라 3개 탭 어디에도 넣지 않고 전체에서만 보여준다.
  */
 const KEY = 'sodate_recent_views'
 const MAX = 50
 
-export type RecentKind = 'event' | 'company'
+export type RecentKind = 'dating' | 'socialing' | 'place' | 'company'
 
 export interface RecentView {
   kind: RecentKind
@@ -21,10 +24,19 @@ export interface RecentView {
   at: number
 }
 
+/** kind 세분화(2026-08-24) 이전 기록은 전부 'event'였다 — 소개팅으로 간주해 마이그레이션한다.
+ *  (그 시점엔 소셜링도 이 kind 하나로 저장됐지만, 원본 event_type 정보가 로컬엔 없어
+ *  되살릴 수 없다 — 다시 열람하면 새 kind로 갱신된다.) */
+function migrateKind(kind: string): RecentKind {
+  return kind === 'event' ? 'dating' : (kind as RecentKind)
+}
+
 export async function getRecentViews(): Promise<RecentView[]> {
   try {
     const raw = await AsyncStorage.getItem(KEY)
-    return raw ? (JSON.parse(raw) as RecentView[]) : []
+    if (!raw) return []
+    const list = JSON.parse(raw) as RecentView[]
+    return list.map((v) => ({ ...v, kind: migrateKind(v.kind as string) }))
   } catch {
     return []
   }

@@ -20,6 +20,7 @@ import {
 import { deletePlaceReview } from '@/lib/placeReviews'
 import { getMyReviewIds } from '@/lib/reviewIdentity'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
+import { addRecentView } from '@/lib/recentViews'
 
 const DOW = ['월', '화', '수', '목', '금', '토', '일']
 const MAP_W = Dimensions.get('window').width
@@ -63,6 +64,16 @@ export default function PlaceDetailScreen() {
   }, [id])
 
   useEffect(() => { loadMyReviewIds() }, [loadMyReviewIds])
+
+  // MY '최근 본 기록' 기록(2026-08-24) — 로컬 저장, 무해. 이전엔 이 화면만 누락돼 있었다.
+  useEffect(() => {
+    if (place) {
+      addRecentView({
+        kind: 'place', id: place.id, title: place.name,
+        sub: place.region ?? undefined,
+      })
+    }
+  }, [place?.id])
 
   const openWrite = () => { setEditTarget(null); setSheetVisible(true) }
   const openEdit = (review: ReviewRow) => {

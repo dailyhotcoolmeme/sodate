@@ -39,7 +39,7 @@ export default function ScrapsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack onLogoPress={() => router.replace('/board')} />
+      <TopBar showBack title="스크랩한 글" onLogoPress={() => router.replace('/board')} />
 
       {loading && isEmpty ? (
         <View style={styles.center}><AppSpinner /></View>
@@ -51,7 +51,7 @@ export default function ScrapsScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}
+          contentContainerStyle={[wideContent, { paddingTop: 8, paddingBottom: insets.bottom + 20 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />}
         >
           {posts.map((p) => (

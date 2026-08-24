@@ -652,7 +652,7 @@ serve(async (req) => {
       const ids = (rows ?? []).map((r: any) => r.post_id)
       if (ids.length === 0) return json({ posts: [] })
       const { data: posts } = await supabase.from('board_posts')
-        .select('id,nickname,title,content,image_urls,link_urls,upvotes,downvotes,comment_count,view_count,tag_id,board_tags(label),is_active,image_hidden,created_at')
+        .select('id,nickname,title,content,image_urls,link_urls,upvotes,downvotes,comment_count,view_count,tag_id,board_tags(label),is_active,content_hidden,created_at')
         .in('id', ids).eq('is_active', true)
       const byId = new Map((posts ?? []).map((p: any) => {
         const { board_tags, ...rest } = p

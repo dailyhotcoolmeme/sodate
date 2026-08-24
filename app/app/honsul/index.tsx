@@ -152,8 +152,8 @@ export default function HonsulScreen() {
 
       {tab === 'feed' ? (
         <>
-          {/* 지역군 칩(강남권·강북권…) — 소개팅·소셜링과 동일. 스크롤하면 접힌다. */}
-          <Animated.View style={{ height: chipsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 36] }), opacity: chipsAnim, overflow: 'hidden' }}>
+          {/* 지역군 칩 + 상권 칩 2줄 — 소개팅처럼 스크롤하면 통째로 접힌다(영업중 줄만 남는다). */}
+          <Animated.View style={{ height: chipsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 72] }), opacity: chipsAnim, overflow: 'hidden' }}>
           <View style={styles.regionScroll}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} style={{ flex: 1 }}>
               {regionGroups.map((g) => (
@@ -162,14 +162,13 @@ export default function HonsulScreen() {
               ))}
             </ScrollView>
           </View>
-          </Animated.View>
 
-          {/* 상권 칩(홍대·서면…) — 지역군 아래 세부 */}
           <View style={styles.regionScroll}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} style={{ flex: 1 }}>
               {sanggwons.map((s) => <Chip key={s} label={s} active={sanggwon === s} onPress={() => setSanggwon(sanggwon === s ? null : s)} colors={colors} />)}
             </ScrollView>
           </View>
+          </Animated.View>
 
           {/* ── 활성 필터 칩 + 초기화 — 소개팅·소셜링과 동일(정렬줄 위, 같은 규격) ── */}
           {activeChips.length > 0 && (

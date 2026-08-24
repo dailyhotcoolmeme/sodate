@@ -151,3 +151,24 @@ export async function reportReview(
   if (errMsg) return { error: errMsg }
   return { ok: true, already: data?.already === true }
 }
+
+/**
+ * MY "내가 쓴 후기" — 소개팅/소셜링 탭용(2026-08-24). 혼술바는 별도(lib/placeReviews.ts
+ * fetchMyPlaceReviews). id 목록(기기 로컬 소유 id)으로 직접 조회하고, event_id로 events를
+ * 조인해 event_type(소개팅/소셜링)을 함께 받는다 — event_id 가 null(연결된 일정이 삭제된
+ * 경우)이면 소개팅으로 분류한다(원래 소셜링이 생기기 전부터 있던 후기가 대부분이라).
+ */
+export async function fetchMyEventReviews(
+  reviewIds: string[]
+): Promise<(ReviewRow & { companies: { name: string; slug: string } | null; event_type: 'dating' | 'socialing' })[]> {
+  if (reviewIds.length === 0) return []
+  const { data } = await supabase
+    .from('reviews')
+    .select('*, companies(name, slug), events(event_type)')
+    .in('id', reviewIds)
+    .eq('is_active', true)
+  return ((data ?? []) as any[]).map((r) => {
+    const { events, ...rest } = r
+    return { ...rest, event_type: events?.event_type === 'socialing' ? 'socialing' : 'dating' }
+  })
+}

@@ -150,19 +150,16 @@ export default function MyScreen() {
           </View>
         </View>
 
-        {/* 관심 — 소개팅·소셜링·혼술바 각각 분리, 오른쪽엔 개수만 */}
+        {/* 관심 — 즐겨찾기·최근 본 기록 각각 진입하면 소개팅·소셜링·혼술바 탭으로 나뉜다 */}
         <Text style={styles.grpLabel}>관심</Text>
-        <Row colors={colors} icon="bookmark" label="관심 소개팅" right={`${datingFavCount}`} onPress={() => router.push('/favorites')} />
-        <Row colors={colors} icon="people-outline" label="관심 소셜링" right={`${socialingFavCount}`} onPress={() => router.push({ pathname: '/favorites', params: { type: 'socialing' } })} />
-        <Row colors={colors} icon="wine-outline" label="관심 혼술바" right={`${placeFavCount}`} onPress={() => router.push('/favorites/places')} />
-        <Row colors={colors} icon="time-outline" label="최근 본 일정·매장" onPress={() => router.push('/my/recent')} />
+        <Row colors={colors} icon="bookmark" label="즐겨찾기" right={`${datingFavCount + socialingFavCount + placeFavCount}`} onPress={() => router.push('/favorites')} />
+        <Row colors={colors} icon="time-outline" label="최근 본 기록" onPress={() => router.push('/my/recent')} />
 
         {/* 내 활동 */}
         <Text style={styles.grpLabel}>내 활동</Text>
-        <Row colors={colors} icon="create-outline" label="내가 쓴 글" right={`${postCount}`} onPress={() => router.push({ pathname: '/board/mine', params: { tab: 'post' } })} />
-        <Row colors={colors} icon="chatbubble-outline" label="내가 쓴 댓글" right={`${commentCount}`} onPress={() => router.push({ pathname: '/board/mine', params: { tab: 'comment' } })} />
+        <Row colors={colors} icon="create-outline" label="내가 쓴 글·댓글" right={`글 ${postCount} · 댓글 ${commentCount}`} onPress={() => router.push('/board/mine')} />
         <Row colors={colors} icon="bookmarks-outline" label="스크랩한 글" right={`${scrapCount}`} onPress={() => router.push('/my/scraps')} />
-        <Row colors={colors} icon="star-outline" label="내가 쓴 후기" right={`${reviewCount}`} onPress={() => router.push({ pathname: '/reviews', params: { tab: 'mine' } })} />
+        <Row colors={colors} icon="star-outline" label="내가 쓴 후기" right={`${reviewCount}`} onPress={() => router.push('/my/reviews')} />
         <Row colors={colors} icon="ban-outline" label="차단 목록" right={`${blockedCount}`} onPress={() => router.push('/board/blocked')} />
 
         {/* 설정 — 알림·다크모드·내 정보·약관을 한 그룹으로 */}

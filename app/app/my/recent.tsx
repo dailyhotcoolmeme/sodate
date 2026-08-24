@@ -6,12 +6,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { getRecentViews, clearRecentViews, type RecentView } from '@/lib/recentViews'
+import { getRecentViews, clearRecentViews, type RecentView, type RecentKind } from '@/lib/recentViews'
 import { wideContent } from '@/constants/layout'
 
+type Tab = 'all' | 'dating' | 'socialing' | 'place'
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'dating', label: '소개팅' },
+  { key: 'socialing', label: '소셜링' },
+  { key: 'place', label: '혼술바' },
+]
+
+// 바텀 내비(BottomNav.tsx)와 같은 아이콘 — "전체" 탭에서 종류를 한눈에 구분하게 한다.
+// 'company'(업체 소개 페이지)는 특정 서비스 하나로 못 묶어 중립 아이콘을 쓴다.
+const KIND_ICON: Record<RecentKind, keyof typeof Ionicons.glyphMap> = {
+  dating: 'heart', socialing: 'sparkles', place: 'wine', company: 'storefront-outline',
+}
+const KIND_ROUTE: Record<RecentKind, string> = {
+  dating: '/event', socialing: '/event', place: '/place', company: '/company',
+}
+
 /**
- * 최근 본 것 — MY 탭 진입. 이벤트/업체 상세를 열 때마다 로컬에 쌓인 기록을 최신순으로 본다.
- * 완전히 로컬(기기)이라 앱을 지우면 비워진다. 소셜링·혼술바가 붙으면 kind 를 늘려 섞는다.
+ * 최근 본 기록 — MY 탭 진입. 일정/업체/매장 상세를 열 때마다 로컬에 쌓인 기록을 최신순으로 본다.
+ * 완전히 로컬(기기)이라 앱을 지우면 비워진다. 전체/소개팅/소셜링/혼술바 탭으로 나눈다(2026-08-24).
  */
 export default function RecentScreen() {
   const router = useRouter()
@@ -19,6 +37,7 @@ export default function RecentScreen() {
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
+  const [tab, setTab] = useState<Tab>('all')
   const [items, setItems] = useState<RecentView[]>([])
   const [loaded, setLoaded] = useState(false)
 
@@ -28,18 +47,34 @@ export default function RecentScreen() {
     return () => { alive = false }
   }, []))
 
-  const open = (v: RecentView) =>
-    router.push(v.kind === 'event' ? `/event/${v.id}` : `/company/${v.id}`)
+  const filtered = useMemo(
+    () => (tab === 'all' ? items : items.filter((v) => v.kind === tab)),
+    [items, tab],
+  )
+
+  const open = (v: RecentView) => router.push(`${KIND_ROUTE[v.kind]}/${v.id}` as never)
 
   const handleClear = async () => { await clearRecentViews(); setItems([]) }
 
-  const isEmpty = items.length === 0
+  const isEmpty = filtered.length === 0
 
   return (
     <View style={styles.container}>
-      <TopBar showBack title="최근 본 것" />
+      <TopBar showBack title="최근 본 기록" />
+      <View style={styles.tabs}>
+        {TABS.map((t) => (
+          <TouchableOpacity
+            key={t.key}
+            style={[styles.tab, tab === t.key && styles.tabOn]}
+            onPress={() => setTab(t.key)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabText, tab === t.key && styles.tabTextOn]}>{t.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       <View style={styles.headingRow}>
-        {!isEmpty && (
+        {items.length > 0 && (
           <TouchableOpacity onPress={handleClear} hitSlop={8}>
             <Text style={styles.clear}>기록 비우기</Text>
           </TouchableOpacity>
@@ -49,16 +84,16 @@ export default function RecentScreen() {
       {loaded && isEmpty ? (
         <View style={styles.center}>
           <Ionicons name="time-outline" size={32} color={colors.textTertiary} />
-          <Text style={styles.emptyText}>아직 본 것이 없어요</Text>
-          <Text style={styles.emptySub}>일정이나 업체를 열어보면 여기에 쌓여요</Text>
+          <Text style={styles.emptyText}>아직 본 기록이 없어요</Text>
+          <Text style={styles.emptySub}>일정·업체·매장을 열어보면 여기에 쌓여요</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}>
-          {items.map((v) => (
+          {filtered.map((v) => (
             <TouchableOpacity key={`${v.kind}:${v.id}`} style={styles.row} onPress={() => open(v)} activeOpacity={0.7}>
               <Ionicons
-                name={v.kind === 'event' ? 'heart-outline' : 'storefront-outline'}
-                size={18} color={colors.textTertiary} style={styles.rowIcon}
+                name={KIND_ICON[v.kind] ?? 'time-outline'}
+                size={18} color={v.kind === 'company' ? colors.textTertiary : colors.primary} style={styles.rowIcon}
               />
               <View style={{ flex: 1 }}>
                 <Text style={styles.title} numberOfLines={1}>{v.title}</Text>
@@ -76,11 +111,20 @@ export default function RecentScreen() {
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    headingRow: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12,
+    // 탭 — 즐겨찾기·알림 설정·혼술바(피드/지도)와 동일한 밑줄 탭 규격.
+    tabs: {
+      flexDirection: 'row', alignItems: 'flex-end', gap: 18,
+      paddingHorizontal: 16, paddingTop: 8,
+      borderBottomWidth: 1, borderBottomColor: colors.divider,
     },
-    heading: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5 },
+    tab: { paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+    tabOn: { borderBottomColor: colors.primary },
+    tabText: { fontSize: 15, fontWeight: '700', color: colors.textTertiary },
+    tabTextOn: { color: colors.textPrimary, fontWeight: '800' },
+    headingRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+      paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4,
+    },
     clear: { fontSize: 13, color: colors.textTertiary },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 60 },
     emptyText: { fontSize: 15, color: colors.textSecondary, marginTop: 4 },

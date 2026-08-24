@@ -124,6 +124,7 @@ export default function RootLayout() {
         <Stack.Screen name="my/index" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="my/scraps" options={{ headerShown: false }} />
         <Stack.Screen name="my/recent" options={{ headerShown: false }} />
+        <Stack.Screen name="my/reviews" options={{ headerShown: false }} />
         <Stack.Screen name="board/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="board/write" options={{ headerShown: false }} />
         <Stack.Screen name="board/mine" options={{ headerShown: false }} />

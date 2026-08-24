@@ -113,8 +113,9 @@ export default function SocialingScreen() {
     <View style={styles.container}>
       <TopBar onSearchPress={() => setSearchVisible(true)} />
 
-      {/* ── 카테고리 빠른칩(다중) — 소개팅 지역/나이대 칩과 동일 리듬(height 34, marginBottom 2) ── */}
-      <Animated.View style={{ height: chipsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 36] }), opacity: chipsAnim, overflow: 'hidden' }}>
+      {/* ── 카테고리 칩 + 지역군 칩 2줄 — 소개팅처럼 스크롤하면 통째로 접힌다(마감제외
+          줄만 항상 남는다). 소개팅 Animated.View 와 동일하게 두 줄을 하나로 감싼다. ── */}
+      <Animated.View style={{ height: chipsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 72] }), opacity: chipsAnim, overflow: 'hidden' }}>
         <View style={styles.chipScroll}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
             {SOCIALING_GROUPS.map((g) => (
@@ -122,26 +123,25 @@ export default function SocialingScreen() {
             ))}
           </ScrollView>
         </View>
-      </Animated.View>
 
-      {/* ── 지역 빠른탭(군) + 필터 버튼 — 소개팅 regionScroll 과 동일 ── */}
-      <View style={styles.regionScroll}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} style={{ flex: 1 }}>
-          {hydrated && regionGroupChips.map((g) => {
-            const active = g.ids.every((id) => regions.includes(id))
-            return (
-              <Chip key={g.key} label={g.key} active={active} onPress={() => setRegionsBulk(g.ids, !active)} colors={colors} />
-            )
-          })}
-        </ScrollView>
-        <TouchableOpacity style={[styles.chip, styles.filterBtn]} onPress={() => setFilterVisible(true)} activeOpacity={0.8}>
-          <Ionicons name="funnel-outline" size={13} color={colors.textSecondary} />
-          <Text style={styles.chipText}>필터</Text>
-          {activeFilterCount > 0 && (
-            <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{activeFilterCount}</Text></View>
-          )}
-        </TouchableOpacity>
-      </View>
+        <View style={styles.regionScroll}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} style={{ flex: 1 }}>
+            {hydrated && regionGroupChips.map((g) => {
+              const active = g.ids.every((id) => regions.includes(id))
+              return (
+                <Chip key={g.key} label={g.key} active={active} onPress={() => setRegionsBulk(g.ids, !active)} colors={colors} />
+              )
+            })}
+          </ScrollView>
+          <TouchableOpacity style={[styles.chip, styles.filterBtn]} onPress={() => setFilterVisible(true)} activeOpacity={0.8}>
+            <Ionicons name="funnel-outline" size={13} color={colors.textSecondary} />
+            <Text style={styles.chipText}>필터</Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{activeFilterCount}</Text></View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
 
       {/* ── 활성 필터 칩 + 초기화 — 소개팅과 같은 자리(정렬줄 위) ── */}
       {activeChips.length > 0 && (

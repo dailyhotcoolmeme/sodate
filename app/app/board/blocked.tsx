@@ -28,7 +28,7 @@ export default function BlockedAuthorsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack onLogoPress={() => router.replace('/board')} />
+      <TopBar showBack title="차단 목록" onLogoPress={() => router.replace('/board')} />
 
       {list.length === 0 ? (
         <View style={styles.center}>
@@ -36,7 +36,7 @@ export default function BlockedAuthorsScreen() {
           <Text style={styles.emptyText}>차단한 작성자가 없어요</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}>
+        <ScrollView contentContainerStyle={[wideContent, { paddingTop: 8, paddingBottom: insets.bottom + 20 }]}>
           {list.map((b) => (
             <View key={b.key} style={styles.row}>
               <Text style={styles.nickname}>{b.nickname}</Text>
