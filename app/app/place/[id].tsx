@@ -9,6 +9,7 @@ import ReviewSection from '@/components/ReviewSection'
 import ReviewSheet, { type ReviewSheetInitial } from '@/components/ReviewSheet'
 import ReportSheet from '@/components/ReportSheet'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
+import PlaceMapCard from '@/components/PlaceMapCard'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
@@ -38,6 +39,15 @@ export default function PlaceDetailScreen() {
   const [showNearby, setShowNearby] = useState(false)
   const [loading, setLoading] = useState(true)
   const { favoriteIds, toggle } = usePlaceFavorites()
+  // 주변 핀을 누르면 바로 이동이 아니라, 어느 가게인지 미리보기 카드로 보여주고 "상세보기"를
+  // 눌러야 이동한다(2026-08-24 오너 지적 — "이 가게가 어느 가게인지 보고 이동할지 선택해야
+  // 할 거 아니야"). 지도탭(honsul/index.tsx)의 PlaceMapCard 와 완전히 같은 패턴 재사용.
+  const [previewPlace, setPreviewPlace] = useState<PlaceRow | null>(null)
+  const onTapNearbyPin = useCallback(async (tappedId: string) => {
+    if (!place || tappedId === place.id) return
+    const p = await fetchPlace(tappedId)
+    if (p) setPreviewPlace(p)
+  }, [place])
 
   // 후기 작성/수정 시트 + 내 후기 식별 + 신고 (소개팅 event/[id] 와 동일 흐름)
   const [sheetVisible, setSheetVisible] = useState(false)
@@ -109,9 +119,8 @@ export default function PlaceDetailScreen() {
                 focus={{ lat: place.lat, lng: place.lng }}
                 hideBasePoi
                 compactPins
-                // 주변 점 누르면 그 가게 상세로 이동(2026-08-24 오너 지적 — 예전엔 점을 눌러도
-                // 아무 반응이 없었다. fetchNearbyCoords 가 id 를 버리고 있던 게 원인).
-                onTapPin={(tappedId) => { if (tappedId !== place.id) router.push(`/place/${tappedId}`) }}
+                // 주변 점 누르면 바로 이동이 아니라 미리보기 카드부터(2026-08-24 오너 지적).
+                onTapPin={onTapNearbyPin}
                 pins={[
                   { id: place.id, lat: place.lat, lng: place.lng, name: place.name, active: true },
                   ...(showNearby
@@ -137,10 +146,23 @@ export default function PlaceDetailScreen() {
                 )
               })()
             )}
-            <TouchableOpacity style={styles.nearbyChk} onPress={() => setShowNearby((v) => !v)} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.nearbyChk}
+              onPress={() => { setShowNearby((v) => !v); setPreviewPlace(null) }}
+              activeOpacity={0.8}
+            >
               <View style={[styles.checkbox, showNearby && styles.checkboxOn]}>{showNearby && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}</View>
               <Text style={styles.nearbyText}>주변 혼술바</Text>
             </TouchableOpacity>
+            {previewPlace && (
+              <PlaceMapCard
+                place={previewPlace}
+                isFavorite={favoriteIds.has(previewPlace.id)}
+                onToggleFavorite={() => toggle(previewPlace.id)}
+                onOpen={() => { const pid = previewPlace.id; setPreviewPlace(null); router.push(`/place/${pid}`) }}
+                onClose={() => setPreviewPlace(null)}
+              />
+            )}
           </View>
         ) : <View style={[styles.mapImg, styles.mapEmpty]}><Ionicons name="map-outline" size={40} color={colors.textTertiary} /></View>}
 
