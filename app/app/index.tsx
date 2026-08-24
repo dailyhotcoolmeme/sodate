@@ -76,7 +76,7 @@ export default function HomeScreen() {
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const [filterVisible, setFilterVisible] = useState(false)
-  const { regions, themes, maxPrice, dateStart, dateEnd, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, setRegionsBulk, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
+  const { regions, themes, minPrice, maxPrice, dateStart, dateEnd, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, setRegionsBulk, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
   const regionOptions = useRegions('dating')
   const filterHydrated = useFilterHydrated()  // persist 로드 완료 전엔 필터칩 렌더 보류(깜빡임 방지)
 
@@ -638,7 +638,17 @@ export default function HomeScreen() {
     if (!name) return
     activeChips.push({ label: name, onRemove: () => toggleCompany(id) })
   })
-  if (maxPrice !== null) activeChips.push({ label: `${(maxPrice / 10000).toFixed(0)}만원 이하`, onRemove: () => useFilterStore.getState().setMaxPrice(null) })
+  if (minPrice !== null || maxPrice !== null) {
+    const won = (n: number) => `${(n / 10000).toFixed(0)}만원`
+    const priceLabel =
+      minPrice !== null && maxPrice !== null ? `${won(minPrice)}~${won(maxPrice)}`
+        : minPrice !== null ? `${won(minPrice)} 이상`
+        : `${won(maxPrice!)} 이하`
+    activeChips.push({
+      label: priceLabel,
+      onRemove: () => { useFilterStore.getState().setMinPrice(null); useFilterStore.getState().setMaxPrice(null) },
+    })
+  }
   if (dateStart && dateEnd) {
     const fmt = (d: string) => d.slice(5).replace('-', '.')
     activeChips.push({ label: `${fmt(dateStart)}~${fmt(dateEnd)}`, onRemove: () => useFilterStore.getState().setDateRange(null, null) })

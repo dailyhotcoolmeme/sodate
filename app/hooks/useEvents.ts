@@ -101,6 +101,7 @@ export function useEvents(
   //    만들면 cacheKey/useCallback deps 가 매번 달라져 fetch 가 무한 반복된다(스피너가 계속
   //    돌아 화면이 깜빡이는 것처럼 보였다 — 2026-08-24 오너 지적).
   const regions = isSoc ? soc.regions : dating.regions
+  const minPrice = isSoc ? soc.minPrice : dating.minPrice
   const maxPrice = isSoc ? soc.maxPrice : dating.maxPrice
   const days = isSoc ? soc.days : dating.days
   const sortBy = isSoc ? soc.sortBy : dating.sortBy
@@ -117,8 +118,8 @@ export function useEvents(
 
   // 캐시를 구분하는 키 — buildQuery가 실제로 참조하는 필터 전부를 담는다.
   const cacheKey = useMemo(() => JSON.stringify({
-    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge: effMyAge, search, eventType, socGroups,
-  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, effMyAge, search, eventType, socGroups])
+    regions, dateStart, dateEnd, minPrice, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge: effMyAge, search, eventType, socGroups,
+  }), [regions, dateStart, dateEnd, minPrice, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, effMyAge, search, eventType, socGroups])
   const cacheSlot = useMemo(() => cacheStoreKey(eventType), [eventType])
 
   const buildQuery = useCallback((from: number, to: number) => {
@@ -166,11 +167,16 @@ export function useEvents(
       query = query.lte('event_date', new Date(`${dateEnd}T23:59:59`).toISOString())
     }
 
-    // 가격 필터
-    if (maxPrice !== null) {
-      query = query.or(
-        `price_male.lte.${maxPrice},price_female.lte.${maxPrice}`
-      )
+    // 가격 필터 — 최소·최대 직접 입력 지원(2026-08-24 오너 지시). 남녀 중 하나라도
+    // 범위 안에 들면 표시(가격이 갈리는 이벤트에서 한쪽만 맞아도 보여야 하므로).
+    if (minPrice !== null || maxPrice !== null) {
+      const bounds = (col: 'price_male' | 'price_female') => {
+        const parts: string[] = []
+        if (minPrice !== null) parts.push(`${col}.gte.${minPrice}`)
+        if (maxPrice !== null) parts.push(`${col}.lte.${maxPrice}`)
+        return parts.length > 1 ? `and(${parts.join(',')})` : parts[0]
+      }
+      query = query.or(`${bounds('price_male')},${bounds('price_female')}`)
     }
 
     // 테마 필터 (theme is string[] in DB)
@@ -235,7 +241,7 @@ export function useEvents(
     query = query.order('id', { ascending: true })
 
     return query.range(from, to)
-  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, effMyAge, search, days, timeSlots, eventType, isSoc, socGroups])
+  }, [regions, dateStart, dateEnd, minPrice, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, effMyAge, search, days, timeSlots, eventType, isSoc, socGroups])
 
   /**
    * 한 페이지를 받아온다.

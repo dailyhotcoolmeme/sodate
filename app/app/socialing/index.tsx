@@ -46,8 +46,8 @@ export default function SocialingScreen() {
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list')
 
   const hydrated = useSocialingFilterHydrated()
-  const { groups, regions, maxPrice, days, sortBy, excludeClosed, toggleGroup, setRegionsBulk, setSortBy, setExcludeClosed, setMaxPrice, toggleDay, applyDraft, resetFilters } = useSocialingFilterStore()
-  const activeFilterCount = socialingActiveFilterCount({ groups, regions, maxPrice, days })
+  const { groups, regions, minPrice, maxPrice, days, sortBy, excludeClosed, toggleGroup, setRegionsBulk, setSortBy, setExcludeClosed, setMinPrice, setMaxPrice, toggleDay, applyDraft, resetFilters } = useSocialingFilterStore()
+  const activeFilterCount = socialingActiveFilterCount({ groups, regions, minPrice, maxPrice, days })
   const { events, loading, loadingMore, refetch, loadMore } = useEvents(search, 'socialing')
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
 
@@ -106,7 +106,14 @@ export default function SocialingScreen() {
     const lbl = (DAY_OPTIONS.find((o) => o.id === d)?.label ?? '') + '요일'
     activeChips.push({ label: lbl, onRemove: () => toggleDay(d) })
   })
-  if (maxPrice !== null) activeChips.push({ label: `${(maxPrice / 10000).toFixed(0)}만원 이하`, onRemove: () => setMaxPrice(null) })
+  if (minPrice !== null || maxPrice !== null) {
+    const won = (n: number) => `${(n / 10000).toFixed(0)}만원`
+    const priceLabel =
+      minPrice !== null && maxPrice !== null ? `${won(minPrice)}~${won(maxPrice)}`
+        : minPrice !== null ? `${won(minPrice)} 이상`
+        : `${won(maxPrice!)} 이하`
+    activeChips.push({ label: priceLabel, onRemove: () => { setMinPrice(null); setMaxPrice(null) } })
+  }
   if (search) activeChips.push({ label: `‘${search}’`, onRemove: clearSearch })
 
   return (

@@ -36,11 +36,18 @@ const PRICE_OPTIONS: { value: number | null; label: string }[] = [
   { value: 100000, label: '10만원 이하' },
 ]
 
+/** 가격 직접 입력 — 숫자만 남기고, 비었으면 null(제한 없음)로. */
+function parsePriceInput(text: string): number | null {
+  const digits = text.replace(/[^0-9]/g, '')
+  return digits ? Number(digits) : null
+}
+
 // FilterSheet가 실제로 편집하는 필드들의 초안(draft) 타입 — 나머지(정렬 등)는 스토어를 안 거친다.
 type FilterDraft = {
   regions: string[]
   dateStart: string | null
   dateEnd: string | null
+  minPrice: number | null
   maxPrice: number | null
   hashtags: string[]
   ageGroups: string[]
@@ -54,6 +61,7 @@ function draftFromStore(s: ReturnType<typeof useFilterStore.getState>): FilterDr
     regions: s.regions,
     dateStart: s.dateStart,
     dateEnd: s.dateEnd,
+    minPrice: s.minPrice,
     maxPrice: s.maxPrice,
     hashtags: s.hashtags,
     ageGroups: s.ageGroups,
@@ -79,7 +87,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible])
 
-  const { regions, dateStart, dateEnd, maxPrice, hashtags, ageGroups, days, timeSlots, companies } = draft
+  const { regions, dateStart, dateEnd, minPrice, maxPrice, hashtags, ageGroups, days, timeSlots, companies } = draft
 
   const toggleRegion = (id: string) =>
     setDraft((d) => ({
@@ -92,6 +100,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
       regions: on ? Array.from(new Set([...d.regions, ...ids])) : d.regions.filter((x) => !ids.includes(x)),
     }))
   const setDateRange = (s: string | null, e: string | null) => setDraft((d) => ({ ...d, dateStart: s, dateEnd: e }))
+  const setMinPrice = (p: number | null) => setDraft((d) => ({ ...d, minPrice: p }))
   const setMaxPrice = (p: number | null) => setDraft((d) => ({ ...d, maxPrice: p }))
   const toggleHashtag = (tag: string) =>
     setDraft((d) => ({
@@ -238,6 +247,15 @@ export default function FilterSheet({ visible, onClose }: Props) {
       gap: 8,
       flexWrap: 'wrap',
     },
+    priceRangeLabel: { fontSize: 12, fontWeight: '600', color: colors.textTertiary, marginTop: 14, marginBottom: 8 },
+    priceRangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    priceInput: {
+      flex: 1, minWidth: 0, backgroundColor: colors.surfaceHigh, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.textPrimary,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    priceRangeDash: { fontSize: 14, color: colors.textTertiary },
+    priceRangeUnit: { fontSize: 13, color: colors.textSecondary },
     groupTop: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginTop: 12, marginBottom: 2 },
     groupRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, gap: 8 },
     groupRowLabel: { width: 60, paddingLeft: 10, paddingTop: 7, fontSize: 13, fontWeight: '700', color: colors.textSecondary },
@@ -301,7 +319,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
   const handleReset = () => {
     resetFilters()
     setDraft({
-      regions: [], dateStart: null, dateEnd: null, maxPrice: null,
+      regions: [], dateStart: null, dateEnd: null, minPrice: null, maxPrice: null,
       hashtags: [], ageGroups: [], days: [], timeSlots: [], companies: [],
     })
   }
@@ -519,6 +537,28 @@ export default function FilterSheet({ visible, onClose }: Props) {
                   styles={styles}
                 />
               ))}
+            </View>
+            {/* 직접 입력(2026-08-24 오너 지시) — 프리셋과 별개로 최소·최대를 직접 정한다. */}
+            <Text style={styles.priceRangeLabel}>직접 입력</Text>
+            <View style={styles.priceRangeRow}>
+              <TextInput
+                style={styles.priceInput}
+                placeholder="최소"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="number-pad"
+                value={minPrice != null ? String(minPrice) : ''}
+                onChangeText={(t) => setMinPrice(parsePriceInput(t))}
+              />
+              <Text style={styles.priceRangeDash}>~</Text>
+              <TextInput
+                style={styles.priceInput}
+                placeholder="최대"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="number-pad"
+                value={maxPrice != null ? String(maxPrice) : ''}
+                onChangeText={(t) => setMaxPrice(parsePriceInput(t))}
+              />
+              <Text style={styles.priceRangeUnit}>원</Text>
             </View>
           </CollapsibleSection>
 

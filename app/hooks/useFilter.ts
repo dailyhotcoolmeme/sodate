@@ -8,7 +8,7 @@ export function useFilter() {
   const activeFilterCount = [
     store.regions.length > 0 ? 1 : 0,
     store.dateStart || store.dateEnd ? 1 : 0,
-    store.maxPrice !== null ? 1 : 0,
+    store.minPrice !== null || store.maxPrice !== null ? 1 : 0,
     store.themes.length > 0 ? 1 : 0,
     store.hashtags.length > 0 ? 1 : 0,
     store.ageGroups.length > 0 ? 1 : 0,

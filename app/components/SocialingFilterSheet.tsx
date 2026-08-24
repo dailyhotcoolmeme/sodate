@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform, TextInput } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { useRegions } from '@/hooks/useRegions'
@@ -25,11 +25,17 @@ const PRICE_OPTIONS: { value: number | null; label: string }[] = [
   { value: 100000, label: '10만원 이하' },
 ]
 
-type Draft = { groups: string[]; regions: string[]; maxPrice: number | null; days: number[] }
+type Draft = { groups: string[]; regions: string[]; minPrice: number | null; maxPrice: number | null; days: number[] }
 
 function draftFromStore(): Draft {
   const s = useSocialingFilterStore.getState()
-  return { groups: s.groups, regions: s.regions, maxPrice: s.maxPrice, days: s.days }
+  return { groups: s.groups, regions: s.regions, minPrice: s.minPrice, maxPrice: s.maxPrice, days: s.days }
+}
+
+/** 가격 직접 입력 — 숫자만 남기고, 비었으면 null(제한 없음)로. */
+function parsePriceInput(text: string): number | null {
+  const digits = text.replace(/[^0-9]/g, '')
+  return digits ? Number(digits) : null
 }
 
 /**
@@ -48,13 +54,14 @@ export default function SocialingFilterSheet({ visible, onClose }: Props) {
     if (visible) setDraft(draftFromStore())
   }, [visible])
 
-  const { groups, regions, maxPrice, days } = draft
+  const { groups, regions, minPrice, maxPrice, days } = draft
   const toggleGroup = (key: string) =>
     setDraft((d) => ({ ...d, groups: d.groups.includes(key) ? d.groups.filter((x) => x !== key) : [...d.groups, key] }))
   const toggleRegion = (id: string) =>
     setDraft((d) => ({ ...d, regions: d.regions.includes(id) ? d.regions.filter((x) => x !== id) : [...d.regions, id] }))
   const setRegionsBulk = (ids: string[], on: boolean) =>
     setDraft((d) => ({ ...d, regions: on ? Array.from(new Set([...d.regions, ...ids])) : d.regions.filter((x) => !ids.includes(x)) }))
+  const setMinPrice = (p: number | null) => setDraft((d) => ({ ...d, minPrice: p }))
   const setMaxPrice = (p: number | null) => setDraft((d) => ({ ...d, maxPrice: p }))
   const toggleDay = (day: number) =>
     setDraft((d) => ({ ...d, days: d.days.includes(day) ? d.days.filter((x) => x !== day) : [...d.days, day] }))
@@ -71,7 +78,7 @@ export default function SocialingFilterSheet({ visible, onClose }: Props) {
   const styles = useMemo(() => makeStyles(colors, insets), [colors, insets.top, insets.bottom])
 
   const handleApply = () => { applyDraft(draft); onClose() }
-  const handleReset = () => { resetFilters(); setDraft({ groups: [], regions: [], maxPrice: null, days: [] }) }
+  const handleReset = () => { resetFilters(); setDraft({ groups: [], regions: [], minPrice: null, maxPrice: null, days: [] }) }
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -130,6 +137,28 @@ export default function SocialingFilterSheet({ visible, onClose }: Props) {
                 <Chip key={String(p.value)} label={p.label} selected={maxPrice === p.value} onPress={() => setMaxPrice(p.value)} styles={styles} />
               ))}
             </View>
+            {/* 직접 입력(2026-08-24 오너 지시) — 프리셋과 별개로 최소·최대를 직접 정한다. */}
+            <Text style={styles.priceRangeLabel}>직접 입력</Text>
+            <View style={styles.priceRangeRow}>
+              <TextInput
+                style={styles.priceInput}
+                placeholder="최소"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="number-pad"
+                value={minPrice != null ? String(minPrice) : ''}
+                onChangeText={(t) => setMinPrice(parsePriceInput(t))}
+              />
+              <Text style={styles.priceRangeDash}>~</Text>
+              <TextInput
+                style={styles.priceInput}
+                placeholder="최대"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="number-pad"
+                value={maxPrice != null ? String(maxPrice) : ''}
+                onChangeText={(t) => setMaxPrice(parsePriceInput(t))}
+              />
+              <Text style={styles.priceRangeUnit}>원</Text>
+            </View>
           </CollapsibleSection>
 
           {/* 요일 */}
@@ -176,6 +205,15 @@ function makeStyles(colors: ReturnType<typeof useColors>, insets: { top: number 
     topTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.3 },
     topReset: { fontSize: 14, fontWeight: '700', color: colors.textTertiary },
     chipGrid: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+    priceRangeLabel: { fontSize: 12, fontWeight: '600', color: colors.textTertiary, marginTop: 14, marginBottom: 8 },
+    priceRangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    priceInput: {
+      flex: 1, minWidth: 0, backgroundColor: colors.surfaceHigh, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.textPrimary,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    priceRangeDash: { fontSize: 14, color: colors.textTertiary },
+    priceRangeUnit: { fontSize: 13, color: colors.textSecondary },
     groupTop: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginTop: 12, marginBottom: 2 },
     groupRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, gap: 8 },
     groupRowLabel: { width: 60, paddingLeft: 10, paddingTop: 7, fontSize: 13, fontWeight: '700', color: colors.textSecondary },
