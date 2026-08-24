@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { TurboModuleRegistry, UIManager, type StyleProp, type ViewStyle } from 'react-native'
 
 /**
@@ -25,6 +25,13 @@ if (NAVER_MAP_AVAILABLE) {
   NaverMapView = m.NaverMapView
   NaverMapMarkerOverlay = m.NaverMapMarkerOverlay
 }
+
+// 이 줌 이하 = 전부 숫자 클러스터, 초과 = 전부 개별 사진 마커. 한 화면에 둘을 절대 안 섞는다
+// (2026-08-25, 두 번째 정정 — screenDistance 만으로 풀려다가 도시 전체 줌(12)에서 "14"
+// 클러스터 바로 옆에 사진 마커 두 개가 따로 떠서 뒤죽박죽으로 보였다. 오너 지적: "숫자 2는
+// 뭐고, 14 옆에는 왜 업체 이미지가 나오냐"). 기본 진입 줌이 12(도시 전체), 매장 선택 시
+// 16(블록 단위)이라 그 사이인 15를 경계로 잡는다 — 15 이하는 항상 전부 클러스터.
+const CLUSTER_MAX_ZOOM = 15
 
 export interface MapPin {
   id: string
@@ -69,28 +76,27 @@ interface Props {
 
 export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false, resolveTapScreen = false }: Props) {
   const ref = useRef<any>(null)
+  const [camZoom, setCamZoom] = useState(zoom)
   useEffect(() => {
     ref.current?.animateCameraTo?.({ latitude: focus.lat, longitude: focus.lng, zoom })
+    setCamZoom(zoom)
   }, [focus.lat, focus.lng, zoom])
 
   if (!NaverMapView) return null
 
   const activePin = pins.find((p) => p.active)
+  const expanded = !cluster || camZoom > CLUSTER_MAX_ZOOM
 
-  // ⚠️(2026-08-25 재작업) 예전엔 "카메라 줌이 14 넘었냐"로 전체를 숫자냐 사진이냐 통째로
-  // 갈랐는데, screenDistance 를 400px(화면 거의 절반)로 잡아놔서 아무리 확대해도 안 풀렸다
-  // (오너 지적: "갯수가 줄어도 숫자로 무조건 보여주는게 이상하다"). 공식 문서
-  // (rnnavermap.mjstudio.net/docs/marker-clustering) 예제 값은 40~80px 대 — 그 정도면
-  // 화면상 실제로 겹칠 만큼 가까운 매장만 뭉치고, 나머지는 라이브러리가 자체적으로
-  // leaf(개별)로 뿌린다. 그 leaf 마커에 직접 대표사진을 줘서 "조금만 확대해도 자연히
-  // 사진으로 풀린다"를 인위적인 줌 컷오프 없이 라이브러리가 알아서 하게 맡긴다.
-  const clusterProps = cluster
+  // screenDistance 는 "이 줌 구간 안에서 클러스터가 얼마나 잘게 쪼개지는지"만 결정한다
+  // (예: 6/10/7/2/14 처럼 지역별로 나뉘는 것) — 개별 사진으로 풀리는 시점은 위 expanded
+  // (줌 경계)가 전담한다. 100px 정도면 도시 스케일에서 역세권 단위로 자연스럽게 갈린다.
+  const clusterProps = cluster && !expanded
     ? [{
         width: 52,
         height: 52,
-        screenDistance: 60,
+        screenDistance: 100,
         minZoom: 0,
-        maxZoom: 21,
+        maxZoom: CLUSTER_MAX_ZOOM,
         animate: true,
         markers: pins
           .filter((p) => !p.active)
@@ -98,9 +104,9 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
             identifier: p.id,
             latitude: p.lat,
             longitude: p.lng,
-            width: 44,
-            height: 44,
-            image: p.markerUrl ? { httpUri: p.markerUrl } : { symbol: 'blue' },
+            width: 22,
+            height: 22,
+            image: require('../assets/map-dot.png'),
           })),
       }]
     : undefined
@@ -116,11 +122,12 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
       symbolScale={hideBasePoi ? 0 : 1}
       clusters={clusterProps}
       onTapClusterLeaf={cluster ? (e: { markerIdentifier: string }) => onTapPin?.(e.markerIdentifier) : undefined}
+      onCameraChanged={cluster ? (e: { zoom: number }) => setCamZoom(e.zoom) : undefined}
       onTapMap={onTapBackground}
     >
-      {/* 클러스터 모드에선 선택된 매장만 직접 그린다(나머지는 위 clusters 가 처리) —
-          히어로(!cluster)에선 전부 여기서 직접 그린다. */}
-      {(cluster ? (activePin ? [activePin] : []) : pins).map((p) => {
+      {/* expanded(줌 15 초과)면 전부 개별 사진 마커, 아니면 선택된 매장만(나머지는 클러스터가 그림) —
+          한 화면에 숫자뭉치와 사진마커를 절대 안 섞는다(2026-08-25). */}
+      {(expanded ? pins : activePin ? [activePin] : []).map((p) => {
         const size = compactPins ? (p.active ? 24 : p.selected ? 20 : 12) : p.active ? 62 : 44
         // ⚠️(2026-08-24) 기본 'pink'/'blue' 심벌은 둘 다 물방울(세로로 긴) 모양이라 정사각형
         // 크기로 찍으면 눌려서 "짜부된" 모양이 된다(오너 지적 — 처음엔 선택 마커만 고쳤다가
