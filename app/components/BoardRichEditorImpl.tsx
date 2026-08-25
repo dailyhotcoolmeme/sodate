@@ -95,7 +95,24 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
 
   useImperativeHandle(ref, () => ({
     getHTML: () => editor.getHTML(),
-    insertImage: (url: string) => editor.setImage(url),
+    // ⚠️(2026-08-25) editor.setImage() 하나만 쓰던 예전 방식은(TrailingNode 확장이
+    // 이미지 뒤에 빈 문단을 자동으로 붙여줄 거라 기대) 실기기에서 재현됐다 — "그림
+    // 다음줄에 텍스트 입력을 죽어도 못한다", "첫번째 줄에 텍스트 없는 상태에서
+    // 이미지 첨부하면 절대로 첫번째 줄에 텍스트 입력을 못한다"(오너 지적). tentap
+    // setImage 내부 커맨드 체인과 커스텀 확장(TrailingNode)이 실제로 웹뷰에서 항상
+    // 기대대로 동작한다고 확신할 수 없어서(둘 다 시뮬레이터에서는 됐는데 실기기에서
+    // 안 됨 — 검증 못 한 부분), 이미 확실히 검증된 getHTML+setContent 조합만으로
+    // 이미지 앞뒤에 빈 문단을 직접 박아 넣는다 — 이미지가 문서 맨 앞에 와도 그 위
+    // 첫 줄에 커서를 놓을 자리가 항상 있고, 뒤에도 항상 탭해서 이어 쓸 빈 줄이 있다.
+    insertImage: async (url: string) => {
+      const html = await editor.getHTML()
+      const trimmed = html.trim()
+      const EMPTY_DOC = /^(<p>\s*(<br\s*\/?>)?\s*<\/p>)?$/i
+      const emptyTrailing = /(<p>\s*(<br\s*\/?>)?\s*<\/p>)$/i
+      const before = EMPTY_DOC.test(trimmed) ? '<p></p>' : trimmed.replace(emptyTrailing, '')
+      const safeUrl = url.replace(/"/g, '&quot;')
+      editor.setContent(`${before}<p><img src="${safeUrl}" /></p><p></p>`)
+    },
     focus: () => editor.focus(),
     // 유튜브·인스타 링크 — 예전엔 본문 바깥 별도 첨부 목록(BoardLinkChips)에만 들어가서
     // "사진은 안에, 링크는 밖에" 로 자리가 갈렸다(오너 지적: "첨부 컨텐츠들은 모두 본문
