@@ -193,15 +193,20 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
         const size2 = compactPins ? (p.active ? 24 : p.selected ? 20 : 12) : p.active ? 62 : 44
         // ⚠️(2026-08-24) 기본 'pink'/'blue' 심벌은 둘 다 물방울(세로로 긴) 모양이라 정사각형
         // 크기로 찍으면 눌려서 "짜부된" 모양이 된다(오너 지적 — 처음엔 선택 마커만 고쳤다가
-        // "주변 점은 짜부가 안되겠냐"고 또 지적받음). 원형 점(map-dot.png(핑크)/map-dot-blue.png)
-        // 은 어떤 정사각형 크기로 찍어도 안 눌린다. 처음엔 compactPins(히어로)에서만 이걸
-        // 쓰고 지도탭(전체 지도)의 사진 없는 매장은 여전히 기본 심벌을 썼는데, 그러니 사진
-        // 있는 매장은 원형 사진으로, 없는 매장은 네이버 기본 물방울 도형으로 나와 지도 안에서
-        // 마커 모양이 뒤섞여 보였다(2026-08-25 오너 지적: "일부는 왜 도형으로 나오냐?").
-        // 사진 유무·compactPins 여부와 상관없이 사진 없으면 항상 이 원형 점으로 통일한다.
+        // "주변 점은 짜부가 안되겠냐"고 또 지적받음). compactPins(히어로)에선 선택·주변 둘 다
+        // 원형 점(map-dot.png(핑크)/map-dot-blue.png) — 정원이라 어떤 정사각형 크기로 찍어도
+        // 안 눌린다. 지도탭(전체 지도, compactPins=false)은 원래부터 기본 심벌 그대로 두는
+        // 게 맞는 설계다(오너 확정: "점으로 표시하는건 상세페이지 히어로 지도에서만"). 지도탭에서
+        // 사진 있는 매장이 도형으로 나오던 진짜 원인은 이 fallback이 아니라 lib/places.ts
+        // placeMarkerUrl 이 naverpic 출처만 인식하고 profile 출처(업체 직접 등록 사진)는
+        // 놓쳐서 markerUrl 자체가 비었던 데 있었다(2026-08-25 오너 지적 후 확인 — 실제로
+        // "사진 없는 업체"는 500곳 중 1곳뿐이었다). 그건 placeMarkerUrl 에서 고쳤으니 여기는
+        // 원래대로 되돌린다.
         const image = p.markerUrl
           ? { httpUri: p.markerUrl }
-          : (p.active ? require('../assets/map-dot.png') : require('../assets/map-dot-blue.png'))
+          : compactPins
+            ? (p.active ? require('../assets/map-dot.png') : require('../assets/map-dot-blue.png'))
+            : { symbol: p.active ? 'pink' : 'blue' }
         return (
           <NaverMapMarkerOverlay
             key={p.id}

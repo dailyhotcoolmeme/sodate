@@ -44,11 +44,18 @@ const COLUMNS =
 // 방문자 키워드 투표(사실) → 해시태그처럼 보여줄 태그 배열(상위순). 생성·범용 항목은 제외.
 // 공백을 없애 해시태그 형태로("술이 다양해요"→"술이다양해요"). 많으면 카드에서 가로 스와이프.
 const SUMMARY_SKIP = new Set(['친절해요', '매장이 청결해요', '화장실이 깨끗해요', '주차', '응대가 좋아요'])
-/** 지도 원형 마커 이미지 URL — 대표사진(naverpic)에서 파생(honsul/marker/{id}.png, gen_map_markers.py로 생성). */
+/** 지도 원형 마커 이미지 URL.
+ *  - naverpic(네이버에서 긁어온 대표사진, 489곳) 출처는 마커 전용 파생 이미지가 따로
+ *    있다(honsul/marker/{id}.png, gen_map_markers.py로 생성) — 그걸 쓴다.
+ *  - profile(업체가 직접 올린 대표사진, 10곳) 출처는 마커 전용 파생 이미지가 없다.
+ *    예전엔 이 출처를 안 걸러내서 무조건 undefined(=기본 도형 마커)로 떨어졌다 — 사진이
+ *    분명히 있는데 지도에서만 도형으로 나오던 원인(2026-08-25 오너 지적: "원형 사진
+ *    마커가 없는 업체도 아니었고..애초에 사진 마커 없는 업체가 있냐고!"). 원본을 그대로 쓴다. */
 export function placeMarkerUrl(p: Pick<PlaceRow, 'profile_image'>): string | undefined {
   const u = p.profile_image
-  if (!u || !u.includes('/naverpic/')) return undefined
-  return u.replace('/naverpic/', '/marker/').replace(/\.webp$/, '.png')
+  if (!u) return undefined
+  if (u.includes('/naverpic/')) return u.replace('/naverpic/', '/marker/').replace(/\.webp$/, '.png')
+  return u
 }
 
 export function reviewHashtags(votes: Record<string, number> | null | undefined, max = 7): string[] {
