@@ -155,7 +155,11 @@ export const isGifUrl = (url: string): boolean => /\.gif(\?|$)/i.test(url)
  *   (있으면) 실패 안내를 함께 돌려준다.
  */
 export async function pickAndUploadMany(
-  remaining: number
+  remaining: number,
+  // 여러 장 올릴 때 몇 번째 장을 올리는 중인지 알려준다(오너 지시: "이미지가 본문에
+  // 첨부될때 스피너에 몇번째장 첨부중인지 1/5.. 2/5.. 숫자로 표시해줘라. 그래야
+  // 인내하고 기다릴 수 있다") — 화면 쪽(write.tsx)이 이걸로 스피너에 진행 상황을 띄운다.
+  onProgress?: (current: number, total: number) => void
 ): Promise<{ urls: string[]; skipped: number; error?: string } | null> {
   const native = loadNative()
   if (!native) {
@@ -177,6 +181,10 @@ export async function pickAndUploadMany(
       allowsMultipleSelection: true,
       // 고를 수 있는 상한을 시스템 선택창에 그대로 알려준다 — 사용자가 애초에 초과 선택을 못 하게.
       selectionLimit: Math.max(1, remaining),
+      // 사진마다 선택 순서를 숫자 배지로 보여준다(오너 지시: "이미지 고르는 팝업에서
+      // 1/10, 2/10 이런식으로 선택되게 해라. 그래야 10장까지 된다는걸 알테니까") —
+      // iOS 15+ 전용 시스템 사진 선택기 옵션, 안드로이드는 시스템 자체에 이 기능이 없다.
+      orderedSelection: true,
       // 다중 선택은 GIF 원본 바이트가 필요 없다(사진만 받는다). base64 를 안 받아 메모리를 아낀다.
       base64: false,
     })
@@ -193,7 +201,10 @@ export async function pickAndUploadMany(
   const urls: string[] = []
   let failed = 0
   const ownerToken = await getOrCreateToken()
+  let i = 0
   for (const asset of take) {
+    i++
+    onProgress?.(i, take.length)
     // 다중 선택은 사진만 — 혹시 GIF 가 섞이면 그 한 장만 건너뛴다(정지프레임으로 뭉개지는 걸 막는다).
     if (asset.mimeType === 'image/gif' || /\.gif$/i.test(asset.uri)) { failed++; continue }
     try {

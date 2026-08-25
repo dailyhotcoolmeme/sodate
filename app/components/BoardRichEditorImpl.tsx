@@ -70,7 +70,10 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
       // 지적: "3줄이 입력박스 전체에 걸쳐서 밑으로 내려온다"). flex:0 으로 눌러서
       // height:44 만큼만 차지하게 고정한다.
       toolbarBody: { flex: 0, backgroundColor: colors.surfaceHigh, borderTopColor: colors.divider, borderBottomColor: colors.divider },
-      toolbarButton: { backgroundColor: colors.surfaceHigh },
+      // paddingHorizontal 을 기본값(8)보다 살짝 줄인다 — 툴바를 한 줄로 합치면서
+      // (오너 지시: "전체 에디터 도구를 한줄로 맞추자") 8개 아이콘이 가장 좁은 화면
+      // (iPhone SE, 375pt)에서도 스와이프 없이 다 들어가게 하려면 여유가 필요했다.
+      toolbarButton: { backgroundColor: colors.surfaceHigh, paddingHorizontal: 6 },
       iconWrapper: { backgroundColor: colors.surfaceHigh },
       iconWrapperActive: { backgroundColor: colors.divider },
       icon: { tintColor: colors.textSecondary },

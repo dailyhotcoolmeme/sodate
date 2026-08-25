@@ -139,6 +139,8 @@ export default function BoardWriteScreen() {
 
   // 리치모드 사진·GIF — 골라 R2 업로드 후 에디터 본문에 인라인 삽입.
   const [richUploading, setRichUploading] = useState(false)
+  // 여러 장 올릴 때 "2/5장 올리는 중" 표시용(오너 지시 — 위 pickAndUploadMany 참고).
+  const [richUploadProgress, setRichUploadProgress] = useState<{ current: number; total: number } | null>(null)
   // ⚠️(2026-08-25) pickAndUpload 는 사진 선택 권한 요청·사진첩 열기 단계가 try/catch
   // 밖에 있어서(lib/boardImage.ts), 거기서 예외가 나면(권한 팝업 타이밍 문제 등) 이
   // 함수가 setRichUploading(false) 를 실행하기 전에 그대로 던져버렸다 — 그러면
@@ -154,7 +156,7 @@ export default function BoardWriteScreen() {
       // 하나씩 밖에 안되는데!!" — 기존 첨부 방식(boardImage.ts pickAndUploadMany)을
       // 그대로 재사용). 움짤은 원래대로 한 장씩(용량 제한이 파일당이라 다르게 다룸).
       if (mode === 'photo') {
-        const r = await pickAndUploadMany(MAX_IMAGES)
+        const r = await pickAndUploadMany(MAX_IMAGES, (current, total) => setRichUploadProgress({ current, total }))
         if (r) {
           for (const url of r.urls) await richRef.current?.insertImage(url)
           if (r.error) Alert.alert('알림', r.error)
@@ -169,39 +171,23 @@ export default function BoardWriteScreen() {
       Alert.alert('알림', '사진을 올리지 못했어요. 잠시 후 다시 시도해주세요.')
     } finally {
       setRichUploading(false)
+      setRichUploadProgress(null)
     }
   }
   // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
   const [poll, setPoll] = useState<PollDraft | null>(null)
 
-  // 리치 툴바 — 딱 2줄(오너 지시 2026-08-25: "2줄로 만들어!"). 조사 결과(Medium·워드프레스
-  // 모바일 에디터 — 캐주얼 글쓰기 앱들은 "항상 보이는 서식 버튼은 최소한만" 원칙) 기준으로
-  // 정렬/텍스트선택 시 뜨는 버블 방식(BubbleMenu)은 검토했으나 제외 — 실제 모바일 앱들
-  // (Notion 등)은 버블이 아니라 고정 바를 쓰고, 버블은 터치 선택 핸들과 겹쳐 오히려
-  // 불편하다는 근거가 있었다(오너 확인 후 현재 구조 유지 결정).
-  // 1줄: 미디어(사진·GIF·유튜브·인스타·투표) + 기본 서식(굵게·기울임·밑줄)
-  // 2줄: 구조(링크·헤딩·목록·인용·체크리스트) + 색상(글자색·배경색, 탭하면 이 줄이
-  //      프리셋 색상 줄로 바뀜) + 되돌리기
-  // 뺀 것: 취소선·순서목록·들여쓰기·내어쓰기·다시실행·인라인코드·코드블록·글자크기(캐주얼
-  // 앱엔 없는 기능 — 헤딩이 그 역할을 대신함)·정렬(캐주얼 앱은 왼쪽 정렬 고정이 관례).
+  // 리치 툴바 — 한 줄로 통합(오너 지시 2026-08-25: "에디터 두번째줄에 있는 것들 모두
+  // 없애고, 글자색/배경색/되돌리기. 이거 3개만 살리자. 그래서 전체 에디터 도구를
+  // 한줄로 맞추자"). 링크·헤딩·목록·인용·체크리스트는 뺀다(하이퍼링크는 자동
+  // 감지(autolink)로 대체 — LinkBridge 기본 설정에 이미 있음). GIF·인스타·투표는
+  // 코드는 남기고 목록에서만 뺐다("일단 숨겨서 안보이게 해놔라. 나중에 필요하면
+  // 추가할 수 있으니") — 필요해지면 아래 배열에 다시 넣기만 하면 된다.
   const pickDefaultItem = useCallback((img: unknown): ToolbarItem => {
     const found = DEFAULT_TOOLBAR_ITEMS.find((item) => item.image({} as never) === img)
     if (!found) throw new Error('tentap 기본 툴바 아이템을 못 찾음')
     return found
   }, [])
-
-  const richToolbarRow1: ToolbarItem[] = useMemo(() => [
-    { onPress: () => () => insertRichMedia('photo'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/photo.png') },
-    { onPress: () => () => insertRichMedia('gif'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/gif.png') },
-    { onPress: () => () => linksApi.openAdd('youtube'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/youtube.png') },
-    { onPress: () => () => linksApi.openAdd('instagram'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/instagram.png') },
-    // 투표 — 신규글에만, 이미 추가했으면 다시 안 뜸.
-    ...(!isEdit && !poll ? [{ onPress: () => () => setPoll(emptyPollDraft()), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/poll.png') }] : []),
-    pickDefaultItem(Images.bold),
-    pickDefaultItem(Images.italic),
-    pickDefaultItem(Images.underline),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [richUploading, isEdit, poll])
 
   // 글자색·배경색 — 엔진(ColorBridge·HighlightBridge)은 이미 붙어있었는데 버튼이 없었다
   // (오너 지적: "글자색. 글자배경색. 이런 기본적인 것들이 하나도 없잖아"). 탭하면 이 줄이
@@ -210,12 +196,16 @@ export default function BoardWriteScreen() {
   const TEXT_COLORS = ['#1F2937', '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6']
   const HIGHLIGHT_COLORS = ['#FEF08A', '#FBCFE8', '#BBF7D0', '#BFDBFE', '#FED7AA', '#E9D5FF']
 
-  const richToolbarRow2: ToolbarItem[] = useMemo(() => [
-    pickDefaultItem(Images.link),
-    pickDefaultItem(Images.Aa), // 헤딩(H1~H6 서브메뉴)
-    pickDefaultItem(Images.bulletList),
-    pickDefaultItem(Images.quote),
-    pickDefaultItem(Images.checkList),
+  const richToolbarItems: ToolbarItem[] = useMemo(() => [
+    { onPress: () => () => insertRichMedia('photo'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/photo.png') },
+    // GIF·인스타·투표 — 일단 숨김(오너 지시). 다시 켜려면 아래 세 줄 주석만 풀면 된다.
+    // { onPress: () => () => insertRichMedia('gif'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/gif.png') },
+    { onPress: () => () => linksApi.openAdd('youtube'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/youtube.png') },
+    // { onPress: () => () => linksApi.openAdd('instagram'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/instagram.png') },
+    // ...(!isEdit && !poll ? [{ onPress: () => () => setPoll(emptyPollDraft()), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/poll.png') }] : []),
+    pickDefaultItem(Images.bold),
+    pickDefaultItem(Images.italic),
+    pickDefaultItem(Images.underline),
     // ⚠️ 글자색 아이콘은 처음에 text-outline(Ionicons) 으로 만들었더니 헤딩(Images.Aa)
     // 아이콘이랑 똑같이 "Aa" 모양으로 보여서 헷갈렸다(직접 캡처해서 확인) — tentap 에 이미
     // 있는 팔레트 아이콘(Images.palette, 기본 툴바엔 안 쓰이던 것)으로 바꿔 구분되게 했다.
@@ -223,7 +213,7 @@ export default function BoardWriteScreen() {
     { onPress: () => () => setColorPicker('highlight'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/highlight_color.png') },
     pickDefaultItem(Images.undo),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [])
+  ], [richUploading])
   // 동영상(숨김 기능 — VIDEO_ENABLED=false 라 버튼 안 보임). R2 업로드 URL 목록.
   const [videos, setVideos] = useState<string[]>([])
   const [videoBusy, setVideoBusy] = useState(false)
@@ -338,7 +328,10 @@ export default function BoardWriteScreen() {
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[wideContent, { padding: 16, paddingBottom: 24, gap: 14 }]}
+        // 안드로이드 3버튼 내비게이션 바가 화면 맨 밑을 가려서 약관 동의 체크박스가
+        // 잘렸다(오너 지적: "안드폰 3버튼 감안해서 맨 밑에 약관 동의 체크박스 부분
+        // 높이 맞춰라. 밑에 잘렸다"). insets.bottom 을 더해서 그 높이만큼 여유를 둔다.
+        contentContainerStyle={[wideContent, { padding: 16, paddingBottom: 24 + insets.bottom, gap: 14 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         // richBoxTouching 설명은 위 state 선언부 참고 — 손가락이 리치 박스 안에 있는
@@ -413,11 +406,6 @@ export default function BoardWriteScreen() {
                   44 로 못박은 바깥 View 로 한 번 더 감싸서 안쪽 FlatList 가 얼마나 늘어나려
                   하든 딱 44 안에서만 채워지게 강제로 가둔다. */}
               {!!richEditor && (
-                <View style={styles.richToolbarRow}>
-                  <BoardRichToolbar editor={richEditor} items={richToolbarRow1} />
-                </View>
-              )}
-              {!!richEditor && (
                 colorPicker ? (
                   <View style={[styles.richToolbarRow, styles.richSwatchRow]}>
                     <TouchableOpacity style={styles.richSwatchBackBtn} onPress={() => setColorPicker(null)} hitSlop={6}>
@@ -460,7 +448,7 @@ export default function BoardWriteScreen() {
                   </View>
                 ) : (
                   <View style={styles.richToolbarRow}>
-                    <BoardRichToolbar editor={richEditor} items={richToolbarRow2} />
+                    <BoardRichToolbar editor={richEditor} items={richToolbarItems} />
                   </View>
                 )
               )}
@@ -636,7 +624,10 @@ export default function BoardWriteScreen() {
           업로드 중인지 눈에 잘 안 띄었다(오너 지적: "이미지 첨부할때 바로바로
           첨부가 안되면 스피너를 보여주던가 해야할거잖아!"). 등록·수정 때 쓰던 것과
           같은 전체화면 스피너 규칙을 그대로 재사용. */}
-      <LoadingOverlay visible={saving || loading || richUploading} />
+      <LoadingOverlay
+        visible={saving || loading || richUploading}
+        message={richUploadProgress ? `${richUploadProgress.current}/${richUploadProgress.total}장 올리는 중` : undefined}
+      />
     </View>
   )
 }
