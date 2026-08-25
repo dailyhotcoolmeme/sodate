@@ -112,6 +112,13 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
       const before = EMPTY_DOC.test(trimmed) ? '<p></p>' : trimmed.replace(emptyTrailing, '')
       const safeUrl = url.replace(/"/g, '&quot;')
       editor.setContent(`${before}<p><img src="${safeUrl}" /></p><p></p>`)
+      // ⚠️(2026-08-25) setContent 만 부르고 끝내면 웹뷰가 통째로 콘텐츠를 새로 그리면서
+      // 네이티브 포커스(첫 응답자 상태)를 잃는다 — 그래서 다음 탭부터 키보드가 아예 안
+      // 올라오는 사고가 났다(오너 제보: "입력박스를 아무리 눌러도 키보드가 올라오질
+      // 않는다"). editor.focus() 는 Tiptap DOM 포커스뿐 아니라 웹뷰
+      // requestFocus()(RN WebView 네이티브 포커스 요청)까지 같이 호출해줘서 이게
+      // 필요하다(core.ts 확인) — 'end' 로 커서도 방금 넣은 빈 줄 끝으로 옮겨준다.
+      editor.focus('end')
     },
     focus: () => editor.focus(),
     // 유튜브·인스타 링크 — 예전엔 본문 바깥 별도 첨부 목록(BoardLinkChips)에만 들어가서
@@ -124,6 +131,9 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
       const html = await editor.getHTML()
       const safeUrl = url.replace(/"/g, '&quot;')
       editor.setContent(`${html}<p><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${url}</a></p>`)
+      // insertImage 와 같은 이유로 필요 — setContent 후 웹뷰 네이티브 포커스가
+      // 빠져서 이후 탭에도 키보드가 안 올라오는 문제를 막는다.
+      editor.focus('end')
     },
   }), [editor])
 

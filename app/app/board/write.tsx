@@ -593,7 +593,11 @@ export default function BoardWriteScreen() {
 
       <LinkInputModal api={linksApi} />
 
-      <LoadingOverlay visible={saving || loading} />
+      {/* 사진·GIF 업로드 중 스피너 — 예전엔 툴바 아이콘만 흐리게 죽어서(비활성 표시)
+          업로드 중인지 눈에 잘 안 띄었다(오너 지적: "이미지 첨부할때 바로바로
+          첨부가 안되면 스피너를 보여주던가 해야할거잖아!"). 등록·수정 때 쓰던 것과
+          같은 전체화면 스피너 규칙을 그대로 재사용. */}
+      <LoadingOverlay visible={saving || loading || richUploading} />
     </View>
   )
 }
