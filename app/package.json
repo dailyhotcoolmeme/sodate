@@ -15,6 +15,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@shopify/flash-list": "2.0.2",
     "@supabase/supabase-js": "^2.99.2",
+    "@tiptap/extensions": "^3.30.2",
     "expo": "~55.0.8",
     "expo-application": "~55.0.10",
     "expo-build-properties": "~55.0.17",

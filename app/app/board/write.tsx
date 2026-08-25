@@ -333,7 +333,14 @@ export default function BoardWriteScreen() {
             // 상단에 고정(2026-08-25 — 키보드 위 KeyboardStickyView 방식은 폐기).
             <View style={styles.richBox}>
               {!!richEditor && richToolbarRows.map((row, i) => (
-                <BoardRichToolbar key={i} editor={richEditor} items={row} />
+                // tentap 기본 테마의 toolbarBody 가 flex:1 이라 theme 오버라이드(flex:0)만으로는
+                // 이 컬럼 안에서 다른 flex:1 형제(에디터 본문)와 남는 높이를 나눠 가져가버렸다
+                // (오너 지적: "3줄이 입력박스 전체에 걸쳐서 밑으로 내려온다"). 줄마다 높이를
+                // 44 로 못박은 바깥 View 로 한 번 더 감싸서 안쪽 FlatList 가 얼마나 늘어나려
+                // 하든 딱 44 안에서만 채워지게 강제로 가둔다.
+                <View key={i} style={styles.richToolbarRow}>
+                  <BoardRichToolbar editor={richEditor} items={row} />
+                </View>
               ))}
               <BoardRichEditor
                 ref={richRef}
@@ -620,6 +627,8 @@ function makeStyles(colors: AppColors) {
     // 공간이 줄어드니, 박스 자체를 예전보다 키워서 하단에 빈 공간 없이 꽉 차게 한다
     // (오너 지시 2026-08-25).
     richBox: { minHeight: 520, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // 줄마다 44 로 고정 — tentap FlatList 자체 flex 를 못 믿으니 바깥에서 한 번 더 가둔다.
+    richToolbarRow: { height: 44, overflow: 'hidden' },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {

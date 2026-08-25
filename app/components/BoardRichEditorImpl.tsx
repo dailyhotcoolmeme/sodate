@@ -1,12 +1,13 @@
 import React, { forwardRef, useImperativeHandle, useEffect, useMemo, useRef } from 'react'
 import { View, StyleSheet } from 'react-native'
 import {
-  RichText, useEditorBridge, useEditorContent,
+  RichText, useEditorBridge, useEditorContent, BridgeExtension,
   CoreBridge, BoldBridge, ItalicBridge, UnderlineBridge, StrikeBridge,
   HeadingBridge, BulletListBridge, OrderedListBridge, BlockquoteBridge,
   CodeBridge, LinkBridge, ColorBridge, HighlightBridge, ImageBridge,
   HistoryBridge, PlaceholderBridge, ListItemBridge,
 } from '@10play/tentap-editor'
+import { TrailingNode } from '@tiptap/extensions'
 import type { AppColors } from '@/constants/colors'
 import type { RichEditorHandle, RichEditorProps } from './BoardRichEditor'
 
@@ -15,6 +16,18 @@ import type { RichEditorHandle, RichEditorProps } from './BoardRichEditor'
  * 툴바는 여기서 그리지 않는다 — 키보드 위에 고정해야 해서(KeyboardStickyView) 부모가
  * onEditorReady 로 받은 editor 로 BoardRichToolbar 를 화면 하단에 따로 그린다.
  */
+
+// ⚠️(2026-08-25) 문서가 이미지로 끝나면 그 뒤에 커서를 놓을 빈 줄이 없다 — 그 상태에서
+// 이미지 영역을 탭하면 이미지 "노드"가 선택되고, 그대로 타이핑하면 이미지가 통째로
+// 지워지고 글자로 바뀌어버렸다(오너 지적: "이미지 첨부 1개 하면 어느 무엇도 작성하기
+// 힘들게 되어있다. 완전히 최악이라고!" — 시뮬레이터로 재현해서 확인: 사진 삽입 후 그
+// 자리를 탭하고 타이핑하니 사진이 사라지고 글자로 바뀜). 직접 짜지 않고 tiptap 팀이
+// 정확히 이 문제(이미지·표 등 뒤에 탭할 곳이 없는 문제)를 위해 공식 제공하는
+// TrailingNode 확장을 쓴다 — 문서 끝이 이미지면 항상 빈 문단을 하나 더 붙여줘서
+// 그 빈 문단을 탭해 안전하게 이어 쓸 수 있게 한다.
+const TrailingParagraphBridge = new BridgeExtension({
+  tiptapExtension: TrailingNode.configure({ node: 'paragraph' }),
+})
 export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColors }>(function BoardRichEditorImpl(
   { initialHTML, placeholder, onChangeText, onReady, onEditorReady, colors },
   ref,
@@ -35,7 +48,7 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
     BoldBridge, ItalicBridge, UnderlineBridge, StrikeBridge,
     HeadingBridge, BulletListBridge, OrderedListBridge, BlockquoteBridge,
     CodeBridge, LinkBridge.configureExtension({ openOnClick: false }),
-    ColorBridge, HighlightBridge, ImageBridge,
+    ColorBridge, HighlightBridge, ImageBridge, TrailingParagraphBridge,
     PlaceholderBridge.configureExtension({ placeholder: placeholder || '내용을 입력하세요' }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [placeholder])
@@ -46,7 +59,14 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
   // 객체 병합(mergeThemes)일 뿐 webview 브릿지를 안 타므로 무한 루프와는 무관하다.
   const editorTheme = useMemo(() => ({
     toolbar: {
-      toolbarBody: { backgroundColor: colors.surfaceHigh, borderTopColor: colors.divider, borderBottomColor: colors.divider },
+      // ⚠️(2026-08-25) tentap 기본 toolbarBody 는 flex:1 이 박혀있다 — 원래는 한 줄짜리
+      // 툴바 하나만 쓰는 걸 가정한 스타일이라 문제가 없었는데, 우리는 상단 고정을 위해
+      // 이 컴포넌트를 여러 줄(BoardRichToolbar 인스턴스 3개)로 쌓아 쓴다. flex:1 이 그대로
+      // 살아있으면 박스 안의 flex:1 형제(각 줄 + 에디터 본문)가 남는 높이를 균등하게
+      // 나눠 가져가버려서 툴바 3줄이 상단에 붙지 않고 박스 전체에 넓게 퍼져버렸다(오너
+      // 지적: "3줄이 입력박스 전체에 걸쳐서 밑으로 내려온다"). flex:0 으로 눌러서
+      // height:44 만큼만 차지하게 고정한다.
+      toolbarBody: { flex: 0, backgroundColor: colors.surfaceHigh, borderTopColor: colors.divider, borderBottomColor: colors.divider },
       toolbarButton: { backgroundColor: colors.surfaceHigh },
       iconWrapper: { backgroundColor: colors.surfaceHigh },
       iconWrapperActive: { backgroundColor: colors.divider },
