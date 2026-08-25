@@ -60,8 +60,6 @@ export default function BoardWriteScreen() {
   const [nickname, setNickname] = useState('')
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
-  // 첨부(사진·GIF·유튜브) 아래에 이어 쓰는 본문. 첨부가 있을 때만 입력칸이 보인다(2026-08-21).
-  const [contentBelow, setContentBelow] = useState('')
   const [images, setImages] = useState<string[]>([])
   const [links, setLinks] = useState<string[]>([])
   // 말머리 — admin(board_tags)에서 등록한 것 중 사용 중인 것만 선택지로 보여준다
@@ -225,7 +223,6 @@ export default function BoardWriteScreen() {
         setNickname(r.post.nickname ?? '')
         setTitle(r.post.title ?? '')
         setContent(r.post.content ?? '')
-        setContentBelow(r.post.content_below ?? '')
         setImages(r.post.image_urls ?? [])
         setLinks(r.post.link_urls ?? [])
         setTagId(r.post.tag_id ?? null)
@@ -240,14 +237,12 @@ export default function BoardWriteScreen() {
   }, [id])
 
   const needsAgreement = !isEdit && agreedLoaded && !agreed
-  // 첨부(사진·GIF·유튜브)가 하나라도 있으면 그 아래에 '이어 쓰는 본문' 입력칸을 보여준다.
-  const hasAttach = images.length > 0 || links.length > 0
   // 리치모드에선 본문이 에디터 안에 있으므로 richText(평문 미러)로 판단.
   const bodyFilled = richMode ? richText.trim().length > 0 : content.trim().length > 0
   const canSave = nickname.trim().length >= 2 && title.trim().length > 0 && bodyFilled && !needsAgreement
 
   // 쓰던 게 있으면 닫기 전에 물어본다
-  const dirty = title.trim().length > 0 || bodyFilled || contentBelow.trim().length > 0 || images.length > 0 || links.length > 0 || poll !== null || videos.length > 0
+  const dirty = title.trim().length > 0 || bodyFilled || images.length > 0 || links.length > 0 || poll !== null || videos.length > 0
   // 입력 중엔 OTA 자동 새로고침을 보류 — 화면을 벗어나면(뒤로가기·등록) 즉시 풀림
   // (lib/appUpdates.ts 참고).
   useEffect(() => {
@@ -270,13 +265,12 @@ export default function BoardWriteScreen() {
     // 가져온다 — 리치모드도 본문 HTML 안에 <img> 를 넣지 않으니 따로 뽑아낼 게 없다.
     let bodyContent = content.trim()
     const bodyImages = images
-    const bodyBelow = hasAttach ? contentBelow.trim() : ''
     if (richMode) {
       bodyContent = (await richRef.current?.getHTML()) ?? ''
     }
     const r = isEdit
-      ? await updatePost({ postId: id!, title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, tagId })
-      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, videoUrls: videos, tagId })
+      ? await updatePost({ postId: id!, title: title.trim(), content: bodyContent, imageUrls: bodyImages, linkUrls: links, tagId })
+      : await createPost({ nickname: nickname.trim(), title: title.trim(), content: bodyContent, imageUrls: bodyImages, linkUrls: links, videoUrls: videos, tagId })
     if ('error' in r) { setSaving(false); Alert.alert('알림', r.error); return }
     // 신규글에 투표가 있으면 이어서 저장(항목 2개 이상 채워졌을 때만).
     if (!isEdit && poll && 'id' in r) {
@@ -464,28 +458,6 @@ export default function BoardWriteScreen() {
             {richMode && <BoardImageChips images={images} onRemove={editor.removeImage} />}
             <BoardLinkChips api={linksApi} links={links} />
           </View>
-
-          {/* 첨부가 있을 때만 아래에 '이어 쓰는 본문' 입력칸. 스타일은 윗칸(본문)과 동일.
-              첨부를 다 빼면 칸은 사라지되 입력한 내용은 state 에 남아(hasAttach 로 렌더만
-              감춤) 다시 첨부하면 복구된다(오너 결정 2026-08-21). 리치모드도 사진·유튜브가
-              본문 밖 갤러리로 빠졌으니 똑같이 이 입력칸을 쓴다(2026-08-25).*/}
-          {hasAttach && (
-            <View style={{ marginTop: 12 }}>
-              <TextInput
-                style={styles.belowInput}
-                value={contentBelow}
-                onChangeText={setContentBelow}
-                placeholder="사진 아래에 이어서 쓸 내용…"
-                placeholderTextColor={colors.textTertiary}
-                maxLength={CONTENT_MAX}
-                multiline
-                textAlignVertical="top"
-              />
-              <Text style={styles.belowHint}>
-                첨부 아래에 내용을 적으면, 게시글에도 컨텐츠 밑에 텍스트가 나옵니다
-              </Text>
-            </View>
-          )}
         </View>
 
         {/* 투표 — 신규글에만. 추가 버튼은 아래 첨부 툴바(사진·GIF·유튜브 옆)로 옮겼다
@@ -721,14 +693,6 @@ function makeStyles(colors: AppColors) {
     nickReadonly: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: colors.border },
     nickReadonlyText: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
     hint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 5 },
-    // 아랫글 입력칸 — 본문(BoardEditor.input)과 완전히 같은 값(오너: 위아래 똑같이).
-    belowInput: {
-      backgroundColor: colors.surfaceHigh, borderRadius: 12,
-      paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, lineHeight: 22,
-      color: colors.textPrimary,
-      borderWidth: 1, borderColor: colors.border, minHeight: 220,
-    },
-    belowHint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 6, lineHeight: 17 },
     // 리치에디터 박스(재빌드 후) — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
     // 툴바가 입력칸 상단에 고정으로 들어가며(최대 3줄 × 44pt ≈ 132pt) 그만큼 타이핑
     // 공간이 줄어드니, 박스 자체를 예전보다 키워서 하단에 빈 공간 없이 꽉 차게 한다
