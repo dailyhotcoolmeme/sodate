@@ -75,8 +75,6 @@ export function BoardEditorInput({
 }) {
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
-  // 썸네일 누르면 전체보기(2026-08-14 오너 지시) — X 버튼과는 별도 터치 영역이라 겹치지 않는다.
-  const [previewUri, setPreviewUri] = useState<string | null>(null)
 
   return (
     <View style={styles.wrap}>
@@ -94,20 +92,37 @@ export function BoardEditorInput({
 
       <LoadingOverlay visible={api.uploading} />
 
-      {images.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
-          {images.map((u) => (
-            <View key={u} style={styles.thumbWrap}>
-              <TouchableOpacity onPress={() => setPreviewUri(u)} activeOpacity={0.85}>
-                <Image source={{ uri: u }} style={styles.thumb} contentFit="cover" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.thumbX} onPress={() => api.removeImage(u)} hitSlop={6}>
-                <Ionicons name="close" size={13} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-      )}
+      <BoardImageChips images={images} onRemove={api.removeImage} />
+    </View>
+  )
+}
+
+/**
+ * 첨부 이미지 썸네일 줄 — 사진첩에서 고른 순서대로 가로 나열, 누르면 전체보기, X로 제거.
+ * 유튜브 링크(BoardLinkChips)와 같은 자리·같은 모양(2026-08-25 오너 지시: "모든 컨텐츠
+ * 첨부는 유튜브처럼 썸네일로 박스 밖에 첨부하게 하자") — 본문(리치 에디터 포함) 안에는
+ * 넣지 않고 게시글 본문 밑에 별도 갤러리로만 나온다.
+ */
+export function BoardImageChips({ images, onRemove }: { images: string[]; onRemove: (u: string) => void }) {
+  const colors = useColors()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+  // 썸네일 누르면 전체보기(2026-08-14 오너 지시) — X 버튼과는 별도 터치 영역이라 겹치지 않는다.
+  const [previewUri, setPreviewUri] = useState<string | null>(null)
+  if (images.length === 0) return null
+  return (
+    <>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
+        {images.map((u) => (
+          <View key={u} style={styles.thumbWrap}>
+            <TouchableOpacity onPress={() => setPreviewUri(u)} activeOpacity={0.85}>
+              <Image source={{ uri: u }} style={styles.thumb} contentFit="cover" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.thumbX} onPress={() => onRemove(u)} hitSlop={6}>
+              <Ionicons name="close" size={13} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ))}
+      </ScrollView>
 
       <Modal visible={!!previewUri} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
         <Pressable style={styles.previewOverlay} onPress={() => setPreviewUri(null)}>
@@ -119,7 +134,7 @@ export function BoardEditorInput({
           </TouchableOpacity>
         </Pressable>
       </Modal>
-    </View>
+    </>
   )
 }
 

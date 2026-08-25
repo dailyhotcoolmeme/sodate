@@ -11,8 +11,7 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardTags } from '@/hooks/useBoard'
-import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
-import { youtubeThumbnail } from '@/lib/youtube'
+import { useBoardEditor, BoardEditorInput, BoardImageChips, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import BoardRichEditor, { type RichEditorHandle } from '@/components/BoardRichEditor'
 import BoardRichToolbar from '@/components/BoardRichToolbar'
 import { DEFAULT_TOOLBAR_ITEMS, Images, type ToolbarItem } from '@10play/tentap-editor'
@@ -27,15 +26,6 @@ import { wideContent } from '@/constants/layout'
 
 const TITLE_MAX = 60
 const CONTENT_MAX = 10000
-
-/** 리치모드 저장 시 본문 HTML 에서 <img src> 를 뽑아 image_urls 로도 넣는다(피드 썸네일·신고용). */
-function extractImageUrls(html: string): string[] {
-  const out: string[] = []
-  const re = /<img[^>]+src=["']([^"']+)["']/gi
-  let m: RegExpExecArray | null
-  while ((m = re.exec(html))) out.push(m[1])
-  return out
-}
 
 /** 커서와 키보드(도구줄 포함) 사이에 둘 여유 */
 const CARET_GAP = 8
@@ -108,24 +98,13 @@ export default function BoardWriteScreen() {
   // 리치에디터(재빌드 후 활성). 본문 HTML 은 저장 시 richRef.getHTML() 로 뽑는다.
   // richText 는 서식 뺀 평문 미러 — 등록 가능 여부·글자수 판단용.
   const richRef = useRef<RichEditorHandle>(null)
-  // 유튜브·인스타 링크 추가 시 본문 안에도 넣는다(오너 지적: "첨부 컨텐츠들은 모두 본문
-  // 내부에 넣게 하라고!!" — 사진은 안에, 링크는 밖(첨부 갤러리)에만 들어가서 자리가
-  // 갈렸었다). 첨부 갤러리 자체는 유지 — 상세페이지 재생 썸네일에 필요.
-  // ⚠️(2026-08-25) 처음엔 링크 텍스트(주소 문자열)만 넣었는데, 오너가 "저게 썸네일
-  // 유튜브라고 생각하냐!!"라고 맞게 지적 — 주소만 있으면 유튜브인지 알 수가 없다.
-  // 조사 결과(Discourse Onebox, Discord/Slack 링크 언퍼얼링) 유튜브는 실제 썸네일
-  // 이미지를 본문에 넣는 게 실제 게시판·포럼들의 표준 방식이라, 사진 삽입과 같은
-  // insertImage 커맨드로 유튜브 공개 썸네일(img.youtube.com) 을 이미지로 넣고 링크
-  // 텍스트도 이어 붙인다. 인스타는 유튜브처럼 공개 썸네일 URL 규칙이 없어서(oEmbed API
-  // 인증이 필요, 이 앱 구조로는 무리) 조사에서도 "실제 미리보기 없이 아이콘/링크만"이
-  // 실제 플랫폼들의 표준 폴백이라고 확인 — 링크 텍스트까지만 넣는다.
-  const linksApi = useBoardLinks(links, setLinks, (url, mode) => {
-    if (mode === 'youtube') {
-      const thumb = youtubeThumbnail(url)
-      if (thumb) richRef.current?.insertImage(thumb)
-    }
-    richRef.current?.insertLinkText(url)
-  })
+  // 사진·유튜브·인스타 모두 본문(리치 에디터) 안에는 넣지 않고, 유튜브 링크와 같은 자리
+  // (게시글 본문 밑 첨부 갤러리)에만 썸네일로 붙인다(2026-08-25 오너 지시: "모든 컨텐츠
+  // 첨부는 유튜브처럼 썸네일로 박스 밖에 첨부하게 하자. 아주 심플하게"). 예전에 "첨부는
+  // 다 본문 안에" 로 반대로 갔다가(사진은 안, 링크는 밖이라 자리가 갈렸던 걸 통일하려던
+  // 시도) 오히려 복잡해져서 다시 원래(단순) 방식으로 되돌렸다 — 링크는 그냥 links 배열에만
+  // 추가(useBoardLinks 자체가 처리), 본문 삽입 콜백은 넘기지 않는다.
+  const linksApi = useBoardLinks(links, setLinks)
   const [richText, setRichText] = useState('')
   // tentap editor 인스턴스 — 입력칸 상단 고정 툴바(BoardRichToolbar)에 넘긴다.
   const [richEditor, setRichEditor] = useState<unknown>(null)
@@ -148,23 +127,31 @@ export default function BoardWriteScreen() {
   // 때까지 계속 죽어있었다(오너 지적: "이제는 이미지 눌러도 반응이 없다. 이미지
   // 첨부 자체를 못하는 상태라고!!!" — 한 번이라도 예외가 나면 영구 고장). try/finally
   // 로 감싸서 무슨 일이 있어도 버튼이 다시 눌리게 한다.
+  // 리치모드에서도 사진은 본문 안이 아니라 images 배열(썸네일 갤러리)로만 들어간다
+  // (위 linksApi 주석 참고 — 2026-08-25 오너 지시로 인라인 삽입을 되돌렸다).
   const insertRichMedia = async (mode: 'photo' | 'gif') => {
     if (richUploading) return
+    // 이미 붙은 장수만큼 빼고 받는다(기존 단순모드 addImage 와 동일한 규칙).
+    const remaining = MAX_IMAGES - editor.photoCount
+    if (mode === 'photo' && remaining <= 0) {
+      Alert.alert('알림', `사진은 ${MAX_IMAGES}장까지 올릴 수 있어요.`)
+      return
+    }
     setRichUploading(true)
     try {
       // 사진은 한 번에 여러 장 골라 순서대로 넣는다(오너 지적: "이미지 첨부할때 왜
       // 하나씩 밖에 안되는데!!" — 기존 첨부 방식(boardImage.ts pickAndUploadMany)을
       // 그대로 재사용). 움짤은 원래대로 한 장씩(용량 제한이 파일당이라 다르게 다룸).
       if (mode === 'photo') {
-        const r = await pickAndUploadMany(MAX_IMAGES, (current, total) => setRichUploadProgress({ current, total }))
+        const r = await pickAndUploadMany(remaining, (current, total) => setRichUploadProgress({ current, total }))
         if (r) {
-          for (const url of r.urls) await richRef.current?.insertImage(url)
+          if (r.urls.length) setImages((prev) => [...prev, ...r.urls])
           if (r.error) Alert.alert('알림', r.error)
           else if (r.skipped > 0) Alert.alert('알림', `한 번에 최대 ${MAX_IMAGES}장까지만 넣을 수 있어서 ${r.skipped}장은 빠졌어요.`)
         }
       } else {
         const r = await pickAndUpload(mode)
-        if (r && 'url' in r) await richRef.current?.insertImage(r.url)
+        if (r && 'url' in r) setImages((prev) => [...prev, r.url])
         else if (r && 'error' in r) Alert.alert('알림', r.error)
       }
     } catch {
@@ -195,9 +182,10 @@ export default function BoardWriteScreen() {
   const [colorPicker, setColorPicker] = useState<'text' | 'highlight' | null>(null)
   const TEXT_COLORS = ['#1F2937', '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6']
   const HIGHLIGHT_COLORS = ['#FEF08A', '#FBCFE8', '#BBF7D0', '#BFDBFE', '#FED7AA', '#E9D5FF']
+  const full = editor.photoCount >= MAX_IMAGES
 
   const richToolbarItems: ToolbarItem[] = useMemo(() => [
-    { onPress: () => () => insertRichMedia('photo'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/photo.png') },
+    { onPress: () => () => insertRichMedia('photo'), active: () => false, disabled: () => richUploading || full, image: () => require('@/assets/rich-toolbar/photo.png') },
     // GIF·인스타·투표 — 일단 숨김(오너 지시). 다시 켜려면 아래 세 줄 주석만 풀면 된다.
     // { onPress: () => () => insertRichMedia('gif'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/gif.png') },
     { onPress: () => () => linksApi.openAdd('youtube'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/youtube.png') },
@@ -213,7 +201,7 @@ export default function BoardWriteScreen() {
     { onPress: () => () => setColorPicker('highlight'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/highlight_color.png') },
     pickDefaultItem(Images.undo),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [richUploading])
+  ], [richUploading, full])
   // 동영상(숨김 기능 — VIDEO_ENABLED=false 라 버튼 안 보임). R2 업로드 URL 목록.
   const [videos, setVideos] = useState<string[]>([])
   const [videoBusy, setVideoBusy] = useState(false)
@@ -278,14 +266,13 @@ export default function BoardWriteScreen() {
   const save = async () => {
     if (!canSave || saving) return
     setSaving(true)
-    // 리치모드: 본문=에디터 HTML, 사진은 HTML 안에 인라인 → 썸네일·신고용으로 URL만 뽑아 imageUrls 에도 담는다.
+    // 사진·링크는 이제 모드와 상관없이 항상 images/links 배열(썸네일 갤러리)에서 그대로
+    // 가져온다 — 리치모드도 본문 HTML 안에 <img> 를 넣지 않으니 따로 뽑아낼 게 없다.
     let bodyContent = content.trim()
-    let bodyImages = images
-    let bodyBelow = hasAttach ? contentBelow.trim() : ''
+    const bodyImages = images
+    const bodyBelow = hasAttach ? contentBelow.trim() : ''
     if (richMode) {
       bodyContent = (await richRef.current?.getHTML()) ?? ''
-      bodyImages = extractImageUrls(bodyContent)
-      bodyBelow = ''
     }
     const r = isEdit
       ? await updatePost({ postId: id!, title: title.trim(), content: bodyContent, contentBelow: bodyBelow, imageUrls: bodyImages, linkUrls: links, tagId })
@@ -302,8 +289,6 @@ export default function BoardWriteScreen() {
     if (!isEdit) await setTermsAgreed()
     router.back()
   }
-
-  const full = editor.photoCount >= MAX_IMAGES
 
   return (
     <View style={styles.container}>
@@ -472,14 +457,19 @@ export default function BoardWriteScreen() {
               placeholder="내용을 입력하세요"
             />
           )}
-          <View style={{ marginTop: 8 }}>
+          <View style={{ marginTop: 8, gap: 8 }}>
+            {/* 리치모드는 사진을 본문 안에 넣지 않으므로(위 insertRichMedia 참고), 여기서
+                유튜브 링크와 같은 자리에 썸네일 갤러리로 보여준다. 단순모드는 이미
+                BoardEditorInput 안에서 images 를 자체적으로 보여주니 또 넣지 않는다. */}
+            {richMode && <BoardImageChips images={images} onRemove={editor.removeImage} />}
             <BoardLinkChips api={linksApi} links={links} />
           </View>
 
-          {/* 첨부가 있을 때만 아래에 '이어 쓰는 본문' 입력칸(기존 모드 전용). 스타일은 윗칸(본문)과 동일.
+          {/* 첨부가 있을 때만 아래에 '이어 쓰는 본문' 입력칸. 스타일은 윗칸(본문)과 동일.
               첨부를 다 빼면 칸은 사라지되 입력한 내용은 state 에 남아(hasAttach 로 렌더만
-              감춤) 다시 첨부하면 복구된다(오너 결정 2026-08-21). */}
-          {!richMode && hasAttach && (
+              감춤) 다시 첨부하면 복구된다(오너 결정 2026-08-21). 리치모드도 사진·유튜브가
+              본문 밖 갤러리로 빠졌으니 똑같이 이 입력칸을 쓴다(2026-08-25).*/}
+          {hasAttach && (
             <View style={{ marginTop: 12 }}>
               <TextInput
                 style={styles.belowInput}
