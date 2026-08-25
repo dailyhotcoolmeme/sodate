@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 export interface PlaceRow {
   id: string
   name: string
+  naver_place_id: string | null      // 지도 원형 마커 이미지 키(honsul/marker/{naver_place_id}.png)
   category: string | null            // 종류: 위스키바/칵테일바/와인바/이자카야/펍/바
   region: string | null
   address_road: string | null
@@ -38,24 +39,26 @@ export interface InstaMedia {
 }
 
 const COLUMNS =
-  'id,name,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
+  'id,name,naver_place_id,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
   'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags,socials,keyword_votes'
 
 // 방문자 키워드 투표(사실) → 해시태그처럼 보여줄 태그 배열(상위순). 생성·범용 항목은 제외.
 // 공백을 없애 해시태그 형태로("술이 다양해요"→"술이다양해요"). 많으면 카드에서 가로 스와이프.
 const SUMMARY_SKIP = new Set(['친절해요', '매장이 청결해요', '화장실이 깨끗해요', '주차', '응대가 좋아요'])
-/** 지도 원형 마커 이미지 URL.
- *  - naverpic(네이버에서 긁어온 대표사진, 489곳) 출처는 마커 전용 파생 이미지가 따로
- *    있다(honsul/marker/{id}.png, gen_map_markers.py로 생성) — 그걸 쓴다.
- *  - profile(업체가 직접 올린 대표사진, 10곳) 출처는 마커 전용 파생 이미지가 없다.
- *    예전엔 이 출처를 안 걸러내서 무조건 undefined(=기본 도형 마커)로 떨어졌다 — 사진이
- *    분명히 있는데 지도에서만 도형으로 나오던 원인(2026-08-25 오너 지적: "원형 사진
- *    마커가 없는 업체도 아니었고..애초에 사진 마커 없는 업체가 있냐고!"). 원본을 그대로 쓴다. */
-export function placeMarkerUrl(p: Pick<PlaceRow, 'profile_image'>): string | undefined {
-  const u = p.profile_image
-  if (!u) return undefined
-  if (u.includes('/naverpic/')) return u.replace('/naverpic/', '/marker/').replace(/\.webp$/, '.png')
-  return u
+/** 지도 원형 마커 이미지 URL — gen_map_markers.py가 profile_image 출처(네이버 긁어온 사진·
+ *  업체 직접 등록 사진 가리지 않고) 전부를 정사각 크롭+흰 테두리 원형으로 다듬어
+ *  naver_place_id 로 R2에 저장해둔다(honsul/marker/{naver_place_id}.png).
+ *
+ *  ⚠️(2026-08-25) 예전엔 profile_image 문자열에서 URL 패턴을 추측해 변환했는데(naverpic
+ *  경로만 인식), 업체가 직접 등록한 사진(profile 경로, 당시 10곳)은 아예 undefined로
+ *  떨어져 지도에서만 기본 도형 마커로 나왔다(오너 지적: "원형 사진 마커가 없는 업체도
+ *  아니었고..애초에 사진 마커 없는 업체가 있냐고!"). 그 자리를 메우려고 원본 이미지를
+ *  그대로 썼더니 이번엔 정사각(원본 비율) 그대로 나와 "이미지를 동그라미로 보여줘야지"라고
+ *  또 지적받았다 — gen_map_markers.py 자체는 원래 출처를 안 가리므로, naver_place_id 로
+ *  직접 만든 마커 URL을 쓰는 게 맞는 방법이었다. */
+export function placeMarkerUrl(p: Pick<PlaceRow, 'profile_image' | 'naver_place_id'>): string | undefined {
+  if (!p.profile_image || !p.naver_place_id) return undefined
+  return `https://sodate-admin.pages.dev/media/honsul/marker/${p.naver_place_id}.png`
 }
 
 export function reviewHashtags(votes: Record<string, number> | null | undefined, max = 7): string[] {
