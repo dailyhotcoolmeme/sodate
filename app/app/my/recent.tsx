@@ -55,24 +55,43 @@ export default function RecentScreen() {
 
   const open = (v: RecentView) => router.push(`${KIND_ROUTE[v.kind]}/${v.id}` as never)
 
-  // 누르자마자 바로 비우지 않고 팝업으로 한 번 확인받고 적용한다(2026-08-25 오너 지시).
-  const handleClear = () => {
-    Alert.alert('기록 비우기', '최근 본 기록을 모두 지울까요?', [
+  // "전체삭제"(예전 "기록 비우기") — 누르자마자 바로 비우지 않고 팝업으로 확인받는다
+  // (2026-08-25 오너 지시).
+  const handleClearAll = () => {
+    Alert.alert('전체삭제', '최근 본 기록을 모두 지울까요?', [
       { text: '취소', style: 'cancel' },
-      { text: '비우기', style: 'destructive', onPress: async () => { await clearRecentViews(); setItems([]) } },
+      { text: '삭제', style: 'destructive', onPress: async () => { await clearRecentViews(); setItems([]) } },
     ])
   }
 
-  // 전체 비우기만 있고 한 줄만 골라 지우는 기능이 없었다(2026-08-25 오너 지시: "선택삭제
-  // 기능도 필요하다"). 스크랩한 글(my/scraps.tsx)과 같은 방식 — 줄마다 삭제 버튼.
-  const handleRemoveOne = (v: RecentView) => {
-    Alert.alert('기록 삭제', `'${v.title}' 기록을 지울까요?`, [
+  // 선택삭제 — 줄마다 삭제 버튼을 다는 방식은 진짜 "선택"이 아니라고 지적받았다(2026-08-25
+  // 오너: "선택삭제 누르면 지울 대상 선택후 삭제하도록 해라"). 체크박스로 여러 개 골라
+  // 한 번에 지우는 표준 선택모드로 다시 만든다.
+  const key = (v: RecentView) => `${v.kind}:${v.id}`
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  const enterSelect = () => { setSelecting(true); setSelected(new Set()) }
+  const exitSelect = () => { setSelecting(false); setSelected(new Set()) }
+  const toggleSelect = (v: RecentView) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      const k = key(v)
+      if (next.has(k)) next.delete(k); else next.add(k)
+      return next
+    })
+  }
+  const handleDeleteSelected = () => {
+    if (selected.size === 0) return
+    Alert.alert('선택삭제', `선택한 ${selected.size}개 기록을 지울까요?`, [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제', style: 'destructive',
         onPress: async () => {
-          setItems((prev) => prev.filter((p) => !(p.kind === v.kind && p.id === v.id)))
-          await removeRecentView(v.kind, v.id)
+          const toRemove = items.filter((v) => selected.has(key(v)))
+          setItems((prev) => prev.filter((v) => !selected.has(key(v))))
+          exitSelect()
+          await Promise.all(toRemove.map((v) => removeRecentView(v.kind, v.id)))
         },
       },
     ])
@@ -96,11 +115,27 @@ export default function RecentScreen() {
         ))}
       </View>
       <View style={styles.headingRow}>
-        {items.length > 0 && (
-          <TouchableOpacity onPress={handleClear} hitSlop={8}>
-            <Text style={styles.clear}>기록 비우기</Text>
-          </TouchableOpacity>
-        )}
+        {selecting ? (
+          <>
+            <TouchableOpacity onPress={exitSelect} hitSlop={8}>
+              <Text style={styles.clear}>취소</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleDeleteSelected} disabled={selected.size === 0} hitSlop={8}>
+              <Text style={[styles.deleteSelected, selected.size === 0 && styles.deleteSelectedOff]}>
+                삭제{selected.size > 0 ? `(${selected.size})` : ''}
+              </Text>
+            </TouchableOpacity>
+          </>
+        ) : items.length > 0 ? (
+          <>
+            <TouchableOpacity onPress={enterSelect} hitSlop={8}>
+              <Text style={styles.clear}>선택삭제</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleClearAll} hitSlop={8}>
+              <Text style={styles.clear}>전체삭제</Text>
+            </TouchableOpacity>
+          </>
+        ) : null}
       </View>
 
       {loaded && isEmpty ? (
@@ -111,8 +146,19 @@ export default function RecentScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}>
-          {filtered.map((v) => (
-            <TouchableOpacity key={`${v.kind}:${v.id}`} style={styles.row} onPress={() => open(v)} activeOpacity={0.7}>
+          {filtered.map((v) => {
+            const on = selected.has(key(v))
+            return (
+            <TouchableOpacity
+              key={key(v)} style={styles.row}
+              onPress={() => (selecting ? toggleSelect(v) : open(v))}
+              activeOpacity={0.7}
+            >
+              {selecting && (
+                <View style={[styles.checkbox, on && styles.checkboxOn]}>
+                  {on && <Ionicons name="checkmark-sharp" size={11} color="#fff" />}
+                </View>
+              )}
               <Ionicons
                 name={KIND_ICON[v.kind] ?? 'time-outline'}
                 size={18} color={v.kind === 'company' ? colors.textTertiary : colors.primary} style={styles.rowIcon}
@@ -121,17 +167,10 @@ export default function RecentScreen() {
                 <Text style={styles.title} numberOfLines={1}>{v.title}</Text>
                 {v.sub && <Text style={styles.sub} numberOfLines={1}>{v.sub}</Text>}
               </View>
-              <TouchableOpacity
-                style={styles.removeBtn}
-                onPress={(e) => { e.stopPropagation?.(); handleRemoveOne(v) }}
-                activeOpacity={0.7}
-                hitSlop={8}
-              >
-                <Ionicons name="close" size={18} color={colors.textTertiary} />
-              </TouchableOpacity>
-              <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+              {!selecting && <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
             </TouchableOpacity>
-          ))}
+            )
+          })}
         </ScrollView>
       )}
       <BottomNav current="my" route="/my/recent" />
@@ -153,10 +192,17 @@ function makeStyles(colors: AppColors) {
     tabText: { fontSize: 15, fontWeight: '700', color: colors.textTertiary },
     tabTextOn: { color: colors.textPrimary, fontWeight: '800' },
     headingRow: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 16,
       paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4,
     },
     clear: { fontSize: 13, color: colors.textTertiary },
+    deleteSelected: { fontSize: 13, fontWeight: '700', color: colors.error },
+    deleteSelectedOff: { color: colors.textTertiary, fontWeight: '400' },
+    checkbox: {
+      width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: colors.textTertiary,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingBottom: 60 },
     emptyText: { fontSize: 15, color: colors.textSecondary, marginTop: 4 },
     emptySub: { fontSize: 13, color: colors.textTertiary },
@@ -166,7 +212,6 @@ function makeStyles(colors: AppColors) {
       borderBottomWidth: 1, borderBottomColor: colors.divider,
     },
     rowIcon: { width: 22 },
-    removeBtn: { padding: 2 },
     title: { fontSize: 14.5, color: colors.textPrimary },
     sub: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
   })

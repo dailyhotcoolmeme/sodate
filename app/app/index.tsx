@@ -560,7 +560,7 @@ export default function HomeScreen() {
   // 복원 로직은 hooks/useScrollRestore.ts 참고(세 번째 재설계 — 한 번만 판정하지 않고
   // 콘텐츠가 자랄 때마다 계속 다시 맞춘다). 페이지네이션 목록이라 loadMore 를 넘긴다.
   const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
-    useScrollRestore('dating-feed', flatListRef, { hasMore, loadMore, revealTimeoutMs: 2500 })
+    useScrollRestore('dating-feed', flatListRef, { hasMore, loadMore })
   const onScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     setShowFab(y > 300)

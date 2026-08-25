@@ -70,7 +70,7 @@ export default function SocialingScreen() {
   // 콘텐츠가 자랄 때마다 계속 다시 맞춘다). 페이지네이션 목록이라 loadMore 를 넘긴다.
   const feedListRef = useRef<FlatList>(null)
   const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
-    useScrollRestore('socialing-feed', feedListRef, { hasMore, loadMore, revealTimeoutMs: 2500 })
+    useScrollRestore('socialing-feed', feedListRef, { hasMore, loadMore })
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current

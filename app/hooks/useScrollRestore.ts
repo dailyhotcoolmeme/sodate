@@ -18,6 +18,12 @@ import { getScrollOffset } from '@/lib/scrollMemory'
  * 데까지 가고, 다음 호출에서 더 자라 있으면 또 더 간다. "됐다"고 확정하는 기준도
  * 높이 하나가 아니라 "두 번 연속 높이가 안 바뀜"(=레이아웃이 진짜로 안정됐다)으로
  * 바꿔서, 이미지 등이 뒤늦게 로딩되며 밀리는 것도 스스로 다시 잡는다.
+ *
+ * ⚠️(2026-08-25, 곧바로 재수정) 복원 끝날 때까지 화면을 안 보여주는 안전장치 시간을
+ * 처음에 1.5~2.5초로 넉넉히 잡았는데, 실제로는 그 시간을 거의 매번 다 채워서 페이지를
+ * 열 때마다 흰 화면이 한참 떴다(오너: "흰화면을 3초를 기다리게 만들어놨네"). 화면을
+ * 못 보여주는 게 위치가 살짝 안 맞는 것보다 훨씬 나쁘다 — 최대한 짧게(기본 150ms) 잡고,
+ * 그 뒤로는 화면을 보여준 채로 계속 재보정한다(눈에 보이는 교정이 흰 화면보다 낫다).
  */
 export function useScrollRestore<T>(
   key: string,
@@ -30,7 +36,7 @@ export function useScrollRestore<T>(
   const [listVisible, setListVisible] = useState(() => getScrollOffset(key) <= 0)
 
   useEffect(() => {
-    const t = setTimeout(() => setListVisible(true), opts.revealTimeoutMs ?? 1500)
+    const t = setTimeout(() => setListVisible(true), opts.revealTimeoutMs ?? 150)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
