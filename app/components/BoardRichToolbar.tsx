@@ -1,7 +1,5 @@
 import React, { useMemo } from 'react'
 import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
-import { BlurView } from 'expo-blur'
-import { useColorScheme } from 'react-native'
 import type { AppColors } from '@/constants/colors'
 
 /**
@@ -9,7 +7,15 @@ import type { AppColors } from '@/constants/colors'
  * 하자"). react-native-enriched-html 은 완전 네이티브라(웹뷰 없음) 예전 tentap 웹뷰
  * 때 이 위치를 포기했던 이유(웹뷰 스크롤/포커스 충돌)가 애초에 없다.
  *
- * 배경은 반투명(BlurView) — "키보드 위에 모두 같은 배경색 투명느낌나게"(오너 지시).
+ * ⚠️(2026-08-26) 안드 실기기에서 이 툴바 전체가 안 보이는 사고가 났다 — 원인 후보를
+ *하나씩 지우는 A/B 테스트 중 첫 번째로, 배경에 쓰던 expo-blur BlurView 를 뺐다.
+ * 외부 AI 3곳(챗지피티·제미나이·그록) 교차 검증 — "BlurTargetView 없이 BlurView만
+ * 쓰면 블러 효과만 꺼지고 반투명으로 대체되는 게 공식 동작이지, 자식(버튼)까지
+ * 안 보여야 한다는 근거는 없다"는 데 셋 다 동의했지만, 그래도 변수를 하나 줄이려고
+ * 가장 먼저 제거한다. 이걸로도 안 고쳐지면 다음 용의자는 KeyboardStickyView 자체.
+ * "투명느낌"은 반투명 배경색(rgba)만으로 유지 — 블러(뒤 배경이 흐려 보이는 효과)는
+ * 없지만 기능상 차이는 없다.
+ *
  * 버튼이 늘어나도(향후 서식 추가 등) 안 잘리게 가로 스와이프 가능(오너 지시: "에디터들
  * 스와이프로 움직이게").
  *
@@ -25,15 +31,9 @@ export interface ToolbarButton {
 }
 
 export default function BoardRichToolbar({ buttons, colors }: { buttons: ToolbarButton[]; colors: AppColors }) {
-  const scheme = useColorScheme()
   const styles = useMemo(() => makeStyles(colors), [colors])
   return (
-    <BlurView
-      intensity={80}
-      tint={scheme === 'dark' ? 'dark' : 'light'}
-      style={styles.wrap}
-    >
-      <View style={styles.tint} />
+    <View style={styles.wrap}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row} keyboardShouldPersistTaps="always">
         {buttons.map((b) => (
           <TouchableOpacity
@@ -48,7 +48,7 @@ export default function BoardRichToolbar({ buttons, colors }: { buttons: Toolbar
           </TouchableOpacity>
         ))}
       </ScrollView>
-    </BlurView>
+    </View>
   )
 }
 
@@ -80,10 +80,9 @@ const styles = StyleSheet.create({
 
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
-    wrap: { height: 48, overflow: 'hidden' },
-    // BlurView 만으로는 브랜드 톤이 안 실려서 아주 옅게 앱 표면색을 겹친다 — 완전
-    // 불투명이 아니라 "투명한데 톤은 앱스러운" 느낌(오너 지시 그대로).
-    tint: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.surfaceHigh, opacity: 0.35 },
+    // 8자리 hex 로 알파를 직접 줘서 반투명(90%) — BlurView 없이도 "투명느낌"은 그대로,
+    // 대신 안드에서 BlurTargetView 미설정 때문에 자식이 안 보이는 경로 자체가 없다.
+    wrap: { height: 48, overflow: 'hidden', backgroundColor: `${colors.surfaceHigh}E6` },
     row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 48 },
     btn: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     btnActive: { backgroundColor: colors.divider },
