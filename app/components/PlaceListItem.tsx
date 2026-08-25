@@ -5,10 +5,15 @@ import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { type PlaceRow, openStatus, categoryCover, reviewHashtags } from '@/lib/places'
+import { formatDistanceKm } from '@/lib/nearby'
 
 /**
  * 혼술바 피드 행. 썸네일=업체 인스타 프로필(원형 아바타). 하트는 소개팅과 동일(우상단·size20·#FF6B9D).
  * 제목 오른쪽에 지도 아이콘(탭→지도탭). 영업중 옆 오늘 영업시간(회색), 그 밑에 방문자 키워드 요약.
+ *
+ * ⚠️ 회색 보조 텍스트(영업시간·지역·거리·리뷰수)는 전부 같은 톤(textSecondary)·같은
+ * 크기(12)로 통일한다 — 예전엔 줄마다 색 토큰(textSecondary/textTertiary)과 크기(12/11.5)가
+ * 제각각이라 안에서마저 안 맞았다(2026-08-25 오너 지적: "글자색 크기가 왜 모두 제각각이냐").
  */
 interface Props {
   place: PlaceRow
@@ -16,11 +21,13 @@ interface Props {
   onToggleFavorite?: () => void
   onTagPress?: (tag: string) => void
   onMapPress?: (place: PlaceRow) => void
+  /** 현재 위치로부터의 거리(km) — 거리순 정렬일 때만 부모가 넘겨준다. */
+  distanceKm?: number
 }
 
 const AV = 54
 
-export default function PlaceListItem({ place, isFavorite = false, onToggleFavorite, onTagPress, onMapPress }: Props) {
+export default function PlaceListItem({ place, isFavorite = false, onToggleFavorite, onTagPress, onMapPress, distanceKm }: Props) {
   const router = useRouter()
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
@@ -78,7 +85,9 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
           ) : (
             <Text style={styles.hours}>영업시간 정보 없음</Text>
           )}
-          <Text style={styles.meta} numberOfLines={1}>{'  ·  '}{place.region ?? ''}</Text>
+          <Text style={styles.meta} numberOfLines={1}>
+            {'  ·  '}{place.region ?? ''}{distanceKm != null ? ` · ${formatDistanceKm(distanceKm)}` : ''}
+          </Text>
         </View>
 
         {/* 평점 — 별도 줄(2026-08-24 오너 지시). 소개팅·소셜링은 참여현황이 한 줄 더 있어서
@@ -117,11 +126,12 @@ function makeStyles(colors: AppColors) {
     tag: { color: colors.primary, fontSize: 11, fontWeight: '700', lineHeight: 15 },
     metaRow: { flexDirection: 'row', alignItems: 'center' },
     op: { fontSize: 12, fontWeight: '800' },
-    hours: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
+    // 회색 보조 텍스트 톤·크기 통일 — textSecondary/12 하나로.
+    hours: { fontSize: 12, color: colors.textSecondary },
     meta: { flexShrink: 1, fontSize: 12, color: colors.textSecondary },
     // 평점 줄 — 소개팅·소셜링의 참여현황 줄과 같은 자리(2026-08-24 오너 지시).
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     ratingScore: { fontSize: 12.5, fontWeight: '800', color: colors.textPrimary },
-    ratingCount: { fontSize: 11.5, color: colors.textTertiary, marginLeft: 2 },
+    ratingCount: { fontSize: 12, color: colors.textSecondary, marginLeft: 2 },
   })
 }

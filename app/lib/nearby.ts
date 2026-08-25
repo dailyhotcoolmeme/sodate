@@ -38,3 +38,9 @@ export function distanceKm(aLat: number, aLng: number, bLat: number, bLng: numbe
     Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
   return 2 * R * Math.asin(Math.sqrt(s))
 }
+
+/** 리스트 슬롯에 보여줄 거리 표시(2026-08-25) — 1km 미만은 m, 이상은 소수점 1자리 km. */
+export function formatDistanceKm(km: number): string {
+  if (km < 1) return `${Math.round(km * 1000)}m`
+  return `${km.toFixed(1)}km`
+}

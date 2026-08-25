@@ -143,6 +143,16 @@ export default function HonsulScreen() {
     return filtered
   }, [all, regionGroup, sanggwon, openNow, tag, search, sortMode, myLoc, sangOf, groupOf])
 
+  // 거리순일 때 각 슬롯에 현재 위치로부터의 거리를 보여준다(2026-08-25 오너 지시).
+  const distanceById = useMemo(() => {
+    if (!myLoc) return null
+    const m = new Map<string, number>()
+    for (const p of all) {
+      if (p.lat != null && p.lng != null) m.set(p.id, distanceKm(myLoc.lat, myLoc.lng, p.lat, p.lng))
+    }
+    return m
+  }, [all, myLoc])
+
   // 스크롤하면 지역군 칩 줄이 접힌다 — 소개팅·소셜링과 동일 기준.
   const chipsAnim = useRef(new Animated.Value(1)).current
   const chipsExpandedRef = useRef(true)
@@ -297,6 +307,7 @@ export default function HonsulScreen() {
               keyExtractor={(p) => p.id}
               renderItem={({ item }) => (
                 <PlaceListItem place={item} onTagPress={setTag} onMapPress={openOnMap}
+                  distanceKm={sortMode === 'distance' ? distanceById?.get(item.id) : undefined}
                   isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.id), () => toggleFav(item.id))} />
               )}
               onScroll={onFeedScroll}
