@@ -91,6 +91,13 @@ export default function BoardWriteScreen() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [toolbarH, setToolbarH] = useState(0)
+  // ⚠️(2026-08-25) 입력박스(richBox) 안에 웹뷰 자체 스크롤(scrollEnabled)을 켰더니,
+  // 바깥 페이지 스크롤(KeyboardAwareScrollView)이랑 동시에 터치를 붙잡으려고 해서
+  // 서로 충돌났다(오너 지적: "입력박스 안쪽이랑 바깥쪽 전체 스크롤바가 서로 충돌
+  // 나서 이거 해결 안 된다니까?"). 손가락이 박스 안에 닿아있는 동안만 바깥 스크롤을
+  // 잠가서(터치 시작~끝) 그 순간엔 안쪽 스크롤만 반응하게 하고, 손을 떼면 다시
+  // 바깥 스크롤이 정상 동작하게 한다 — 중첩 스크롤 충돌의 표준 해결 방식.
+  const [richBoxTouching, setRichBoxTouching] = useState(false)
   const [agreed, setAgreed] = useState(false)
   // 화면 진입 시점에 이미 동의돼 있었는지 — 체크박스 자체를 보여줄지 말지는 이 값으로만
   // 정한다. `agreed`로 정하면 지금 막 체크하는 순간 조건이 바뀌어 체크박스 줄 전체가
@@ -334,6 +341,9 @@ export default function BoardWriteScreen() {
         contentContainerStyle={[wideContent, { padding: 16, paddingBottom: 24, gap: 14 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        // richBoxTouching 설명은 위 state 선언부 참고 — 손가락이 리치 박스 안에 있는
+        // 동안만 바깥 스크롤을 잠가서 안쪽 웹뷰 스크롤과 충돌하지 않게 한다.
+        scrollEnabled={!richBoxTouching}
         // 커서와 키보드 사이에 둘 거리. 키보드 위에 도구줄이 얹혀 있으니 그 높이까지만
         // 비켜준다. 이보다 크게 잡으면 필요 없이 화면이 밀려 올라간다.
         bottomOffset={toolbarH + CARET_GAP}
@@ -391,7 +401,12 @@ export default function BoardWriteScreen() {
           {richMode ? (
             // 재빌드 후: 리치에디터(tentap). 본문 안에 서식·이미지 인라인. 툴바는 입력칸
             // 상단에 고정(2026-08-25 — 키보드 위 KeyboardStickyView 방식은 폐기).
-            <View style={styles.richBox}>
+            <View
+              style={styles.richBox}
+              onTouchStart={() => setRichBoxTouching(true)}
+              onTouchEnd={() => setRichBoxTouching(false)}
+              onTouchCancel={() => setRichBoxTouching(false)}
+            >
               {/* tentap 기본 테마의 toolbarBody 가 flex:1 이라 theme 오버라이드(flex:0)만으로는
                   이 컬럼 안에서 다른 flex:1 형제(에디터 본문)와 남는 높이를 나눠 가져가버렸다
                   (오너 지적: "3줄이 입력박스 전체에 걸쳐서 밑으로 내려온다"). 줄마다 높이를
