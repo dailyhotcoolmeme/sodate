@@ -14,7 +14,6 @@ import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import BoardRichEditor, { type RichEditorHandle } from '@/components/BoardRichEditor'
 import BoardRichToolbar from '@/components/BoardRichToolbar'
-import { DEFAULT_TOOLBAR_ITEMS, type ToolbarItem } from '@10play/tentap-editor'
 import PollEditor, { emptyPollDraft, durationToEndsAt, type PollDraft } from '@/components/PollEditor'
 import { createPoll } from '@/lib/boardPoll'
 import { VIDEO_ENABLED, pickCompressUploadVideo } from '@/lib/boardVideo'
@@ -131,23 +130,6 @@ export default function BoardWriteScreen() {
   }
   // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
   const [poll, setPoll] = useState<PollDraft | null>(null)
-
-  // 리치 툴바 전체(사진/GIF/유튜브/인스타/투표 + 서식 아이콘 + 키보드 닫기) — 예전엔 미디어
-  // 버튼들이 tentap 서식 툴바(자체 스크롤)와 분리된 고정 영역이라 "한쪽만 스와이프되고 왼쪽은
-  // 고정"이었다(오너 지적). tentap Toolbar 의 items prop 에 전부 합쳐서 하나의 스크롤 줄로
-  // 만든다 — 배경·아이콘 톤도 tentap 테마(BoardRichEditorImpl.tsx) 하나로 통일된다.
-  const richToolbarItems: ToolbarItem[] = useMemo(() => [
-    { onPress: () => () => insertRichMedia('photo'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/photo.png') },
-    { onPress: () => () => insertRichMedia('gif'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/gif.png') },
-    { onPress: () => () => linksApi.openAdd('youtube'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/youtube.png') },
-    { onPress: () => () => linksApi.openAdd('instagram'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/instagram.png') },
-    // 투표 — 신규글에만, 이미 추가했으면 다시 안 뜸.
-    ...(!isEdit && !poll ? [{ onPress: () => () => setPoll(emptyPollDraft()), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/poll.png') }] : []),
-    ...DEFAULT_TOOLBAR_ITEMS,
-    // 키보드 닫기 — 원래 없어서 입력하다 키보드를 내릴 방법이 없었다(오너 지적).
-    { onPress: () => () => Keyboard.dismiss(), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/keyboard_dismiss.png') },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [richUploading, isEdit, poll])
   // 동영상(숨김 기능 — VIDEO_ENABLED=false 라 버튼 안 보임). R2 업로드 URL 목록.
   const [videos, setVideos] = useState<string[]>([])
   const [videoBusy, setVideoBusy] = useState(false)
@@ -489,15 +471,37 @@ export default function BoardWriteScreen() {
       )}
 
       {/* 리치에디터 하단 고정 툴바 — 키보드 위에 붙는다(서식·이미지 등). 에디터 본체와 분리해
-          화면 최하단에서 그려야 키보드에 안 가린다(2026-08-24 개판 수정).
-          ⚠️(2026-08-25) 예전엔 사진·GIF·유튜브·인스타·투표 버튼이 서식 툴바(tentap, 자체
-          스크롤)와 분리된 별도 영역이라 "왼쪽은 고정, 오른쪽만 스와이프"였다(오너 지적) —
-          전부 tentap 의 items prop 하나로 합쳐서 한 줄 전체가 같이 스와이프되고 배경도
-          하나로 통일된다(BoardRichEditorImpl.tsx 의 테마 설정 참고). */}
+          화면 최하단에서 그려야 키보드에 안 가린다(2026-08-24 개판 수정). */}
       {richMode && !!richEditor && kbUp && (
         <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
-          <View onLayout={(e) => setToolbarH(e.nativeEvent.layout.height)}>
-            <BoardRichToolbar editor={richEditor} items={richToolbarItems} />
+          {/* 한 줄: 사진·GIF(왼쪽) + 서식 툴바(오른쪽 스크롤) — 네이버 카페처럼 한 줄에 */}
+          <View
+            style={styles.richToolbarBar}
+            onLayout={(e) => setToolbarH(e.nativeEvent.layout.height)}
+          >
+            <TouchableOpacity style={styles.richMediaBtn} onPress={() => insertRichMedia('photo')} disabled={richUploading} hitSlop={6}>
+              <Ionicons name="image-outline" size={23} color={richUploading ? colors.textTertiary : colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.richMediaBtn} onPress={() => insertRichMedia('gif')} disabled={richUploading} hitSlop={6}>
+              <Text style={[styles.richGifText, richUploading && { color: colors.textTertiary }]}>GIF</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.richMediaBtn} onPress={() => linksApi.openAdd('youtube')} hitSlop={6}>
+              <Ionicons name="logo-youtube" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+            {/* 인스타 링크 — 유튜브 옆(2026-08-24 오너 지시: "깜빡했었다"). */}
+            <TouchableOpacity style={styles.richMediaBtn} onPress={() => linksApi.openAdd('instagram')} hitSlop={6}>
+              <Ionicons name="logo-instagram" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+            {/* 투표 — 신규글에만, 이미 추가했으면 다시 안 뜸(2026-08-24: 사진·GIF·유튜브 옆으로 이동). */}
+            {!isEdit && !poll && (
+              <TouchableOpacity style={styles.richMediaBtn} onPress={() => setPoll(emptyPollDraft())} hitSlop={6}>
+                <Ionicons name="bar-chart-outline" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+            <View style={styles.richDivider} />
+            <View style={styles.richToolbarInner}>
+              <BoardRichToolbar editor={richEditor} />
+            </View>
           </View>
         </KeyboardStickyView>
       )}
@@ -618,6 +622,12 @@ function makeStyles(colors: AppColors) {
     belowHint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 6, lineHeight: 17 },
     // 리치에디터 박스(재빌드 후) — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
     richBox: { minHeight: 320, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // 배경 없음(투명) — tentap 툴바가 흰 직사각형이라 라운드 사이에 빈틈이 보였다(2026-08-24).
+    richToolbarBar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingLeft: 10, borderTopWidth: 1, borderTopColor: colors.divider },
+    richMediaBtn: { paddingHorizontal: 8, height: 48, justifyContent: 'center' },
+    richGifText: { fontSize: 15, fontWeight: '800', color: colors.textSecondary, letterSpacing: 0.3 },
+    richDivider: { width: 1, height: 22, backgroundColor: colors.divider, marginHorizontal: 6 },
+    richToolbarInner: { flex: 1, height: 48 },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {

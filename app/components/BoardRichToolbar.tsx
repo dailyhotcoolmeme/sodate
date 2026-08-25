@@ -12,7 +12,7 @@ if (RICH_EDITOR_AVAILABLE) {
   ToolbarImpl = require('@10play/tentap-editor').Toolbar
 }
 
-export default function BoardRichToolbar({ editor, items }: { editor: unknown; items?: unknown[] }) {
+export default function BoardRichToolbar({ editor }: { editor: unknown }) {
   if (!ToolbarImpl || !editor) return null
-  return <ToolbarImpl editor={editor} items={items} />
+  return <ToolbarImpl editor={editor} />
 }
