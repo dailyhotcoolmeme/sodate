@@ -2,7 +2,8 @@ import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Keyboard } from 'react-native'
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
-import { KeyboardAwareScrollView, KeyboardStickyView, useKeyboardState } from 'react-native-keyboard-controller'
+import { KeyboardAwareScrollView, KeyboardStickyView, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller'
+import Reanimated, { useAnimatedStyle } from 'react-native-reanimated'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -111,19 +112,28 @@ export default function BoardWriteScreen() {
   // `Keyboard.addListener('keyboardDidShow', ...)` 로 직접 높이를 재는 방식으로
   // 바꿨더니, 이번엔 그 이벤트 자체가 최신 안드(엣지투엣지) 에서 전혀 안 와서
   // 툴바가 키보드를 안 따라가고 화면 맨 아래에 고정되는 사고가 났다(오너 제보:
-  // "바닥에 있는게 키보드랑 같이 올라오질 않고 고정되어 있다"). RN 코어 Keyboard
-  // 모듈은 안드에서 창 높이 변화를 추론하는 낡은 방식이라 엣지투엣지에서 잘 안
-  // 맞는다 — 같은 라이브러리 안에 있는 `useKeyboardState`(네이티브 이벤트 기반,
-  // KeyboardStickyView 와 무관한 별개 훅)로 교체한다. 위치 계산(밀어올리기)은
-  // 계속 우리가 직접 만든 로직 그대로 쓴다 — 문제였던 컴포넌트만 피한다.
-  const kbHeightRaw = useKeyboardState((state) => state.height)
+  // "바닥에 있는게 키보드랑 같이 올라오질 않고 고정되어 있다"). 그 다음 JS 상태
+  // 기반 `useKeyboardState` 로 바꿔서 키보드를 따라가긴 했지만, 매 프레임 JS
+  // 스레드 리렌더로 위치를 갱신하는 구조라 네이티브 키보드 애니메이션보다 반박자
+  // 늦게 움직였다(오너 제보: "키보드보다 반박자 느리게 따라온다. 닫을때도
+  // 그렇다"). UI 스레드에서 직접 애니메이션 값을 받는 reanimated 기반
+  // `useReanimatedKeyboardAnimation` (KeyboardStickyView 가 내부적으로 쓰는 것과
+  // 같은 훅)으로 다시 바꾼다 — 문제였던 컴포넌트(KeyboardStickyView)만 피하고,
+  // 그 컴포넌트가 쓰던 것과 같은 저수준 애니메이션 값은 그대로 재사용한다.
+  const { height: kbHeightSV } = useReanimatedKeyboardAnimation()
   // ⚠️(2026-08-26 오너 지적: "안드 3버튼 생각을 안하냐?") 안드 3버튼 네비게이션
   // 기기 일부에서 키보드 높이가 실제보다 작게(3버튼 바 높이만큼 빠진 값으로)
-  // 잘못 잡히는 사례가 있다 — 최소한 3버튼 바 높이(insets.bottom)는 넘도록
-  // 보정한다. 이 프로젝트에서 안드 3버튼을 깜빡해서 사고 낸 게 이번이 처음이
-  // 아니다(입력박스 높이, 약관 체크박스 잘림) — 매번 새로 지적받지 않도록
-  // "화면 맨 아래 관련 계산은 항상 3버튼 네비게이션까지 감안" 을 메모리에 박아둔다.
-  const kbHeight = kbHeightRaw > 0 ? Math.max(kbHeightRaw, insets.bottom) : 0
+  // 잘못 잡히는 사례가 있다 — 키보드가 닫혀 있거나 그 높이가 3버튼 바 높이보다
+  // 작을 때는 최소한 3버튼 바 높이(insets.bottom)만큼은 띄운다. 이 프로젝트에서
+  // 안드 3버튼을 깜빡해서 사고 낸 게 이번이 처음이 아니다(입력박스 높이, 약관
+  // 체크박스 잘림) — 매번 새로 지적받지 않도록 "화면 맨 아래 관련 계산은 항상
+  // 3버튼 네비게이션까지 감안" 을 메모리에 박아둔다.
+  // kbHeightSV.value 는 0(닫힘) 또는 음수(-키보드 높이)이므로, -insets.bottom 과
+  // 비교해 더 (음의 방향으로) 큰 쪽을 쓰면 "닫힘일 때 최소 insets.bottom"과
+  // "키보드가 더 크면 키보드 높이 그대로" 두 경우를 한 식으로 처리한다.
+  const richToolbarAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: Math.min(kbHeightSV.value, -insets.bottom) }],
+  }), [insets.bottom])
   // 사진·유튜브·인스타 모두 본문(리치 에디터) 안에는 넣지 않고, 유튜브 링크와 같은 자리
   // (게시글 본문 밑 첨부 갤러리)에만 썸네일로 붙인다(2026-08-25 오너 지시: "모든 컨텐츠
   // 첨부는 유튜브처럼 썸네일로 박스 밖에 첨부하게 하자. 아주 심플하게"). 예전에 "첨부는
@@ -311,7 +321,12 @@ export default function BoardWriteScreen() {
         // 안드로이드 3버튼 내비게이션 바가 화면 맨 밑을 가려서 약관 동의 체크박스가
         // 잘렸다(오너 지적: "안드폰 3버튼 감안해서 맨 밑에 약관 동의 체크박스 부분
         // 높이 맞춰라. 밑에 잘렸다"). insets.bottom 을 더해서 그 높이만큼 여유를 둔다.
-        contentContainerStyle={[wideContent, { padding: 16, paddingBottom: 24 + insets.bottom, gap: 14 }]}
+        // ⚠️(2026-08-26) 리치 툴바가 키보드 유무와 상관없이 항상 화면 맨 아래에 떠
+        // 있는데(서식 버튼 상시 접근용), 이 여백 계산에 툴바 높이(toolbarH)가 안 빠져
+        // 있어서 마지막 줄이 툴바 뒤에 가려진 채 스크롤이 거기서 멈췄다(오너 제보:
+        // "키보드를 닫아도 바닥에 항상 있고 뒤쪽 글자를 가린다... 스크롤바가 안 먹는다").
+        // toolbarH 를 더해 툴바 뒤까지 스크롤로 볼 수 있게 한다.
+        contentContainerStyle={[wideContent, { padding: 16, paddingBottom: 24 + insets.bottom + toolbarH, gap: 14 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         // richBoxTouching 설명은 위 state 선언부 참고 — 손가락이 리치 박스 안에 있는
@@ -528,16 +543,16 @@ export default function BoardWriteScreen() {
 
       {/* 리치모드 툴바 — 키보드 바로 위(오너 지시 2026-08-25: "키보드 위 방식으로
           하자"). KeyboardStickyView 가 안드에서 툴바를 통째로 숨기는 사고를 내서
-          (위 kbHeight 주석 참고) RN 코어 Keyboard 이벤트로 직접 위치를 계산한다 —
-          키보드 열려있으면 그 높이만큼, 닫혀있으면 안전영역(홈 인디케이터/3버튼)
-          만큼만 띄운다. */}
+          (위 kbHeightSV 주석 참고) 컴포넌트 대신 같은 저수준 reanimated 애니메이션
+          값을 직접 받아 translateY 로 움직인다 — 키보드 열려있으면 그 높이만큼,
+          닫혀있으면 안전영역(홈 인디케이터/3버튼)만큼만 띄운다. */}
       {richMode && richReady && (
-        <View
-          style={[styles.richToolbarFloat, { bottom: kbHeight > 0 ? kbHeight : insets.bottom }]}
+        <Reanimated.View
+          style={[styles.richToolbarFloat, richToolbarAnimatedStyle]}
           onLayout={(e) => setToolbarH(e.nativeEvent.layout.height)}
         >
           <BoardRichToolbar buttons={toolbarButtons} colors={colors} />
-        </View>
+        </Reanimated.View>
       )}
 
       <LinkInputModal api={linksApi} />
@@ -662,7 +677,9 @@ function makeStyles(colors: AppColors) {
     richBox: { minHeight: 160, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     // 리치 툴바를 화면에 직접 띄우는 자리 — KeyboardStickyView 대신 RN Keyboard
     // 이벤트로 계산한 bottom 값을 그대로 쓴다(위 kbHeight 주석 참고).
-    richToolbarFloat: { position: 'absolute', left: 0, right: 0 },
+    // bottom:0 고정 + translateY 애니메이션으로 위치 이동(위 richToolbarAnimatedStyle 참고) —
+    // 예전처럼 bottom 값 자체를 JS state 로 매 프레임 바꾸면 리렌더가 껴서 한 박자 늦는다.
+    richToolbarFloat: { position: 'absolute', left: 0, right: 0, bottom: 0 },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {
