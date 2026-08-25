@@ -132,13 +132,25 @@ export default function BoardWriteScreen() {
 
   // 리치모드 사진·GIF — 골라 R2 업로드 후 에디터 본문에 인라인 삽입.
   const [richUploading, setRichUploading] = useState(false)
+  // ⚠️(2026-08-25) pickAndUpload 는 사진 선택 권한 요청·사진첩 열기 단계가 try/catch
+  // 밖에 있어서(lib/boardImage.ts), 거기서 예외가 나면(권한 팝업 타이밍 문제 등) 이
+  // 함수가 setRichUploading(false) 를 실행하기 전에 그대로 던져버렸다 — 그러면
+  // richUploading 이 true 로 영원히 남아서 사진·GIF 버튼이 그 글쓰기 화면을 나갈
+  // 때까지 계속 죽어있었다(오너 지적: "이제는 이미지 눌러도 반응이 없다. 이미지
+  // 첨부 자체를 못하는 상태라고!!!" — 한 번이라도 예외가 나면 영구 고장). try/finally
+  // 로 감싸서 무슨 일이 있어도 버튼이 다시 눌리게 한다.
   const insertRichMedia = async (mode: 'photo' | 'gif') => {
     if (richUploading) return
     setRichUploading(true)
-    const r = await pickAndUpload(mode)
-    setRichUploading(false)
-    if (r && 'url' in r) richRef.current?.insertImage(r.url)
-    else if (r && 'error' in r) Alert.alert('알림', r.error)
+    try {
+      const r = await pickAndUpload(mode)
+      if (r && 'url' in r) await richRef.current?.insertImage(r.url)
+      else if (r && 'error' in r) Alert.alert('알림', r.error)
+    } catch {
+      Alert.alert('알림', '사진을 올리지 못했어요. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setRichUploading(false)
+    }
   }
   // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
   const [poll, setPoll] = useState<PollDraft | null>(null)
