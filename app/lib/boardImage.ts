@@ -163,20 +163,26 @@ export async function pickAndUploadMany(
   }
   const { picker: ImagePicker, manipulator: ImageManipulator } = native
 
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
-  if (!perm.granted) {
-    return { urls: [], skipped: 0, error: '사진 접근을 허용해야 첨부할 수 있어요. 설정에서 권한을 켜주세요.' }
-  }
+  // pickAndUpload 와 같은 이유(위 참고)로 권한·사진첩 열기 단계도 감싼다.
+  let perm, picked
+  try {
+    perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      return { urls: [], skipped: 0, error: '사진 접근을 허용해야 첨부할 수 있어요. 설정에서 권한을 켜주세요.' }
+    }
 
-  const picked = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 1,
-    allowsMultipleSelection: true,
-    // 고를 수 있는 상한을 시스템 선택창에 그대로 알려준다 — 사용자가 애초에 초과 선택을 못 하게.
-    selectionLimit: Math.max(1, remaining),
-    // 다중 선택은 GIF 원본 바이트가 필요 없다(사진만 받는다). base64 를 안 받아 메모리를 아낀다.
-    base64: false,
-  })
+    picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+      allowsMultipleSelection: true,
+      // 고를 수 있는 상한을 시스템 선택창에 그대로 알려준다 — 사용자가 애초에 초과 선택을 못 하게.
+      selectionLimit: Math.max(1, remaining),
+      // 다중 선택은 GIF 원본 바이트가 필요 없다(사진만 받는다). base64 를 안 받아 메모리를 아낀다.
+      base64: false,
+    })
+  } catch {
+    return { urls: [], skipped: 0, error: '사진첩을 열지 못했어요. 잠시 후 다시 시도해주세요.' }
+  }
   if (picked.canceled || !picked.assets?.length) return null
 
   // iOS 는 고른 순서대로, 안드로이드도 대부분 순서를 유지한다. 시스템이 주는 순서를 그대로 쓴다.

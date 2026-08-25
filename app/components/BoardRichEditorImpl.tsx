@@ -88,14 +88,12 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
     // 원인 파악 전까지 원복 — 키보드 가림 문제는 미해결 상태로 남지만, 스크롤이 아예 막히는
     // 것보다는 낫다.
     avoidIosKeyboard: false,
-    // ⚠️(2026-08-25) dynamicHeight:true 를 시도해봤다(웹뷰 내부 오버플로우로 스크롤이
-    // 막히는 문제를 웹뷰가 실제 문서 높이를 RN 에 보고하게 해서 근본적으로 없애려는
-    // 의도) — 그런데 시뮬레이터에서 켜자마자 에디터가 통째로 안 그려졌다(빈 박스,
-    // placeholder 도 안 뜸). tentap RichText.tsx 를 보면 dynamicHeight 가 켜지면
-    // 컨테이너 height 가 웹뷰가 보고하는 editorHeight(초기값 0)를 그대로 쓰는데, 그
-    // 보고 메시지가 이 프로젝트 환경에서 안 오는 것으로 보인다 — 원인을 더 못 파서
-    // (이 부분 로직은 컴파일된 웹뷰 번들 안에 있어 RN 쪽 소스만으로는 확인 불가) 일단
-    // 원복. 스크롤 문제는 이 방법 말고 다른 방법을 찾아야 한다.
+    // ⚠️(2026-08-25) dynamicHeight:true + 직접 onMessage 로 높이를 받아 적용하는 방식을
+    // 시도했다가 이미지 삽입 자체가 무한 로딩(스피너가 안 멈춤)에 빠지는 걸 확인해서
+    // 바로 원복했다 — exclusivelyUseCustomOnMessage:false 로 tentap 내부 처리도 같이
+    // 돌게 했는데도 getHTML() 의 비동기 응답(같은 메시지 채널 사용)이 막힌 것으로 보인다.
+    // 스크롤 문제(웹뷰 내부 오버플로우 숨음)는 여전히 미해결 — dynamicHeight 를 통한
+    // 해결은 이 프로젝트 환경에서 두 번 다 실패했으니 완전히 다른 방법이 필요하다.
     initialContent: initialHTML || '',
     bridgeExtensions,
     theme: editorTheme,

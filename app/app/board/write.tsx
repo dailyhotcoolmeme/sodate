@@ -19,7 +19,7 @@ import { DEFAULT_TOOLBAR_ITEMS, Images, type ToolbarItem } from '@10play/tentap-
 import PollEditor, { emptyPollDraft, durationToEndsAt, type PollDraft } from '@/components/PollEditor'
 import { createPoll } from '@/lib/boardPoll'
 import { VIDEO_ENABLED, pickCompressUploadVideo } from '@/lib/boardVideo'
-import { MAX_IMAGES, pickAndUpload } from '@/lib/boardImage'
+import { MAX_IMAGES, pickAndUpload, pickAndUploadMany } from '@/lib/boardImage'
 import { getLastNickname } from '@/lib/reviewIdentity'
 import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
 import { setUpdateHold } from '@/lib/appUpdates'
@@ -143,9 +143,21 @@ export default function BoardWriteScreen() {
     if (richUploading) return
     setRichUploading(true)
     try {
-      const r = await pickAndUpload(mode)
-      if (r && 'url' in r) await richRef.current?.insertImage(r.url)
-      else if (r && 'error' in r) Alert.alert('알림', r.error)
+      // 사진은 한 번에 여러 장 골라 순서대로 넣는다(오너 지적: "이미지 첨부할때 왜
+      // 하나씩 밖에 안되는데!!" — 기존 첨부 방식(boardImage.ts pickAndUploadMany)을
+      // 그대로 재사용). 움짤은 원래대로 한 장씩(용량 제한이 파일당이라 다르게 다룸).
+      if (mode === 'photo') {
+        const r = await pickAndUploadMany(MAX_IMAGES)
+        if (r) {
+          for (const url of r.urls) await richRef.current?.insertImage(url)
+          if (r.error) Alert.alert('알림', r.error)
+          else if (r.skipped > 0) Alert.alert('알림', `한 번에 최대 ${MAX_IMAGES}장까지만 넣을 수 있어서 ${r.skipped}장은 빠졌어요.`)
+        }
+      } else {
+        const r = await pickAndUpload(mode)
+        if (r && 'url' in r) await richRef.current?.insertImage(r.url)
+        else if (r && 'error' in r) Alert.alert('알림', r.error)
+      }
     } catch {
       Alert.alert('알림', '사진을 올리지 못했어요. 잠시 후 다시 시도해주세요.')
     } finally {
