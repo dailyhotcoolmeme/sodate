@@ -708,10 +708,14 @@ function makeStyles(colors: AppColors) {
     // 마자 미친듯이 늘어나잖아!"). 세 번 모두 다른 증상(먹통 화면 / 이미지 삽입
     // 무한로딩 / 진입 즉시 폭주)으로 실패해서, 이 프로젝트·이 tentap 버전 조합에서는
     // dynamicHeight 자체를 포기한다 — 대신 오너가 전에 실기기로 직접 확인해서 됐던
-    // (아이폰·안드 둘 다 "된다" 확인받음) maxHeight+내부 스크롤 방식으로 되돌리고,
-    // 사진 갤러리가 스크롤 없이 같이 보이도록 그 높이만 줄인다(오너 지시: "이미지
-    // 썸네일이 한 화면에 보이는 높이로 줄여봐라").
-    richBox: { minHeight: 160, maxHeight: 280, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // (아이폰·안드 둘 다 "된다" 확인받음) maxHeight+내부 스크롤 방식으로 되돌린다.
+    // ⚠️(2026-08-25 재조정) 처음엔 160~280 으로 줄였는데 너무 낮았다(오너 지적: "사진
+    // 썸네일이 보일정도가 아니라 한참 위에까지 나오게 줄였잖아!") — 게시물 이용약관
+    // 동의 칸은 1회성(첫 글쓰기에만 보임)이라 그걸 뺀 "재방문" 상태 기준으로도 다시
+    // 재보고, 안드 3버튼 네비게이션(화면을 더 먹는 기기)까지 감안한 가장 좁은 경우
+    // 기준으로 300~460 으로 다시 잡았다 — 본문 타이핑 공간도 확보하면서 사진 갤러리도
+    // 스크롤 없이 같은 화면에 보인다.
+    richBox: { minHeight: 300, maxHeight: 460, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     // 줄마다 44 로 고정 — tentap FlatList 자체 flex 를 못 믿으니 바깥에서 한 번 더 가둔다.
     richToolbarRow: { height: 44, overflow: 'hidden' },
     // 글자색·배경색 프리셋 스와치 줄 — 2번째 줄이 탭하면 이 모습으로 바뀐다.
