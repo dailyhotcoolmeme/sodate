@@ -1,20 +1,15 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, Component, type ReactNode } from 'react'
 import { View, TextInput, StyleSheet } from 'react-native'
 import type { AppColors } from '@/constants/colors'
+import type { RichEditorState } from './BoardRichEditorImpl'
 
 /**
- * 게시판 본문 리치텍스트 에디터(tentap). 네이버카페급 서식.
+ * 게시판 본문 리치텍스트 에디터(react-native-enriched-html, Software Mansion —
+ * 완전 네이티브, 웹뷰 없음). tentap(웹뷰 기반)이 이번 세션에만 세 번 다른 방식으로
+ * 실패해서(먹통 화면·이미지 무한로딩·진입 즉시 폭주) 교체했다(오너 지시 2026-08-25).
  *
- * ⚠️ tentap 은 react-native-webview(네이티브)에 의존한다. 없으면 평문 입력칸으로 폴백.
- *
- * ⚠️(2026-08-24, 두 번째 정정) 원래는 TurboModuleRegistry/UIManager로 "미리" 감지해서
- * 있을 때만 require 했는데, ipa를 직접 열어 바이너리 안 RNCWebView 심볼을 확인해보니
- * 네이티브 코드는 확실히 들어가 있었다 — 그런데도 두 감지 방법 다 계속 false를
- * 돌려줬다(오너 제보: "글쓰기에서 에디터가 전혀 안나온다", 감지 수정 후에도 재현).
- * WebView(RNCWebView)는 Fabric에서 **뷰 컴포넌트**로 등록되고(codegenNativeComponent),
- * TurboModuleRegistry는 **네이티브 모듈**용이라 애초에 확인 대상이 다르다 — 컴파일은
- * 됐어도 이 방법으로는 못 잡을 수 있다는 뜻. 미리 감지하는 대신, 항상 먼저 시도해보고
- * Impl이 마운트 중 실제로 에러를 던지면 그때 평문으로 자동 전환한다(아래 ErrorBoundary).
+ * New Architecture(Fabric) 전용 라이브러리라 구형 아키텍처에선 아예 안 뜬다 — 그런
+ * 경우까지 포함해 require 실패든 렌더 중 크래시든 평문 입력칸으로 자동 폴백한다.
  */
 let Impl: React.ComponentType<any> | null = null
 let requireError: string | null = null
@@ -39,6 +34,9 @@ export interface RichEditorHandle {
   insertLinkText: (url: string) => void
   focus: () => void
   blur: () => void
+  toggleBold: () => void
+  toggleItalic: () => void
+  toggleUnderline: () => void
 }
 
 export interface RichEditorProps {
@@ -46,7 +44,8 @@ export interface RichEditorProps {
   placeholder?: string
   onChangeText?: (plainText: string) => void
   onReady?: () => void
-  onEditorReady?: (editor: unknown) => void   // tentap editor 인스턴스(하단 고정 툴바용)
+  /** 굵게/기울임/밑줄 버튼 활성 표시용 — 하단(키보드 위) 툴바가 이 값으로 토글 상태를 그린다. */
+  onStateChange?: (state: RichEditorState) => void
   /** require 실패했거나(모듈 자체 로드 실패) 렌더 중 죽었을 때 한 번 호출된다(원인 문자열 포함) —
    *  상위(write.tsx)가 이걸 받아 자기 화면 전체를 예전 평문 모드로 바꿔야 한다(이 컴포넌트
    *  안에서만 조용히 폴백하면 상위의 첨부 툴바가 안 뜬 채로 남아 "에디터도 안 뜨고 툴바도
@@ -54,7 +53,7 @@ export interface RichEditorProps {
   onUnavailable?: (reason: string) => void
 }
 
-/** 폴백(평문) — webview 없는 현재 바이너리용. getHTML 은 평문을 문단으로 감싼다. */
+/** 폴백(평문) — New Architecture 아니거나 라이브러리 로드 실패 시. getHTML 은 평문을 문단으로 감싼다. */
 const Fallback = forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColors }>(
   function Fallback({ initialHTML, placeholder, onChangeText, colors }, ref) {
     const valueRef = useRef(stripHtml(initialHTML || ''))
@@ -64,6 +63,9 @@ const Fallback = forwardRef<RichEditorHandle, RichEditorProps & { colors: AppCol
       insertLinkText: () => {},
       focus: () => {},
       blur: () => {},
+      toggleBold: () => {},
+      toggleItalic: () => {},
+      toggleUnderline: () => {},
     }), [])
     return (
       <View style={{ minHeight: 260 }}>

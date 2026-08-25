@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Image, Keyboard } from 'react-native'
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Keyboard } from 'react-native'
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
@@ -13,8 +13,8 @@ import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, BoardImageChips, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import BoardRichEditor, { type RichEditorHandle } from '@/components/BoardRichEditor'
-import BoardRichToolbar from '@/components/BoardRichToolbar'
-import { DEFAULT_TOOLBAR_ITEMS, Images, type ToolbarItem } from '@10play/tentap-editor'
+import BoardRichToolbar, { type ToolbarButton } from '@/components/BoardRichToolbar'
+import type { RichEditorState } from '@/components/BoardRichEditorImpl'
 import PollEditor, { emptyPollDraft, durationToEndsAt, type PollDraft } from '@/components/PollEditor'
 import { createPoll } from '@/lib/boardPoll'
 import { VIDEO_ENABLED, pickCompressUploadVideo } from '@/lib/boardVideo'
@@ -112,13 +112,11 @@ export default function BoardWriteScreen() {
   // 추가(useBoardLinks 자체가 처리), 본문 삽입 콜백은 넘기지 않는다.
   const linksApi = useBoardLinks(links, setLinks)
   const [richText, setRichText] = useState('')
-  // tentap editor 인스턴스 — 입력칸 상단 고정 툴바(BoardRichToolbar)에 넘긴다.
-  const [richEditor, setRichEditor] = useState<unknown>(null)
-  // 리치에디터(tentap/webview) 활성(2026-08-25). 예전엔 "Maximum update depth exceeded"
-  // 무한 렌더 루프 때문에 자바스크립트 스레드가 막혀 화면 전체 터치가 먹통이 됐다
-  // (BoardRichEditorImpl.tsx 참고 — useEditorBridge 가 돌려주는 editor 객체가 렌더마다
-  // 새 참조라 onEditorReady 이펙트가 계속 재실행되며 부모 state를 무한히 갱신했다).
-  // 시뮬레이터로 직접 재현해서 실제 에러 로그로 원인을 확인하고 고쳤다.
+  // 에디터가 마운트되면 한 번 알려준다 — 그 전엔 키보드 위 툴바를 그리지 않는다
+  // (react-native-enriched-html은 tentap 웹뷰와 달리 비동기 로드가 없어 거의 즉시 옴).
+  const [richReady, setRichReady] = useState(false)
+  // 굵게·기울임·밑줄 버튼 활성 표시용(react-native-enriched-html onChangeState).
+  const [richState, setRichState] = useState<RichEditorState>(null)
   const richMode = true
   const fallbackToLegacy = useCallback((_reason?: string) => { setContent((c) => c || richText) }, [richText])
 
@@ -170,44 +168,19 @@ export default function BoardWriteScreen() {
   // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
   const [poll, setPoll] = useState<PollDraft | null>(null)
 
-  // 리치 툴바 — 한 줄로 통합(오너 지시 2026-08-25: "에디터 두번째줄에 있는 것들 모두
-  // 없애고, 글자색/배경색/되돌리기. 이거 3개만 살리자. 그래서 전체 에디터 도구를
-  // 한줄로 맞추자"). 링크·헤딩·목록·인용·체크리스트는 뺀다(하이퍼링크는 자동
-  // 감지(autolink)로 대체 — LinkBridge 기본 설정에 이미 있음). GIF·인스타·투표는
-  // 코드는 남기고 목록에서만 뺐다("일단 숨겨서 안보이게 해놔라. 나중에 필요하면
-  // 추가할 수 있으니") — 필요해지면 아래 배열에 다시 넣기만 하면 된다.
-  const pickDefaultItem = useCallback((img: unknown): ToolbarItem => {
-    const found = DEFAULT_TOOLBAR_ITEMS.find((item) => item.image({} as never) === img)
-    if (!found) throw new Error('tentap 기본 툴바 아이템을 못 찾음')
-    return found
-  }, [])
-
-  // 글자색·배경색 — 엔진(ColorBridge·HighlightBridge)은 이미 붙어있었는데 버튼이 없었다
-  // (오너 지적: "글자색. 글자배경색. 이런 기본적인 것들이 하나도 없잖아"). 탭하면 이 줄이
-  // 프리셋 색상 스와치 줄로 바뀌는 방식 — 헤딩 버튼이 서브메뉴로 바뀌는 것과 같은 패턴.
-  const [colorPicker, setColorPicker] = useState<'text' | 'highlight' | null>(null)
-  const TEXT_COLORS = ['#1F2937', '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6']
-  const HIGHLIGHT_COLORS = ['#FEF08A', '#FBCFE8', '#BBF7D0', '#BFDBFE', '#FED7AA', '#E9D5FF']
+  // 리치 툴바 — 사진·유튜브·굵게·기울임·밑줄 한 줄, 키보드 바로 위에 고정(오너 지시
+  // 2026-08-25: "키보드 위 방식으로 하자"). 글자색·배경색은 새 에디터
+  // (react-native-enriched-html)에 아직 없어서 뺐다(오너에게 사전 보고·승인 완료).
+  // 되돌리기(undo)도 이 라이브러리 ref API에 없어서 뺐다 — 기기 자체 되돌리기에 맡긴다.
   const full = editor.photoCount >= MAX_IMAGES
-
-  const richToolbarItems: ToolbarItem[] = useMemo(() => [
-    { onPress: () => () => insertRichMedia('photo'), active: () => false, disabled: () => richUploading || full, image: () => require('@/assets/rich-toolbar/photo.png') },
-    // GIF·인스타·투표 — 일단 숨김(오너 지시). 다시 켜려면 아래 세 줄 주석만 풀면 된다.
-    // { onPress: () => () => insertRichMedia('gif'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/gif.png') },
-    { onPress: () => () => linksApi.openAdd('youtube'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/youtube.png') },
-    // { onPress: () => () => linksApi.openAdd('instagram'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/instagram.png') },
-    // ...(!isEdit && !poll ? [{ onPress: () => () => setPoll(emptyPollDraft()), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/poll.png') }] : []),
-    pickDefaultItem(Images.bold),
-    pickDefaultItem(Images.italic),
-    pickDefaultItem(Images.underline),
-    // ⚠️ 글자색 아이콘은 처음에 text-outline(Ionicons) 으로 만들었더니 헤딩(Images.Aa)
-    // 아이콘이랑 똑같이 "Aa" 모양으로 보여서 헷갈렸다(직접 캡처해서 확인) — tentap 에 이미
-    // 있는 팔레트 아이콘(Images.palette, 기본 툴바엔 안 쓰이던 것)으로 바꿔 구분되게 했다.
-    { onPress: () => () => setColorPicker('text'), active: () => false, disabled: () => false, image: () => Images.palette },
-    { onPress: () => () => setColorPicker('highlight'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/highlight_color.png') },
-    pickDefaultItem(Images.undo),
+  const toolbarButtons: ToolbarButton[] = useMemo(() => [
+    { key: 'photo', icon: 'photo', disabled: richUploading || full, onPress: () => insertRichMedia('photo') },
+    { key: 'youtube', icon: 'youtube', onPress: () => linksApi.openAdd('youtube') },
+    { key: 'bold', icon: 'bold', active: !!richState?.bold.isActive, onPress: () => richRef.current?.toggleBold() },
+    { key: 'italic', icon: 'italic', active: !!richState?.italic.isActive, onPress: () => richRef.current?.toggleItalic() },
+    { key: 'underline', icon: 'underline', active: !!richState?.underline.isActive, onPress: () => richRef.current?.toggleUnderline() },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [richUploading, full])
+  ], [richUploading, full, richState])
   // 동영상(숨김 기능 — VIDEO_ENABLED=false 라 버튼 안 보임). R2 업로드 URL 목록.
   const [videos, setVideos] = useState<string[]>([])
   const [videoBusy, setVideoBusy] = useState(false)
@@ -379,73 +352,18 @@ export default function BoardWriteScreen() {
         <View>
           <Text style={styles.label}>내용</Text>
           {richMode ? (
-            // 재빌드 후: 리치에디터(tentap). 본문 안에 서식·이미지 인라인. 툴바는 입력칸
-            // 상단에 고정(2026-08-25 — 키보드 위 KeyboardStickyView 방식은 폐기).
-            <View
-              style={styles.richBox}
-              onTouchStart={() => setRichBoxTouching(true)}
-              onTouchEnd={() => setRichBoxTouching(false)}
-              onTouchCancel={() => setRichBoxTouching(false)}
-            >
-              {/* tentap 기본 테마의 toolbarBody 가 flex:1 이라 theme 오버라이드(flex:0)만으로는
-                  이 컬럼 안에서 다른 flex:1 형제(에디터 본문)와 남는 높이를 나눠 가져가버렸다
-                  (오너 지적: "3줄이 입력박스 전체에 걸쳐서 밑으로 내려온다"). 줄마다 높이를
-                  44 로 못박은 바깥 View 로 한 번 더 감싸서 안쪽 FlatList 가 얼마나 늘어나려
-                  하든 딱 44 안에서만 채워지게 강제로 가둔다. */}
-              {!!richEditor && (
-                colorPicker ? (
-                  <View style={[styles.richToolbarRow, styles.richSwatchRow]}>
-                    <TouchableOpacity style={styles.richSwatchBackBtn} onPress={() => setColorPicker(null)} hitSlop={6}>
-                      <Image source={require('@/assets/rich-toolbar/picker_back.png')} style={[styles.richSwatchBackIcon, { tintColor: colors.textSecondary }]} />
-                    </TouchableOpacity>
-                    {(colorPicker === 'text' ? TEXT_COLORS : HIGHLIGHT_COLORS).map((hex) => (
-                      <TouchableOpacity
-                        key={hex}
-                        style={styles.richSwatchBtn}
-                        hitSlop={4}
-                        onPress={() => {
-                          // ⚠️(2026-08-25) HighlightBridge.setHighlight 는 문자열(color: string)을
-                          // 받는데, 내부에서 이미 { color } 로 감싸서 보낸다(highlight.ts 참고) —
-                          // 여기서 또 { color: hex } 로 한 번 더 감싸서 넘겼더니 Tiptap 쪽에
-                          // 색상 값이 깨져서 항상 기본값(노란색)만 적용됐다(오너 지적: "글자
-                          // 배경색은 뭘 골라도 노란색만 적용되고"). 그냥 문자열로 넘겨야 한다.
-                          const e = richEditor as { setColor?: (c: string) => void; setHighlight?: (c: string) => void }
-                          if (colorPicker === 'text') e.setColor?.(hex)
-                          else e.setHighlight?.(hex)
-                          setColorPicker(null)
-                        }}
-                      >
-                        <View style={[styles.richSwatchDot, { backgroundColor: hex }]} />
-                      </TouchableOpacity>
-                    ))}
-                    <TouchableOpacity
-                      style={styles.richSwatchBtn}
-                      hitSlop={4}
-                      onPress={() => {
-                        const e = richEditor as { unsetColor?: () => void; unsetHighlight?: () => void }
-                        if (colorPicker === 'text') e.unsetColor?.()
-                        else e.unsetHighlight?.()
-                        setColorPicker(null)
-                      }}
-                    >
-                      <View style={styles.richSwatchNone}>
-                        <Ionicons name="close" size={14} color={colors.textSecondary} />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.richToolbarRow}>
-                    <BoardRichToolbar editor={richEditor} items={richToolbarItems} />
-                  </View>
-                )
-              )}
+            // react-native-enriched-html(완전 네이티브 — 웹뷰 없음). 툴바는 키보드
+            // 바로 위에 따로 고정한다(아래 KeyboardStickyView 참고, 오너 지시
+            // 2026-08-25: "키보드 위 방식으로 하자").
+            <View style={styles.richBox}>
               <BoardRichEditor
                 ref={richRef}
                 colors={colors}
                 initialHTML={content}
                 placeholder="내용을 입력하세요"
                 onChangeText={setRichText}
-                onEditorReady={setRichEditor}
+                onReady={() => setRichReady(true)}
+                onStateChange={setRichState}
                 onUnavailable={fallbackToLegacy}
               />
             </View>
@@ -588,6 +506,17 @@ export default function BoardWriteScreen() {
       </KeyboardStickyView>
       )}
 
+      {/* 리치모드 툴바 — 키보드 바로 위(오너 지시 2026-08-25: "키보드 위 방식으로
+          하자"). react-native-enriched-html 은 완전 네이티브라 예전 tentap 웹뷰 때
+          이 위치를 포기했던 이유(웹뷰 스크롤/포커스 충돌)가 없다. */}
+      {richMode && richReady && (
+        <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
+          <View onLayout={(e) => setToolbarH(e.nativeEvent.layout.height)}>
+            <BoardRichToolbar buttons={toolbarButtons} colors={colors} />
+          </View>
+        </KeyboardStickyView>
+      )}
+
       <LinkInputModal api={linksApi} />
 
       {/* 사진·GIF 업로드 중 스피너 — 예전엔 툴바 아이콘만 흐리게 죽어서(비활성 표시)
@@ -701,30 +630,13 @@ function makeStyles(colors: AppColors) {
     nickReadonly: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: colors.border },
     nickReadonlyText: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
     hint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 5 },
-    // 리치에디터 박스 — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
-    // ⚠️(2026-08-25) dynamicHeight(웹뷰가 실제 문서 높이를 보고해서 박스가 그만큼만
-    // 커지는 tentap 공식 기능)를 세 번째로 시도했다가 이번엔 진입하자마자 박스가
-    // 통제 불능으로 계속 늘어나는 사고가 났다(오너 지적: "입력박스가 그냥 진입하자
-    // 마자 미친듯이 늘어나잖아!"). 세 번 모두 다른 증상(먹통 화면 / 이미지 삽입
-    // 무한로딩 / 진입 즉시 폭주)으로 실패해서, 이 프로젝트·이 tentap 버전 조합에서는
-    // dynamicHeight 자체를 포기한다 — 대신 오너가 전에 실기기로 직접 확인해서 됐던
-    // (아이폰·안드 둘 다 "된다" 확인받음) maxHeight+내부 스크롤 방식으로 되돌린다.
-    // ⚠️(2026-08-25 재조정) 처음엔 160~280 으로 줄였는데 너무 낮았다(오너 지적: "사진
-    // 썸네일이 보일정도가 아니라 한참 위에까지 나오게 줄였잖아!") — 게시물 이용약관
-    // 동의 칸은 1회성(첫 글쓰기에만 보임)이라 그걸 뺀 "재방문" 상태 기준으로도 다시
-    // 재보고, 안드 3버튼 네비게이션(화면을 더 먹는 기기)까지 감안한 가장 좁은 경우
-    // 기준으로 300~460 으로 다시 잡았다 — 본문 타이핑 공간도 확보하면서 사진 갤러리도
-    // 스크롤 없이 같은 화면에 보인다.
-    richBox: { minHeight: 300, maxHeight: 460, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
-    // 줄마다 44 로 고정 — tentap FlatList 자체 flex 를 못 믿으니 바깥에서 한 번 더 가둔다.
-    richToolbarRow: { height: 44, overflow: 'hidden' },
-    // 글자색·배경색 프리셋 스와치 줄 — 2번째 줄이 탭하면 이 모습으로 바뀐다.
-    richSwatchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, gap: 10, backgroundColor: colors.surfaceHigh, borderTopWidth: 0.5, borderBottomWidth: 0.5, borderTopColor: colors.divider, borderBottomColor: colors.divider },
-    richSwatchBackBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-    richSwatchBackIcon: { width: 18, height: 18 },
-    richSwatchBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-    richSwatchDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: colors.divider },
-    richSwatchNone: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: colors.divider, alignItems: 'center', justifyContent: 'center' },
+    // 리치에디터 박스 — 본문 입력칸과 같은 테두리. 툴바가 이제 박스 밖(키보드 위)에
+    // 있어서 박스 안엔 순수 텍스트 입력만 있다 — 예전 300 은 안에 툴바(44)까지 넣고
+    // 잡은 값이라 지금은 과하다. react-native-enriched-html 의 scrollEnabled=false
+    // 는 tentap dynamicHeight(웹뷰 높이 자기보고, 세 번 다르게 실패)와 달리 진짜
+    // 네이티브 텍스트 레이아웃이라 최대높이 없이 내용만큼 그대로 늘어나게 둔다 —
+    // 실기기로 직접 늘어나는지 확인 후 문제 있으면 다시 잡는다.
+    richBox: { minHeight: 160, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {

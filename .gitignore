@@ -36,3 +36,6 @@ supabase/.temp/
 
 # 크롤러 로컬 검증용 가상환경(스크래퍼를 DB 없이 돌려보는 용도)
 crawler/.venv/
+
+# Claude Code 개인 설정(허락 없이는 작업 시작 못하게 하는 권한 게이트 등) — 개인용, 커밋 안 함
+.claude/settings.local.json
