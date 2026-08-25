@@ -363,10 +363,13 @@ export default function HonsulScreen() {
                     zoom={center.zoom}
                     showLocationButton
                     cluster
+                    // 마커 탭하면 카메라도 같이 줌인 이동시켰는데, 그 애니메이션이 눈에
+                    // 더 띄어서 업체박스가 "반박자 늦게 뜨는 것처럼" 느껴졌다(2026-08-25
+                    // 오너 지적). 카메라는 그대로 두고 박스만 그 자리에서 즉시 뜨게 한다 —
+                    // 경쟁하는 움직임이 없어지면 체감 지연이 줄어든다(오너 승인, 시도).
                     onTapPin={(id) => {
                       const p = pinned.find((p) => p.id === id) ?? null
                       setFocused(p)
-                      if (p?.lat != null && p?.lng != null) setCameraTarget({ lat: p.lat, lng: p.lng, zoom: 16 })
                     }}
                     onTapBackground={() => setFocused(null)}
                     // 마커를 안 눌러도 자유롭게 팬/줌한 위치까지 "기억만"(mapView, 다음에 다시
