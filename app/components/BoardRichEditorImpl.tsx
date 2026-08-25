@@ -77,15 +77,14 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
 
   const editor = useEditorBridge({
     autofocus: false,
-    // ⚠️(2026-08-25) 이걸 꺼놨던 게(예전엔 "부모 KeyboardAwareScrollView 가 담당하니 이중
-    // 회피 방지"라는 이유였음) 실제로는 문제였다 — 오너 지적: "키보드 올라오면서 입력박스가
-    // 가려지는 문제". 부모 스크롤뷰는 RN 네이티브 TextInput 포커스만 감지해서 웹뷰 전체를
-    // 스크롤시켜줄 뿐, 웹뷰 "내부"(ProseMirror 문서, 커서 위치)는 전혀 모른다 — 그래서 박스가
-    // 화면에 다 들어와도 정작 커서가 있는 줄은 키보드에 가려질 수 있었다. avoidIosKeyboard
-    // 를 켜면 tentap 이 웹뷰 내부 스크롤에 키보드 높이만큼 여백을 주고 커서로 자동 스크롤
-    // 해준다(RichText.tsx 의 setDocBottomPadding 참고) — 부모 스크롤과 역할이 겹치지 않고
-    // 보완 관계라 "이중 회피"가 아니다.
-    avoidIosKeyboard: true,
+    // ⚠️(2026-08-25) avoidIosKeyboard:true 로 한 번 켜봤는데(키보드가 입력칸을 가리는 문제
+    // 고치려고) tentap 이 내부적으로 editor.updateScrollThresholdAndMargin() 을 호출해서
+    // 웹뷰 "내부" 스크롤 동작 자체를 자기 것으로 바꿔버리는데, 그게 이미지 삽입 후 스크롤이
+    // 막혀서 이미지 아래 내용에 손을 못 대는 새 사고를 냈다(오너 지적: "이미지를 첨부하면
+    // 이미지 하단이 입력박스 내부에서 스크롤이 안늘어나서 이미지 밑에는 가지도 못하고").
+    // 원인 파악 전까지 원복 — 키보드 가림 문제는 미해결 상태로 남지만, 스크롤이 아예 막히는
+    // 것보다는 낫다.
+    avoidIosKeyboard: false,
     initialContent: initialHTML || '',
     bridgeExtensions,
     theme: editorTheme,

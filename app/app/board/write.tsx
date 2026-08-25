@@ -372,9 +372,14 @@ export default function BoardWriteScreen() {
                         style={styles.richSwatchBtn}
                         hitSlop={4}
                         onPress={() => {
-                          const e = richEditor as { setColor?: (c: string) => void; setHighlight?: (a: { color: string }) => void }
+                          // ⚠️(2026-08-25) HighlightBridge.setHighlight 는 문자열(color: string)을
+                          // 받는데, 내부에서 이미 { color } 로 감싸서 보낸다(highlight.ts 참고) —
+                          // 여기서 또 { color: hex } 로 한 번 더 감싸서 넘겼더니 Tiptap 쪽에
+                          // 색상 값이 깨져서 항상 기본값(노란색)만 적용됐다(오너 지적: "글자
+                          // 배경색은 뭘 골라도 노란색만 적용되고"). 그냥 문자열로 넘겨야 한다.
+                          const e = richEditor as { setColor?: (c: string) => void; setHighlight?: (c: string) => void }
                           if (colorPicker === 'text') e.setColor?.(hex)
-                          else e.setHighlight?.({ color: hex })
+                          else e.setHighlight?.(hex)
                           setColorPicker(null)
                         }}
                       >
