@@ -79,6 +79,13 @@ export default function BoardWriteScreen() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [toolbarH, setToolbarH] = useState(0)
+  // ⚠️(2026-08-25) 입력박스(richBox) 안에 웹뷰 자체 스크롤(scrollEnabled)을 켰더니,
+  // 바깥 페이지 스크롤(KeyboardAwareScrollView)이랑 동시에 터치를 붙잡으려고 해서
+  // 서로 충돌났다(오너 지적: "입력박스 안쪽이랑 바깥쪽 전체 스크롤바가 서로 충돌
+  // 나서 이거 해결 안 된다니까?"). 손가락이 박스 안에 닿아있는 동안만 바깥 스크롤을
+  // 잠가서(터치 시작~끝) 그 순간엔 안쪽 스크롤만 반응하게 하고, 손을 떼면 다시
+  // 바깥 스크롤이 정상 동작하게 한다 — 중첩 스크롤 충돌의 표준 해결 방식.
+  const [richBoxTouching, setRichBoxTouching] = useState(false)
   const [agreed, setAgreed] = useState(false)
   // 화면 진입 시점에 이미 동의돼 있었는지 — 체크박스 자체를 보여줄지 말지는 이 값으로만
   // 정한다. `agreed`로 정하면 지금 막 체크하는 순간 조건이 바뀌어 체크박스 줄 전체가
@@ -306,6 +313,9 @@ export default function BoardWriteScreen() {
         contentContainerStyle={[wideContent, { padding: 16, paddingBottom: 24 + insets.bottom, gap: 14 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        // richBoxTouching 설명은 위 state 선언부 참고 — 손가락이 리치 박스 안에 있는
+        // 동안만 바깥 스크롤을 잠가서 안쪽 웹뷰 스크롤과 충돌하지 않게 한다.
+        scrollEnabled={!richBoxTouching}
         // 커서와 키보드 사이에 둘 거리. 키보드 위에 도구줄이 얹혀 있으니 그 높이까지만
         // 비켜준다. 이보다 크게 잡으면 필요 없이 화면이 밀려 올라간다.
         bottomOffset={toolbarH + CARET_GAP}
@@ -361,11 +371,14 @@ export default function BoardWriteScreen() {
         <View>
           <Text style={styles.label}>내용</Text>
           {richMode ? (
-            // 재빌드 후: 리치에디터(tentap). 서식 전용(사진·유튜브는 본문 밖 갤러리).
-            // 툴바는 입력칸 상단 고정. 박스는 내부 스크롤 없이 dynamicHeight 로 타이핑한
-            // 만큼 늘어나고, 페이지 전체 스크롤(KeyboardAwareScrollView) 하나로 처리한다
-            // (오너 지시 2026-08-25: "입력박스는 무조건 높이 늘어나는 방식으로").
-            <View style={styles.richBox}>
+            // 재빌드 후: 리치에디터(tentap). 본문 안에 서식·이미지 인라인. 툴바는 입력칸
+            // 상단에 고정(2026-08-25 — 키보드 위 KeyboardStickyView 방식은 폐기).
+            <View
+              style={styles.richBox}
+              onTouchStart={() => setRichBoxTouching(true)}
+              onTouchEnd={() => setRichBoxTouching(false)}
+              onTouchCancel={() => setRichBoxTouching(false)}
+            >
               {/* tentap 기본 테마의 toolbarBody 가 flex:1 이라 theme 오버라이드(flex:0)만으로는
                   이 컬럼 안에서 다른 flex:1 형제(에디터 본문)와 남는 높이를 나눠 가져가버렸다
                   (오너 지적: "3줄이 입력박스 전체에 걸쳐서 밑으로 내려온다"). 줄마다 높이를
@@ -680,13 +693,25 @@ function makeStyles(colors: AppColors) {
     nickReadonly: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: colors.border },
     nickReadonlyText: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
     hint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 5 },
-    // 리치에디터 박스 — 본문 입력칸과 같은 테두리, 에디터+툴바 담김. dynamicHeight
-    // (BoardRichEditorImpl.tsx) 로 타이핑한 만큼 늘어나므로 maxHeight 는 두지 않는다.
-    // minHeight 는 툴바(44) + 사진 첨부해도 그 밑 썸네일 갤러리가 스크롤 없이 한 화면에
-    // 같이 보일 만큼만(오너 지시 2026-08-25: "이미지 썸네일이 한 화면에 보이는 높이로
-    // 줄여봐라") — 예전 480~600 은 리치모드 안에 사진까지 인라인으로 넣던 시절 기준이라
-    // 지금은 과하게 크다.
-    richBox: { minHeight: 160, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // 리치에디터 박스(재빌드 후) — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
+    // 툴바가 입력칸 상단에 고정으로 들어가며(최대 3줄 × 44pt ≈ 132pt) 그만큼 타이핑
+    // 공간이 줄어드니, 박스 자체를 예전보다 키워서 하단에 빈 공간 없이 꽉 차게 한다
+    // (오너 지시 2026-08-25).
+    // 2줄(오너 지시 2026-08-25: "2줄로 만들어!")로 줄어서 툴바가 88 만 차지 — 그만큼
+    // 박스는 줄여도 타이핑 공간은 3줄 때(520)와 비슷하게 유지된다.
+    // ⚠️(2026-08-25) 근본 원인 확정 — 웹뷰(에디터 본문)는 RN 쪽에 자기 실제 문서 높이를
+    // 보고하지 않는 한 부모가 flex 로 나눠준 높이에서 안 늘어난다. 그 실제 높이를 RN 에
+    // 보고하게 하는 tentap 공식 기능(dynamicHeight)을 두 번 시도했는데 한 번은 에디터가
+    // 안 보이는 사고, 한 번은 이미지 삽입 자체가 무한 로딩에 빠지는 사고가 나서 둘 다
+    // 원복했다(오너: "스크롤바 얘기했다고 디자인 다 깨뜨리면 집어치워라" — 검증 안 된
+    // 걸 억지로 밀어넣지 않는다). overflow 를 열어보는 것도 시도했지만 효과 없음을
+    // 직접 재현해서 확인(스크롤이 특정 지점에서 그대로 멈춤). 페이지 전체 스크롤 하나로
+    // 처리하는 방식은 이 프로젝트 환경에서 안전하게 구현할 방법을 아직 못 찾았다 —
+    // 그래서 최대 높이를 정하고 그 안에서는 박스 자체가 확실하게 동작하는 내부 스크롤을
+    // 쓰기로 한다(페이지 전체 스크롤 방식이 두 번 다 실패했으니, 최소한 확실히 되는
+    // 쪽을 우선한다). maxHeight 600 — 화면 대부분을 채우면서도 등록 버튼 등 다른
+    // 요소가 완전히 밀려나지 않을 정도.
+    richBox: { minHeight: 480, maxHeight: 600, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     // 줄마다 44 로 고정 — tentap FlatList 자체 flex 를 못 믿으니 바깥에서 한 번 더 가둔다.
     richToolbarRow: { height: 44, overflow: 'hidden' },
     // 글자색·배경색 프리셋 스와치 줄 — 2번째 줄이 탭하면 이 모습으로 바뀐다.
