@@ -69,6 +69,16 @@ export default function HonsulScreen() {
     cameraInitedRef.current = true
     if (mapView) setCameraTarget(mapView)
   }, [hydrated, mapView])
+  // 위치를 새로 구하면 좌표 상태만이 아니라 지도 카메라도 같이 옮긴다(2026-08-25 오너
+  // 지시: "현재위치 누를때 지도에도 그게 자동 적용되게 해서 지도로 진입하면 자동으로
+  // 현재위치에 지도가 나오게"). 위치를 구하는 것 자체가 명시적 이동 의도라 cameraTarget
+  // (카메라 진동 버그 방지를 위해 명시적 의도로만 바뀌는 값)을 건드려도 안전하다.
+  const applyLocation = useCallback((loc: { lat: number; lng: number }) => {
+    setMyLoc(loc)
+    setCachedLocation(loc)
+    setCameraTarget({ lat: loc.lat, lng: loc.lng, zoom: 15 })
+    setMapView({ lat: loc.lat, lng: loc.lng, zoom: 15 })
+  }, [setMapView])
   const { favoriteIds, toggle: toggleFav } = usePlaceFavorites()
   const router = useRouter()
 
@@ -88,10 +98,10 @@ export default function HonsulScreen() {
       setLocBusy(true)
       const loc = await getMyLocation()
       setLocBusy(false)
-      if (loc) { setMyLoc(loc); setCachedLocation(loc); setSortMode('distance') }
+      if (loc) { applyLocation(loc); setSortMode('distance') }
       else setSortMode('reviewCount')
     })()
-  }, [hydrated, hasAutoInit, setHasAutoInit, setSortMode])
+  }, [hydrated, hasAutoInit, setHasAutoInit, setSortMode, applyLocation])
 
   // 매장별 상권·지역군 1회 계산. 지역군은 주소(도로명) 기준 — region(동)은 분류가 안 된다.
   const sangOf = useMemo(() => {
@@ -201,8 +211,8 @@ export default function HonsulScreen() {
     setLocBusy(true)
     const loc = await getMyLocation()
     setLocBusy(false)
-    if (loc) { setMyLoc(loc); setCachedLocation(loc); setSortMode('distance') }
-  }, [myLoc, sortMode, setSortMode])
+    if (loc) { applyLocation(loc); setSortMode('distance') }
+  }, [myLoc, sortMode, setSortMode, applyLocation])
 
   // 거리순 — 위치 없으면 먼저 요청하고 나서 적용.
   const selectDistanceSort = useCallback(async () => {
@@ -211,8 +221,8 @@ export default function HonsulScreen() {
     setLocBusy(true)
     const loc = await getMyLocation()
     setLocBusy(false)
-    if (loc) { setMyLoc(loc); setCachedLocation(loc); setSortMode('distance') }
-  }, [sortMode, myLoc, setSortMode])
+    if (loc) { applyLocation(loc); setSortMode('distance') }
+  }, [sortMode, myLoc, setSortMode, applyLocation])
 
   const selectRatingSort = () => setSortMode(sortMode === 'rating' ? 'default' : 'rating')
   // 리뷰많은순 — 위치 필요 없음, naver_review_count 기준(2026-08-24 오너 지시).
