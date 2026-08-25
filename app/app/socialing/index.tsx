@@ -19,7 +19,8 @@ import { SOCIALING_GROUPS } from '@/constants/socialingCategories'
 import { DAY_OPTIONS } from '@/constants/filters'
 import { useSocialingFilterStore, useSocialingFilterHydrated, socialingActiveFilterCount, type SocialingFilterState } from '@/stores/socialingFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
-import { saveScrollOffset, getScrollOffset } from '@/lib/scrollMemory'
+import { saveScrollOffset } from '@/lib/scrollMemory'
+import { useScrollRestore } from '@/hooks/useScrollRestore'
 import { confirmFavorite } from '@/lib/confirmToggle'
 
 /**
@@ -65,16 +66,11 @@ export default function SocialingScreen() {
   const chipsAnim = useRef(new Animated.Value(1)).current
   const chipsExpandedRef = useRef(true)
   // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
+  // 복원 로직은 hooks/useScrollRestore.ts 참고(세 번째 재설계 — 한 번만 판정하지 않고
+  // 콘텐츠가 자랄 때마다 계속 다시 맞춘다). 페이지네이션 목록이라 loadMore 를 넘긴다.
   const feedListRef = useRef<FlatList>(null)
-  const restoredScrollRef = useRef(false)
-  // 복원 전 잠깐 맨 위가 보였다가 튀는 게 안 보이게(2026-08-25 오너 지적). 소개팅과 동일 패턴.
-  const [listVisible, setListVisible] = useState(() => getScrollOffset('socialing-feed') <= 0)
-  useEffect(() => {
-    // 페이지네이션 목록이라 깊은 위치를 복원하려면 추가 로딩(loadMore)이 여러 번 오가야
-    // 할 수 있어 소개팅/혼술바보다 여유를 더 준다(2026-08-25).
-    const t = setTimeout(() => setListVisible(true), 2500)
-    return () => clearTimeout(t)
-  }, [])
+  const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
+    useScrollRestore('socialing-feed', feedListRef, { hasMore, loadMore, revealTimeoutMs: 2500 })
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -83,10 +79,8 @@ export default function SocialingScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
-    // 복원(onContentSizeChange)이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이
-    // 자체적으로 흘리는 y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로
-    // 덮어써버려서 복원이 조용히 실패한다(2026-08-25 오너 지적: "다른화면 돌아갔다오면
-    // 위치가 안맞다" — 데이터가 늦게 오는 화면일수록 잘 걸린다).
+    // 복원이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이 자체적으로 흘리는
+    // y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로 덮어써버린다.
     if (restoredScrollRef.current) saveScrollOffset('socialing-feed', y)
   }, [chipsAnim])
 
@@ -232,26 +226,10 @@ export default function SocialingScreen() {
             )
           )}
           onScroll={onFeedScroll}
-          onScrollBeginDrag={() => { restoredScrollRef.current = true; setListVisible(true) }}
+          onScrollBeginDrag={onScrollBeginDrag}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
-          onContentSizeChange={(_w, h) => {
-            if (restoredScrollRef.current) return
-            const y = getScrollOffset('socialing-feed')
-            if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
-            if (h < y + 300) {
-              // 페이지네이션 목록이라 화면에 스크롤이 안 닿으면 onEndReached 가 저절로 안
-              // 불려서, 가만히 기다리기만 하면 깊은 스크롤 위치는 영영 복원이 안 된다
-              // (2026-08-25 오너 지적: "위치를 이동후에 다른페이지 갔다오면 처음 정한
-              // 위치만 나온다"). 목표 높이에 닿을 때까지 직접 다음 페이지를 불러온다.
-              // 더 불러올 게 없으면(hasMore=false, 그 사이 글이 지워졌을 수도) 포기하고
-              // 지금 있는 만큼만으로 복원한다.
-              if (hasMore) { loadMore(); return }
-            }
-            feedListRef.current?.scrollToOffset({ offset: y, animated: false })
-            restoredScrollRef.current = true
-            requestAnimationFrame(() => setListVisible(true))
-          }}
+          onContentSizeChange={restoreOnContentSizeChange}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}

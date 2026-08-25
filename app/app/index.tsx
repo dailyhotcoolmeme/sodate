@@ -46,7 +46,8 @@ import { track } from '@/lib/analytics'
 import { warmNativeAdPool, getFeedNativeAdUnitId } from '@/lib/ads'
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/eventSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
-import { saveScrollOffset, getScrollOffset } from '@/lib/scrollMemory'
+import { saveScrollOffset } from '@/lib/scrollMemory'
+import { useScrollRestore } from '@/hooks/useScrollRestore'
 import { confirmFavorite } from '@/lib/confirmToggle'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
@@ -555,6 +556,11 @@ export default function HomeScreen() {
   // 안 바뀌게 한다(펼치려면 8px 아래로, 접으려면 60px 넘게 — 확실히 한쪽으로 넘어가야 함).
   const EXPAND_AT = 8
   const COLLAPSE_AT = 60
+  // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
+  // 복원 로직은 hooks/useScrollRestore.ts 참고(세 번째 재설계 — 한 번만 판정하지 않고
+  // 콘텐츠가 자랄 때마다 계속 다시 맞춘다). 페이지네이션 목록이라 loadMore 를 넘긴다.
+  const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
+    useScrollRestore('dating-feed', flatListRef, { hasMore, loadMore, revealTimeoutMs: 2500 })
   const onScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     setShowFab(y > 300)
@@ -565,27 +571,10 @@ export default function HomeScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
-    // 복원(onContentSizeChange)이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이
-    // 자체적으로 흘리는 y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로
-    // 덮어써버려서 복원이 조용히 실패한다(2026-08-25 오너 지적: 소셜링·혼술바에서
-    // "다른화면 돌아갔다오면 위치가 안맞다" — 데이터가 늦게 오는 화면일수록 잘 걸린다).
+    // 복원이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이 자체적으로 흘리는
+    // y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로 덮어써버린다.
     if (restoredScrollRef.current) saveScrollOffset('dating-feed', y)
   }, [chipsAnim])
-  // 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시) — 목록이 준비되면 딱 한 번 복원.
-  // 콘텐츠가 목표 위치+여유만큼 쌓이기 전엔 시도하지 않는다(안 그러면 아직 다 안 그려진
-  // 상태에서 스크롤해서 목표보다 한참 위에서 멈춘다, 오너 지적).
-  const restoredScrollRef = useRef(false)
-  // 복원 전 목록이 맨 위에서 잠깐 보였다가 목표 위치로 튀는 게 보이면 안 된다(2026-08-25
-  // 오너 지적: "그냥 바로 딱 나오면 안되냐?"). 복원할 게 없으면(저장된 위치가 0) 바로
-  // 보여주고, 있으면 실제로 그 위치로 옮긴 뒤에야 보여준다. 혹시라도 복원이 영영 안 끝나는
-  // 경우(콘텐츠가 목표 높이까지 못 자라는 등)를 대비해 안전장치로 늦어도 곧 보여준다.
-  const [listVisible, setListVisible] = useState(() => getScrollOffset('dating-feed') <= 0)
-  useEffect(() => {
-    // 페이지네이션 목록이라 깊은 위치를 복원하려면 추가 로딩(loadMore)이 여러 번 오가야
-    // 할 수 있어 여유를 더 준다(2026-08-25).
-    const t = setTimeout(() => setListVisible(true), 2500)
-    return () => clearTimeout(t)
-  }, [])
 
   const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
     confirmFavorite(isCurrent, () => {
@@ -859,22 +848,10 @@ export default function HomeScreen() {
         <FlatList
           ref={flatListRef}
           onScroll={onScroll}
-          onScrollBeginDrag={() => { restoredScrollRef.current = true; setListVisible(true) }}
-          onContentSizeChange={(_w, h) => {
+          onScrollBeginDrag={onScrollBeginDrag}
+          onContentSizeChange={(w, h) => {
             if (Platform.OS === 'android') setAndroidContentHeight(h)
-            if (restoredScrollRef.current) return
-            const y = getScrollOffset('dating-feed')
-            if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
-            if (h < y + 300) {
-              // 페이지네이션 목록이라 화면에 스크롤이 안 닿으면 onEndReached 가 저절로
-              // 안 불려서, 가만히 기다리기만 하면 깊은 스크롤 위치는 영영 복원이 안 된다
-              // (2026-08-25 오너 지적, 소셜링에서 먼저 확인됨). 목표 높이에 닿을 때까지
-              // 직접 다음 페이지를 불러온다. 더 불러올 게 없으면 지금 있는 만큼만 복원.
-              if (hasMore) { loadMore(); return }
-            }
-            flatListRef.current?.scrollToOffset({ offset: y, animated: false })
-            restoredScrollRef.current = true
-            requestAnimationFrame(() => setListVisible(true))
+            restoreOnContentSizeChange(w, h)
           }}
           onLayout={(e) => { if (Platform.OS === 'android') setAndroidListHeight(e.nativeEvent.layout.height) }}
           scrollEventThrottle={100}

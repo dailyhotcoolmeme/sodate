@@ -54,6 +54,18 @@ export async function addRecentView(item: Omit<RecentView, 'at'>): Promise<void>
   }
 }
 
+/** 한 줄만 삭제 — 리스트에서 골라 지운다(2026-08-25 오너 지시: "전체 삭제만 되는데
+ *  선택삭제 기능도 필요하다"). */
+export async function removeRecentView(kind: RecentKind, id: string): Promise<void> {
+  try {
+    const list = await getRecentViews()
+    const filtered = list.filter((v) => !(v.kind === kind && v.id === id))
+    await AsyncStorage.setItem(KEY, JSON.stringify(filtered))
+  } catch {
+    // ignore
+  }
+}
+
 export async function clearRecentViews(): Promise<void> {
   try {
     await AsyncStorage.removeItem(KEY)

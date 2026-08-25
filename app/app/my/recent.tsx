@@ -7,7 +7,7 @@ import TopBar from '@/components/TopBar'
 import BottomNav from '@/components/BottomNav'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { getRecentViews, clearRecentViews, type RecentView, type RecentKind } from '@/lib/recentViews'
+import { getRecentViews, clearRecentViews, removeRecentView, type RecentView, type RecentKind } from '@/lib/recentViews'
 import { wideContent } from '@/constants/layout'
 
 type Tab = 'all' | 'dating' | 'socialing' | 'place'
@@ -63,6 +63,21 @@ export default function RecentScreen() {
     ])
   }
 
+  // 전체 비우기만 있고 한 줄만 골라 지우는 기능이 없었다(2026-08-25 오너 지시: "선택삭제
+  // 기능도 필요하다"). 스크랩한 글(my/scraps.tsx)과 같은 방식 — 줄마다 삭제 버튼.
+  const handleRemoveOne = (v: RecentView) => {
+    Alert.alert('기록 삭제', `'${v.title}' 기록을 지울까요?`, [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제', style: 'destructive',
+        onPress: async () => {
+          setItems((prev) => prev.filter((p) => !(p.kind === v.kind && p.id === v.id)))
+          await removeRecentView(v.kind, v.id)
+        },
+      },
+    ])
+  }
+
   const isEmpty = filtered.length === 0
 
   return (
@@ -106,6 +121,14 @@ export default function RecentScreen() {
                 <Text style={styles.title} numberOfLines={1}>{v.title}</Text>
                 {v.sub && <Text style={styles.sub} numberOfLines={1}>{v.sub}</Text>}
               </View>
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={(e) => { e.stopPropagation?.(); handleRemoveOne(v) }}
+                activeOpacity={0.7}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
               <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
             </TouchableOpacity>
           ))}
@@ -143,6 +166,7 @@ function makeStyles(colors: AppColors) {
       borderBottomWidth: 1, borderBottomColor: colors.divider,
     },
     rowIcon: { width: 22 },
+    removeBtn: { padding: 2 },
     title: { fontSize: 14.5, color: colors.textPrimary },
     sub: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
   })

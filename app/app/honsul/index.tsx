@@ -16,7 +16,8 @@ import { getMyLocation, distanceKm } from '@/lib/nearby'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { useHonsulFilterStore, useHonsulFilterHydrated } from '@/stores/honsulFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
-import { saveScrollOffset, getScrollOffset } from '@/lib/scrollMemory'
+import { saveScrollOffset } from '@/lib/scrollMemory'
+import { useScrollRestore } from '@/hooks/useScrollRestore'
 import { confirmFavorite } from '@/lib/confirmToggle'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
 import PlaceMapCard from '@/components/PlaceMapCard'
@@ -141,20 +142,11 @@ export default function HonsulScreen() {
   const chipsAnim = useRef(new Animated.Value(1)).current
   const chipsExpandedRef = useRef(true)
   // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
-  // ⚠️ 처음엔 onContentSizeChange 첫 호출에서 바로 복원했는데, 그 시점엔 리스트가 아직
-  // 다 안 그려져서(이미지·광고 로딩 전) 실제 목표 위치보다 훨씬 못 미친 높이라 스크롤이
-  // "한참 위쪽"에서 멈췄다(오너 지적). 목표 위치+여유를 채울 만큼 콘텐츠가 실제로 쌓일
-  // 때까지 여러 번의 onContentSizeChange 호출에 걸쳐 기다렸다가 복원한다. 또 복원 전에
-  // 사용자가 직접 스크롤을 시작하면(우리가 만든 프로그램적 스크롤이 아니면) 그걸로 끝 —
-  // 나중에 콘텐츠가 더 쌓여도 되돌리지 않는다.
+  // 복원 로직은 hooks/useScrollRestore.ts 참고(세 번째 재설계 — 한 번만 판정하지 않고
+  // 콘텐츠가 자랄 때마다 계속 다시 맞춘다).
   const feedListRef = useRef<FlatList<PlaceRow>>(null)
-  const restoredScrollRef = useRef(false)
-  // 복원 전 잠깐 맨 위가 보였다가 튀는 게 안 보이게(2026-08-25 오너 지적). 소개팅과 동일 패턴.
-  const [listVisible, setListVisible] = useState(() => getScrollOffset('honsul-feed') <= 0)
-  useEffect(() => {
-    const t = setTimeout(() => setListVisible(true), 600)
-    return () => clearTimeout(t)
-  }, [])
+  const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
+    useScrollRestore('honsul-feed', feedListRef)
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -163,10 +155,8 @@ export default function HonsulScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
-    // 복원(onContentSizeChange)이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이
-    // 자체적으로 흘리는 y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로
-    // 덮어써버려서 복원이 조용히 실패한다(2026-08-25 오너 지적: "다른화면 돌아갔다오면
-    // 위치가 안맞다" — 데이터가 늦게 오는 화면일수록 잘 걸린다).
+    // 복원이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이 자체적으로 흘리는
+    // y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로 덮어써버린다.
     if (restoredScrollRef.current) saveScrollOffset('honsul-feed', y)
   }, [chipsAnim])
 
@@ -305,25 +295,12 @@ export default function HonsulScreen() {
                   isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.id), () => toggleFav(item.id))} />
               )}
               onScroll={onFeedScroll}
-              onScrollBeginDrag={() => { restoredScrollRef.current = true; setListVisible(true) }}
+              onScrollBeginDrag={onScrollBeginDrag}
               scrollEventThrottle={16}
               contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 96 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
               showsVerticalScrollIndicator={false}
-              // 목록이 준비되면 저장해둔 위치로 딱 한 번 복원(2026-08-25) — 다른 탭 갔다가
-              // 돌아왔을 때 맨 위로 안 돌아가고 보던 자리 그대로.
-              onContentSizeChange={(_w, h) => {
-                if (restoredScrollRef.current) return
-                const y = getScrollOffset('honsul-feed')
-                if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
-                // 목표 위치보다 콘텐츠가 충분히(여유 300px) 쌓이기 전엔 시도하지 않는다 —
-                // 안 그러면 아직 다 안 그려진 상태에서 스크롤해서 목표보다 한참 위에서
-                // 멈춘다(오너 지적: "원래 있어야할 위치보다 한참 위쪽에 위치한다").
-                if (h < y + 300) return
-                feedListRef.current?.scrollToOffset({ offset: y, animated: false })
-                restoredScrollRef.current = true
-                requestAnimationFrame(() => setListVisible(true))
-              }}
+              onContentSizeChange={restoreOnContentSizeChange}
             />
           )}
 
