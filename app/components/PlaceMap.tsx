@@ -193,13 +193,15 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
         const size2 = compactPins ? (p.active ? 24 : p.selected ? 20 : 12) : p.active ? 62 : 44
         // ⚠️(2026-08-24) 기본 'pink'/'blue' 심벌은 둘 다 물방울(세로로 긴) 모양이라 정사각형
         // 크기로 찍으면 눌려서 "짜부된" 모양이 된다(오너 지적 — 처음엔 선택 마커만 고쳤다가
-        // "주변 점은 짜부가 안되겠냐"고 또 지적받음). compactPins 에선 선택·주변 둘 다 원형 점
-        // (정원이라 어떤 정사각형 크기로 찍어도 안 눌림) — map-dot.png(핑크)/map-dot-blue.png.
+        // "주변 점은 짜부가 안되겠냐"고 또 지적받음). 원형 점(map-dot.png(핑크)/map-dot-blue.png)
+        // 은 어떤 정사각형 크기로 찍어도 안 눌린다. 처음엔 compactPins(히어로)에서만 이걸
+        // 쓰고 지도탭(전체 지도)의 사진 없는 매장은 여전히 기본 심벌을 썼는데, 그러니 사진
+        // 있는 매장은 원형 사진으로, 없는 매장은 네이버 기본 물방울 도형으로 나와 지도 안에서
+        // 마커 모양이 뒤섞여 보였다(2026-08-25 오너 지적: "일부는 왜 도형으로 나오냐?").
+        // 사진 유무·compactPins 여부와 상관없이 사진 없으면 항상 이 원형 점으로 통일한다.
         const image = p.markerUrl
           ? { httpUri: p.markerUrl }
-          : compactPins
-            ? (p.active ? require('../assets/map-dot.png') : require('../assets/map-dot-blue.png'))
-            : { symbol: p.active ? 'pink' : 'blue' }
+          : (p.active ? require('../assets/map-dot.png') : require('../assets/map-dot-blue.png'))
         return (
           <NaverMapMarkerOverlay
             key={p.id}
