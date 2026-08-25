@@ -14,6 +14,7 @@ import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import BoardRichEditor, { type RichEditorHandle } from '@/components/BoardRichEditor'
 import BoardRichToolbar from '@/components/BoardRichToolbar'
+import { DEFAULT_TOOLBAR_ITEMS, type ToolbarItem } from '@10play/tentap-editor'
 import PollEditor, { emptyPollDraft, durationToEndsAt, type PollDraft } from '@/components/PollEditor'
 import { createPoll } from '@/lib/boardPoll'
 import { VIDEO_ENABLED, pickCompressUploadVideo } from '@/lib/boardVideo'
@@ -101,7 +102,7 @@ export default function BoardWriteScreen() {
   // richText 는 서식 뺀 평문 미러 — 등록 가능 여부·글자수 판단용.
   const richRef = useRef<RichEditorHandle>(null)
   const [richText, setRichText] = useState('')
-  // tentap editor 인스턴스 — 하단 고정 툴바(BoardRichToolbar)에 넘긴다.
+  // tentap editor 인스턴스 — 입력칸 상단 고정 툴바(BoardRichToolbar)에 넘긴다.
   const [richEditor, setRichEditor] = useState<unknown>(null)
   // 리치에디터(tentap/webview) 활성(2026-08-25). 예전엔 "Maximum update depth exceeded"
   // 무한 렌더 루프 때문에 자바스크립트 스레드가 막혀 화면 전체 터치가 먹통이 됐다
@@ -111,13 +112,6 @@ export default function BoardWriteScreen() {
   const richMode = true
   const fallbackToLegacy = useCallback((_reason?: string) => { setContent((c) => c || richText) }, [richText])
 
-  // 키보드가 올라와 있을 때만 리치 툴바 바를 그린다(내려가면 빈 바 안 남게).
-  const [kbUp, setKbUp] = useState(false)
-  useEffect(() => {
-    const s = Keyboard.addListener('keyboardWillShow', () => setKbUp(true))
-    const h = Keyboard.addListener('keyboardWillHide', () => setKbUp(false))
-    return () => { s.remove(); h.remove() }
-  }, [])
   // 리치모드 사진·GIF — 골라 R2 업로드 후 에디터 본문에 인라인 삽입.
   const [richUploading, setRichUploading] = useState(false)
   const insertRichMedia = async (mode: 'photo' | 'gif') => {
@@ -130,6 +124,39 @@ export default function BoardWriteScreen() {
   }
   // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
   const [poll, setPoll] = useState<PollDraft | null>(null)
+
+  // 리치 툴바 전체(사진/GIF/유튜브/인스타/투표 + 서식 아이콘 + 키보드 닫기) — 전부
+  // tentap Toolbar 의 items prop 하나로 합친 뒤(오너 지적: "좌측 이미지~투표 아이콘까지는
+  // 고정이던데, 이것도 스와이프에 다같이 걸리게 해라") 입력칸 상단에 고정으로 그린다.
+  // 배경·아이콘 톤은 tentap 테마(BoardRichEditorImpl.tsx)로 통일.
+  // ⚠️(2026-08-25) 예전엔 이 툴바를 KeyboardStickyView 로 키보드 위에 띄웠는데, 그
+  // 포지셔닝이 실제 키보드 애니메이션 상태에 의존해서 시뮬레이터에서 검증이 안 됐고
+  // 그대로 배포했다가 실기기에서 통째로 안 뜨는 회귀를 냈다(오너 지적 후 revert).
+  // 키보드와 무관하게 입력칸 상단에 고정으로 그리는 걸로 바꿔서, 이 문제 자체를 없앤다.
+  // 상단 고정이라 좌우 스와이프는 오히려 어색해서(오너 지시 2026-08-25) 없애고, 한
+  // 줄에 다 안 들어가는 나머지는 아래 줄로 넘긴다(최대 3줄) — 줄마다 별도 tentap
+  // Toolbar 인스턴스(FlatList)로 그리되, 줄당 개수를 화면 폭보다 훨씬 적게 잡아서
+  // 그 안에서는 스크롤이 필요 없게(=사실상 스와이프 불가능하게) 만든다.
+  const richToolbarItems: ToolbarItem[] = useMemo(() => [
+    { onPress: () => () => insertRichMedia('photo'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/photo.png') },
+    { onPress: () => () => insertRichMedia('gif'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/gif.png') },
+    { onPress: () => () => linksApi.openAdd('youtube'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/youtube.png') },
+    { onPress: () => () => linksApi.openAdd('instagram'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/instagram.png') },
+    // 투표 — 신규글에만, 이미 추가했으면 다시 안 뜸.
+    ...(!isEdit && !poll ? [{ onPress: () => () => setPoll(emptyPollDraft()), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/poll.png') }] : []),
+    ...DEFAULT_TOOLBAR_ITEMS,
+    // 키보드 닫기 — 이게 없으면 입력 중 키보드를 내릴 방법이 없다(오너 지적).
+    { onPress: () => () => Keyboard.dismiss(), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/keyboard_dismiss.png') },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [richUploading, isEdit, poll])
+  // 한 줄에 7개씩(44pt × 7 = 308pt — 제일 좁은 기기 화면 폭보다도 작게 잡아서 그 줄
+  // 안에서는 스크롤이 안 생긴다) 끊어 여러 줄로 — 전체 20~21개면 3줄 안에 다 들어간다.
+  const richToolbarRows: ToolbarItem[][] = useMemo(() => {
+    const ROW_SIZE = 7
+    const rows: ToolbarItem[][] = []
+    for (let i = 0; i < richToolbarItems.length; i += ROW_SIZE) rows.push(richToolbarItems.slice(i, i + ROW_SIZE))
+    return rows
+  }, [richToolbarItems])
   // 동영상(숨김 기능 — VIDEO_ENABLED=false 라 버튼 안 보임). R2 업로드 URL 목록.
   const [videos, setVideos] = useState<string[]>([])
   const [videoBusy, setVideoBusy] = useState(false)
@@ -302,8 +329,12 @@ export default function BoardWriteScreen() {
         <View>
           <Text style={styles.label}>내용</Text>
           {richMode ? (
-            // 재빌드 후: 리치에디터(tentap). 본문 안에 서식·이미지 인라인. 툴바는 에디터 내부.
+            // 재빌드 후: 리치에디터(tentap). 본문 안에 서식·이미지 인라인. 툴바는 입력칸
+            // 상단에 고정(2026-08-25 — 키보드 위 KeyboardStickyView 방식은 폐기).
             <View style={styles.richBox}>
+              {!!richEditor && richToolbarRows.map((row, i) => (
+                <BoardRichToolbar key={i} editor={richEditor} items={row} />
+              ))}
               <BoardRichEditor
                 ref={richRef}
                 colors={colors}
@@ -470,42 +501,6 @@ export default function BoardWriteScreen() {
       </KeyboardStickyView>
       )}
 
-      {/* 리치에디터 하단 고정 툴바 — 키보드 위에 붙는다(서식·이미지 등). 에디터 본체와 분리해
-          화면 최하단에서 그려야 키보드에 안 가린다(2026-08-24 개판 수정). */}
-      {richMode && !!richEditor && kbUp && (
-        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
-          {/* 한 줄: 사진·GIF(왼쪽) + 서식 툴바(오른쪽 스크롤) — 네이버 카페처럼 한 줄에 */}
-          <View
-            style={styles.richToolbarBar}
-            onLayout={(e) => setToolbarH(e.nativeEvent.layout.height)}
-          >
-            <TouchableOpacity style={styles.richMediaBtn} onPress={() => insertRichMedia('photo')} disabled={richUploading} hitSlop={6}>
-              <Ionicons name="image-outline" size={23} color={richUploading ? colors.textTertiary : colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.richMediaBtn} onPress={() => insertRichMedia('gif')} disabled={richUploading} hitSlop={6}>
-              <Text style={[styles.richGifText, richUploading && { color: colors.textTertiary }]}>GIF</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.richMediaBtn} onPress={() => linksApi.openAdd('youtube')} hitSlop={6}>
-              <Ionicons name="logo-youtube" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-            {/* 인스타 링크 — 유튜브 옆(2026-08-24 오너 지시: "깜빡했었다"). */}
-            <TouchableOpacity style={styles.richMediaBtn} onPress={() => linksApi.openAdd('instagram')} hitSlop={6}>
-              <Ionicons name="logo-instagram" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-            {/* 투표 — 신규글에만, 이미 추가했으면 다시 안 뜸(2026-08-24: 사진·GIF·유튜브 옆으로 이동). */}
-            {!isEdit && !poll && (
-              <TouchableOpacity style={styles.richMediaBtn} onPress={() => setPoll(emptyPollDraft())} hitSlop={6}>
-                <Ionicons name="bar-chart-outline" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            )}
-            <View style={styles.richDivider} />
-            <View style={styles.richToolbarInner}>
-              <BoardRichToolbar editor={richEditor} />
-            </View>
-          </View>
-        </KeyboardStickyView>
-      )}
-
       <LinkInputModal api={linksApi} />
 
       <LoadingOverlay visible={saving || loading} />
@@ -621,13 +616,10 @@ function makeStyles(colors: AppColors) {
     },
     belowHint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 6, lineHeight: 17 },
     // 리치에디터 박스(재빌드 후) — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
-    richBox: { minHeight: 320, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
-    // 배경 없음(투명) — tentap 툴바가 흰 직사각형이라 라운드 사이에 빈틈이 보였다(2026-08-24).
-    richToolbarBar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingLeft: 10, borderTopWidth: 1, borderTopColor: colors.divider },
-    richMediaBtn: { paddingHorizontal: 8, height: 48, justifyContent: 'center' },
-    richGifText: { fontSize: 15, fontWeight: '800', color: colors.textSecondary, letterSpacing: 0.3 },
-    richDivider: { width: 1, height: 22, backgroundColor: colors.divider, marginHorizontal: 6 },
-    richToolbarInner: { flex: 1, height: 48 },
+    // 툴바가 입력칸 상단에 고정으로 들어가며(최대 3줄 × 44pt ≈ 132pt) 그만큼 타이핑
+    // 공간이 줄어드니, 박스 자체를 예전보다 키워서 하단에 빈 공간 없이 꽉 차게 한다
+    // (오너 지시 2026-08-25).
+    richBox: { minHeight: 520, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {
