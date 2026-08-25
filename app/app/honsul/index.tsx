@@ -163,6 +163,25 @@ export default function HonsulScreen() {
     return m
   }, [all, myLoc])
 
+  // 지도탭 핀 목록 — 예전엔 지도탭 렌더 안에서 매번 새로 만들어서(useMemo 없이), 이 화면의
+  // 아무 상태(예: mapView — 지도를 그냥 팬/줌만 해도 onCameraIdle로 계속 바뀜)가 바뀔 때마다
+  // ~500개 핀 배열·이미지 prop 객체가 전부 새로 생성됐다. PlaceMap 내부 클러스터링(useMemo)도
+  // pins 참조가 바뀌었다고 보고 매번 다시 계산하고, 마커 이미지도 새 객체라 다시 로드될
+  // 수 있어 — 특히 마커를 탭할 때마다(카메라 이동으로 mapView 갱신 + 클릭으로 focused 갱신
+  // 이 겹쳐) 눈에 띄는 지연이 생겼다(2026-08-25 오너 지적: "업체박스 반박자 느리게 나온다").
+  // 실제로 지도 이동을 껐더니 오히려 더 느리게 느껴졌다는 건 — 지연 자체는 그대로였고
+  // 카메라 이동이 "탭이 먹혔다"는 즉각적 피드백 역할을 해서 지연을 가려주고 있었다는 뜻.
+  // pinned·pins 를 실제로 바뀔 때만(장소 목록·선택 매장) 재계산하도록 메모해 근본 원인을 없앤다.
+  const pinnedMapPlaces = useMemo(() => list.filter((p) => p.lat != null && p.lng != null), [list])
+  const mapPins = useMemo(() => pinnedMapPlaces.map((p) => ({
+    id: p.id,
+    lat: p.lat!,
+    lng: p.lng!,
+    name: p.name,
+    markerUrl: placeMarkerUrl(p),
+    active: focused?.id === p.id,
+  })), [pinnedMapPlaces, focused])
+
   // 스크롤하면 지역군 칩 줄이 접힌다 — 소개팅·소셜링과 동일 기준.
   const chipsAnim = useRef(new Animated.Value(1)).current
   const chipsExpandedRef = useRef(true)
@@ -344,7 +363,7 @@ export default function HonsulScreen() {
         /* 지도 탭 — 네이버 지도(재빌드 후). 네이티브 모듈 없으면 안내로 폴백. */
         <View style={{ flex: 1 }}>
           {(() => {
-            const pinned = list.filter((p) => p.lat != null && p.lng != null)
+            const pinned = pinnedMapPlaces
             // ⚠️(2026-08-25) cameraTarget(지도에 "여기로 가라"고 명령하는 값)과 mapView(그냥
             // 기억만 해두는 값)를 반드시 분리해야 한다 — 처음엔 같은 값(mapView)을 both로
             // 쓰다가 무한루프에 빠졌다: onCameraIdle → setMapView → center 재계산 → focus
@@ -363,26 +382,21 @@ export default function HonsulScreen() {
                     zoom={center.zoom}
                     showLocationButton
                     cluster
-                    // 마커 탭하면 카메라도 같이 줌인 이동시켰는데, 그 애니메이션이 눈에
-                    // 더 띄어서 업체박스가 "반박자 늦게 뜨는 것처럼" 느껴졌다(2026-08-25
-                    // 오너 지적). 카메라는 그대로 두고 박스만 그 자리에서 즉시 뜨게 한다 —
-                    // 경쟁하는 움직임이 없어지면 체감 지연이 줄어든다(오너 승인, 시도).
+                    // 마커 탭하면 카메라도 같이 줌인 이동(오너 승인 — "줌인 효과는 있는게
+                    // 좋긴하겠다"). 예전엔 이게 "박스가 늦게 뜨는" 원인인 줄 알고 빼봤는데,
+                    // 빼니 오히려 더 느리게 느껴졌다 — 진짜 원인은 이게 아니라 pins 배열이
+                    // 매번 새로 생성되던 것(위 mapPins useMemo 주석 참고)이었다. 그건 고쳤으니
+                    // 줌인은 도로 살린다.
                     onTapPin={(id) => {
                       const p = pinned.find((p) => p.id === id) ?? null
                       setFocused(p)
+                      if (p?.lat != null && p?.lng != null) setCameraTarget({ lat: p.lat, lng: p.lng, zoom: 16 })
                     }}
                     onTapBackground={() => setFocused(null)}
                     // 마커를 안 눌러도 자유롭게 팬/줌한 위치까지 "기억만"(mapView, 다음에 다시
                     // 들어올 때 복원용) — cameraTarget 은 안 건드려서 루프를 안 만든다.
                     onCameraIdle={setMapView}
-                    pins={pinned.map((p) => ({
-                      id: p.id,
-                      lat: p.lat!,
-                      lng: p.lng!,
-                      name: p.name,
-                      markerUrl: placeMarkerUrl(p),
-                      active: focused?.id === p.id,
-                    }))}
+                    pins={mapPins}
                   />
                   {focused && (
                     <PlaceMapCard
