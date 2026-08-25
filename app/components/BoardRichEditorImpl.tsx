@@ -92,20 +92,13 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
 
   const editor = useEditorBridge({
     autofocus: false,
-    // ⚠️(2026-08-25) avoidIosKeyboard:true 로 한 번 켜봤는데(키보드가 입력칸을 가리는 문제
-    // 고치려고) tentap 이 내부적으로 editor.updateScrollThresholdAndMargin() 을 호출해서
-    // 웹뷰 "내부" 스크롤 동작 자체를 자기 것으로 바꿔버리는데, 그게 이미지 삽입 후 스크롤이
-    // 막혀서 이미지 아래 내용에 손을 못 대는 새 사고를 냈다(오너 지적: "이미지를 첨부하면
-    // 이미지 하단이 입력박스 내부에서 스크롤이 안늘어나서 이미지 밑에는 가지도 못하고").
-    // 원인 파악 전까지 원복 — 키보드 가림 문제는 미해결 상태로 남지만, 스크롤이 아예 막히는
-    // 것보다는 낫다.
-    avoidIosKeyboard: false,
-    // ⚠️(2026-08-25) dynamicHeight:true + 직접 onMessage 로 높이를 받아 적용하는 방식을
-    // 시도했다가 이미지 삽입 자체가 무한 로딩(스피너가 안 멈춤)에 빠지는 걸 확인해서
-    // 바로 원복했다 — exclusivelyUseCustomOnMessage:false 로 tentap 내부 처리도 같이
-    // 돌게 했는데도 getHTML() 의 비동기 응답(같은 메시지 채널 사용)이 막힌 것으로 보인다.
-    // 스크롤 문제(웹뷰 내부 오버플로우 숨음)는 여전히 미해결 — dynamicHeight 를 통한
-    // 해결은 이 프로젝트 환경에서 두 번 다 실패했으니 완전히 다른 방법이 필요하다.
+    // ⚠️(2026-08-25) 이전에 dynamicHeight:true + 우리가 직접 만든 onMessage(높이 수신용)를
+    // 같이 썼다가 이미지 삽입이 무한 로딩에 빠졌다 — getHTML() 의 비동기 응답이 같은
+    // 메시지 채널을 우리 onMessage 가 가로채면서 막힌 것으로 보였다. 지금은 사진이 더
+    // 이상 본문(웹뷰) 안에 안 들어가고(write.tsx — images 배열/썸네일 갤러리로만 붙음),
+    // <RichText> 에도 커스텀 onMessage 를 전혀 안 넘기니(아래 렌더 참고) tentap 자체
+    // 높이 리스너가 아무 방해 없이 그대로 동작한다 — 그래서 재시도.
+    dynamicHeight: true,
     initialContent: initialHTML || '',
     bridgeExtensions,
     theme: editorTheme,
@@ -181,19 +174,18 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
   const styles = makeStyles(colors)
   return (
     <View style={styles.wrap}>
-      {/* ⚠️(2026-08-25) tentap 기본값은 scrollEnabled=false(웹뷰 내부 스크롤 끔) — 페이지
-          전체 스크롤 하나로 처리하려던 시도(dynamicHeight)가 두 번 다 실패해서, 박스에
-          maxHeight 를 주고(write.tsx richBox) 그 안에서는 웹뷰 자체 스크롤이 동작하게
-          켠다. WebView 컴포넌트 표준 기능이라 tentap 내부 로직(dynamicHeight 처럼
-          실패한 적 없음)에 기대지 않는다. */}
-      <RichText editor={editor} style={styles.rich} scrollEnabled />
+      {/* dynamicHeight:true — 웹뷰가 자기 실제 문서 높이를 RN 에 보고하고, 박스는 그
+          높이만큼만 커진다(내부 스크롤 없음). 커지고 줄어드는 건 이 박스 하나뿐이고,
+          화면 전체 스크롤(write.tsx KeyboardAwareScrollView)이 나머지를 처리한다
+          (오너 지시 2026-08-25: "입력박스는 무조건 높이 늘어나는 방식으로"). */}
+      <RichText editor={editor} style={styles.rich} />
     </View>
   )
 })
 
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
-    wrap: { flex: 1 },
+    wrap: {},
     rich: { flex: 1, backgroundColor: colors.background },
   })
 }
