@@ -13,6 +13,7 @@ import { fetchPlaces, placeMarkerUrl, openStatus, type PlaceRow } from '@/lib/pl
 import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
 import { sanggwonFor } from '@/constants/honsulSanggwon'
 import { getMyLocation, distanceKm } from '@/lib/nearby'
+import { getCachedLocation, setCachedLocation } from '@/lib/locationMemory'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { useHonsulFilterStore, useHonsulFilterHydrated } from '@/stores/honsulFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
@@ -45,7 +46,11 @@ export default function HonsulScreen() {
     regionGroup, sanggwon, tag, openNow, sortMode, hasAutoInit, tab, mapView,
     setRegionGroup, setSanggwon, setTag, setOpenNow, setSortMode, setHasAutoInit, setTab, setMapView,
   } = useHonsulFilterStore()
-  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null) // 현재 위치(거리정렬용)
+  // 현재 위치(거리정렬용) — 예전엔 화면 로컬 useState라 다른 탭 갔다 돌아오면(화면이 통째로
+  // 다시 마운트되며) 매번 null 로 리셋됐다. "거리순" 칩은 스토어에 남아 계속 켜져 보이는데
+  // 실제 좌표가 없어 정렬은 조용히 풀려 있었다(2026-08-25 오너 지적: "현재위치를 계속
+  // 물고 있을순 없나?"). lib/locationMemory.ts(세션 동안 유지)에서 초기값을 가져온다.
+  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(() => getCachedLocation())
   const [locBusy, setLocBusy] = useState(false)
   const [search, setSearch] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
@@ -83,7 +88,7 @@ export default function HonsulScreen() {
       setLocBusy(true)
       const loc = await getMyLocation()
       setLocBusy(false)
-      if (loc) { setMyLoc(loc); setSortMode('distance') }
+      if (loc) { setMyLoc(loc); setCachedLocation(loc); setSortMode('distance') }
       else setSortMode('reviewCount')
     })()
   }, [hydrated, hasAutoInit, setHasAutoInit, setSortMode])
@@ -182,11 +187,11 @@ export default function HonsulScreen() {
   // 위치를 잡으면 거리순도 같이 켠다(오너 지시: "현재위치 누르면 자동으로 거리순") —
   // 다시 누르면 해제, 거리순 정렬 중이었으면 기본 정렬로 되돌린다(위치 없이는 거리순 불가).
   const toggleNearby = useCallback(async () => {
-    if (myLoc) { setMyLoc(null); if (sortMode === 'distance') setSortMode('default'); return }
+    if (myLoc) { setMyLoc(null); setCachedLocation(null); if (sortMode === 'distance') setSortMode('default'); return }
     setLocBusy(true)
     const loc = await getMyLocation()
     setLocBusy(false)
-    if (loc) { setMyLoc(loc); setSortMode('distance') }
+    if (loc) { setMyLoc(loc); setCachedLocation(loc); setSortMode('distance') }
   }, [myLoc, sortMode, setSortMode])
 
   // 거리순 — 위치 없으면 먼저 요청하고 나서 적용.
@@ -196,7 +201,7 @@ export default function HonsulScreen() {
     setLocBusy(true)
     const loc = await getMyLocation()
     setLocBusy(false)
-    if (loc) { setMyLoc(loc); setSortMode('distance') }
+    if (loc) { setMyLoc(loc); setCachedLocation(loc); setSortMode('distance') }
   }, [sortMode, myLoc, setSortMode])
 
   const selectRatingSort = () => setSortMode(sortMode === 'rating' ? 'default' : 'rating')
