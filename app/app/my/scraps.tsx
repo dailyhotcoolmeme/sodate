@@ -91,7 +91,7 @@ export default function ScrapsScreen() {
           ))}
         </ScrollView>
       )}
-      <BottomNav current="my" />
+      <BottomNav current="my" route="/my/scraps" />
     </View>
   )
 }

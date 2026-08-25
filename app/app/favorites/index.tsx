@@ -164,7 +164,7 @@ export default function FavoritesScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-      <BottomNav current="my" />
+      <BottomNav current="my" route="/favorites" />
     </View>
   )
 }

@@ -50,7 +50,7 @@ export default function SocialingScreen() {
   const hydrated = useSocialingFilterHydrated()
   const { groups, regions, minPrice, maxPrice, days, sortBy, excludeClosed, toggleGroup, setRegionsBulk, setSortBy, setExcludeClosed, setMinPrice, setMaxPrice, toggleDay, applyDraft, resetFilters } = useSocialingFilterStore()
   const activeFilterCount = socialingActiveFilterCount({ groups, regions, minPrice, maxPrice, days })
-  const { events, loading, loadingMore, refetch, loadMore } = useEvents(search, 'socialing')
+  const { events, loading, loadingMore, hasMore, refetch, loadMore } = useEvents(search, 'socialing')
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
 
   // 지역 빠른탭 = 군(강남권·강북권…) — 소개팅과 동일 계산.
@@ -70,7 +70,9 @@ export default function SocialingScreen() {
   // 복원 전 잠깐 맨 위가 보였다가 튀는 게 안 보이게(2026-08-25 오너 지적). 소개팅과 동일 패턴.
   const [listVisible, setListVisible] = useState(() => getScrollOffset('socialing-feed') <= 0)
   useEffect(() => {
-    const t = setTimeout(() => setListVisible(true), 600)
+    // 페이지네이션 목록이라 깊은 위치를 복원하려면 추가 로딩(loadMore)이 여러 번 오가야
+    // 할 수 있어 소개팅/혼술바보다 여유를 더 준다(2026-08-25).
+    const t = setTimeout(() => setListVisible(true), 2500)
     return () => clearTimeout(t)
   }, [])
   const onFeedScroll = useCallback((e: any) => {
@@ -237,7 +239,15 @@ export default function SocialingScreen() {
             if (restoredScrollRef.current) return
             const y = getScrollOffset('socialing-feed')
             if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
-            if (h < y + 300) return
+            if (h < y + 300) {
+              // 페이지네이션 목록이라 화면에 스크롤이 안 닿으면 onEndReached 가 저절로 안
+              // 불려서, 가만히 기다리기만 하면 깊은 스크롤 위치는 영영 복원이 안 된다
+              // (2026-08-25 오너 지적: "위치를 이동후에 다른페이지 갔다오면 처음 정한
+              // 위치만 나온다"). 목표 높이에 닿을 때까지 직접 다음 페이지를 불러온다.
+              // 더 불러올 게 없으면(hasMore=false, 그 사이 글이 지워졌을 수도) 포기하고
+              // 지금 있는 만큼만으로 복원한다.
+              if (hasMore) { loadMore(); return }
+            }
             feedListRef.current?.scrollToOffset({ offset: y, animated: false })
             restoredScrollRef.current = true
             requestAnimationFrame(() => setListVisible(true))

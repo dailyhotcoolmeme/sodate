@@ -116,7 +116,7 @@ export default function MyPostsScreen() {
           ))}
         </ScrollView>
       )}
-      <BottomNav current="my" />
+      <BottomNav current="my" route="/board/mine" />
     </View>
   )
 }

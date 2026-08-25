@@ -1,18 +1,20 @@
 import { Alert } from 'react-native'
 
 /**
- * 찜/스크랩 — 예전엔 하트·북마크를 누르는 즉시 바로 적용됐는데, 실수로 누르는 경우가
- * 있어 담을 때·뺄 때 모두 팝업으로 한 번 더 확인받고 적용한다(2026-08-25 오너 지시:
- * "누르자마자 적용되는데 이것도 팝업으로 확인후에 적용되게 해라").
+ * 즐겨찾기/스크랩 — 예전엔 하트·북마크를 누르는 즉시 바로 적용됐는데, 실수로 누르는
+ * 경우가 있어 담을 때·뺄 때 모두 팝업으로 한 번 더 확인받고 적용한다(2026-08-25 오너
+ * 지시: "누르자마자 적용되는데 이것도 팝업으로 확인후에 적용되게 해라"). 화면 표기가
+ * "찜"에서 "즐겨찾기"로 바뀐 지 오래인데 여기 문구는 옛말 그대로였다(오너 지적) — 반드시
+ * "즐겨찾기"로 통일한다.
  */
 export function confirmFavorite(isFavorite: boolean, onConfirm: () => void): void {
   if (isFavorite) {
-    Alert.alert('찜 해제', '찜 목록에서 뺄까요?', [
+    Alert.alert('즐겨찾기 해제', '즐겨찾기에서 뺄까요?', [
       { text: '취소', style: 'cancel' },
       { text: '해제', style: 'destructive', onPress: onConfirm },
     ])
   } else {
-    Alert.alert('찜하기', '찜 목록에 담을까요?', [
+    Alert.alert('즐겨찾기', '즐겨찾기에 담을까요?', [
       { text: '취소', style: 'cancel' },
       { text: '담기', onPress: onConfirm },
     ])

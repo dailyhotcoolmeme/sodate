@@ -661,7 +661,7 @@ export default function AlertsScreen() {
 
     </ScrollView>
     <LoadingOverlay visible={saving || unsubscribing} />
-    <BottomNav current="my" />
+    <BottomNav current="my" route="/alerts" />
     </View>
   )
 }

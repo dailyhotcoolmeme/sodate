@@ -111,7 +111,7 @@ export default function RecentScreen() {
           ))}
         </ScrollView>
       )}
-      <BottomNav current="my" />
+      <BottomNav current="my" route="/my/recent" />
     </View>
   )
 }

@@ -817,7 +817,7 @@ export default function BoardPostScreen() {
           refetch()
         }}
       />
-      <BottomNav current="board" />
+      <BottomNav current="board" route={`/board/${id}`} />
     </View>
   )
 }

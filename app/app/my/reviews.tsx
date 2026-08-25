@@ -136,7 +136,7 @@ export default function MyReviewsScreen() {
         initial={editTarget}
         onDone={onEditDone}
       />
-      <BottomNav current="my" />
+      <BottomNav current="my" route="/my/reviews" />
     </View>
   )
 }

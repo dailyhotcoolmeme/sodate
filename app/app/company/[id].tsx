@@ -267,7 +267,7 @@ export default function CompanyDetailScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
-    <BottomNav current="event" />
+    <BottomNav current="event" route={`/company/${id}`} />
     </View>
   )
 }

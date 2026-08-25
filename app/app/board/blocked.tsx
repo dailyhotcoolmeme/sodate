@@ -48,7 +48,7 @@ export default function BlockedAuthorsScreen() {
           ))}
         </ScrollView>
       )}
-      <BottomNav current="my" />
+      <BottomNav current="my" route="/board/blocked" />
     </View>
   )
 }

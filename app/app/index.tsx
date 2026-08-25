@@ -74,7 +74,7 @@ export default function HomeScreen() {
   // 지시, 커뮤니티 검색과는 별개). 최근 검색어는 기기에 저장(lib/eventSearchHistory).
   const [search, setSearch] = useState('')
   const [searchModalVisible, setSearchModalVisible] = useState(false)
-  const { events, loading, loadingMore, error, refetch, loadMore } = useEvents(search)
+  const { events, loading, loadingMore, hasMore, error, refetch, loadMore } = useEvents(search)
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const [filterVisible, setFilterVisible] = useState(false)
@@ -581,7 +581,9 @@ export default function HomeScreen() {
   // 경우(콘텐츠가 목표 높이까지 못 자라는 등)를 대비해 안전장치로 늦어도 곧 보여준다.
   const [listVisible, setListVisible] = useState(() => getScrollOffset('dating-feed') <= 0)
   useEffect(() => {
-    const t = setTimeout(() => setListVisible(true), 600)
+    // 페이지네이션 목록이라 깊은 위치를 복원하려면 추가 로딩(loadMore)이 여러 번 오가야
+    // 할 수 있어 여유를 더 준다(2026-08-25).
+    const t = setTimeout(() => setListVisible(true), 2500)
     return () => clearTimeout(t)
   }, [])
 
@@ -863,7 +865,13 @@ export default function HomeScreen() {
             if (restoredScrollRef.current) return
             const y = getScrollOffset('dating-feed')
             if (y <= 0) { restoredScrollRef.current = true; setListVisible(true); return }
-            if (h < y + 300) return
+            if (h < y + 300) {
+              // 페이지네이션 목록이라 화면에 스크롤이 안 닿으면 onEndReached 가 저절로
+              // 안 불려서, 가만히 기다리기만 하면 깊은 스크롤 위치는 영영 복원이 안 된다
+              // (2026-08-25 오너 지적, 소셜링에서 먼저 확인됨). 목표 높이에 닿을 때까지
+              // 직접 다음 페이지를 불러온다. 더 불러올 게 없으면 지금 있는 만큼만 복원.
+              if (hasMore) { loadMore(); return }
+            }
             flatListRef.current?.scrollToOffset({ offset: y, animated: false })
             restoredScrollRef.current = true
             requestAnimationFrame(() => setListVisible(true))
