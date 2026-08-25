@@ -110,11 +110,23 @@ export default function BoardWriteScreen() {
   // 무죄 확정, 다음 용의자는 KeyboardStickyView 자체). 그 라이브러리 내부 애니메이션에
   // 기대지 않고, RN 코어 Keyboard 이벤트로 키보드 높이를 직접 재서 그만큼
   // position:absolute 로 밀어올리는 훨씬 오래되고 단순한 방식으로 교체한다.
+  // ⚠️(2026-08-26 오너 지적: "안드 3버튼 생각을 안하냐?") 안드 3버튼 네비게이션
+  // 기기 일부에서 keyboardDidShow 가 보고하는 높이가 실제 키보드 높이보다 훨씬
+  // 작게(3버튼 바 높이만큼 빠진 값으로) 잘못 오는 게 알려진 RN 자체 버그다
+  // (facebook/react-native#24353 — 삼성 등 3버튼 기기에서 재현 보고 다수). 이 값을
+  // 그대로 믿으면 툴바가 키보드에 가려지거나 3버튼 바 위 틈에 끼어 보일 수 있다 —
+  // 안전장치로 keyboardDidShow 값과 "최소한 3버튼 바 높이(insets.bottom)는 넘는
+  // 값" 중 큰 쪽을 쓴다. 이 프로젝트에서 안드 3버튼을 깜빡해서 사고 낸 게 이번이
+  // 처음이 아니다(입력박스 높이, 약관 체크박스 잘림) — 매번 새로 지적받지 않도록
+  // "화면 맨 아래 관련 계산은 항상 3버튼 네비게이션까지 감안" 을 메모리에 박아둔다.
   const [kbHeight, setKbHeight] = useState(0)
   useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates.height))
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKbHeight(Math.max(e.endCoordinates.height, insets.bottom))
+    })
     const hideSub = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0))
     return () => { showSub.remove(); hideSub.remove() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // 사진·유튜브·인스타 모두 본문(리치 에디터) 안에는 넣지 않고, 유튜브 링크와 같은 자리
   // (게시글 본문 밑 첨부 갤러리)에만 썸네일로 붙인다(2026-08-25 오너 지시: "모든 컨텐츠
