@@ -28,6 +28,15 @@ import type { RichEditorHandle, RichEditorProps } from './BoardRichEditor'
 const TrailingParagraphBridge = new BridgeExtension({
   tiptapExtension: TrailingNode.configure({ node: 'paragraph' }),
 })
+
+// ⚠️(2026-08-25) 이미지 탭하면 전체보기 기능을 위해, 선택된 이미지의 src 를 RN 쪽에
+// 알려주는 커스텀 상태(extendEditorState)를 시도했다가 확인 후 뺐다 — ColorBridge 등
+// 기존 브릿지의 extendEditorState 는 동작하지만(webview 번들에 이미 컴파일되어 있음),
+// 우리가 새로 만든 필드는 웹뷰 쪽에서 절대 계산되지 않는다는 걸 실측으로 확인했다
+// (이미지를 탭하면 화면상 선택은 정상적으로 되는데도 이 커스텀 필드는 항상
+// undefined). tentap 웹뷰는 사전 컴파일된 정적 번들이라, 그 번들에 이미 포함된
+// 확장의 상태만 RN 쪽으로 넘어오고 우리가 새로 정의한 상태는 넘어올 방법이 없다 —
+// 이 접근으로는 이미지 탭 감지 자체가 불가능하다(오너에게 보고 완료).
 export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColors }>(function BoardRichEditorImpl(
   { initialHTML, placeholder, onChangeText, onReady, onEditorReady, colors },
   ref,
