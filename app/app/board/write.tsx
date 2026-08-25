@@ -104,6 +104,18 @@ export default function BoardWriteScreen() {
     const sub = Keyboard.addListener('keyboardDidHide', () => richRef.current?.blur())
     return () => sub.remove()
   }, [])
+  // ⚠️(2026-08-26) 키보드 위 툴바를 react-native-keyboard-controller 의
+  // KeyboardStickyView 로 고정했는데, 안드 실기기에서 툴바 전체가 아예 안 보이는
+  // 사고가 났다 — BlurView 를 빼도 그대로였다(외부 AI 3곳 교차검증으로 BlurView는
+  // 무죄 확정, 다음 용의자는 KeyboardStickyView 자체). 그 라이브러리 내부 애니메이션에
+  // 기대지 않고, RN 코어 Keyboard 이벤트로 키보드 높이를 직접 재서 그만큼
+  // position:absolute 로 밀어올리는 훨씬 오래되고 단순한 방식으로 교체한다.
+  const [kbHeight, setKbHeight] = useState(0)
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates.height))
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0))
+    return () => { showSub.remove(); hideSub.remove() }
+  }, [])
   // 사진·유튜브·인스타 모두 본문(리치 에디터) 안에는 넣지 않고, 유튜브 링크와 같은 자리
   // (게시글 본문 밑 첨부 갤러리)에만 썸네일로 붙인다(2026-08-25 오너 지시: "모든 컨텐츠
   // 첨부는 유튜브처럼 썸네일로 박스 밖에 첨부하게 하자. 아주 심플하게"). 예전에 "첨부는
@@ -507,14 +519,17 @@ export default function BoardWriteScreen() {
       )}
 
       {/* 리치모드 툴바 — 키보드 바로 위(오너 지시 2026-08-25: "키보드 위 방식으로
-          하자"). react-native-enriched-html 은 완전 네이티브라 예전 tentap 웹뷰 때
-          이 위치를 포기했던 이유(웹뷰 스크롤/포커스 충돌)가 없다. */}
+          하자"). KeyboardStickyView 가 안드에서 툴바를 통째로 숨기는 사고를 내서
+          (위 kbHeight 주석 참고) RN 코어 Keyboard 이벤트로 직접 위치를 계산한다 —
+          키보드 열려있으면 그 높이만큼, 닫혀있으면 안전영역(홈 인디케이터/3버튼)
+          만큼만 띄운다. */}
       {richMode && richReady && (
-        <KeyboardStickyView offset={{ closed: 0, opened: insets.bottom }}>
-          <View onLayout={(e) => setToolbarH(e.nativeEvent.layout.height)}>
-            <BoardRichToolbar buttons={toolbarButtons} colors={colors} />
-          </View>
-        </KeyboardStickyView>
+        <View
+          style={[styles.richToolbarFloat, { bottom: kbHeight > 0 ? kbHeight : insets.bottom }]}
+          onLayout={(e) => setToolbarH(e.nativeEvent.layout.height)}
+        >
+          <BoardRichToolbar buttons={toolbarButtons} colors={colors} />
+        </View>
       )}
 
       <LinkInputModal api={linksApi} />
@@ -637,6 +652,9 @@ function makeStyles(colors: AppColors) {
     // 네이티브 텍스트 레이아웃이라 최대높이 없이 내용만큼 그대로 늘어나게 둔다 —
     // 실기기로 직접 늘어나는지 확인 후 문제 있으면 다시 잡는다.
     richBox: { minHeight: 160, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // 리치 툴바를 화면에 직접 띄우는 자리 — KeyboardStickyView 대신 RN Keyboard
+    // 이벤트로 계산한 bottom 값을 그대로 쓴다(위 kbHeight 주석 참고).
+    richToolbarFloat: { position: 'absolute', left: 0, right: 0 },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {
