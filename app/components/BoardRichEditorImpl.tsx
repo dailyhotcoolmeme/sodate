@@ -88,6 +88,14 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
     // 원인 파악 전까지 원복 — 키보드 가림 문제는 미해결 상태로 남지만, 스크롤이 아예 막히는
     // 것보다는 낫다.
     avoidIosKeyboard: false,
+    // ⚠️(2026-08-25) dynamicHeight:true 를 시도해봤다(웹뷰 내부 오버플로우로 스크롤이
+    // 막히는 문제를 웹뷰가 실제 문서 높이를 RN 에 보고하게 해서 근본적으로 없애려는
+    // 의도) — 그런데 시뮬레이터에서 켜자마자 에디터가 통째로 안 그려졌다(빈 박스,
+    // placeholder 도 안 뜸). tentap RichText.tsx 를 보면 dynamicHeight 가 켜지면
+    // 컨테이너 height 가 웹뷰가 보고하는 editorHeight(초기값 0)를 그대로 쓰는데, 그
+    // 보고 메시지가 이 프로젝트 환경에서 안 오는 것으로 보인다 — 원인을 더 못 파서
+    // (이 부분 로직은 컴파일된 웹뷰 번들 안에 있어 RN 쪽 소스만으로는 확인 불가) 일단
+    // 원복. 스크롤 문제는 이 방법 말고 다른 방법을 찾아야 한다.
     initialContent: initialHTML || '',
     bridgeExtensions,
     theme: editorTheme,
@@ -107,9 +115,12 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
     insertImage: async (url: string) => {
       const html = await editor.getHTML()
       const trimmed = html.trim()
-      const EMPTY_DOC = /^(<p>\s*(<br\s*\/?>)?\s*<\/p>)?$/i
-      const emptyTrailing = /(<p>\s*(<br\s*\/?>)?\s*<\/p>)$/i
-      const before = EMPTY_DOC.test(trimmed) ? '<p></p>' : trimmed.replace(emptyTrailing, '')
+      // ⚠️(2026-08-25) 처음엔 기존 내용 끝의 빈 문단을 지우고 다시 붙였는데(중복 방지
+      // 의도), 그게 바로 이미지 2장째부터 "이미지 위에는 여전히 글을 쓸 수 없다"는
+      // 버그였다 — 1번째 이미지 뒤에 만들어둔 빈 문단(2번째 이미지의 "위 첫 줄"이 될
+      // 자리)을 여기서 지워버리고 있었다. 아무것도 지우지 말고 그대로 이어붙인다 —
+      // 기존에 이미 있던 빈 문단이 자연스럽게 새 이미지의 윗줄이 된다.
+      const before = trimmed === '' ? '<p></p>' : trimmed
       const safeUrl = url.replace(/"/g, '&quot;')
       editor.setContent(`${before}<p><img src="${safeUrl}" /></p><p></p>`)
       // ⚠️(2026-08-25) setContent 만 부르고 끝내면 웹뷰가 통째로 콘텐츠를 새로 그리면서
