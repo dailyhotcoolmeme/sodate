@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Keyboard } from 'react-native'
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Image } from 'react-native'
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
@@ -14,7 +14,7 @@ import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import BoardRichEditor, { type RichEditorHandle } from '@/components/BoardRichEditor'
 import BoardRichToolbar from '@/components/BoardRichToolbar'
-import { DEFAULT_TOOLBAR_ITEMS, type ToolbarItem } from '@10play/tentap-editor'
+import { DEFAULT_TOOLBAR_ITEMS, Images, type ToolbarItem } from '@10play/tentap-editor'
 import PollEditor, { emptyPollDraft, durationToEndsAt, type PollDraft } from '@/components/PollEditor'
 import { createPoll } from '@/lib/boardPoll'
 import { VIDEO_ENABLED, pickCompressUploadVideo } from '@/lib/boardVideo'
@@ -125,38 +125,56 @@ export default function BoardWriteScreen() {
   // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
   const [poll, setPoll] = useState<PollDraft | null>(null)
 
-  // 리치 툴바 전체(사진/GIF/유튜브/인스타/투표 + 서식 아이콘 + 키보드 닫기) — 전부
-  // tentap Toolbar 의 items prop 하나로 합친 뒤(오너 지적: "좌측 이미지~투표 아이콘까지는
-  // 고정이던데, 이것도 스와이프에 다같이 걸리게 해라") 입력칸 상단에 고정으로 그린다.
-  // 배경·아이콘 톤은 tentap 테마(BoardRichEditorImpl.tsx)로 통일.
-  // ⚠️(2026-08-25) 예전엔 이 툴바를 KeyboardStickyView 로 키보드 위에 띄웠는데, 그
-  // 포지셔닝이 실제 키보드 애니메이션 상태에 의존해서 시뮬레이터에서 검증이 안 됐고
-  // 그대로 배포했다가 실기기에서 통째로 안 뜨는 회귀를 냈다(오너 지적 후 revert).
-  // 키보드와 무관하게 입력칸 상단에 고정으로 그리는 걸로 바꿔서, 이 문제 자체를 없앤다.
-  // 상단 고정이라 좌우 스와이프는 오히려 어색해서(오너 지시 2026-08-25) 없애고, 한
-  // 줄에 다 안 들어가는 나머지는 아래 줄로 넘긴다(최대 3줄) — 줄마다 별도 tentap
-  // Toolbar 인스턴스(FlatList)로 그리되, 줄당 개수를 화면 폭보다 훨씬 적게 잡아서
-  // 그 안에서는 스크롤이 필요 없게(=사실상 스와이프 불가능하게) 만든다.
-  const richToolbarItems: ToolbarItem[] = useMemo(() => [
+  // 리치 툴바 — 딱 2줄(오너 지시 2026-08-25: "2줄로 만들어!"). 조사 결과(Medium·워드프레스
+  // 모바일 에디터 — 캐주얼 글쓰기 앱들은 "항상 보이는 서식 버튼은 최소한만" 원칙) 기준으로
+  // 정렬/텍스트선택 시 뜨는 버블 방식(BubbleMenu)은 검토했으나 제외 — 실제 모바일 앱들
+  // (Notion 등)은 버블이 아니라 고정 바를 쓰고, 버블은 터치 선택 핸들과 겹쳐 오히려
+  // 불편하다는 근거가 있었다(오너 확인 후 현재 구조 유지 결정).
+  // 1줄: 미디어(사진·GIF·유튜브·인스타·투표) + 기본 서식(굵게·기울임·밑줄)
+  // 2줄: 구조(링크·헤딩·목록·인용·체크리스트) + 색상(글자색·배경색, 탭하면 이 줄이
+  //      프리셋 색상 줄로 바뀜) + 되돌리기
+  // 뺀 것: 취소선·순서목록·들여쓰기·내어쓰기·다시실행·인라인코드·코드블록·글자크기(캐주얼
+  // 앱엔 없는 기능 — 헤딩이 그 역할을 대신함)·정렬(캐주얼 앱은 왼쪽 정렬 고정이 관례).
+  const pickDefaultItem = useCallback((img: unknown): ToolbarItem => {
+    const found = DEFAULT_TOOLBAR_ITEMS.find((item) => item.image({} as never) === img)
+    if (!found) throw new Error('tentap 기본 툴바 아이템을 못 찾음')
+    return found
+  }, [])
+
+  const richToolbarRow1: ToolbarItem[] = useMemo(() => [
     { onPress: () => () => insertRichMedia('photo'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/photo.png') },
     { onPress: () => () => insertRichMedia('gif'), active: () => false, disabled: () => richUploading, image: () => require('@/assets/rich-toolbar/gif.png') },
     { onPress: () => () => linksApi.openAdd('youtube'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/youtube.png') },
     { onPress: () => () => linksApi.openAdd('instagram'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/instagram.png') },
     // 투표 — 신규글에만, 이미 추가했으면 다시 안 뜸.
     ...(!isEdit && !poll ? [{ onPress: () => () => setPoll(emptyPollDraft()), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/poll.png') }] : []),
-    ...DEFAULT_TOOLBAR_ITEMS,
-    // 키보드 닫기 — 이게 없으면 입력 중 키보드를 내릴 방법이 없다(오너 지적).
-    { onPress: () => () => Keyboard.dismiss(), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/keyboard_dismiss.png') },
+    pickDefaultItem(Images.bold),
+    pickDefaultItem(Images.italic),
+    pickDefaultItem(Images.underline),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [richUploading, isEdit, poll])
-  // 한 줄에 7개씩(44pt × 7 = 308pt — 제일 좁은 기기 화면 폭보다도 작게 잡아서 그 줄
-  // 안에서는 스크롤이 안 생긴다) 끊어 여러 줄로 — 전체 20~21개면 3줄 안에 다 들어간다.
-  const richToolbarRows: ToolbarItem[][] = useMemo(() => {
-    const ROW_SIZE = 7
-    const rows: ToolbarItem[][] = []
-    for (let i = 0; i < richToolbarItems.length; i += ROW_SIZE) rows.push(richToolbarItems.slice(i, i + ROW_SIZE))
-    return rows
-  }, [richToolbarItems])
+
+  // 글자색·배경색 — 엔진(ColorBridge·HighlightBridge)은 이미 붙어있었는데 버튼이 없었다
+  // (오너 지적: "글자색. 글자배경색. 이런 기본적인 것들이 하나도 없잖아"). 탭하면 이 줄이
+  // 프리셋 색상 스와치 줄로 바뀌는 방식 — 헤딩 버튼이 서브메뉴로 바뀌는 것과 같은 패턴.
+  const [colorPicker, setColorPicker] = useState<'text' | 'highlight' | null>(null)
+  const TEXT_COLORS = ['#1F2937', '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6']
+  const HIGHLIGHT_COLORS = ['#FEF08A', '#FBCFE8', '#BBF7D0', '#BFDBFE', '#FED7AA', '#E9D5FF']
+
+  const richToolbarRow2: ToolbarItem[] = useMemo(() => [
+    pickDefaultItem(Images.link),
+    pickDefaultItem(Images.Aa), // 헤딩(H1~H6 서브메뉴)
+    pickDefaultItem(Images.bulletList),
+    pickDefaultItem(Images.quote),
+    pickDefaultItem(Images.checkList),
+    // ⚠️ 글자색 아이콘은 처음에 text-outline(Ionicons) 으로 만들었더니 헤딩(Images.Aa)
+    // 아이콘이랑 똑같이 "Aa" 모양으로 보여서 헷갈렸다(직접 캡처해서 확인) — tentap 에 이미
+    // 있는 팔레트 아이콘(Images.palette, 기본 툴바엔 안 쓰이던 것)으로 바꿔 구분되게 했다.
+    { onPress: () => () => setColorPicker('text'), active: () => false, disabled: () => false, image: () => Images.palette },
+    { onPress: () => () => setColorPicker('highlight'), active: () => false, disabled: () => false, image: () => require('@/assets/rich-toolbar/highlight_color.png') },
+    pickDefaultItem(Images.undo),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [])
   // 동영상(숨김 기능 — VIDEO_ENABLED=false 라 버튼 안 보임). R2 업로드 URL 목록.
   const [videos, setVideos] = useState<string[]>([])
   const [videoBusy, setVideoBusy] = useState(false)
@@ -332,16 +350,58 @@ export default function BoardWriteScreen() {
             // 재빌드 후: 리치에디터(tentap). 본문 안에 서식·이미지 인라인. 툴바는 입력칸
             // 상단에 고정(2026-08-25 — 키보드 위 KeyboardStickyView 방식은 폐기).
             <View style={styles.richBox}>
-              {!!richEditor && richToolbarRows.map((row, i) => (
-                // tentap 기본 테마의 toolbarBody 가 flex:1 이라 theme 오버라이드(flex:0)만으로는
-                // 이 컬럼 안에서 다른 flex:1 형제(에디터 본문)와 남는 높이를 나눠 가져가버렸다
-                // (오너 지적: "3줄이 입력박스 전체에 걸쳐서 밑으로 내려온다"). 줄마다 높이를
-                // 44 로 못박은 바깥 View 로 한 번 더 감싸서 안쪽 FlatList 가 얼마나 늘어나려
-                // 하든 딱 44 안에서만 채워지게 강제로 가둔다.
-                <View key={i} style={styles.richToolbarRow}>
-                  <BoardRichToolbar editor={richEditor} items={row} />
+              {/* tentap 기본 테마의 toolbarBody 가 flex:1 이라 theme 오버라이드(flex:0)만으로는
+                  이 컬럼 안에서 다른 flex:1 형제(에디터 본문)와 남는 높이를 나눠 가져가버렸다
+                  (오너 지적: "3줄이 입력박스 전체에 걸쳐서 밑으로 내려온다"). 줄마다 높이를
+                  44 로 못박은 바깥 View 로 한 번 더 감싸서 안쪽 FlatList 가 얼마나 늘어나려
+                  하든 딱 44 안에서만 채워지게 강제로 가둔다. */}
+              {!!richEditor && (
+                <View style={styles.richToolbarRow}>
+                  <BoardRichToolbar editor={richEditor} items={richToolbarRow1} />
                 </View>
-              ))}
+              )}
+              {!!richEditor && (
+                colorPicker ? (
+                  <View style={[styles.richToolbarRow, styles.richSwatchRow]}>
+                    <TouchableOpacity style={styles.richSwatchBackBtn} onPress={() => setColorPicker(null)} hitSlop={6}>
+                      <Image source={require('@/assets/rich-toolbar/picker_back.png')} style={[styles.richSwatchBackIcon, { tintColor: colors.textSecondary }]} />
+                    </TouchableOpacity>
+                    {(colorPicker === 'text' ? TEXT_COLORS : HIGHLIGHT_COLORS).map((hex) => (
+                      <TouchableOpacity
+                        key={hex}
+                        style={styles.richSwatchBtn}
+                        hitSlop={4}
+                        onPress={() => {
+                          const e = richEditor as { setColor?: (c: string) => void; setHighlight?: (a: { color: string }) => void }
+                          if (colorPicker === 'text') e.setColor?.(hex)
+                          else e.setHighlight?.({ color: hex })
+                          setColorPicker(null)
+                        }}
+                      >
+                        <View style={[styles.richSwatchDot, { backgroundColor: hex }]} />
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity
+                      style={styles.richSwatchBtn}
+                      hitSlop={4}
+                      onPress={() => {
+                        const e = richEditor as { unsetColor?: () => void; unsetHighlight?: () => void }
+                        if (colorPicker === 'text') e.unsetColor?.()
+                        else e.unsetHighlight?.()
+                        setColorPicker(null)
+                      }}
+                    >
+                      <View style={styles.richSwatchNone}>
+                        <Ionicons name="close" size={14} color={colors.textSecondary} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.richToolbarRow}>
+                    <BoardRichToolbar editor={richEditor} items={richToolbarRow2} />
+                  </View>
+                )
+              )}
               <BoardRichEditor
                 ref={richRef}
                 colors={colors}
@@ -626,9 +686,18 @@ function makeStyles(colors: AppColors) {
     // 툴바가 입력칸 상단에 고정으로 들어가며(최대 3줄 × 44pt ≈ 132pt) 그만큼 타이핑
     // 공간이 줄어드니, 박스 자체를 예전보다 키워서 하단에 빈 공간 없이 꽉 차게 한다
     // (오너 지시 2026-08-25).
-    richBox: { minHeight: 520, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // 2줄(오너 지시 2026-08-25: "2줄로 만들어!")로 줄어서 툴바가 88 만 차지 — 그만큼
+    // 박스는 줄여도 타이핑 공간은 3줄 때(520)와 비슷하게 유지된다.
+    richBox: { minHeight: 480, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     // 줄마다 44 로 고정 — tentap FlatList 자체 flex 를 못 믿으니 바깥에서 한 번 더 가둔다.
     richToolbarRow: { height: 44, overflow: 'hidden' },
+    // 글자색·배경색 프리셋 스와치 줄 — 2번째 줄이 탭하면 이 모습으로 바뀐다.
+    richSwatchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, gap: 10, backgroundColor: colors.surfaceHigh, borderTopWidth: 0.5, borderBottomWidth: 0.5, borderTopColor: colors.divider, borderBottomColor: colors.divider },
+    richSwatchBackBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+    richSwatchBackIcon: { width: 18, height: 18 },
+    richSwatchBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+    richSwatchDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: colors.divider },
+    richSwatchNone: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: colors.divider, alignItems: 'center', justifyContent: 'center' },
     notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
 
     agreeRow: {

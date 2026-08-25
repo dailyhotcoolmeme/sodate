@@ -77,7 +77,15 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
 
   const editor = useEditorBridge({
     autofocus: false,
-    avoidIosKeyboard: false,   // 키보드 회피는 부모 KeyboardAwareScrollView 가 담당(이중 회피 방지)
+    // ⚠️(2026-08-25) 이걸 꺼놨던 게(예전엔 "부모 KeyboardAwareScrollView 가 담당하니 이중
+    // 회피 방지"라는 이유였음) 실제로는 문제였다 — 오너 지적: "키보드 올라오면서 입력박스가
+    // 가려지는 문제". 부모 스크롤뷰는 RN 네이티브 TextInput 포커스만 감지해서 웹뷰 전체를
+    // 스크롤시켜줄 뿐, 웹뷰 "내부"(ProseMirror 문서, 커서 위치)는 전혀 모른다 — 그래서 박스가
+    // 화면에 다 들어와도 정작 커서가 있는 줄은 키보드에 가려질 수 있었다. avoidIosKeyboard
+    // 를 켜면 tentap 이 웹뷰 내부 스크롤에 키보드 높이만큼 여백을 주고 커서로 자동 스크롤
+    // 해준다(RichText.tsx 의 setDocBottomPadding 참고) — 부모 스크롤과 역할이 겹치지 않고
+    // 보완 관계라 "이중 회피"가 아니다.
+    avoidIosKeyboard: true,
     initialContent: initialHTML || '',
     bridgeExtensions,
     theme: editorTheme,
