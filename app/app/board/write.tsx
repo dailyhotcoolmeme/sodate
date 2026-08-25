@@ -97,10 +97,13 @@ export default function BoardWriteScreen() {
   const [initiallyAgreed, setInitiallyAgreed] = useState(false)
   const [agreedLoaded, setAgreedLoaded] = useState(false)
   const editor = useBoardEditor(images, setImages)
-  const linksApi = useBoardLinks(links, setLinks)
   // 리치에디터(재빌드 후 활성). 본문 HTML 은 저장 시 richRef.getHTML() 로 뽑는다.
   // richText 는 서식 뺀 평문 미러 — 등록 가능 여부·글자수 판단용.
   const richRef = useRef<RichEditorHandle>(null)
+  // 유튜브·인스타 링크 추가 시 본문 안에도 텍스트로 넣는다(오너 지적: "첨부 컨텐츠들은
+  // 모두 본문 내부에 넣게 하라고!!" — 사진은 안에, 링크는 밖(첨부 갤러리)에만 들어가서
+  // 자리가 갈렸었다). 첨부 갤러리 자체는 유지 — 상세페이지 재생 썸네일에 필요.
+  const linksApi = useBoardLinks(links, setLinks, (url) => richRef.current?.insertLinkText(url))
   const [richText, setRichText] = useState('')
   // tentap editor 인스턴스 — 입력칸 상단 고정 툴바(BoardRichToolbar)에 넘긴다.
   const [richEditor, setRichEditor] = useState<unknown>(null)

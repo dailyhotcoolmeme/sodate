@@ -36,6 +36,7 @@ class RichEditorBoundary extends Component<{ onFallback: (reason: string) => voi
 export interface RichEditorHandle {
   getHTML: () => Promise<string>
   insertImage: (url: string) => void
+  insertLinkText: (url: string) => void
   focus: () => void
 }
 
@@ -59,6 +60,7 @@ const Fallback = forwardRef<RichEditorHandle, RichEditorProps & { colors: AppCol
     useImperativeHandle(ref, () => ({
       getHTML: async () => escapeToHtml(valueRef.current),
       insertImage: () => {},
+      insertLinkText: () => {},
       focus: () => {},
     }), [])
     return (

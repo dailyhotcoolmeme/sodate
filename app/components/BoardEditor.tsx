@@ -168,7 +168,12 @@ function makeStyles(colors: AppColors) {
  */
 export type LinkMode = 'youtube' | 'instagram'
 
-export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) => void) {
+// onInsertToContent — 리치 에디터 본문 안에도 같이 넣어달라는 오너 지시(2026-08-25:
+// "첨부 컨텐츠들은 모두 본문 내부에 넣게 하라고!! 왜 이걸 해결을 못하냐고" — 사진은
+// 본문 안, 유튜브·인스타는 밖(첨부 갤러리)이라 자리가 갈렸었다). 아래 썸네일 갤러리
+// (BoardLinkChips, 상세페이지 재생 썸네일)는 그대로 두고, 본문에도 링크 텍스트를
+// 추가로 넣어서 "어디에 뭐가 들어가는지" 일관되게 만든다.
+export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) => void, onInsertToContent?: (url: string) => void) {
   const [modalVisible, setModalVisible] = useState(false)
   const [mode, setMode] = useState<LinkMode>('youtube')
   const [input, setInput] = useState('')
@@ -192,6 +197,7 @@ export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) =
       return
     }
     if (!links.includes(url)) onChangeLinks([...links, url])
+    onInsertToContent?.(url)
     setModalVisible(false)
   }
 

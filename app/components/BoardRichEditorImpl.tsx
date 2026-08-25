@@ -42,7 +42,10 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
     CoreBridge.configureCSS(`
       .ProseMirror { padding: 12px 14px; font-size: 15px; line-height: 1.5; }
       .ProseMirror p { margin: 0 0 8px; }
-      .ProseMirror img { max-width: 100%; height: auto; border-radius: 8px; }
+      /* ⚠️(2026-08-25) max-width:100% 만 있으면 사진 한 장이 본문 가로·세로를 통째로
+         잡아먹었다(오너 지적: "이미지 첨부하는 순간 이미지가 본문 가로세로 사이즈를
+         완전히 잡아먹는데"). 썸네일 크기(최대 200×200)로 제한하고 원본 비율은 유지한다. */
+      .ProseMirror img { display: block; max-width: 200px; max-height: 200px; width: auto; height: auto; border-radius: 8px; }
     `),
     HistoryBridge, ListItemBridge,
     BoldBridge, ItalicBridge, UnderlineBridge, StrikeBridge,
@@ -94,6 +97,17 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
     getHTML: () => editor.getHTML(),
     insertImage: (url: string) => editor.setImage(url),
     focus: () => editor.focus(),
+    // 유튜브·인스타 링크 — 예전엔 본문 바깥 별도 첨부 목록(BoardLinkChips)에만 들어가서
+    // "사진은 안에, 링크는 밖에" 로 자리가 갈렸다(오너 지적: "첨부 컨텐츠들은 모두 본문
+    // 내부에 넣게 하라고!!"). tentap 은 커서 위치에 임의 콘텐츠를 끼워넣는 커맨드가
+    // 없어서(setImage 처럼 전용 노드 커맨드만 있음), 현재 HTML 뒤에 링크 문단을 이어붙여
+    // setContent 로 다시 넣는 방식으로 "본문 안"에 들어가게 한다. 첨부 갤러리(썸네일+재생
+    // 배지)는 그대로 유지 — 상세페이지에서 그 표시가 따로 필요해서 없애지 않았다.
+    insertLinkText: async (url: string) => {
+      const html = await editor.getHTML()
+      const safeUrl = url.replace(/"/g, '&quot;')
+      editor.setContent(`${html}<p><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${url}</a></p>`)
+    },
   }), [editor])
 
   // 본문 평문(서식 제외)을 부모에 전달 — canSave·글자수 판단용
