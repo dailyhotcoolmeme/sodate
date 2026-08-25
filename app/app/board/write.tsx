@@ -739,7 +739,19 @@ function makeStyles(colors: AppColors) {
     // (오너 지시 2026-08-25).
     // 2줄(오너 지시 2026-08-25: "2줄로 만들어!")로 줄어서 툴바가 88 만 차지 — 그만큼
     // 박스는 줄여도 타이핑 공간은 3줄 때(520)와 비슷하게 유지된다.
-    richBox: { minHeight: 480, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // ⚠️(2026-08-25) 근본 원인 확정 — 웹뷰(에디터 본문)는 RN 쪽에 자기 실제 문서 높이를
+    // 보고하지 않는 한 부모가 flex 로 나눠준 높이에서 안 늘어난다. 그 실제 높이를 RN 에
+    // 보고하게 하는 tentap 공식 기능(dynamicHeight)을 두 번 시도했는데 한 번은 에디터가
+    // 안 보이는 사고, 한 번은 이미지 삽입 자체가 무한 로딩에 빠지는 사고가 나서 둘 다
+    // 원복했다(오너: "스크롤바 얘기했다고 디자인 다 깨뜨리면 집어치워라" — 검증 안 된
+    // 걸 억지로 밀어넣지 않는다). overflow 를 열어보는 것도 시도했지만 효과 없음을
+    // 직접 재현해서 확인(스크롤이 특정 지점에서 그대로 멈춤). 페이지 전체 스크롤 하나로
+    // 처리하는 방식은 이 프로젝트 환경에서 안전하게 구현할 방법을 아직 못 찾았다 —
+    // 그래서 최대 높이를 정하고 그 안에서는 박스 자체가 확실하게 동작하는 내부 스크롤을
+    // 쓰기로 한다(페이지 전체 스크롤 방식이 두 번 다 실패했으니, 최소한 확실히 되는
+    // 쪽을 우선한다). maxHeight 600 — 화면 대부분을 채우면서도 등록 버튼 등 다른
+    // 요소가 완전히 밀려나지 않을 정도.
+    richBox: { minHeight: 480, maxHeight: 600, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     // 줄마다 44 로 고정 — tentap FlatList 자체 flex 를 못 믿으니 바깥에서 한 번 더 가둔다.
     richToolbarRow: { height: 44, overflow: 'hidden' },
     // 글자색·배경색 프리셋 스와치 줄 — 2번째 줄이 탭하면 이 모습으로 바뀐다.

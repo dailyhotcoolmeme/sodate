@@ -169,7 +169,12 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
   const styles = makeStyles(colors)
   return (
     <View style={styles.wrap}>
-      <RichText editor={editor} style={styles.rich} />
+      {/* ⚠️(2026-08-25) tentap 기본값은 scrollEnabled=false(웹뷰 내부 스크롤 끔) — 페이지
+          전체 스크롤 하나로 처리하려던 시도(dynamicHeight)가 두 번 다 실패해서, 박스에
+          maxHeight 를 주고(write.tsx richBox) 그 안에서는 웹뷰 자체 스크롤이 동작하게
+          켠다. WebView 컴포넌트 표준 기능이라 tentap 내부 로직(dynamicHeight 처럼
+          실패한 적 없음)에 기대지 않는다. */}
+      <RichText editor={editor} style={styles.rich} scrollEnabled />
     </View>
   )
 })
