@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Image } from 'react-native'
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Image, Keyboard } from 'react-native'
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
@@ -96,6 +96,14 @@ export default function BoardWriteScreen() {
   // 리치에디터(재빌드 후 활성). 본문 HTML 은 저장 시 richRef.getHTML() 로 뽑는다.
   // richText 는 서식 뺀 평문 미러 — 등록 가능 여부·글자수 판단용.
   const richRef = useRef<RichEditorHandle>(null)
+  // ⚠️(2026-08-25) 스와이프·바깥 탭으로 소프트 키보드를 닫아도 웹뷰 안 커서(DOM
+  // 포커스)는 안 지워진다 — 키보드 없이 커서(+iOS17 물방울 손잡이)만 화면에 남는
+  // 사고가 났다(오너 지적: "이게 뭐냐고!!"). 키보드가 실제로 닫힐 때마다(경로 상관
+  // 없이) editor.blur() 로 웹뷰 DOM 포커스까지 같이 내린다.
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidHide', () => richRef.current?.blur())
+    return () => sub.remove()
+  }, [])
   // 사진·유튜브·인스타 모두 본문(리치 에디터) 안에는 넣지 않고, 유튜브 링크와 같은 자리
   // (게시글 본문 밑 첨부 갤러리)에만 썸네일로 붙인다(2026-08-25 오너 지시: "모든 컨텐츠
   // 첨부는 유튜브처럼 썸네일로 박스 밖에 첨부하게 하자. 아주 심플하게"). 예전에 "첨부는
@@ -693,25 +701,17 @@ function makeStyles(colors: AppColors) {
     nickReadonly: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: colors.border },
     nickReadonlyText: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
     hint: { fontSize: 11.5, color: colors.textTertiary, marginTop: 5 },
-    // 리치에디터 박스(재빌드 후) — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
-    // 툴바가 입력칸 상단에 고정으로 들어가며(최대 3줄 × 44pt ≈ 132pt) 그만큼 타이핑
-    // 공간이 줄어드니, 박스 자체를 예전보다 키워서 하단에 빈 공간 없이 꽉 차게 한다
-    // (오너 지시 2026-08-25).
-    // 2줄(오너 지시 2026-08-25: "2줄로 만들어!")로 줄어서 툴바가 88 만 차지 — 그만큼
-    // 박스는 줄여도 타이핑 공간은 3줄 때(520)와 비슷하게 유지된다.
-    // ⚠️(2026-08-25) 근본 원인 확정 — 웹뷰(에디터 본문)는 RN 쪽에 자기 실제 문서 높이를
-    // 보고하지 않는 한 부모가 flex 로 나눠준 높이에서 안 늘어난다. 그 실제 높이를 RN 에
-    // 보고하게 하는 tentap 공식 기능(dynamicHeight)을 두 번 시도했는데 한 번은 에디터가
-    // 안 보이는 사고, 한 번은 이미지 삽입 자체가 무한 로딩에 빠지는 사고가 나서 둘 다
-    // 원복했다(오너: "스크롤바 얘기했다고 디자인 다 깨뜨리면 집어치워라" — 검증 안 된
-    // 걸 억지로 밀어넣지 않는다). overflow 를 열어보는 것도 시도했지만 효과 없음을
-    // 직접 재현해서 확인(스크롤이 특정 지점에서 그대로 멈춤). 페이지 전체 스크롤 하나로
-    // 처리하는 방식은 이 프로젝트 환경에서 안전하게 구현할 방법을 아직 못 찾았다 —
-    // 그래서 최대 높이를 정하고 그 안에서는 박스 자체가 확실하게 동작하는 내부 스크롤을
-    // 쓰기로 한다(페이지 전체 스크롤 방식이 두 번 다 실패했으니, 최소한 확실히 되는
-    // 쪽을 우선한다). maxHeight 600 — 화면 대부분을 채우면서도 등록 버튼 등 다른
-    // 요소가 완전히 밀려나지 않을 정도.
-    richBox: { minHeight: 480, maxHeight: 600, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // 리치에디터 박스 — 본문 입력칸과 같은 테두리, 에디터+툴바 담김.
+    // ⚠️(2026-08-25) dynamicHeight(웹뷰가 실제 문서 높이를 보고해서 박스가 그만큼만
+    // 커지는 tentap 공식 기능)를 세 번째로 시도했다가 이번엔 진입하자마자 박스가
+    // 통제 불능으로 계속 늘어나는 사고가 났다(오너 지적: "입력박스가 그냥 진입하자
+    // 마자 미친듯이 늘어나잖아!"). 세 번 모두 다른 증상(먹통 화면 / 이미지 삽입
+    // 무한로딩 / 진입 즉시 폭주)으로 실패해서, 이 프로젝트·이 tentap 버전 조합에서는
+    // dynamicHeight 자체를 포기한다 — 대신 오너가 전에 실기기로 직접 확인해서 됐던
+    // (아이폰·안드 둘 다 "된다" 확인받음) maxHeight+내부 스크롤 방식으로 되돌리고,
+    // 사진 갤러리가 스크롤 없이 같이 보이도록 그 높이만 줄인다(오너 지시: "이미지
+    // 썸네일이 한 화면에 보이는 높이로 줄여봐라").
+    richBox: { minHeight: 160, maxHeight: 280, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     // 줄마다 44 로 고정 — tentap FlatList 자체 flex 를 못 믿으니 바깥에서 한 번 더 가둔다.
     richToolbarRow: { height: 44, overflow: 'hidden' },
     // 글자색·배경색 프리셋 스와치 줄 — 2번째 줄이 탭하면 이 모습으로 바뀐다.

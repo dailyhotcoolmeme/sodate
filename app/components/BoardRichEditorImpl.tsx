@@ -142,6 +142,15 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
       editor.focus('end')
     },
     focus: () => editor.focus(),
+    // 소프트 키보드를 스와이프/바깥 탭으로 닫아도(write.tsx Keyboard.dismiss 리스너)
+    // 그건 RN 쪽 네이티브 첫 응답자만 내려놓을 뿐, 웹뷰 안 contentEditable 의 DOM
+    // 포커스는 그대로 남는다 — 그러면 커서(iOS17부터는 커서 밑에 물방울 모양 손잡이가
+    // 붙는다)가 키보드 없이도 화면에 그대로 박혀 있는 사고가 났다(오너 지적: "이게
+    // 뭐냐고!! 이딴식으로 줄이면 어쩌라고!!" — 박스를 줄이면서 그 손잡이가 상대적으로
+    // 커 보여 더 눈에 띄었다). editor.blur() 는 CoreBridge 기본 커맨드라 웹뷰
+    // 번들에 이미 컴파일돼 있어 확실히 동작한다 — DOM 포커스까지 같이 내려서 커서·
+    // 손잡이를 지운다.
+    blur: () => editor.blur(),
     // 유튜브·인스타 링크 — 예전엔 본문 바깥 별도 첨부 목록(BoardLinkChips)에만 들어가서
     // "사진은 안에, 링크는 밖에" 로 자리가 갈렸다(오너 지적: "첨부 컨텐츠들은 모두 본문
     // 내부에 넣게 하라고!!"). tentap 은 커서 위치에 임의 콘텐츠를 끼워넣는 커맨드가

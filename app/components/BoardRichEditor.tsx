@@ -38,6 +38,7 @@ export interface RichEditorHandle {
   insertImage: (url: string) => void
   insertLinkText: (url: string) => void
   focus: () => void
+  blur: () => void
 }
 
 export interface RichEditorProps {
@@ -62,6 +63,7 @@ const Fallback = forwardRef<RichEditorHandle, RichEditorProps & { colors: AppCol
       insertImage: () => {},
       insertLinkText: () => {},
       focus: () => {},
+      blur: () => {},
     }), [])
     return (
       <View style={{ minHeight: 260 }}>
