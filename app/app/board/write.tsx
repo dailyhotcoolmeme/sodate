@@ -12,6 +12,7 @@ import type { AppColors } from '@/constants/colors'
 import { createPost, updatePost, getPostForEdit } from '@/lib/board'
 import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
+import { youtubeThumbnail } from '@/lib/youtube'
 import BoardRichEditor, { type RichEditorHandle } from '@/components/BoardRichEditor'
 import BoardRichToolbar from '@/components/BoardRichToolbar'
 import { DEFAULT_TOOLBAR_ITEMS, Images, type ToolbarItem } from '@10play/tentap-editor'
@@ -100,10 +101,24 @@ export default function BoardWriteScreen() {
   // 리치에디터(재빌드 후 활성). 본문 HTML 은 저장 시 richRef.getHTML() 로 뽑는다.
   // richText 는 서식 뺀 평문 미러 — 등록 가능 여부·글자수 판단용.
   const richRef = useRef<RichEditorHandle>(null)
-  // 유튜브·인스타 링크 추가 시 본문 안에도 텍스트로 넣는다(오너 지적: "첨부 컨텐츠들은
-  // 모두 본문 내부에 넣게 하라고!!" — 사진은 안에, 링크는 밖(첨부 갤러리)에만 들어가서
-  // 자리가 갈렸었다). 첨부 갤러리 자체는 유지 — 상세페이지 재생 썸네일에 필요.
-  const linksApi = useBoardLinks(links, setLinks, (url) => richRef.current?.insertLinkText(url))
+  // 유튜브·인스타 링크 추가 시 본문 안에도 넣는다(오너 지적: "첨부 컨텐츠들은 모두 본문
+  // 내부에 넣게 하라고!!" — 사진은 안에, 링크는 밖(첨부 갤러리)에만 들어가서 자리가
+  // 갈렸었다). 첨부 갤러리 자체는 유지 — 상세페이지 재생 썸네일에 필요.
+  // ⚠️(2026-08-25) 처음엔 링크 텍스트(주소 문자열)만 넣었는데, 오너가 "저게 썸네일
+  // 유튜브라고 생각하냐!!"라고 맞게 지적 — 주소만 있으면 유튜브인지 알 수가 없다.
+  // 조사 결과(Discourse Onebox, Discord/Slack 링크 언퍼얼링) 유튜브는 실제 썸네일
+  // 이미지를 본문에 넣는 게 실제 게시판·포럼들의 표준 방식이라, 사진 삽입과 같은
+  // insertImage 커맨드로 유튜브 공개 썸네일(img.youtube.com) 을 이미지로 넣고 링크
+  // 텍스트도 이어 붙인다. 인스타는 유튜브처럼 공개 썸네일 URL 규칙이 없어서(oEmbed API
+  // 인증이 필요, 이 앱 구조로는 무리) 조사에서도 "실제 미리보기 없이 아이콘/링크만"이
+  // 실제 플랫폼들의 표준 폴백이라고 확인 — 링크 텍스트까지만 넣는다.
+  const linksApi = useBoardLinks(links, setLinks, (url, mode) => {
+    if (mode === 'youtube') {
+      const thumb = youtubeThumbnail(url)
+      if (thumb) richRef.current?.insertImage(thumb)
+    }
+    richRef.current?.insertLinkText(url)
+  })
   const [richText, setRichText] = useState('')
   // tentap editor 인스턴스 — 입력칸 상단 고정 툴바(BoardRichToolbar)에 넘긴다.
   const [richEditor, setRichEditor] = useState<unknown>(null)

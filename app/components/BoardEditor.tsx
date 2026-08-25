@@ -171,9 +171,12 @@ export type LinkMode = 'youtube' | 'instagram'
 // onInsertToContent — 리치 에디터 본문 안에도 같이 넣어달라는 오너 지시(2026-08-25:
 // "첨부 컨텐츠들은 모두 본문 내부에 넣게 하라고!! 왜 이걸 해결을 못하냐고" — 사진은
 // 본문 안, 유튜브·인스타는 밖(첨부 갤러리)이라 자리가 갈렸었다). 아래 썸네일 갤러리
-// (BoardLinkChips, 상세페이지 재생 썸네일)는 그대로 두고, 본문에도 링크 텍스트를
-// 추가로 넣어서 "어디에 뭐가 들어가는지" 일관되게 만든다.
-export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) => void, onInsertToContent?: (url: string) => void) {
+// (BoardLinkChips, 상세페이지 재생 썸네일)는 그대로 두고, 본문에도 넣는다.
+// ⚠️(2026-08-25) 처음엔 본문에 링크 텍스트(주소 문자열)만 넣었는데, 오너가 "저게
+// 썸네일 유튜브라고 생각하냐!!" 라고 지적 — 맞는 말이다, 주소만 덜렁 있으면 유튜브인지
+// 알 수가 없다. mode 를 같이 넘겨서 write.tsx 가 유튜브면 실제 썸네일 이미지까지 본문에
+// 넣게 한다(인스타는 공개 썸네일 URL 규칙이 없어 링크 텍스트까지만 가능).
+export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) => void, onInsertToContent?: (url: string, mode: LinkMode) => void) {
   const [modalVisible, setModalVisible] = useState(false)
   const [mode, setMode] = useState<LinkMode>('youtube')
   const [input, setInput] = useState('')
@@ -197,7 +200,7 @@ export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) =
       return
     }
     if (!links.includes(url)) onChangeLinks([...links, url])
-    onInsertToContent?.(url)
+    onInsertToContent?.(url, mode)
     setModalVisible(false)
   }
 
