@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Keyboard } from 'react-native'
 // 커서가 키보드에 가릴 때만, 가린 만큼만 올려주는 컴포넌트.
 // RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서 동작하지 않는다(react-native#16826).
-import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller'
+import { KeyboardAwareScrollView, KeyboardStickyView, useKeyboardState } from 'react-native-keyboard-controller'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -107,27 +107,23 @@ export default function BoardWriteScreen() {
   // ⚠️(2026-08-26) 키보드 위 툴바를 react-native-keyboard-controller 의
   // KeyboardStickyView 로 고정했는데, 안드 실기기에서 툴바 전체가 아예 안 보이는
   // 사고가 났다 — BlurView 를 빼도 그대로였다(외부 AI 3곳 교차검증으로 BlurView는
-  // 무죄 확정, 다음 용의자는 KeyboardStickyView 자체). 그 라이브러리 내부 애니메이션에
-  // 기대지 않고, RN 코어 Keyboard 이벤트로 키보드 높이를 직접 재서 그만큼
-  // position:absolute 로 밀어올리는 훨씬 오래되고 단순한 방식으로 교체한다.
+  // 무죄 확정). 그 컴포넌트(KeyboardStickyView) 자체를 걷어내고 RN 코어
+  // `Keyboard.addListener('keyboardDidShow', ...)` 로 직접 높이를 재는 방식으로
+  // 바꿨더니, 이번엔 그 이벤트 자체가 최신 안드(엣지투엣지) 에서 전혀 안 와서
+  // 툴바가 키보드를 안 따라가고 화면 맨 아래에 고정되는 사고가 났다(오너 제보:
+  // "바닥에 있는게 키보드랑 같이 올라오질 않고 고정되어 있다"). RN 코어 Keyboard
+  // 모듈은 안드에서 창 높이 변화를 추론하는 낡은 방식이라 엣지투엣지에서 잘 안
+  // 맞는다 — 같은 라이브러리 안에 있는 `useKeyboardState`(네이티브 이벤트 기반,
+  // KeyboardStickyView 와 무관한 별개 훅)로 교체한다. 위치 계산(밀어올리기)은
+  // 계속 우리가 직접 만든 로직 그대로 쓴다 — 문제였던 컴포넌트만 피한다.
+  const kbHeightRaw = useKeyboardState((state) => state.height)
   // ⚠️(2026-08-26 오너 지적: "안드 3버튼 생각을 안하냐?") 안드 3버튼 네비게이션
-  // 기기 일부에서 keyboardDidShow 가 보고하는 높이가 실제 키보드 높이보다 훨씬
-  // 작게(3버튼 바 높이만큼 빠진 값으로) 잘못 오는 게 알려진 RN 자체 버그다
-  // (facebook/react-native#24353 — 삼성 등 3버튼 기기에서 재현 보고 다수). 이 값을
-  // 그대로 믿으면 툴바가 키보드에 가려지거나 3버튼 바 위 틈에 끼어 보일 수 있다 —
-  // 안전장치로 keyboardDidShow 값과 "최소한 3버튼 바 높이(insets.bottom)는 넘는
-  // 값" 중 큰 쪽을 쓴다. 이 프로젝트에서 안드 3버튼을 깜빡해서 사고 낸 게 이번이
-  // 처음이 아니다(입력박스 높이, 약관 체크박스 잘림) — 매번 새로 지적받지 않도록
+  // 기기 일부에서 키보드 높이가 실제보다 작게(3버튼 바 높이만큼 빠진 값으로)
+  // 잘못 잡히는 사례가 있다 — 최소한 3버튼 바 높이(insets.bottom)는 넘도록
+  // 보정한다. 이 프로젝트에서 안드 3버튼을 깜빡해서 사고 낸 게 이번이 처음이
+  // 아니다(입력박스 높이, 약관 체크박스 잘림) — 매번 새로 지적받지 않도록
   // "화면 맨 아래 관련 계산은 항상 3버튼 네비게이션까지 감안" 을 메모리에 박아둔다.
-  const [kbHeight, setKbHeight] = useState(0)
-  useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
-      setKbHeight(Math.max(e.endCoordinates.height, insets.bottom))
-    })
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0))
-    return () => { showSub.remove(); hideSub.remove() }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const kbHeight = kbHeightRaw > 0 ? Math.max(kbHeightRaw, insets.bottom) : 0
   // 사진·유튜브·인스타 모두 본문(리치 에디터) 안에는 넣지 않고, 유튜브 링크와 같은 자리
   // (게시글 본문 밑 첨부 갤러리)에만 썸네일로 붙인다(2026-08-25 오너 지시: "모든 컨텐츠
   // 첨부는 유튜브처럼 썸네일로 박스 밖에 첨부하게 하자. 아주 심플하게"). 예전에 "첨부는
