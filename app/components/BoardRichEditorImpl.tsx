@@ -40,11 +40,27 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [placeholder])
 
+  // 툴바 배경·아이콘 색을 앱 톤(회색)으로 통일한다 — tentap 기본 테마는 배경이 흰색
+  // 고정이라, 우리가 직접 그리던 사진·GIF 버튼 구역(투명, 앱 배경색)과 색이 갈라져
+  // 보였다(오너 지적: "배경색을 모두 회색으로 통일시키고"). 다크모드에서는 흰 배경이
+  // 그대로 튀어보이는 문제도 겸사겸사 해결된다.
+  const editorTheme = useMemo(() => ({
+    toolbar: {
+      toolbarBody: { backgroundColor: colors.surfaceHigh, borderTopColor: colors.divider, borderBottomColor: colors.divider },
+      toolbarButton: { backgroundColor: colors.surfaceHigh },
+      iconWrapper: { backgroundColor: colors.surfaceHigh },
+      iconWrapperActive: { backgroundColor: colors.divider },
+      icon: { tintColor: colors.textSecondary },
+      iconDisabled: { tintColor: colors.textTertiary },
+    },
+  }), [colors])
+
   const editor = useEditorBridge({
     autofocus: false,
     avoidIosKeyboard: false,   // 키보드 회피는 부모 KeyboardAwareScrollView 가 담당(이중 회피 방지)
     initialContent: initialHTML || '',
     bridgeExtensions,
+    theme: editorTheme,
   })
 
   useImperativeHandle(ref, () => ({
