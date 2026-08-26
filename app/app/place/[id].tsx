@@ -19,7 +19,7 @@ import type { AppColors } from '@/constants/colors'
 import type { ReviewRow } from '@/lib/supabase'
 import {
   fetchPlace, fetchPlaceReviews, fetchNearbyPlaces, openStatus,
-  osmTiles, type PlaceRow, type PlaceReview,
+  osmTiles, topConveniences, type PlaceRow, type PlaceReview,
 } from '@/lib/places'
 import { deletePlaceReview } from '@/lib/placeReviews'
 import { getMyReviewIds } from '@/lib/reviewIdentity'
@@ -271,7 +271,18 @@ export default function PlaceDetailScreen() {
               <View style={styles.telRow}><Text style={styles.infoV}>{place.tel}</Text><Ionicons name="call" size={14} color={colors.primary} /></View>
             </TouchableOpacity>
           )}
-          {place.conveniences.length > 0 && <View style={styles.infoRow}><Text style={styles.infoK}>편의</Text><Text style={styles.infoV}>{place.conveniences.join(' · ')}</Text></View>}
+          {/* 편의시설 — 카드(PlaceListItem)와 같은 순서(흔치 않은 것부터, 오너 지시
+              2026-08-26). 상세는 자리 여유가 있어 전부 다 보여준다(카드는 상위 3개만). */}
+          {place.conveniences.length > 0 && (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoK}>편의</Text>
+              <View style={styles.kwWrap}>
+                {topConveniences(place.conveniences, place.conveniences.length).map((c) => (
+                  <View key={c} style={styles.kwChip}><Text style={styles.kwChipText}>{c}</Text></View>
+                ))}
+              </View>
+            </View>
+          )}
           {/* 방문자 키워드 = 네이버 방문자 투표(사실). 별도 박스 대신 같은 라벨-내용 레이어. */}
           {place.keyword_votes && Object.keys(place.keyword_votes).length > 0 && (
             <View style={styles.infoRow}>

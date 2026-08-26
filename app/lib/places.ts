@@ -81,6 +81,27 @@ export function reviewHashtags(votes: Record<string, number> | null | undefined,
     .map(([k]) => k.replace(/\s+/g, ''))
 }
 
+// 편의시설(conveniences) — 흔한 순(500곳 실측). 카드 4번째 줄엔 "무선인터넷·간편결제"처럼
+// 거의 다 있는 것보다 "주차·노키즈존·반려동물동반"처럼 업체마다 갈리는 게 먼저 보여야
+// 의미가 있다(2026-08-26 오너 승인 — 해시태그 때와 같은 이유: reviewHashtags 주석 참고).
+// 목록에 없는 새 값은 순위 밖(흔함 취급)으로 맨 뒤에 둔다.
+const CONVENIENCE_RARE_FIRST = [
+  '발렛파킹', '유아시설 (놀이방)', '유아의자', '방문접수/출장', '포장', '배달',
+  '반려동물 동반', '대기공간', '주차', '노키즈존', '예약', '남/녀 화장실 구분',
+  '단체 이용 가능', '간편결제', '무선 인터넷',
+]
+export function topConveniences(list: string[] | null | undefined, max = 3): string[] {
+  if (!list || list.length === 0) return []
+  return [...list]
+    .filter(Boolean)
+    .sort((a, b) => {
+      const ai = CONVENIENCE_RARE_FIRST.indexOf(a)
+      const bi = CONVENIENCE_RARE_FIRST.indexOf(b)
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+    })
+    .slice(0, max)
+}
+
 // 종류별 커버 아이콘(Ionicons — 이모지는 시뮬/기기에서 깨질 수 있어 사용 안 함)·색
 export function categoryCover(category: string | null): { icon: string; bg: string; tint: string } {
   switch (category) {

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { type PlaceRow, openStatus, categoryCover } from '@/lib/places'
+import { type PlaceRow, openStatus, categoryCover, topConveniences } from '@/lib/places'
 import { formatDistanceKm } from '@/lib/nearby'
 
 /**
@@ -40,6 +40,10 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
   const styles = useMemo(() => makeStyles(colors), [colors])
   const { open, hoursLabel } = openStatus(place.hours)
   const cover = categoryCover(place.category)
+  // 4번째 줄(편의시설) — 소개팅·소셜링은 4줄인데 혼술바만 3줄이라 카드 리듬이 안 맞았다
+  // (오너 지적 2026-08-26: "혼술바에 한줄이 더 들어갈만한게 뭐가 있을지"). 흔한 순
+  // 정렬(topConveniences)로 업체마다 갈리는 것부터 보여준다 — 자세한 이유는 lib/places.ts 참고.
+  const conv = topConveniences(place.conveniences)
 
   return (
     <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => router.push(`/place/${place.id}`)}>
@@ -87,6 +91,15 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
           )}
         </View>
 
+        {/* 편의시설 칩(2026-08-26) — 눌러도 필터링 안 되는 정보성 표시. */}
+        {conv.length > 0 && (
+          <View style={styles.convRow}>
+            {conv.map((c) => (
+              <View key={c} style={styles.convChip}><Text style={styles.convChipText} numberOfLines={1}>{c}</Text></View>
+            ))}
+          </View>
+        )}
+
         {/* 평점 — 별도 줄(2026-08-24 오너 지시). 소개팅·소셜링은 참여현황이 한 줄 더 있어서
             혼술바만 카드가 짧고 어색했는데, 이걸로 줄 수가 맞는다. 네이버 평점 없는(백필 전/
             리뷰 없는) 매장은 이 줄 자체가 안 뜬다. */}
@@ -130,6 +143,10 @@ function makeStyles(colors: AppColors) {
     // 아이콘만 있던 지도 버튼 대신 텍스트버튼(오너 지시 2026-08-26) — 지역·거리 뒤로 위치 이동.
     mapTextBtn: { paddingLeft: 8, paddingVertical: 2 },
     mapTextBtnLabel: { fontSize: 12, fontWeight: '700', color: colors.primary },
+    // 편의시설 칩 — 해시태그처럼 눈에 띄는 primary색 대신 무채색 알약(정보성, 필터 아님).
+    convRow: { flexDirection: 'row', gap: 5, marginTop: 1 },
+    convChip: { backgroundColor: colors.surfaceHigh, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+    convChipText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
     // 평점 줄 — 소개팅·소셜링의 참여현황 줄과 같은 자리(2026-08-24 오너 지시).
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     ratingScore: { fontSize: 12.5, fontWeight: '800', color: colors.textPrimary },
