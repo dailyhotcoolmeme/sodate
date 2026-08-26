@@ -21,6 +21,12 @@ import Svg, { Path } from 'react-native-svg'
  */
 const STROKE_W = 0.75
 
+/**
+ * 커뮤니티(가운데) 아이콘 전용 선 굵기. 이 아이콘만 52px 로 훨씬 크게 그려서 같은
+ * 굵기 값을 써도 화면상 선이 더 두꺼워 보인다 — 그만큼 더 얇게 잡는다(오너 지시).
+ */
+const STROKE_W_CENTER = 0.5
+
 export interface IconProps {
   size: number
   /** 안쪽 면색(연한 톤) */
@@ -58,7 +64,7 @@ export function ChatIcon({ size, fill, stroke }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 14 14">
       <Path d="M7.25 12.78c3.84 0 6-2.16 6-6s-2.16-6-6-6s-6 2.16-6 6c0 1.173.201 2.189.59 3.034l-.987 2.713a.5.5 0 0 0 .628.646l2.825-.942c.828.362 1.813.55 2.944.55Z" fill={fill} />
-      <Path d="M7.25 12.78c3.84 0 6-2.16 6-6s-2.16-6-6-6s-6 2.16-6 6c0 1.173.201 2.189.59 3.034l-.987 2.713a.5.5 0 0 0 .628.646l2.825-.942c.828.362 1.813.55 2.944.55ZM4.385 6.567V7m2.92-.433V7m2.919-.433V7" fill="none" stroke={stroke} strokeWidth={STROKE_W} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M7.25 12.78c3.84 0 6-2.16 6-6s-2.16-6-6-6s-6 2.16-6 6c0 1.173.201 2.189.59 3.034l-.987 2.713a.5.5 0 0 0 .628.646l2.825-.942c.828.362 1.813.55 2.944.55ZM4.385 6.567V7m2.92-.433V7m2.919-.433V7" fill="none" stroke={stroke} strokeWidth={STROKE_W_CENTER} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   )
 }
