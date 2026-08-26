@@ -117,10 +117,12 @@ function makeStyles(colors: AppColors) {
     // 소개팅 제목과 동일: fontSize 14 · weight 700 · lineHeight 19
     name: { flexShrink: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 19 },
     metaRow: { flexDirection: 'row', alignItems: 'center' },
-    // 영업시간·지역·거리 텍스트 묶음 — flex:1 로 남는 공간만 차지해야 오른쪽
-    // "지도보기" 버튼이 항상 제자리에 붙는다(업체명이 길어 지역·거리 텍스트가
-    // 늘어져도 버튼이 밀려나지 않게).
-    metaTextWrap: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+    // 영업시간·지역·거리 텍스트 묶음 — flex:1 을 주면 내용이 짧아도(거리 없이 지역만
+    // 있을 때 등) 이 View 가 줄 끝까지 늘어나 버려서 "지도보기" 버튼이 텍스트와 안
+    // 붙고 줄 맨 끝에 혼자 떨어져 보였다(오너 지적: "지도보기 글자만 혼자
+    // 떨어져있다"). flexShrink 만 줘서 내용 길이만큼만 차지하게 하고(넘칠 때만
+    // 줄어들어 meta 텍스트가 말줄임되게), 버튼이 항상 텍스트 바로 뒤에 붙게 한다.
+    metaTextWrap: { flexShrink: 1, flexDirection: 'row', alignItems: 'center' },
     op: { fontSize: 12, fontWeight: '800' },
     // 회색 보조 텍스트 톤·크기 통일 — textSecondary/12 하나로.
     hours: { fontSize: 12, color: colors.textSecondary },
