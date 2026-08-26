@@ -43,7 +43,9 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
   // 4번째 줄(편의시설) — 소개팅·소셜링은 4줄인데 혼술바만 3줄이라 카드 리듬이 안 맞았다
   // (오너 지적 2026-08-26: "혼술바에 한줄이 더 들어갈만한게 뭐가 있을지"). 흔한 순
   // 정렬(topConveniences)로 업체마다 갈리는 것부터 보여준다 — 자세한 이유는 lib/places.ts 참고.
-  const conv = topConveniences(place.conveniences)
+  // 처음엔 상위 3개만 칩(배경 박스)으로 보여줬는데, 오너 지시(2026-08-26)로 배경 없는
+  // 핑크색 텍스트 + 가운뎃점 나열로 바꾸고 개수도 3개 제한 없이 거의 다 보여주게 늘렸다.
+  const conv = topConveniences(place.conveniences, 99)
 
   return (
     <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => router.push(`/place/${place.id}`)}>
@@ -91,13 +93,10 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
           )}
         </View>
 
-        {/* 편의시설 칩(2026-08-26) — 눌러도 필터링 안 되는 정보성 표시. */}
+        {/* 편의시설(2026-08-26) — 눌러도 필터링 안 되는 정보성 표시. 배경 박스 없이
+            핑크색 글자를 가운뎃점으로 나열(오너 지시). 다 보여줘야 해서 줄바꿈 허용. */}
         {conv.length > 0 && (
-          <View style={styles.convRow}>
-            {conv.map((c) => (
-              <View key={c} style={styles.convChip}><Text style={styles.convChipText} numberOfLines={1}>{c}</Text></View>
-            ))}
-          </View>
+          <Text style={styles.convText}>{conv.join(' · ')}</Text>
         )}
 
         {/* 평점 — 별도 줄(2026-08-24 오너 지시). 소개팅·소셜링은 참여현황이 한 줄 더 있어서
@@ -143,10 +142,8 @@ function makeStyles(colors: AppColors) {
     // 아이콘만 있던 지도 버튼 대신 텍스트버튼(오너 지시 2026-08-26) — 지역·거리 뒤로 위치 이동.
     mapTextBtn: { paddingLeft: 8, paddingVertical: 2 },
     mapTextBtnLabel: { fontSize: 12, fontWeight: '700', color: colors.primary },
-    // 편의시설 칩 — 해시태그처럼 눈에 띄는 primary색 대신 무채색 알약(정보성, 필터 아님).
-    convRow: { flexDirection: 'row', gap: 5, marginTop: 1 },
-    convChip: { backgroundColor: colors.surfaceHigh, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
-    convChipText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+    // 편의시설 — 배경 박스 없이 핑크(primary)색 글자, 가운뎃점 나열(오너 지시 2026-08-26).
+    convText: { fontSize: 12, fontWeight: '700', color: colors.primary, marginTop: 1 },
     // 평점 줄 — 소개팅·소셜링의 참여현황 줄과 같은 자리(2026-08-24 오너 지시).
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     ratingScore: { fontSize: 12.5, fontWeight: '800', color: colors.textPrimary },

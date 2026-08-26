@@ -271,16 +271,12 @@ export default function PlaceDetailScreen() {
               <View style={styles.telRow}><Text style={styles.infoV}>{place.tel}</Text><Ionicons name="call" size={14} color={colors.primary} /></View>
             </TouchableOpacity>
           )}
-          {/* 편의시설 — 카드(PlaceListItem)와 같은 순서(흔치 않은 것부터, 오너 지시
-              2026-08-26). 상세는 자리 여유가 있어 전부 다 보여준다(카드는 상위 3개만). */}
+          {/* 편의시설 — 카드(PlaceListItem)와 같은 순서(흔치 않은 것부터). 배경 박스
+              없이 가운뎃점으로 나열, 글자색은 기존 그대로(오너 지시 2026-08-26). */}
           {place.conveniences.length > 0 && (
             <View style={styles.infoRow}>
               <Text style={styles.infoK}>편의</Text>
-              <View style={styles.kwWrap}>
-                {topConveniences(place.conveniences, place.conveniences.length).map((c) => (
-                  <View key={c} style={styles.kwChip}><Text style={styles.kwChipText}>{c}</Text></View>
-                ))}
-              </View>
+              <Text style={styles.convText}>{topConveniences(place.conveniences, place.conveniences.length).join(' · ')}</Text>
             </View>
           )}
           {/* 방문자 키워드 = 네이버 방문자 투표(사실). 별도 박스 대신 같은 라벨-내용 레이어. */}
@@ -397,6 +393,9 @@ function makeStyles(colors: AppColors) {
     kwChip: { backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
     kwChipText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
     kwCount: { color: colors.primary, fontWeight: '800' },
+    // 편의시설 — 이전엔 kwChip과 같은 배경 박스였는데, 배경 없이 가운뎃점 나열로
+    // 바꾸면서도 글자색은 그대로(kwChipText와 동일한 textSecondary/12/600) 유지.
+    convText: { flex: 1, fontSize: 12, color: colors.textSecondary, fontWeight: '600', lineHeight: 20 },
     // 후기 섹션 헤더 — 소개팅 event/[id] 와 동일(제목 왼쪽, 연필+글자 오른쪽)
     reviewsSection: { paddingHorizontal: 20, paddingTop: 10, marginTop: 6 },
     reviewsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
