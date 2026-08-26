@@ -66,9 +66,15 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
           // 웹뷰 높이 보고를 흉내내는 방식이 아니라 네이티브 텍스트 레이아웃이라 안정적.
           scrollEnabled={false}
           style={styles.input}
+          // ⚠️(2026-08-26) 비순서 목록 점(bulletColor)·체크박스(boxColor) 라이브러리
+          // 기본값이 각각 검정·파랑이라 다크 배경에서 점이 안 보이고 체크박스만 튀는
+          // 색이었다(오너 지적: "점이 검정색이라서 잘 안보인다... 체크박스도 파랑색").
+          // 본문 글자색·앱 포인트 컬러로 맞추고, 박스 크기도 기본 24 → 18 로 줄였다.
           htmlStyle={{
             a: { color: colors.primary },
             blockquote: { color: colors.textSecondary, borderColor: colors.border },
+            ul: { bulletColor: colors.textPrimary },
+            ulCheckbox: { boxColor: colors.primary, boxSize: 18 },
           }}
           onChangeText={(e) => onChangeText?.(e.nativeEvent.value)}
           onChangeState={(e) => onStateChange?.(e.nativeEvent)}

@@ -51,9 +51,15 @@ export default function PostHtmlView({ content, textStyle, colors }: Props) {
   return (
     <EnrichedText
       selectable
-      // 글쓰기 입력칸(BoardRichEditorImpl)과 같은 htmlStyle — 인용구가 쓰기 화면과
-      // 보기 화면에서 다르게 보이면 안 된다(2026-08-26 취소선·인용구·목록·링크 추가).
-      htmlStyle={{ a: { color: colors.primary }, blockquote: { color: colors.textSecondary, borderColor: colors.border } }}
+      // 글쓰기 입력칸(BoardRichEditorImpl)과 같은 htmlStyle — 인용구·목록·체크박스가
+      // 쓰기 화면과 보기 화면에서 다르게 보이면 안 된다(2026-08-26 취소선·인용구·
+      // 목록·링크 추가, 목록점/체크박스 색상·크기 조정).
+      htmlStyle={{
+        a: { color: colors.primary },
+        blockquote: { color: colors.textSecondary, borderColor: colors.border },
+        ul: { bulletColor: colors.textPrimary },
+        ulCheckbox: { boxColor: colors.primary, boxSize: 18 },
+      }}
       style={StyleSheet.flatten([{ color: colors.textPrimary }, textStyle])}
     >
       {content}
