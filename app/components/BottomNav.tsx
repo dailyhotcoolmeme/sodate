@@ -38,10 +38,13 @@ const TABS: { key: TabKey; label: string; route: string; Icon: IconComp }[] = [
   { key: 'my',        label: 'MY',       route: '/my',        Icon: UserCircleIcon },
 ]
 
-/** 아이콘 크기 — 가운데(커뮤니티)만 크게, 그리고 바 윗선 위로 올린다(오너 선택: 44/14). */
-const ICON = 28
-const CENTER_ICON = 44
-const CENTER_LIFT = 14
+/** 아이콘 크기 — 가운데(커뮤니티)만 크게, 그리고 바 윗선 위로 올린다. */
+const ICON = 32
+const CENTER_ICON = 52
+/** 커뮤니티 아이콘이 바 윗선 위로 올라오는 높이 = 위쪽 투명 여백의 높이이기도 하다. */
+const CENTER_LIFT = 20
+/** 바(색이 칠해지는 부분)의 높이. 오너 지시로 이전보다 낮췄다. */
+const BAR_H = 50
 
 const CANONICAL_ROUTE: Record<TabKey, string> = {
   event: '/', socialing: '/socialing', honsul: '/honsul', my: '/my', board: '/board',
@@ -97,8 +100,6 @@ export default function BottomNav({ current, route }: { current: TabKey; route?:
         accessibilityRole="tab" accessibilityLabel={t.label}
         accessibilityState={{ selected: on }}
       >
-        {/* 가운데만 transform 으로 끌어올린다 — margin 을 쓰면 바 높이가 같이 늘어나
-            아이콘이 바 안에 갇힌다(시안 만들며 실제로 겪은 문제). */}
         <View style={center ? styles.centerLift : undefined}>
           <t.Icon size={center ? CENTER_ICON : ICON} stroke={stroke} fill={fill} />
         </View>
@@ -108,6 +109,11 @@ export default function BottomNav({ current, route }: { current: TabKey; route?:
 
   return (
     <View style={[styles.wrap, { paddingBottom: insets.bottom }]}>
+      {/* 바 배경은 아래쪽(BAR_H)에만 깔고, 그 위 CENTER_LIFT 만큼은 투명하게 비워둔다.
+          커뮤니티 아이콘은 그 투명 영역으로 올라오므로 "윗선 위로 튀어나온" 모양이 되면서도
+          부모 밖으로 나가지 않는다 — 안드로이드는 부모 밖 자식을 잘라버려서(overflow 무시)
+          밖으로 밀어내는 방식은 실기기에서 안 먹혔다(2026-08-27 실기기 확인). */}
+      <View style={[styles.barBg, { bottom: insets.bottom }]} pointerEvents="none" />
       {TABS.map(renderTab)}
     </View>
   )
@@ -115,22 +121,24 @@ export default function BottomNav({ current, route }: { current: TabKey; route?:
 
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
-    // ⚠️ overflow 를 자르면 안 된다 — 가운데 커뮤니티 아이콘이 이 바 위로 튀어나온다.
+    // 바깥 컨테이너는 배경이 없다(투명). 위쪽 CENTER_LIFT 만큼이 커뮤니티 아이콘이
+    // 올라올 자리이고, 실제 바 색은 아래 barBg 가 칠한다.
     wrap: {
-      flexDirection: 'row', alignItems: 'center',
+      flexDirection: 'row', alignItems: 'flex-end',
+      paddingHorizontal: 4,
+      paddingTop: CENTER_LIFT,
+    },
+    // 실제로 색이 칠해지는 바. 좌우 끝까지, 아래는 안전영역 위까지.
+    barBg: {
+      position: 'absolute', left: 0, right: 0, height: BAR_H,
       backgroundColor: colors.background,
       borderTopWidth: 1, borderTopColor: colors.divider,
-      paddingHorizontal: 4,
-      overflow: 'visible',
     },
-    // 이름표를 뺀 뒤에도 바 높이가 확 줄지 않게 세로 패딩을 유지한다(아이콘 28 + 패딩 26 ≈ 54).
     tab: {
       flex: 1, alignItems: 'center', justifyContent: 'center',
-      paddingTop: 14, paddingBottom: 12,
-      overflow: 'visible',
+      height: BAR_H,
     },
-    // 가운데(커뮤니티)만 위로 끌어올린다. translateY 는 레이아웃 높이에 영향이 없어
-    // 바 높이가 안 늘어나고 아이콘만 윗선 밖으로 나간다.
+    // 가운데(커뮤니티)만 위로 끌어올린다 — 위에 비워둔 투명 여백 안으로 들어간다.
     centerLift: { transform: [{ translateY: -CENTER_LIFT }] },
   })
 }
