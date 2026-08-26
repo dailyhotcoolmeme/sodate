@@ -157,34 +157,53 @@ export default function HonsulScreen() {
     for (const p of all) m.set(p.id, regionGroupKey(p.address_road ?? p.region ?? ''))
     return m
   }, [all])
-  // 지역군 칩 — 소개팅·소셜링은 고정 순서(강남권·강북권·강서권·경기…) 그대로 쓰지만,
-  // 혼술바만 매장 많은 순으로 바꾼다(오너 지시 2026-08-26: "업체들 많은 순서로...
-  // 가급적 서울,경기,인천이 먼저 나오게"). REGION_GROUP_ORDER 자체(다른 화면과 공유)는
-  // 안 건드리고, 여기서만 카운트를 세어 서울·경기·인천을 먼저, 그 안에서는 매장 많은
-  // 순으로 정렬한다.
-  const CORE_REGIONS = useMemo(() => new Set(['강남권', '강북권', '강서권', '경기', '인천']), [])
+  // 지역군 칩(1번째 줄: 강남권·강북권·강서권·경기…) — 소개팅·소셜링과 같은 고정 순서.
+  // ⚠️(2026-08-26) 이 줄을 매장 많은 순으로 바꿨다가 오너 지적으로 되돌렸다 — 오너가
+  // "두번째줄에 홍대 제주시청"이라고 예로 든 건 이 지역군 줄이 아니라 아래 상권(sanggwons)
+  // 줄이었다("이새끼 첫번째줄 필터를 바꿔놨네" — 대상을 잘못 짚었던 실수).
   const regionGroups = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const p of all) {
-      const k = groupOf.get(p.id)
-      if (k) counts.set(k, (counts.get(k) ?? 0) + 1)
-    }
-    const keys = REGION_GROUP_ORDER.map((g) => g.key).filter((k) => counts.has(k))
-    return keys.sort((a, b) => {
-      const coreDiff = (CORE_REGIONS.has(a) ? 0 : 1) - (CORE_REGIONS.has(b) ? 0 : 1)
-      if (coreDiff !== 0) return coreDiff
-      return (counts.get(b) ?? 0) - (counts.get(a) ?? 0)
-    })
-  }, [all, groupOf, CORE_REGIONS])
-  // 상권 목록 = 매장 있는 상권만, 매장수 많은 순. 지역군 선택 시 그 안의 상권만.
+    const has = new Set([...all].map((p) => groupOf.get(p.id)))
+    return REGION_GROUP_ORDER.map((g) => g.key).filter((k) => has.has(k))
+  }, [all, groupOf])
+  // 상권 목록(2번째 줄: 홍대·제주시청·부산·광안리…) = 매장 있는 상권만. 기존에도 매장
+  // 많은 순 정렬은 이미 돼 있었는데, 서울/경기/인천이 아닌 지역(제주·부산 등)이 매장수만
+  // 보고 섞여 들어와 있었다 — 오너 지시(2026-08-26): "이거 순서를 업체들 많은
+  // 순서로 바꿔라. 가급적 서울,경기,인천이 먼저 나오게". 서울·경기·인천 소속 상권을
+  // 먼저(그 안에서는 매장 많은 순), 나머지 지역은 순서를 매장수로 매기지 않고 1번째 줄
+  // 지역군 순서(REGION_GROUP_ORDER: 강원→충청→호남→경북→경남→제주→기타)를 그대로
+  // 따르게 하고, 같은 지역군 안에서만 매장 많은 순으로 정렬한다(오너 추가 지시: "나머지
+  // 지역들도 1번째줄 지역군에 맞춰서 정렬시켜라" — 매장수만으로 매기면 예를 들어 인기
+  // 많은 제주 상권이 강원보다 먼저 나오는 등 지역군 순서와 어긋났다).
+  const CORE_REGIONS = useMemo(() => new Set(['강남권', '강북권', '강서권', '경기', '인천']), [])
+  const REGION_ORDER_INDEX = useMemo(
+    () => new Map(REGION_GROUP_ORDER.map((g, i) => [g.key, i])),
+    [],
+  )
   const sanggwons = useMemo(() => {
     const c = new Map<string, number>()
+    const groupBySang = new Map<string, string>()
     for (const p of all) {
       if (regionGroup && groupOf.get(p.id) !== regionGroup) continue
-      const s = sangOf.get(p.id); if (s) c.set(s, (c.get(s) ?? 0) + 1)
+      const s = sangOf.get(p.id); if (!s) continue
+      c.set(s, (c.get(s) ?? 0) + 1)
+      if (!groupBySang.has(s)) {
+        const g = groupOf.get(p.id)
+        if (g) groupBySang.set(s, g)
+      }
     }
-    return [...c.entries()].sort((a, b) => b[1] - a[1]).map(([s]) => s)
-  }, [all, sangOf, groupOf, regionGroup])
+    return [...c.entries()].sort((a, b) => {
+      const aGroup = groupBySang.get(a[0]) ?? ''
+      const bGroup = groupBySang.get(b[0]) ?? ''
+      const aCore = CORE_REGIONS.has(aGroup)
+      const bCore = CORE_REGIONS.has(bGroup)
+      if (aCore !== bCore) return aCore ? -1 : 1
+      if (aCore && bCore) return b[1] - a[1]
+      const aIdx = REGION_ORDER_INDEX.get(aGroup) ?? 999
+      const bIdx = REGION_ORDER_INDEX.get(bGroup) ?? 999
+      if (aIdx !== bIdx) return aIdx - bIdx
+      return b[1] - a[1]
+    }).map(([s]) => s)
+  }, [all, sangOf, groupOf, regionGroup, CORE_REGIONS, REGION_ORDER_INDEX])
 
   const list = useMemo(() => {
     const q = search.trim()
