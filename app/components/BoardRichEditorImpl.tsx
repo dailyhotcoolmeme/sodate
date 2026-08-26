@@ -4,6 +4,7 @@ import {
   EnrichedTextInput,
   type EnrichedTextInputInstance,
   type OnChangeStateEvent,
+  type OnChangeSelectionEvent,
 } from 'react-native-enriched-html'
 import type { AppColors } from '@/constants/colors'
 import type { RichEditorHandle, RichEditorProps } from './BoardRichEditor'
@@ -22,6 +23,10 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
     ref,
   ) {
     const inputRef = useRef<EnrichedTextInputInstance>(null)
+    // 링크 삽입(setLink)은 어느 범위에 걸지 알아야 하는데, 그 값을 상위(write.tsx)
+    // 로 async 없이 즉시 넘겨줘야 해서(모달 여는 순간 필요) 매번 최신값을 ref 에만
+    // 담아두고 getSelection() 으로 동기 조회한다.
+    const selectionRef = useRef({ start: 0, end: 0, text: '' })
 
     useImperativeHandle(ref, () => ({
       getHTML: () => inputRef.current?.getHTML() ?? Promise.resolve(''),
@@ -32,6 +37,14 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
       toggleBold: () => inputRef.current?.toggleBold(),
       toggleItalic: () => inputRef.current?.toggleItalic(),
       toggleUnderline: () => inputRef.current?.toggleUnderline(),
+      toggleStrikeThrough: () => inputRef.current?.toggleStrikeThrough(),
+      toggleBlockQuote: () => inputRef.current?.toggleBlockQuote(),
+      toggleOrderedList: () => inputRef.current?.toggleOrderedList(),
+      toggleUnorderedList: () => inputRef.current?.toggleUnorderedList(),
+      toggleCheckboxList: () => inputRef.current?.toggleCheckboxList(false),
+      setLink: (start, end, text, url) => inputRef.current?.setLink(start, end, text, url),
+      removeLink: (start, end) => inputRef.current?.removeLink(start, end),
+      getSelection: () => selectionRef.current,
     }), [])
 
     // 네이티브 컴포넌트라 tentap 웹뷰처럼 비동기 로드를 기다릴 필요가 없다 — 마운트되면
@@ -59,6 +72,7 @@ export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColor
           }}
           onChangeText={(e) => onChangeText?.(e.nativeEvent.value)}
           onChangeState={(e) => onStateChange?.(e.nativeEvent)}
+          onChangeSelection={(e: { nativeEvent: OnChangeSelectionEvent }) => { selectionRef.current = e.nativeEvent }}
         />
       </View>
     )

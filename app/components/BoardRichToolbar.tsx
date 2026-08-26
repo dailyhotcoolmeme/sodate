@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import type { AppColors } from '@/constants/colors'
 
 /**
@@ -24,7 +25,7 @@ import type { AppColors } from '@/constants/colors'
  */
 export interface ToolbarButton {
   key: string
-  icon: 'photo' | 'youtube' | 'bold' | 'italic' | 'underline'
+  icon: 'photo' | 'youtube' | 'bold' | 'italic' | 'underline' | 'strike' | 'quote' | 'orderedList' | 'unorderedList' | 'checkbox' | 'link'
   active?: boolean
   disabled?: boolean
   onPress: () => void
@@ -52,11 +53,19 @@ export default function BoardRichToolbar({ buttons, colors }: { buttons: Toolbar
   )
 }
 
+// 굵게·기울임·밑줄과 같은 이유(라이브러리가 툴바 UI를 안 줌)로, 취소선·인용구·
+// 순서·비순서 목록도 별도 아이콘 에셋 없이 글자 글리프로 표현한다(오너 승인
+// 2026-08-26: 취소선/인용구/순서목록/비순서목록/체크박스목록/링크 추가). 링크·
+// 체크박스는 Ionicons(이미 프로젝트 의존성)에 딱 맞는 아이콘이 있어 그걸 쓴다.
 function ToolbarIcon({ icon, colors, disabled }: { icon: ToolbarButton['icon']; colors: AppColors; disabled: boolean }) {
   const tint = disabled ? colors.textTertiary : colors.textSecondary
   if (icon === 'photo') return <Image source={require('@/assets/rich-toolbar/photo.png')} style={[styles.img, { tintColor: tint }]} />
   if (icon === 'youtube') return <Image source={require('@/assets/rich-toolbar/youtube.png')} style={[styles.img, { tintColor: tint }]} />
-  const glyph = icon === 'bold' ? 'B' : icon === 'italic' ? 'I' : 'U'
+  if (icon === 'link') return <Ionicons name="link-outline" size={20} color={tint} />
+  if (icon === 'checkbox') return <Ionicons name="checkbox-outline" size={19} color={tint} />
+  const glyphMap: Partial<Record<ToolbarButton['icon'], string>> = {
+    bold: 'B', italic: 'I', underline: 'U', strike: 'S', quote: '“', orderedList: '1.', unorderedList: '•',
+  }
   return (
     <Text style={[
       styles.glyph,
@@ -64,8 +73,12 @@ function ToolbarIcon({ icon, colors, disabled }: { icon: ToolbarButton['icon']; 
       icon === 'bold' && styles.glyphBold,
       icon === 'italic' && styles.glyphItalic,
       icon === 'underline' && styles.glyphUnderline,
+      icon === 'strike' && styles.glyphStrike,
+      icon === 'quote' && styles.glyphQuote,
+      icon === 'orderedList' && styles.glyphOrderedList,
+      icon === 'unorderedList' && styles.glyphUnorderedList,
     ]}>
-      {glyph}
+      {glyphMap[icon]}
     </Text>
   )
 }
@@ -76,6 +89,10 @@ const styles = StyleSheet.create({
   glyphBold: { fontWeight: '800' },
   glyphItalic: { fontStyle: 'italic' },
   glyphUnderline: { textDecorationLine: 'underline' },
+  glyphStrike: { textDecorationLine: 'line-through' },
+  glyphQuote: { fontSize: 20, fontWeight: '800' },
+  glyphOrderedList: { fontSize: 14, fontWeight: '800' },
+  glyphUnorderedList: { fontSize: 22, fontWeight: '900' },
 })
 
 function makeStyles(colors: AppColors) {

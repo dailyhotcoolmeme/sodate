@@ -31,6 +31,13 @@ const CONTENT_MAX = 10000
 /** 커서와 키보드(도구줄 포함) 사이에 둘 여유 */
 const CARET_GAP = 8
 
+/** 리치 에디터 인라인 링크(setLink)용 — 프로토콜 없이 입력해도 https:// 를 붙여준다. */
+function normalizeUrl(raw: string): string {
+  const t = raw.trim()
+  if (!t) return ''
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`
+}
+
 type TagOption = { id: string; label: string }
 
 /**
@@ -198,17 +205,45 @@ export default function BoardWriteScreen() {
   // 투표 초안(null=없음). 글 등록 성공 후 createPoll 로 저장(신규글만).
   const [poll, setPoll] = useState<PollDraft | null>(null)
 
-  // 리치 툴바 — 사진·유튜브·굵게·기울임·밑줄 한 줄, 키보드 바로 위에 고정(오너 지시
-  // 2026-08-25: "키보드 위 방식으로 하자"). 글자색·배경색은 새 에디터
+  // 리치 툴바 — 사진·유튜브·굵게·기울임·밑줄·취소선·인용구·순서목록·비순서목록·
+  // 체크박스목록·링크 한 줄, 키보드 바로 위에 고정(오너 지시 2026-08-25: "키보드
+  // 위 방식으로 하자"). 취소선~링크는 2026-08-26 오너 승인으로 추가(아티팩트
+  // 미리보기로 실제 렌더링 확인 후 6개만 골라 승인받음). 글자색·배경색은 새 에디터
   // (react-native-enriched-html)에 아직 없어서 뺐다(오너에게 사전 보고·승인 완료).
   // 되돌리기(undo)도 이 라이브러리 ref API에 없어서 뺐다 — 기기 자체 되돌리기에 맡긴다.
   const full = editor.photoCount >= MAX_IMAGES
+  // 링크 삽입 팝업 상태 — 유튜브/인스타 링크(useBoardLinks)와는 별개다. 그건 본문
+  // 밖 썸네일용이고, 이건 본문 텍스트 중간에 거는 하이퍼링크(setLink)용이다.
+  const [linkModal, setLinkModal] = useState<{ visible: boolean; sel: { start: number; end: number }; text: string; url: string; error: string | null; wasActive: boolean }>(
+    { visible: false, sel: { start: 0, end: 0 }, text: '', url: '', error: null, wasActive: false },
+  )
+  const openInlineLinkModal = () => {
+    const sel = richRef.current?.getSelection() ?? { start: 0, end: 0, text: '' }
+    setLinkModal({ visible: true, sel: { start: sel.start, end: sel.end }, text: sel.text, url: '', error: null, wasActive: !!richState?.link.isActive })
+  }
+  const confirmInlineLink = () => {
+    const url = normalizeUrl(linkModal.url)
+    if (!url) { setLinkModal((m) => ({ ...m, error: '링크 주소를 입력해주세요.' })); return }
+    const text = linkModal.text.trim() || url
+    richRef.current?.setLink(linkModal.sel.start, linkModal.sel.end, text, url)
+    setLinkModal((m) => ({ ...m, visible: false }))
+  }
+  const removeInlineLink = () => {
+    richRef.current?.removeLink(linkModal.sel.start, linkModal.sel.end)
+    setLinkModal((m) => ({ ...m, visible: false }))
+  }
   const toolbarButtons: ToolbarButton[] = useMemo(() => [
     { key: 'photo', icon: 'photo', disabled: richUploading || full, onPress: () => insertRichMedia('photo') },
     { key: 'youtube', icon: 'youtube', onPress: () => linksApi.openAdd('youtube') },
     { key: 'bold', icon: 'bold', active: !!richState?.bold.isActive, onPress: () => richRef.current?.toggleBold() },
     { key: 'italic', icon: 'italic', active: !!richState?.italic.isActive, onPress: () => richRef.current?.toggleItalic() },
     { key: 'underline', icon: 'underline', active: !!richState?.underline.isActive, onPress: () => richRef.current?.toggleUnderline() },
+    { key: 'strike', icon: 'strike', active: !!richState?.strikeThrough.isActive, onPress: () => richRef.current?.toggleStrikeThrough() },
+    { key: 'quote', icon: 'quote', active: !!richState?.blockQuote.isActive, onPress: () => richRef.current?.toggleBlockQuote() },
+    { key: 'orderedList', icon: 'orderedList', active: !!richState?.orderedList.isActive, onPress: () => richRef.current?.toggleOrderedList() },
+    { key: 'unorderedList', icon: 'unorderedList', active: !!richState?.unorderedList.isActive, onPress: () => richRef.current?.toggleUnorderedList() },
+    { key: 'checkbox', icon: 'checkbox', active: !!richState?.checkboxList.isActive, onPress: () => richRef.current?.toggleCheckboxList() },
+    { key: 'link', icon: 'link', active: !!richState?.link.isActive, onPress: openInlineLinkModal },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [richUploading, full, richState])
   // 동영상(숨김 기능 — VIDEO_ENABLED=false 라 버튼 안 보임). R2 업로드 URL 목록.
@@ -557,6 +592,18 @@ export default function BoardWriteScreen() {
 
       <LinkInputModal api={linksApi} />
 
+      {/* 본문 텍스트에 거는 인라인 하이퍼링크 팝업(setLink) — 위 LinkInputModal(유튜브/
+          인스타 썸네일용)과 별개, 말머리 선택 팝업과 같은 화면 가운데 카드 방식. */}
+      <InlineLinkModal
+        state={linkModal}
+        colors={colors}
+        onChangeText={(text) => setLinkModal((m) => ({ ...m, text, error: null }))}
+        onChangeUrl={(url) => setLinkModal((m) => ({ ...m, url, error: null }))}
+        onCancel={() => setLinkModal((m) => ({ ...m, visible: false }))}
+        onConfirm={confirmInlineLink}
+        onRemove={removeInlineLink}
+      />
+
       {/* 사진·GIF 업로드 중 스피너 — 예전엔 툴바 아이콘만 흐리게 죽어서(비활성 표시)
           업로드 중인지 눈에 잘 안 띄었다(오너 지적: "이미지 첨부할때 바로바로
           첨부가 안되면 스피너를 보여주던가 해야할거잖아!"). 등록·수정 때 쓰던 것과
@@ -605,6 +652,91 @@ function TagPickerModal({
       </View>
     </Modal>
   )
+}
+
+/** 본문 인라인 하이퍼링크 팝업 — 표시 텍스트(선택 있으면 자동 채움) + URL 두 칸.
+ *  누르는 순간 이미 링크인 범위였으면(wasActive) 삭제 버튼도 같이 보여준다. */
+function InlineLinkModal({
+  state, colors, onChangeText, onChangeUrl, onCancel, onConfirm, onRemove,
+}: {
+  state: { visible: boolean; text: string; url: string; error: string | null; wasActive: boolean }
+  colors: AppColors
+  onChangeText: (t: string) => void
+  onChangeUrl: (u: string) => void
+  onCancel: () => void
+  onConfirm: () => void
+  onRemove: () => void
+}) {
+  const styles = useMemo(() => makeLinkModalStyles(colors), [colors])
+  return (
+    <Modal visible={state.visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
+        <View style={styles.card}>
+          <Text style={styles.title}>링크 삽입</Text>
+          <Text style={styles.label}>표시할 텍스트</Text>
+          <TextInput
+            style={styles.input}
+            value={state.text}
+            onChangeText={onChangeText}
+            placeholder="링크에 표시될 글자"
+            placeholderTextColor={colors.textTertiary}
+          />
+          <Text style={styles.label}>링크 주소</Text>
+          <TextInput
+            style={styles.input}
+            value={state.url}
+            onChangeText={onChangeUrl}
+            placeholder="example.com"
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          {!!state.error && <Text style={styles.error}>{state.error}</Text>}
+          <View style={styles.btnRow}>
+            {state.wasActive && (
+              <TouchableOpacity style={[styles.btn, styles.btnDanger]} onPress={onRemove} activeOpacity={0.75}>
+                <Text style={[styles.btnText, styles.btnDangerText]}>링크 삭제</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.btn} onPress={onCancel} activeOpacity={0.75}>
+              <Text style={styles.btnText}>취소</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={onConfirm} activeOpacity={0.85}>
+              <Text style={[styles.btnText, styles.btnTextPrimary]}>확인</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function makeLinkModalStyles(colors: AppColors) {
+  return StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+    card: {
+      width: '100%', maxWidth: 360, borderRadius: 16, backgroundColor: colors.surface,
+      borderWidth: 1, borderColor: colors.border, padding: 16,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16,
+      elevation: 12,
+    },
+    title: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
+    label: { fontSize: 12, color: colors.textSecondary, marginBottom: 5 },
+    input: {
+      backgroundColor: colors.surfaceHigh, borderRadius: 10, borderWidth: 1, borderColor: colors.border,
+      paddingHorizontal: 12, paddingVertical: 10, fontSize: 14.5, color: colors.textPrimary, marginBottom: 12,
+    },
+    error: { fontSize: 12, color: '#ff5f5f', marginTop: -6, marginBottom: 10 },
+    btnRow: { flexDirection: 'row', gap: 8, marginTop: 2 },
+    btn: { flex: 1, paddingVertical: 11, borderRadius: 10, alignItems: 'center', backgroundColor: colors.surfaceHigh },
+    btnPrimary: { backgroundColor: colors.primary },
+    btnDanger: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#ff5f5f' },
+    btnText: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+    btnTextPrimary: { color: '#fff' },
+    btnDangerText: { color: '#ff5f5f' },
+  })
 }
 
 function makeTagPickerStyles(colors: AppColors) {

@@ -36,7 +36,7 @@ function stripTags(html: string): string {
 interface Props {
   content: string
   textStyle: StyleProp<TextStyle>
-  colors: { textPrimary: string; background: string; primary: string }
+  colors: { textPrimary: string; textSecondary: string; background: string; primary: string; border: string }
 }
 
 export default function PostHtmlView({ content, textStyle, colors }: Props) {
@@ -51,7 +51,9 @@ export default function PostHtmlView({ content, textStyle, colors }: Props) {
   return (
     <EnrichedText
       selectable
-      htmlStyle={{ a: { color: colors.primary } }}
+      // 글쓰기 입력칸(BoardRichEditorImpl)과 같은 htmlStyle — 인용구가 쓰기 화면과
+      // 보기 화면에서 다르게 보이면 안 된다(2026-08-26 취소선·인용구·목록·링크 추가).
+      htmlStyle={{ a: { color: colors.primary }, blockquote: { color: colors.textSecondary, borderColor: colors.border } }}
       style={StyleSheet.flatten([{ color: colors.textPrimary }, textStyle])}
     >
       {content}

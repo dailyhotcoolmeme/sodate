@@ -37,6 +37,15 @@ export interface RichEditorHandle {
   toggleBold: () => void
   toggleItalic: () => void
   toggleUnderline: () => void
+  toggleStrikeThrough: () => void
+  toggleBlockQuote: () => void
+  toggleOrderedList: () => void
+  toggleUnorderedList: () => void
+  toggleCheckboxList: () => void
+  setLink: (start: number, end: number, text: string, url: string) => void
+  removeLink: (start: number, end: number) => void
+  /** 링크 삽입 모달을 열 때 현재 커서/선택 범위를 동기 조회한다(비어있으면 start===end). */
+  getSelection: () => { start: number; end: number; text: string }
 }
 
 export interface RichEditorProps {
@@ -66,6 +75,14 @@ const Fallback = forwardRef<RichEditorHandle, RichEditorProps & { colors: AppCol
       toggleBold: () => {},
       toggleItalic: () => {},
       toggleUnderline: () => {},
+      toggleStrikeThrough: () => {},
+      toggleBlockQuote: () => {},
+      toggleOrderedList: () => {},
+      toggleUnorderedList: () => {},
+      toggleCheckboxList: () => {},
+      setLink: () => {},
+      removeLink: () => {},
+      getSelection: () => ({ start: 0, end: 0, text: '' }),
     }), [])
     return (
       <View style={{ minHeight: 260 }}>
