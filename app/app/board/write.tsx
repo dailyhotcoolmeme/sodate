@@ -362,7 +362,15 @@ export default function BoardWriteScreen() {
         // "키보드를 닫아도 바닥에 항상 있고 뒤쪽 글자를 가린다... 스크롤바가 안 먹는다").
         // toolbarH 를 더해 툴바 뒤까지 스크롤로 볼 수 있게 한다.
         contentContainerStyle={[wideContent, { padding: 16, paddingBottom: 24 + insets.bottom + toolbarH, gap: 14 }]}
-        keyboardShouldPersistTaps="handled"
+        // ⚠️(2026-08-26) "handled"는 탭 대상이 표준 TextInput/Touchable 처럼 RN
+        // 제스처 시스템에 "내가 처리했다"고 스스로 신호를 줄 때만 키보드를 안 닫는다.
+        // 리치 에디터(EnrichedTextInput)는 Fabric 커스텀 네이티브 뷰라 이 신호를
+        // 표준 방식대로 안 줘서, 제목 입력칸에서 바로 이어 리치 박스를 탭하면 첫
+        // 탭은 "박스 바깥 탭"으로 처리돼 키보드가 닫히고 두 번째 탭에야 포커스가
+        // 넘어갔다(오너 제보: "제목 입력하고 바로 내용 박스 누르면 키보드가 바로
+        // 닫히고 한번 더 눌러야 올라온다"). "always"로 바꿔 탭 자체로는 절대 키보드를
+        // 안 닫게 한다.
+        keyboardShouldPersistTaps="always"
         keyboardDismissMode="interactive"
         // richBoxTouching 설명은 위 state 선언부 참고 — 손가락이 리치 박스 안에 있는
         // 동안만 바깥 스크롤을 잠가서 안쪽 웹뷰 스크롤과 충돌하지 않게 한다.
