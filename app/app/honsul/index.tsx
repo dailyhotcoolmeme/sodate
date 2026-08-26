@@ -265,7 +265,12 @@ export default function HonsulScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar onSearchPress={() => setSearchVisible(true)} />
+      {/* ⚠️(2026-08-26) onLogoPress 를 안 넘기면 TopBar 기본 동작(5탭 개편 이전
+          segment='event'|'board' 2분법)이 무조건 소개팅 홈(/)으로 보낸다 — 혼술바
+          화면(특히 지도보기 상태)에서 로고를 눌러도 소개팅으로 튕겼다(오너 지시:
+          "혼술바는 지도보기 상태에서 눌렀을때도 서브홈으로 가게 해라"). 이미 혼술바
+          안에 있으니 다른 화면으로 이동할 필요 없이 목록(피드) 탭으로만 되돌린다. */}
+      <TopBar onSearchPress={() => setSearchVisible(true)} onLogoPress={() => setTab('feed')} />
 
       {tab === 'feed' ? (
         <View style={{ flex: 1 }}>

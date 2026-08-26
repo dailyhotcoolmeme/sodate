@@ -130,7 +130,11 @@ export default function SocialingScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar onSearchPress={() => setSearchVisible(true)} />
+      {/* ⚠️(2026-08-26) onLogoPress 를 안 넘기면 TopBar 기본 동작이 무조건 소개팅
+          홈(/)으로 보낸다 — 소셜링에서 로고를 눌러도 소개팅으로 튕겼다(혼술바와 같은
+          문제, 오너 지시로 함께 수정). 소개팅 홈(app/index.tsx)과 동일하게 이미 이
+          화면이니 목록 맨 위로 스크롤만 해준다. */}
+      <TopBar onSearchPress={() => setSearchVisible(true)} onLogoPress={() => feedListRef.current?.scrollToOffset({ offset: 0, animated: true })} />
 
       {/* ── 카테고리 칩 + 지역군 칩 2줄 — 소개팅처럼 스크롤하면 통째로 접힌다(마감제외
           줄만 항상 남는다). 소개팅 Animated.View 와 동일하게 두 줄을 하나로 감싼다. ── */}
