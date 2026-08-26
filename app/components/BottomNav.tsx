@@ -49,8 +49,8 @@ const CENTER_ICON = 52
  * 20 으로 뒀더니 아이콘 절반이 올라가 보였다(오너 지적) — 살짝만 걸치게 낮춘다.
  */
 const CENTER_LIFT = 8
-/** 바(색이 칠해지는 부분)의 높이. 오너 지시로 이전보다 낮췄다. */
-const BAR_H = 50
+/** 바(색이 칠해지는 부분)의 높이. 54 → 50 으로 낮췄다가 살짝만 다시 올렸다(오너 지시). */
+const BAR_H = 56
 
 const CANONICAL_ROUTE: Record<TabKey, string> = {
   event: '/', socialing: '/socialing', honsul: '/honsul', my: '/my', board: '/board',
