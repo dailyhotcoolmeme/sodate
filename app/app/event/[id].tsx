@@ -434,7 +434,13 @@ export default function EventDetailScreen() {
 
   return (
     <View style={styles.screen}>
-      <TopBar showBack />
+      {/* ⚠️(2026-08-26) 이 상세화면은 소개팅·소셜링 이벤트가 같이 쓰는 화면이라, 톱바
+          로고를 눌렀을 때 무조건 소개팅 홈(/)으로 보내던 기본 동작(TopBar 자체 로직,
+          segment='event'|'board' 2분법이라 5탭 개편 이전 그대로였다)이 소셜링에서 열었을
+          때도 소개팅으로 튕겨서 흐름이 끊겼다(오너 지시: "상세페이지에서 톱바 아이콘
+          누르면 해당 메뉴들의 서브홈 화면으로 보내라"). 실제로 어느 쪽 이벤트인지
+          아는 이 화면이 직접 목적지를 정해준다. */}
+      <TopBar showBack onLogoPress={() => router.replace(isSocialing ? '/socialing' : '/')} />
     <ScrollView
       style={styles.container}
       showsVerticalScrollIndicator={false}

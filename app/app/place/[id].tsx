@@ -111,8 +111,13 @@ export default function PlaceDetailScreen() {
   }
   const handleReport = (review: ReviewRow) => { setReportTarget(review.id) }
 
-  if (loading) return <View style={styles.container}><TopBar showBack /><View style={styles.center}><AppSpinner /></View></View>
-  if (!place) return <View style={styles.container}><TopBar showBack /><View style={styles.center}><Text style={styles.muted}>매장을 찾을 수 없어요</Text></View></View>
+  // ⚠️(2026-08-26) onLogoPress 를 안 넘기면 TopBar 자체 기본 동작(5탭 개편 이전
+  // segment='event'|'board' 2분법)이 무조건 소개팅 홈(/)으로 보낸다 — 혼술바 상세에서
+  // 로고를 눌러도 소개팅으로 튕겨서 흐름이 끊겼다(오너 지시: "상세페이지에서 톱바
+  // 아이콘 누르면 해당 메뉴들의 서브홈 화면으로 보내라"). 혼술바 홈으로 명시한다.
+  const goHonsulHome = () => router.replace('/honsul')
+  if (loading) return <View style={styles.container}><TopBar showBack onLogoPress={goHonsulHome} /><View style={styles.center}><AppSpinner /></View></View>
+  if (!place) return <View style={styles.container}><TopBar showBack onLogoPress={goHonsulHome} /><View style={styles.center}><Text style={styles.muted}>매장을 찾을 수 없어요</Text></View></View>
 
   const { open, hoursLabel } = openStatus(place.hours)
   const isFav = favoriteIds.has(place.id)
@@ -120,7 +125,7 @@ export default function PlaceDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack />
+      <TopBar showBack onLogoPress={goHonsulHome} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
         {/* 히어로 = 네이버 지도(재빌드 후). 아직 네이티브 모듈 없으면 OSM 타일로 폴백. */}
         {place.lat && place.lng ? (
