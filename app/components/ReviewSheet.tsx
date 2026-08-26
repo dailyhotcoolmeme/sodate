@@ -16,12 +16,14 @@ import {
   type KeyboardEvent,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import { submitReview, updateReview, type SubmittedReview } from '@/lib/reviews'
 import { submitPlaceReview, updatePlaceReview } from '@/lib/placeReviews'
 import { getLastNickname, getLastGender, type ReviewGender } from '@/lib/reviewIdentity'
+import { getTermsAgreed, setTermsAgreed } from '@/lib/boardIdentity'
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
 const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.85
@@ -63,6 +65,7 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
   const isPlace = !!placeId
   const insets = useSafeAreaInsets()
   const colors = useColors()
+  const router = useRouter()
   const translateY = useRef(new Animated.Value(SHEET_MAX_HEIGHT)).current
   // 키보드 높이를 직접 추적해 시트를 밀어올림 → 닫힐 때 정확히 0으로 복귀(바닥에 딱 붙음)
   const kbHeight = useRef(new Animated.Value(0)).current
@@ -101,6 +104,14 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // ⚠️(2026-08-26) 후기도 이용자 제작 콘텐츠(UGC)인데 게시판(app/board/write.tsx)에만
+  // 약관 동의 절차가 있고 여기엔 없었다 — 애플 심사지침 1.2는 후기도 UGC로 본다.
+  // 게시판과 같은 저장키(boardIdentity)를 공유해서, 한쪽에서 이미 동의했으면 다시 묻지
+  // 않는다(같은 '게시물 관련 이용약관'에 대한 동의라 따로 받을 이유가 없다).
+  // 수정(isEdit)은 이미 동의하고 쓴 글을 고치는 것이라 묻지 않는다.
+  const [agreed, setAgreed] = useState(false)
+  const [initiallyAgreed, setInitiallyAgreed] = useState(false)
+  const [agreedLoaded, setAgreedLoaded] = useState(false)
 
   // 열릴 때 프리필/초기화
   useEffect(() => {
@@ -111,6 +122,8 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
       setContent(initial?.content ?? '')
       setError(null)
       setSubmitting(false)
+      setAgreedLoaded(false)
+      getTermsAgreed().then((v) => { setAgreed(v); setInitiallyAgreed(v); setAgreedLoaded(true) })
       // 신규 작성이면 마지막에 쓴 닉네임·성별 자동 세팅(둘 다 수정 가능)
       if (!initial) {
         getLastNickname().then((last) => {
@@ -175,7 +188,10 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
   const ratingValid = rating >= 1 && rating <= 5
   const contentValid = body.length >= CONTENT_MIN && body.length <= CONTENT_MAX
   const genderValid = isPlace || gender === 'male' || gender === 'female'  // 매장 후기는 성별 없음
-  const canSubmit = nickValid && genderValid && ratingValid && contentValid && !submitting
+  // 신규 작성이면서 아직 동의한 적 없으면 체크해야 등록 가능(수정은 해당 없음).
+  const needAgree = !isEdit && agreedLoaded && !initiallyAgreed
+  const agreeValid = !needAgree || agreed
+  const canSubmit = nickValid && genderValid && ratingValid && contentValid && agreeValid && !submitting
 
   const handleSubmit = async () => {
     if (submitting) return
@@ -184,6 +200,7 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
     if (!genderValid) { setError('성별을 선택해주세요.'); return }
     if (!ratingValid) { setError('별점을 선택해주세요.'); return }
     if (!contentValid) { setError('후기를 5자 이상 입력해주세요.'); return }
+    if (!agreeValid) { setError('게시물 관련 이용약관에 동의해주세요.'); return }
     setSubmitting(true)
     setError(null)
     const result = isPlace
@@ -198,6 +215,7 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
       setSubmitting(false)
       return
     }
+    if (needAgree) await setTermsAgreed()
     setSubmitting(false)
     onDone?.(result.review)
     closeSheet()
@@ -277,6 +295,14 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
           paddingVertical: 10,
         },
         errorText: { fontSize: 13, color: colors.error, lineHeight: 19 },
+        // 약관 동의 줄 — 게시판 글쓰기(app/board/write.tsx)와 완전히 같은 규격.
+        agreeRow: {
+          flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+          backgroundColor: colors.surfaceHigh, borderRadius: 12, padding: 12,
+        },
+        agreeCheck: { paddingTop: 1 },
+        agreeText: { flex: 1, fontSize: 12.5, color: colors.textSecondary, lineHeight: 18 },
+        agreeLink: { color: colors.primary, fontWeight: '700' },
         footer: {
           paddingHorizontal: 20,
           paddingTop: 12,
@@ -408,6 +434,27 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
                   </Text>
                 </View>
               </View>
+
+              {/* 게시물 관련 이용약관 동의(애플 1.2 UGC 요건) — 게시판 글쓰기와 같은
+                  문구·같은 저장키. 이미 동의한 적 있으면 이 줄 자체가 안 뜬다. */}
+              {needAgree && (
+                <View style={styles.agreeRow}>
+                  <TouchableOpacity style={styles.agreeCheck} onPress={() => setAgreed((v) => !v)} hitSlop={8} disabled={submitting}>
+                    <Ionicons
+                      name={agreed ? 'checkbox' : 'square-outline'}
+                      size={20}
+                      color={agreed ? colors.primary : colors.textTertiary}
+                    />
+                  </TouchableOpacity>
+                  <Text style={styles.agreeText}>
+                    게시물 관련{' '}
+                    <Text style={styles.agreeLink} onPress={() => { closeSheet(); router.push('/terms') }}>
+                      이용약관
+                    </Text>
+                    에 동의합니다. (무관용 원칙, 신고 접수 후 24시간 내 조치)
+                  </Text>
+                </View>
+              )}
 
               {error && (
                 <View style={styles.errorBox}>

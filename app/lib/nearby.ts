@@ -28,6 +28,21 @@ export async function getMyLocation(): Promise<{ lat: number; lng: number } | nu
   }
 }
 
+/**
+ * 이미 위치 권한이 허용돼 있는지. 사전 안내(프리퍼미션) 팝업을 띄울지 판단하는 용도 —
+ * 이미 허용한 사람에게 또 물으면 잔소리가 된다. request 가 아니라 get 이라 이 함수
+ * 자체로는 OS 권한 팝업이 뜨지 않는다.
+ */
+export async function isLocationGranted(): Promise<boolean> {
+  try {
+    const Location = await import('expo-location')
+    const { status } = await Location.getForegroundPermissionsAsync()
+    return status === 'granted'
+  } catch {
+    return false
+  }
+}
+
 /** 두 좌표 간 거리(km, 하버사인). */
 export function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const R = 6371

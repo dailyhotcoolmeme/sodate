@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated, Image, BackHandler } from 'react-native'
+import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated, Image, BackHandler, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
@@ -12,7 +12,7 @@ import type { AppColors } from '@/constants/colors'
 import { fetchPlaces, placeMarkerUrl, openStatus, type PlaceRow } from '@/lib/places'
 import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
 import { sanggwonFor } from '@/constants/honsulSanggwon'
-import { getMyLocation, distanceKm } from '@/lib/nearby'
+import { getMyLocation, distanceKm, isLocationGranted } from '@/lib/nearby'
 import { getCachedLocation, setCachedLocation } from '@/lib/locationMemory'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { useHonsulFilterStore, useHonsulFilterHydrated } from '@/stores/honsulFilterStore'
@@ -143,12 +143,34 @@ export default function HonsulScreen() {
   }, [tab, setTab]))
 
   // 최초 진입 자동 위치요청(2026-08-24 오너 지시) — 이 화면에 평생 딱 한 번(hasAutoInit),
-  // 들어오자마자 위치 권한을 물어서 허용하면 거리순, 거부하면 리뷰많은순으로 기본 정렬을
-  // 잡는다. hydrated 되기 전엔 hasAutoInit 이 기본값(false)이라 오판할 수 있어 기다린다.
+  // 위치 권한을 물어서 허용하면 거리순, 거부하면 리뷰많은순으로 기본 정렬을 잡는다.
+  // hydrated 되기 전엔 hasAutoInit 이 기본값(false)이라 오판할 수 있어 기다린다.
+  //
+  // ⚠️(2026-08-26) 예전엔 탭에 들어오자마자 아무 설명 없이 OS 권한 팝업을 바로 띄웠다.
+  // 이러면 (1) 사용자가 왜 묻는지 몰라 반사적으로 거부하기 쉽고(OS 권한은 한 번 거부하면
+  // 앱에서 다시 물을 수 없어 설정에서 직접 켜야 한다), (2) 스토어 심사에서 권한 사용
+  // 목적 사전 고지가 부실하다고 잡힐 수 있다(약관·방침 감사에서 지적됨). OS 팝업 전에
+  // 우리 안내 팝업을 먼저 띄워 목적을 설명하고, "나중에"를 고르면 OS 팝업 자체를 안
+  // 띄운다 — 거부 이력이 안 남아 나중에 '현재 위치' 버튼으로 다시 시도할 수 있다.
+  // 이미 허용한 사람에겐 안내를 건너뛴다(잔소리 방지).
   useEffect(() => {
     if (!hydrated || hasAutoInit) return
     setHasAutoInit(true)
     ;(async () => {
+      if (!(await isLocationGranted())) {
+        const ok = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            '내 주변 혼술바를 찾아드릴까요?',
+            '현재 위치를 사용하면 가까운 곳부터 순서대로 보여드려요.\n위치 정보는 기기 안에서만 거리 계산에 쓰이고 서버에 저장되지 않습니다.',
+            [
+              { text: '나중에', style: 'cancel', onPress: () => resolve(false) },
+              { text: '위치 사용', onPress: () => resolve(true) },
+            ],
+            { cancelable: true, onDismiss: () => resolve(false) },
+          )
+        })
+        if (!ok) { setSortMode('reviewCount'); return }
+      }
       setLocBusy(true)
       const loc = await getMyLocation()
       setLocBusy(false)
