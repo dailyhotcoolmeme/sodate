@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated, Image } from 'react-native'
+import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated, Image, BackHandler, Modal, Pressable } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
@@ -22,13 +22,20 @@ import { useScrollRestore } from '@/hooks/useScrollRestore'
 import { confirmFavorite } from '@/lib/confirmToggle'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
 import PlaceMapCard from '@/components/PlaceMapCard'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
 
 /**
  * 혼술바 탭 — 상시 매장(places). 피드/지도 두 탭. 종류는 (현재 2종뿐이라) 헤더칩에서 뺌 →
  * 필요하면 상세 필터로. 지도는 카카오맵(앱키+재빌드) 연동 후 채운다. 카드 지도아이콘 → 지도탭.
  * ⚠️ NEW_TABS_ENABLED=false 동안은 접근 경로 없음. (파일럿) 전부 불러와 클라 필터.
  */
+// 지도 유형 선택 팝업 옵션 — 네이버지도와 동일한 3종(일반/위성/하이브리드). 지형도(Terrain)는
+// 혼술바 찾기 용도에 안 맞아 뺐다(오너 요청 범위: "위성지도, 하이브리드 전환만").
+const MAP_TYPE_OPTIONS: { key: 'Basic' | 'Satellite' | 'Hybrid'; label: string }[] = [
+  { key: 'Basic', label: '일반' },
+  { key: 'Satellite', label: '위성' },
+  { key: 'Hybrid', label: '하이브리드' },
+]
 export default function HonsulScreen() {
   const colors = useColors()
   const insets = useSafeAreaInsets()
@@ -55,6 +62,11 @@ export default function HonsulScreen() {
   const [search, setSearch] = useState('')
   const [searchVisible, setSearchVisible] = useState(false)
   const [focused, setFocused] = useState<PlaceRow | null>(null)   // 지도탭에서 볼 업체
+  // 지도 유형(일반/위성/하이브리드) — 네이버지도처럼 지도 위 레이어 버튼으로 전환
+  // (오너 지시 2026-08-26). 화면을 나갔다 들어오면 일반으로 되돌아가도 무방해 로컬
+  // state 로만 둔다(필터처럼 계속 유지해야 할 값이 아님).
+  const [mapType, setMapType] = useState<'Basic' | 'Satellite' | 'Hybrid'>('Basic')
+  const [mapTypeMenuOpen, setMapTypeMenuOpen] = useState(false)
   // 지도 카메라 — cameraTarget(지도에 실제로 "여기로 가라"고 명령하는 값, PlaceMap 의 focus
   // prop 으로 들어감)과 mapView(그냥 기억만 해두는 값, 스토어에 저장)를 분리했다. 처음엔
   // 하나로 같이 썼다가 onCameraIdle→setMapView→focus prop 변경→다시 이동 명령→다시 idle…
@@ -79,6 +91,17 @@ export default function HonsulScreen() {
     setCameraTarget({ lat: loc.lat, lng: loc.lng, zoom: 15 })
     setMapView({ lat: loc.lat, lng: loc.lng, zoom: 15 })
   }, [setMapView])
+  // 지도탭 전용 "현재위치" 버튼(2026-08-26) — 네이티브 SDK 기본 버튼은 위치를 라이브러리가
+  // 정한 자리(왼쪽 아래)에만 그려주고 옮기는 옵션이 없어서, 그 기본 버튼은 끄고 우리가
+  // 직접 만든 버튼을 네이버지도와 같은 오른쪽 아래(리스트보기 버튼 위)에 둔다. 동작은
+  // 위 applyLocation 과 동일 — 이미 좌표를 알면 재요청 없이 바로 그 위치로 이동만 한다.
+  const goMyLocationOnMap = async () => {
+    if (myLoc) { setCameraTarget({ lat: myLoc.lat, lng: myLoc.lng, zoom: 15 }); return }
+    setLocBusy(true)
+    const loc = await getMyLocation()
+    setLocBusy(false)
+    if (loc) applyLocation(loc)
+  }
   const { favoriteIds, toggle: toggleFav } = usePlaceFavorites()
   const router = useRouter()
 
@@ -105,6 +128,20 @@ export default function HonsulScreen() {
       if (url) Image.prefetch(url).catch(() => {})
     }
   }, [all])
+
+  // ⚠️(2026-08-26) 지도보기(tab='map')는 같은 화면 안의 로컬 state 전환이라 네비게이션
+  // 스택에 안 쌓인다 — 이 화면(/honsul)이 탭 루트라 그 밑에 뒤로 갈 화면이 없어서,
+  // 안드로이드 뒤로가기를 누르면 "더 뒤로 갈 곳이 없다"고 판단해 앱 자체가 꺼져버렸다
+  // (오너 제보: "지도보기 맵 상태에서 뒤로가기 하는데 가게 리스트화면으로 안가고
+  // 앱이 닫히는 경우들이 있더라"). 지도보기 중엔 뒤로가기를 가로채 목록(피드)으로만
+  // 돌아가게 하고, 이미 목록이면 원래 동작(탭 전환·앱 종료)을 그대로 둔다.
+  useFocusEffect(useCallback(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (tab === 'map') { setTab('feed'); return true }
+      return false
+    })
+    return () => sub.remove()
+  }, [tab, setTab]))
 
   // 최초 진입 자동 위치요청(2026-08-24 오너 지시) — 이 화면에 평생 딱 한 번(hasAutoInit),
   // 들어오자마자 위치 권한을 물어서 허용하면 거리순, 거부하면 리뷰많은순으로 기본 정렬을
@@ -401,7 +438,7 @@ export default function HonsulScreen() {
                     style={{ flex: 1 }}
                     focus={{ lat: center.lat, lng: center.lng }}
                     zoom={center.zoom}
-                    showLocationButton
+                    mapType={mapType}
                     cluster
                     // 마커 탭하면 카메라도 같이 줌인 이동(오너 승인 — "줌인 효과는 있는게
                     // 좋긴하겠다"). 예전엔 이게 "박스가 늦게 뜨는" 원인인 줄 알고 빼봤는데,
@@ -440,13 +477,66 @@ export default function HonsulScreen() {
             )
           })()}
 
-          {/* 피드로 돌아가기 — 지도엔 네이티브 SDK 자체 내 위치 버튼이 있어(showLocationButton) 이거 하나만.
+          {/* 지도유형(레이어)·현재위치·피드로 돌아가기 — 네이버지도와 같은 순서로 오른쪽 아래
+              세로 배치(오너 지시 2026-08-26). 네이티브 SDK 기본 위치 버튼은 자리를 못 옮겨서
+              꺼두고(PlaceMap 쪽 showLocationButton 생략) 직접 만든 버튼으로 대체했다.
               마커 선택 시 뜨는 PlaceMapCard(바닥 카드, 사진 92 높이)와 겹치지 않게 그만큼 올린다. */}
           <View style={[styles.fabStack, { bottom: insets.bottom + (focused ? 140 : 14) }]}>
+            <TouchableOpacity
+              style={[styles.fabSm, mapTypeMenuOpen && styles.fabSmOn]}
+              onPress={() => setMapTypeMenuOpen((v) => !v)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="layers-outline" size={20} color={mapTypeMenuOpen ? colors.primary : colors.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.fabSm} onPress={goMyLocationOnMap} activeOpacity={0.8} disabled={locBusy}>
+              <Ionicons name={myLoc ? 'navigate' : 'navigate-outline'} size={18} color={myLoc ? colors.primary : colors.textSecondary} />
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.fabPrimary} onPress={() => setTab('feed')} activeOpacity={0.85}>
               <Ionicons name="list-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
+
+          {/* 지도유형 팝업 — 화면 전체를 덮는 Modal로 띄운다(다른 팝업들과 같은 방식,
+              write.tsx TagPickerModal 참고). fabStack 안 View에 끼워 넣는 방식(음수
+              오프셋으로 화면 전체를 덮는 투명 터치 레이어)도 가능했지만, 그러면 그 투명
+              레이어가 톱바(검색·알림 아이콘)까지 겹쳐 터치를 가로챌 위험이 있어(형제
+              컴포넌트 사이 렌더 순서만으로는 항상 안전을 보장 못 함) 안전한 Modal로
+              분리했다. 위치는 레이어 버튼 옆에 오도록 fabStack 배치와 같은 값으로 직접
+              계산한다. */}
+          <Modal visible={mapTypeMenuOpen} transparent animationType="fade" onRequestClose={() => setMapTypeMenuOpen(false)}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setMapTypeMenuOpen(false)} />
+            <View style={[
+              styles.mapTypePopup,
+              {
+                right: 16 + 42 + 8,
+                // fabStack 의 bottom(14 또는 140) + fabPrimary(52) + gap(10) + 위치버튼(42) +
+                // gap(10) = 레이어 버튼의 아래쪽 y좌표. 팝업 높이(약 84)의 절반만큼 올려서
+                // 레이어 버튼과 세로 중앙이 맞게 앉힌다.
+                bottom: insets.bottom + (focused ? 140 : 14) + 52 + 10 + 42 + 10 - 20,
+              },
+            ]}>
+              {MAP_TYPE_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={styles.mapTypeItem}
+                  activeOpacity={0.8}
+                  onPress={() => { setMapType(opt.key); setMapTypeMenuOpen(false) }}
+                >
+                  <View style={[
+                    styles.mapTypeThumb,
+                    opt.key === 'Basic' && styles.mapTypeThumbBasic,
+                    opt.key === 'Satellite' && styles.mapTypeThumbSat,
+                    opt.key === 'Hybrid' && styles.mapTypeThumbHybrid,
+                    mapType === opt.key && styles.mapTypeThumbOn,
+                  ]} />
+                  <Text style={[styles.mapTypeLabel, mapType === opt.key && styles.mapTypeLabelOn]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Modal>
         </View>
       )}
 
@@ -479,6 +569,29 @@ function makeStyles(colors: AppColors) {
       alignItems: 'center', justifyContent: 'center',
       shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
     },
+    // 지도유형·현재위치 — 리스트보기(fabPrimary)보다 작은 정사각 버튼, 네이버지도와 동일 톤(흰 배경).
+    fabSm: {
+      width: 42, height: 42, borderRadius: 12, backgroundColor: colors.surface,
+      alignItems: 'center', justifyContent: 'center',
+      shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+    },
+    fabSmOn: { backgroundColor: `${colors.primary}18` },
+    // 지도유형 팝업 — 레이어 버튼 옆에 뜬다(2026-08-26, 아티팩트 시안 승인). Modal 안에서
+    // 화면 절대좌표로 위치를 계산해 앉힌다(위 JSX 주석 참고).
+    mapTypePopup: {
+      // right/bottom은 JSX 쪽에서 fabStack 배치값 기준으로 직접 계산해 넘긴다.
+      position: 'absolute',
+      flexDirection: 'row', gap: 8, backgroundColor: colors.surface, borderRadius: 16, padding: 8,
+      shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8,
+    },
+    mapTypeItem: { alignItems: 'center', gap: 5 },
+    mapTypeThumb: { width: 48, height: 48, borderRadius: 10, borderWidth: 2, borderColor: 'transparent' },
+    mapTypeThumbBasic: { backgroundColor: colors.surfaceHigh },
+    mapTypeThumbSat: { backgroundColor: '#3a4a2e' },
+    mapTypeThumbHybrid: { backgroundColor: '#4a5a3a' },
+    mapTypeThumbOn: { borderColor: colors.primary },
+    mapTypeLabel: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+    mapTypeLabelOn: { color: colors.primary, fontWeight: '700' },
     // 활성 필터칩 — 소개팅·소셜링과 완전히 동일한 값
     activeFilterRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 8, paddingVertical: 6, gap: 8 },
     activeChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary + '22', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: colors.primary + '44' },

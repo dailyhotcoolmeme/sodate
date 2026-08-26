@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { TurboModuleRegistry, UIManager, View, Text, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native'
+import type { MapType } from '@mj-studio/react-native-naver-map'
 
 /**
  * 혼술바 지도(네이버 지도). 히어로(단일 핀)·지도탭(다수 핀·클러스터) 공용.
@@ -93,6 +94,9 @@ interface Props {
    *  있게(2026-08-25 오너 지적: "지도 상태 유지가 확대해서 보고 있던 상태가 아니다" —
    *  예전엔 마커를 탭했을 때만 위치를 저장해서 자유 팬/줌은 기억되지 않았다). */
   onCameraIdle?: (camera: { lat: number; lng: number; zoom: number }) => void
+  /** 지도 유형(일반/위성/하이브리드) — 오너 지시 2026-08-26, 네이버지도처럼 지도 위
+   *  레이어 버튼으로 전환. 기본은 일반(Basic). */
+  mapType?: MapType
 }
 
 /** 카메라가 멈췄을 때(onCameraIdle)의 중심좌표+줌 — 이 값 기준으로 클러스터를 다시 계산한다.
@@ -101,7 +105,7 @@ interface Props {
  *  쓰라고 나와 있다. */
 interface CameraState { lat: number; lng: number; zoom: number }
 
-export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false, resolveTapScreen = false, onCameraIdle }: Props) {
+export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false, resolveTapScreen = false, onCameraIdle, mapType = 'Basic' }: Props) {
   const ref = useRef<any>(null)
   const [camera, setCamera] = useState<CameraState>({ lat: focus.lat, lng: focus.lng, zoom })
   const [size, setSize] = useState({ width: 0, height: 0 })
@@ -162,6 +166,7 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
       isShowZoomControls={cluster}
       isShowScaleBar={false}
       symbolScale={hideBasePoi ? 0 : 1}
+      mapType={mapType}
       onCameraIdle={cluster ? (e: { latitude: number; longitude: number; zoom: number }) => {
         setCamera({ lat: e.latitude, lng: e.longitude, zoom: e.zoom })
         onCameraIdle?.({ lat: e.latitude, lng: e.longitude, zoom: e.zoom })
