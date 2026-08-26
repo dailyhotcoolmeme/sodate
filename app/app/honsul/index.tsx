@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated } from 'react-native'
+import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
@@ -87,6 +87,24 @@ export default function HonsulScreen() {
   }, [])
   useEffect(() => { load() }, [load])
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false) }, [load])
+
+  // ⚠️(2026-08-26) 지도 마커 사진(placeMarkerUrl — R2에 미리 만들어둔 원형 크롭 PNG,
+  // profile_image와 다른 별도 URL)은 지도 탭에 마커를 그릴 때가 돼서야 네트워크로 받아온다.
+  // "지도보기"로 처음 들어가면 그 순간 여러 마커가 동시에 이미지를 받아오는 동안, 마커
+  // 라이브러리(NaverMapMarkerOverlay)의 image prop 기본값이 {symbol:'green'}이라 아직 못
+  // 받은 마커는 그 초록 핀이 대신 보인다(오너 제보: "녹색 화살표로 나오는게 있는데...
+  // 업체 이미지(동그라미) 이걸로 나와야하는데" — 확대·축소하면 그새 다 받아져서 정상으로
+  // 보인다고 재확인함). 지도 탭에 들어가기 전, 피드 목록을 받아온 시점에 미리 이미지를
+  // 캐시에 받아두면(RN Image.prefetch — 안드로이드에선 이 마커 라이브러리도 같은 Fresco
+  // 이미지 파이프라인을 쓰므로 캐시가 공유돼 효과가 있다) 실제로 지도를 열 때는 이미
+  // 캐시에 있어 초록 핀이 거의 안 보이게 된다.
+  useEffect(() => {
+    if (all.length === 0) return
+    for (const p of all) {
+      const url = placeMarkerUrl(p)
+      if (url) Image.prefetch(url).catch(() => {})
+    }
+  }, [all])
 
   // 최초 진입 자동 위치요청(2026-08-24 오너 지시) — 이 화면에 평생 딱 한 번(hasAutoInit),
   // 들어오자마자 위치 권한을 물어서 허용하면 거리순, 거부하면 리뷰많은순으로 기본 정렬을
