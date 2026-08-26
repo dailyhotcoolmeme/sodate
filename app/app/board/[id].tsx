@@ -588,7 +588,24 @@ export default function BoardPostScreen() {
 
         {/* 첨부(사진+링크) 신고 누적 시 이미지처럼 통째로 안 그리고 가림 문구로 대신한다
             (2026-08-13 일반화 — 반투명 덮개는 밝은 사진·썸네일이 비쳐 보여 가린 게
-            아니었던 예전 문제와 동일하게 피한다). */}
+            아니었던 예전 문제와 동일하게 피한다). 사진을 유튜브/인스타 링크보다 먼저
+            보여준다(2026-08-26 오너 지시: "이미지가 먼저 나오고 유튜브가 나중에"). */}
+        {!!post.image_urls?.length && (
+          <View style={styles.images}>
+            {post.content_hidden ? (
+              <View style={[styles.imageWrap, styles.imageBlocked]}>
+                <Ionicons name="eye-off-outline" size={22} color={colors.textSecondary} />
+                <Text style={styles.imageBlockedText}>첨부 검수 중</Text>
+                <Text style={styles.imageBlockedSub}>신고가 접수되어 확인하고 있습니다</Text>
+              </View>
+            ) : post.image_urls.map((u) => (
+              <View key={u} style={styles.imageWrap}>
+                <LazyPostImage uri={u} style={styles.image} scrollTick={scrollTick} />
+              </View>
+            ))}
+          </View>
+        )}
+
         {!!post.link_urls?.length && (
           <View style={styles.images}>
             {post.content_hidden ? (
@@ -616,22 +633,6 @@ export default function BoardPostScreen() {
                 </TouchableOpacity>
               )
             })}
-          </View>
-        )}
-
-        {!!post.image_urls?.length && (
-          <View style={styles.images}>
-            {post.content_hidden ? (
-              <View style={[styles.imageWrap, styles.imageBlocked]}>
-                <Ionicons name="eye-off-outline" size={22} color={colors.textSecondary} />
-                <Text style={styles.imageBlockedText}>첨부 검수 중</Text>
-                <Text style={styles.imageBlockedSub}>신고가 접수되어 확인하고 있습니다</Text>
-              </View>
-            ) : post.image_urls.map((u) => (
-              <View key={u} style={styles.imageWrap}>
-                <LazyPostImage uri={u} style={styles.image} scrollTick={scrollTick} />
-              </View>
-            ))}
           </View>
         )}
 
