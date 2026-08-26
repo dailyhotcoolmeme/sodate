@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -12,6 +12,7 @@ import { saveTabRoute, getTabRoute } from '@/lib/tabMemory'
  * 하단 5탭 내비게이션(2026-08-21) — 소개팅·소셜링·[홈]·혼술바·MY.
  * 가운데 홈(커뮤니티)이 크게 튀어나온 형태(인스타·틱톡의 중앙 강조 버튼과 같은 패턴).
  * 커뮤니티가 본체(매일 오는 곳)라 가운데에 두고 이름 없이 아이콘만 크게 강조한다.
+ * 나머지 4개도 2026-08-26 오너 지시로 이름표를 빼고 아이콘만 키워서 쓴다.
  *
  * ⚠️ NEW_TABS_ENABLED 가 false 인 동안 아무것도 그리지 않는다 — 운영 앱은 지금 그대로.
  *    완성 후 플래그를 켜고 새 빌드+심사로 전환한다. constants/features.ts 참고.
@@ -66,19 +67,23 @@ export default function BottomNav({ current, route }: { current: TabKey; route?:
   const left = SIDE_TABS.slice(0, 2)
   const right = SIDE_TABS.slice(2)
 
+  // ⚠️(2026-08-26 오너 지시) 이름표(소개팅·소셜링·혼술바·MY)를 빼고 아이콘만 남겼다.
+  // 글자가 빠진 만큼 아이콘을 키워(22→28) 빈 자리를 채운다. 가운데 홈은 원래부터
+  // 이름 없이 아이콘만이라 그대로다. 화면에 이름이 안 보이는 대신 스크린리더가 읽을
+  // 수 있게 accessibilityLabel 로 이름을 남긴다(빼먹으면 시각장애인이 탭을 구분 못 한다).
   const sideTab = (t: typeof SIDE_TABS[number]) => {
     const on = t.key === current
     return (
       <TouchableOpacity
         key={t.key} style={styles.tab} activeOpacity={0.7}
         onPress={() => go(t.key, t.route, on)}
-        accessibilityRole="tab" accessibilityState={{ selected: on }}
+        accessibilityRole="tab" accessibilityLabel={t.label}
+        accessibilityState={{ selected: on }}
       >
         <Ionicons
           name={on ? t.icon : (`${t.icon}-outline` as keyof typeof Ionicons.glyphMap)}
-          size={22} color={on ? colors.primary : colors.textTertiary}
+          size={28} color={on ? colors.primary : colors.textTertiary}
         />
-        <Text style={[styles.label, on && styles.labelOn]}>{t.label}</Text>
       </TouchableOpacity>
     )
   }
@@ -113,12 +118,13 @@ function makeStyles(colors: AppColors) {
       borderTopWidth: 1, borderTopColor: colors.divider,
       paddingHorizontal: 4,
     },
+    // 이름표를 뺀 뒤에도 바 높이가 확 줄지 않게 세로 패딩을 늘렸다(기존: 아이콘 22 +
+    // gap 3 + 라벨 13 + 패딩 17 ≈ 55 / 지금: 아이콘 28 + 패딩 26 ≈ 54). 탭 터치 영역도
+    // 그대로 유지된다.
     tab: {
       flex: 1, alignItems: 'center', justifyContent: 'center',
-      gap: 3, paddingTop: 9, paddingBottom: 8,
+      paddingTop: 14, paddingBottom: 12,
     },
-    label: { fontSize: 10, color: colors.textTertiary },
-    labelOn: { color: colors.primary, fontWeight: '800' },
     // 가운데 홈(메인) — 바 위쪽 선을 넘치게 크게 튀어나온다. margin-top 음수로 끌어올린다.
     homeSlot: { flexShrink: 0, marginHorizontal: 6, marginTop: -24 },
     homeBtn: {
