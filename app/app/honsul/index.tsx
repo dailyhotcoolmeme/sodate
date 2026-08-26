@@ -157,11 +157,25 @@ export default function HonsulScreen() {
     for (const p of all) m.set(p.id, regionGroupKey(p.address_road ?? p.region ?? ''))
     return m
   }, [all])
-  // 지역군 칩 — 소개팅·소셜링과 같은 순서(강남권·강북권·강서권·경기…), 매장 있는 것만.
+  // 지역군 칩 — 소개팅·소셜링은 고정 순서(강남권·강북권·강서권·경기…) 그대로 쓰지만,
+  // 혼술바만 매장 많은 순으로 바꾼다(오너 지시 2026-08-26: "업체들 많은 순서로...
+  // 가급적 서울,경기,인천이 먼저 나오게"). REGION_GROUP_ORDER 자체(다른 화면과 공유)는
+  // 안 건드리고, 여기서만 카운트를 세어 서울·경기·인천을 먼저, 그 안에서는 매장 많은
+  // 순으로 정렬한다.
+  const CORE_REGIONS = useMemo(() => new Set(['강남권', '강북권', '강서권', '경기', '인천']), [])
   const regionGroups = useMemo(() => {
-    const has = new Set([...all].map((p) => groupOf.get(p.id)))
-    return REGION_GROUP_ORDER.map((g) => g.key).filter((k) => has.has(k))
-  }, [all, groupOf])
+    const counts = new Map<string, number>()
+    for (const p of all) {
+      const k = groupOf.get(p.id)
+      if (k) counts.set(k, (counts.get(k) ?? 0) + 1)
+    }
+    const keys = REGION_GROUP_ORDER.map((g) => g.key).filter((k) => counts.has(k))
+    return keys.sort((a, b) => {
+      const coreDiff = (CORE_REGIONS.has(a) ? 0 : 1) - (CORE_REGIONS.has(b) ? 0 : 1)
+      if (coreDiff !== 0) return coreDiff
+      return (counts.get(b) ?? 0) - (counts.get(a) ?? 0)
+    })
+  }, [all, groupOf, CORE_REGIONS])
   // 상권 목록 = 매장 있는 상권만, 매장수 많은 순. 지역군 선택 시 그 안의 상권만.
   const sanggwons = useMemo(() => {
     const c = new Map<string, number>()
