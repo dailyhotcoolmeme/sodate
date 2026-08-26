@@ -193,6 +193,11 @@ export default function HonsulScreen() {
       const aIdx = REGION_ORDER_INDEX.get(groupBySang.get(a[0]) ?? '') ?? 999
       const bIdx = REGION_ORDER_INDEX.get(groupBySang.get(b[0]) ?? '') ?? 999
       if (aIdx !== bIdx) return aIdx - bIdx
+      // 강남권 안에서는 "강남" 이 매장수와 상관없이 항상 맨 앞(오너 지시 2026-08-26:
+      // "방이동보다 강남을 먼저 나오게 해라") — 지역군 대표 지명이라 매장 수로 밀리면
+      // 안 된다는 취지. 나머지는 그대로 매장 많은 순.
+      if (a[0] === '강남' && b[0] !== '강남') return -1
+      if (b[0] === '강남' && a[0] !== '강남') return 1
       return b[1] - a[1]
     }).map(([s]) => s)
   }, [all, sangOf, groupOf, regionGroup, REGION_ORDER_INDEX])
