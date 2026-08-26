@@ -136,7 +136,14 @@ export default function PlaceDetailScreen() {
               <PlaceMap
                 style={StyleSheet.absoluteFill}
                 focus={{ lat: place.lat, lng: place.lng }}
-                hideBasePoi
+                // ⚠️(2026-08-26) hideBasePoi 를 껐다 — 이걸 켜면 네이버 기본 심벌이
+                // 전부 사라지는데, 노란 원 숫자뿐 아니라 지명·건물명·가게명까지 통째로
+                // 없어져서 히어로가 배경 타일만 남은 상태가 됐다(오너 지적: "지도에는
+                // 왜 배경이 그냥 이미지타일만 있고 다른정보들은 하나도 없지?").
+                // 지도보기 탭과 같은 모양으로 통일한다. 원래 이 옵션을 켰던 이유는
+                // 2026-08-24 "히어로 지도가 저딴식이냐" 지적 때 노란 원을 없애려던
+                // 것이었는데, 둘을 따로 끄는 방법이 없어 트레이드오프를 오너가 확인 후
+                // 켜보기로 함 — 이상하면 이 줄만 되돌리면 된다.
                 compactPins
                 // 주변 점 누르면 바로 이동이 아니라 미리보기 카드부터(2026-08-24 오너 지적).
                 onTapPin={onTapNearbyPin}
