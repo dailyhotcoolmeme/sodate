@@ -9,7 +9,7 @@ import EventSearchModal from '@/components/EventSearchModal'
 import AppSpinner from '@/components/AppSpinner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { fetchPlaces, placeMarkerUrl, openStatus, type PlaceRow } from '@/lib/places'
+import { fetchPlaces, placeMarkerUrl, openStatus, reviewHashtags, type PlaceRow } from '@/lib/places'
 import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
 import { sanggwonFor } from '@/constants/honsulSanggwon'
 import { getMyLocation, distanceKm } from '@/lib/nearby'
@@ -135,7 +135,13 @@ export default function HonsulScreen() {
       (!regionGroup || groupOf.get(p.id) === regionGroup) &&
       (!sanggwon || sangOf.get(p.id) === sanggwon) &&
       (!openNow || openStatus(p.hours).open === true) &&
-      (!tag || [...p.honsul_badges, ...p.mood_tags].includes(tag)) &&
+      // ⚠️(2026-08-26) 카드에 보이는 해시태그(PlaceListItem)는 honsul_badges·mood_tags가
+      // 아니라 네이버 방문자 키워드 투표(keyword_votes)에서 뽑는데(mood_tags는 주석대로
+      // "현재 미사용"), 이 필터는 honsul_badges·mood_tags 멤버십만 봐서 해시태그를 눌러도
+      // 그 태그가 그 배열들엔 없어 매칭이 안 됐다(오너 제보: "해시태그 눌렀을때 검색으로
+      // 잡혀야 하는데 검색이 작동이 안된다"). 해시태그가 실제로 나오는 것과 같은 소스로
+      // 맞춘다.
+      (!tag || reviewHashtags(p.keyword_votes).includes(tag)) &&
       (!q || p.name.includes(q) || (p.region ?? '').includes(q)),
     )
     if (sortMode === 'distance' && myLoc) {
