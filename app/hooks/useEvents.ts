@@ -62,6 +62,21 @@ function writeEventsCache(storeKey: string, key: string, events: EventWithCompan
 // 조인 테이블이라 PostgREST or() 로직트리 안에서 직접 필터링이 안 돼(둘 다 실측 확인),
 // events에 검색용으로 동기화해둔 hashtags_search·company_name 컬럼을 대신 쓴다
 // (supabase/migrations/20260814_events_search_fields.sql).
+// 소셜링 카드의 "마감" 배지는 is_closed 서버 플래그뿐 아니라 "정원이 다 찼는지"
+// (총정원≤참여인원)도 같이 본다(SocialingListItem.tsx/SocialingCard.tsx와 동일 공식 —
+// 문토·트레바리·동행 등 소셜링 소스가 마감 여부를 크롤링 시점에 정확히 못 주는 경우가
+// 있어 참여인원이 정원을 채우면 앱이 자체 보완 판단한다). 소개팅은 배지가 is_closed만
+// 보므로 서버 쿼리(is_closed만 거름)와 항상 일치했지만, 소셜링은 배지 기준과 필터
+// 기준이 서로 달라서 "마감제외"를 켜도 정원 다 찬 모임(is_closed=false)이 안 사라지는
+// 사고가 났다(오너 제보 2026-08-26, 스크린샷으로 확인). 배지와 같은 기준으로 한 번 더
+// 걸러 일치시킨다.
+function isSocialingEventClosed(e: EventWithCompany): boolean {
+  const stats = e.participant_stats
+  const cap = stats?.total_capacity
+  const cur = stats?.total_count
+  return !!e.is_closed || (cap != null && cur != null && cur >= cap)
+}
+
 function searchOrFilter(term: string): string {
   // 쉼표·괄호는 or 구문의 구분자라 검색어에 들어가면 질의가 깨진다(board 검색과 동일 이유).
   const safe = term.trim().replace(/[,()]/g, ' ')
@@ -257,8 +272,13 @@ export function useEvents(
     const { data, error: err } = await buildQuery(from, from + PAGE_SIZE - 1)
     if (err) throw err
     const rows = (data ?? []) as EventWithCompany[]
-    return { rows, lastPage: page, exhausted: rows.length < PAGE_SIZE }
-  }, [buildQuery])
+    // exhausted 는 반드시 걸러내기 전 개수로 판단한다 — 걸러진 뒤 개수로 판단하면
+    // 마감 카드가 많은 페이지에서 실제로는 더 있는데도 "끝"으로 오판해 다음 페이지를
+    // 영영 안 불러온다.
+    const exhausted = rows.length < PAGE_SIZE
+    const filtered = (isSoc && excludeClosed) ? rows.filter((r) => !isSocialingEventClosed(r)) : rows
+    return { rows: filtered, lastPage: page, exhausted }
+  }, [buildQuery, isSoc, excludeClosed])
 
   // opts.silent: 화면엔 이미 캐시된 목록이 보이는 상태에서 뒤에서 조용히 최신화할 때 씀
   // (스피너를 다시 띄우지 않고, 실패해도 이미 보이는 화면을 에러로 덮지 않음).
