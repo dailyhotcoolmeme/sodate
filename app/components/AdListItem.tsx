@@ -28,16 +28,17 @@ type Variant = 'thumb' | 'wide'
 // 광고 단위 ID는 @/lib/ads 에서 중앙 관리 (미설정 시 자동 테스트 광고 폴백)
 // 요청 시점에 계산 — 모듈 로드 시점엔 Updates.channel이 아직 없을 수 있다
 
-export default function AdListItem({ slot = 'feed', variant = 'thumb' }: { slot?: string; variant?: Variant }) {
+// ⚠️(2026-08-26) 소셜링·혼술바 피드에도 소개팅과 같은 방식으로 광고를 붙이면서, 리포트를
+// 섹션별로 나누려고 애드몹에 전용 네이티브 광고 단위를 새로 만들었다(오너 지시 — "재사용하지
+// 말고 새로 붙이라고"). adUnitId를 안 넘기면 기존과 동일하게 소개팅 피드 단위를 쓴다.
+export default function AdListItem({ slot = 'feed', variant = 'thumb', adUnitId }: { slot?: string; variant?: Variant; adUnitId?: string }) {
   const colors = useColors()
   const [ad, setAd] = useState<NativeAd | null>(null)
 
   useEffect(() => {
     let mounted = true
     let owned: NativeAd | null = null
-    // 게시판 등 다른 슬롯도 당장은 피드와 같은 광고 단위를 재사용한다(리포트는 slot으로 구분).
-    // AdMob에서 게시판 전용 네이티브 광고 단위를 만들면 @/lib/ads 에 추가해 이 슬롯만 바꿔 끼우면 된다.
-    const unitId = getFeedNativeAdUnitId()
+    const unitId = adUnitId ?? getFeedNativeAdUnitId()
 
     // 미리 채워둔 풀에서 즉시 꺼내 쓴다(lib/ads.ts 참고) — 네트워크 왕복 없이 반영되므로
     // 이 행이 스크롤로 화면 밖에 밀려 언마운트되기 전에 뜰 확률이 훨씬 높다.
@@ -80,7 +81,7 @@ export default function AdListItem({ slot = 'feed', variant = 'thumb' }: { slot?
       mounted = false
       owned?.destroy()
     }
-  }, [slot])
+  }, [slot, adUnitId])
 
   const styles = useMemo(() => StyleSheet.create({
     // 둥근 테두리는 일반 RN View가 담당 (NativeAdView는 네이티브뷰라 borderRadius 클리핑이 안 됨)

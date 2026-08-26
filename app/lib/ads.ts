@@ -39,6 +39,22 @@ const REAL = {
     ios: 'ca-app-pub-2792582436871752/5220516558',
     android: 'ca-app-pub-2792582436871752/6725169912',
   },
+  // 소셜링 피드 목록 사이(2026-08-26, 오너 지시 — 소개팅 피드와 같은 방식). 리포트를
+  // 소개팅과 분리하려고 feedNative 재사용 대신 전용 단위를 새로 만들었다.
+  socialingFeedNative: {
+    ios: 'ca-app-pub-2792582436871752/5312891608',
+    android: 'ca-app-pub-2792582436871752/2195773676',
+  },
+  // 혼술바 피드 목록 사이(2026-08-26)
+  honsulFeedNative: {
+    ios: 'ca-app-pub-2792582436871752/1237915227',
+    android: 'ca-app-pub-2792582436871752/5706758799',
+  },
+  // 혼술바 가게 상세(2026-08-26) — 소개팅 이벤트 상세와 같은 방식.
+  honsulDetailNative: {
+    ios: 'ca-app-pub-2792582436871752/6434401582',
+    android: 'ca-app-pub-2792582436871752/9252136615',
+  },
 } as const
 
 // 테스트 광고를 쓸지 판정한다.
@@ -81,6 +97,12 @@ export const getFeedNativeAdUnitId = () => resolve(REAL.feedNative, TestIds.NATI
 export const getDetailNativeAdUnitId = () => resolve(REAL.detailNative, TestIds.NATIVE)
 /** 게시판 목록 맨 아래(페이지 번호 밑) 배너 광고 단위 ID */
 export const getBoardBannerAdUnitId = () => resolve(REAL.boardBanner, TestIds.BANNER)
+/** 소셜링 피드 목록 사이 네이티브 광고 단위 ID */
+export const getSocialingFeedNativeAdUnitId = () => resolve(REAL.socialingFeedNative, TestIds.NATIVE)
+/** 혼술바 피드 목록 사이 네이티브 광고 단위 ID */
+export const getHonsulFeedNativeAdUnitId = () => resolve(REAL.honsulFeedNative, TestIds.NATIVE)
+/** 혼술바 가게 상세 네이티브 광고 단위 ID */
+export const getHonsulDetailNativeAdUnitId = () => resolve(REAL.honsulDetailNative, TestIds.NATIVE)
 
 // ── 네이티브 광고 선(先)로딩 풀 ─────────────────────────────────────────────
 //

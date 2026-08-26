@@ -22,6 +22,9 @@ import { addRecentSearch } from '@/lib/eventSearchHistory'
 import { saveScrollOffset } from '@/lib/scrollMemory'
 import { useScrollRestore } from '@/hooks/useScrollRestore'
 import { confirmFavorite } from '@/lib/confirmToggle'
+import AdListItem from '@/components/AdListItem'
+import { warmNativeAdPool, getSocialingFeedNativeAdUnitId } from '@/lib/ads'
+import type { EventWithCompany } from '@/lib/supabase'
 
 /**
  * 소셜링 목록 화면(2026-08-21~08-22, 오너 승인). 소개팅 피드와 같은 틀이되 필터 축이 다르다:
@@ -38,6 +41,18 @@ const SORT_OPTIONS: { id: SocialingFilterState['sortBy']; label: string }[] = [
   { id: 'price_high', label: '가격 높은순' },
 ]
 
+// 피드 사이 광고 삽입 — 소개팅(app/index.tsx)과 동일한 간격 규칙(오너 지시 2026-08-26:
+// "소셜링, 혼술바에도 소개팅하고 같은 방식으로 피드 리스트에 광고배너 추가").
+// 리스트형: 첫 광고 3번째 뒤, 이후 8개 간격. 카드형: 카드 1개가 화면을 거의 다 채워
+// 노출이 적으므로 첫 카드 바로 뒤 + 3개 간격으로 더 촘촘하게.
+const FIRST_AD_AFTER = 3
+const AD_INTERVAL = 8
+const FIRST_AD_AFTER_CARD = 1
+const AD_INTERVAL_CARD = 3
+type SocRow =
+  | { type: 'event'; event: EventWithCompany }
+  | { type: 'ad'; key: string; adIndex: number }
+
 export default function SocialingScreen() {
   const colors = useColors()
   const insets = useSafeAreaInsets()
@@ -53,6 +68,9 @@ export default function SocialingScreen() {
   const activeFilterCount = socialingActiveFilterCount({ groups, regions, minPrice, maxPrice, days })
   const { events, loading, loadingMore, hasMore, refetch, loadMore } = useEvents(search, 'socialing')
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
+
+  // 화면 마운트 시 미리 몇 개 채워둔다(lib/ads.ts 참고) — 소개팅 피드와 동일한 이유.
+  useEffect(() => { warmNativeAdPool(getSocialingFeedNativeAdUnitId(), 'socialing-feed') }, [])
 
   // 지역 빠른탭 = 군(강남권·강북권…) — 소개팅과 동일 계산.
   const regionOptions = useRegions('socialing')
@@ -95,6 +113,26 @@ export default function SocialingScreen() {
   const clearSearch = () => setSearch('')
 
   const isEmpty = !loading && events.length === 0
+
+  // 이벤트 사이사이에 광고 슬롯 삽입 — 소개팅(app/index.tsx)과 동일 로직.
+  const listData = useMemo<SocRow[]>(() => {
+    const rows: SocRow[] = []
+    const firstAfter = viewMode === 'card' ? FIRST_AD_AFTER_CARD : FIRST_AD_AFTER
+    const interval = viewMode === 'card' ? AD_INTERVAL_CARD : AD_INTERVAL
+    const FIRST_IDX = firstAfter - 1
+    let adIndex = 0
+    events.forEach((ev, i) => {
+      rows.push({ type: 'event', event: ev })
+      const isAdSlot = i >= FIRST_IDX && (i - FIRST_IDX) % interval === 0
+      if (isAdSlot && i < events.length - 1) {
+        rows.push({ type: 'ad', key: `ad-${i}`, adIndex: adIndex++ })
+      }
+    })
+    if (events.length >= 2 && !rows.some((r) => r.type === 'ad')) {
+      rows.push({ type: 'ad', key: 'ad-tail', adIndex: adIndex++ })
+    }
+    return rows
+  }, [events, viewMode])
   const anyFilterActive = activeFilterCount > 0 || !!search
 
   // 적용된 필터를 제거 가능한 칩으로(소개팅과 동일). 지역은 완전선택 군은 군 이름으로 묶음.
@@ -220,15 +258,16 @@ export default function SocialingScreen() {
         <FlatList
           ref={feedListRef}
           style={{ opacity: listVisible ? 1 : 0 }}
-          data={events}
-          keyExtractor={(e) => e.id}
-          renderItem={({ item }) => (
-            viewMode === 'card' ? (
-              <SocialingCard event={item} isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.id), () => toggleFavorite(item.id))} />
+          data={listData}
+          keyExtractor={(item) => item.type === 'ad' ? item.key : item.event.id}
+          renderItem={({ item }) => {
+            if (item.type === 'ad') return <AdListItem slot="socialing-feed" adUnitId={getSocialingFeedNativeAdUnitId()} variant={item.adIndex % 2 === 0 ? 'thumb' : 'wide'} />
+            return viewMode === 'card' ? (
+              <SocialingCard event={item.event} isFavorite={favoriteIds.has(item.event.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.event.id), () => toggleFavorite(item.event.id))} />
             ) : (
-              <SocialingListItem event={item} isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.id), () => toggleFavorite(item.id))} />
+              <SocialingListItem event={item.event} isFavorite={favoriteIds.has(item.event.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.event.id), () => toggleFavorite(item.event.id))} />
             )
-          )}
+          }}
           onScroll={onFeedScroll}
           onScrollBeginDrag={onScrollBeginDrag}
           scrollEventThrottle={16}

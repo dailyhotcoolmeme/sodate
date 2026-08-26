@@ -22,6 +22,8 @@ import { useScrollRestore } from '@/hooks/useScrollRestore'
 import { confirmFavorite } from '@/lib/confirmToggle'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
 import PlaceMapCard from '@/components/PlaceMapCard'
+import AdListItem from '@/components/AdListItem'
+import { warmNativeAdPool, getHonsulFeedNativeAdUnitId } from '@/lib/ads'
 import { useRouter, useFocusEffect } from 'expo-router'
 
 /**
@@ -29,6 +31,15 @@ import { useRouter, useFocusEffect } from 'expo-router'
  * 필요하면 상세 필터로. 지도는 카카오맵(앱키+재빌드) 연동 후 채운다. 카드 지도아이콘 → 지도탭.
  * ⚠️ NEW_TABS_ENABLED=false 동안은 접근 경로 없음. (파일럿) 전부 불러와 클라 필터.
  */
+// 피드 사이 광고 삽입 — 소개팅(app/index.tsx)과 동일 규칙(오너 지시 2026-08-26: "소셜링,
+// 혼술바에도 소개팅하고 같은 방식으로 피드 리스트에 광고배너 추가"). 혼술바는 카드형/목록형
+// 토글이 없어 소개팅의 '리스트형' 간격(첫 광고 3번째 뒤, 이후 8개 간격)만 쓴다.
+const FIRST_AD_AFTER = 3
+const AD_INTERVAL = 8
+type HonsulRow =
+  | { type: 'place'; place: PlaceRow }
+  | { type: 'ad'; key: string; adIndex: number }
+
 export default function HonsulScreen() {
   const colors = useColors()
   const insets = useSafeAreaInsets()
@@ -225,6 +236,28 @@ export default function HonsulScreen() {
     return filtered
   }, [all, regionGroup, sanggwon, openNow, search, sortMode, myLoc, sangOf, groupOf])
 
+  // 화면 마운트 시 미리 몇 개 채워둔다(lib/ads.ts 참고) — 소개팅 피드와 동일한 이유.
+  useEffect(() => { warmNativeAdPool(getHonsulFeedNativeAdUnitId(), 'honsul-feed') }, [])
+
+  // 피드(목록형 FlatList)에만 광고를 섞은 별도 배열 — list 자체는 지도탭 핀 계산에도
+  // 쓰이므로(pinnedMapPlaces) 그대로 두고 건드리지 않는다.
+  const feedListData = useMemo<HonsulRow[]>(() => {
+    const rows: HonsulRow[] = []
+    const FIRST_IDX = FIRST_AD_AFTER - 1
+    let adIndex = 0
+    list.forEach((p, i) => {
+      rows.push({ type: 'place', place: p })
+      const isAdSlot = i >= FIRST_IDX && (i - FIRST_IDX) % AD_INTERVAL === 0
+      if (isAdSlot && i < list.length - 1) {
+        rows.push({ type: 'ad', key: `ad-${i}`, adIndex: adIndex++ })
+      }
+    })
+    if (list.length >= 2 && !rows.some((r) => r.type === 'ad')) {
+      rows.push({ type: 'ad', key: 'ad-tail', adIndex: adIndex++ })
+    }
+    return rows
+  }, [list])
+
   // 거리순일 때 각 슬롯에 현재 위치로부터의 거리를 보여준다(2026-08-25 오너 지시).
   const distanceById = useMemo(() => {
     if (!myLoc) return null
@@ -260,7 +293,7 @@ export default function HonsulScreen() {
   // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
   // 복원 로직은 hooks/useScrollRestore.ts 참고(세 번째 재설계 — 한 번만 판정하지 않고
   // 콘텐츠가 자랄 때마다 계속 다시 맞춘다).
-  const feedListRef = useRef<FlatList<PlaceRow>>(null)
+  const feedListRef = useRef<FlatList<HonsulRow>>(null)
   const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
     useScrollRestore('honsul-feed', feedListRef)
   const onFeedScroll = useCallback((e: any) => {
@@ -408,13 +441,17 @@ export default function HonsulScreen() {
             <FlatList
               ref={feedListRef}
               style={{ opacity: listVisible ? 1 : 0 }}
-              data={list}
-              keyExtractor={(p) => p.id}
-              renderItem={({ item }) => (
-                <PlaceListItem place={item} onMapPress={openOnMap}
-                  distanceKm={sortMode === 'distance' ? distanceById?.get(item.id) : undefined}
-                  isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.id), () => toggleFav(item.id))} />
-              )}
+              data={feedListData}
+              keyExtractor={(item) => item.type === 'ad' ? item.key : item.place.id}
+              renderItem={({ item }) => {
+                if (item.type === 'ad') return <AdListItem slot="honsul-feed" adUnitId={getHonsulFeedNativeAdUnitId()} variant={item.adIndex % 2 === 0 ? 'thumb' : 'wide'} />
+                const p = item.place
+                return (
+                  <PlaceListItem place={p} onMapPress={openOnMap}
+                    distanceKm={sortMode === 'distance' ? distanceById?.get(p.id) : undefined}
+                    isFavorite={favoriteIds.has(p.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(p.id), () => toggleFav(p.id))} />
+                )
+              }}
               onScroll={onFeedScroll}
               onScrollBeginDrag={onScrollBeginDrag}
               scrollEventThrottle={16}

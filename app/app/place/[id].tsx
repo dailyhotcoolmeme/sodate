@@ -11,6 +11,8 @@ import ReviewSheet, { type ReviewSheetInitial } from '@/components/ReviewSheet'
 import ReportSheet from '@/components/ReportSheet'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
 import PlaceMapCard from '@/components/PlaceMapCard'
+import AdBanner from '@/components/AdBanner'
+import { getHonsulDetailNativeAdUnitId } from '@/lib/ads'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
@@ -282,6 +284,10 @@ export default function PlaceDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* 후기 위 광고 — 소개팅 상세와 동일 방식(신청버튼 위 광고와 같은 자리, 오너 지시
+            2026-08-26). 혼술바엔 신청버튼이 없어 후기 바로 위에 둔다. */}
+        <AdBanner variant="thumb" adUnitId={getHonsulDetailNativeAdUnitId()} />
 
         {/* 후기 — 소개팅과 동일 디자인(ReviewSection) + 작성/수정/삭제/신고 */}
         <View style={styles.reviewsSection}>
