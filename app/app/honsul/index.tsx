@@ -9,7 +9,7 @@ import EventSearchModal from '@/components/EventSearchModal'
 import AppSpinner from '@/components/AppSpinner'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { fetchPlaces, placeMarkerUrl, openStatus, reviewHashtags, type PlaceRow } from '@/lib/places'
+import { fetchPlaces, placeMarkerUrl, openStatus, type PlaceRow } from '@/lib/places'
 import { REGION_GROUP_ORDER, regionGroupKey } from '@/constants/chipGroups'
 import { sanggwonFor } from '@/constants/honsulSanggwon'
 import { getMyLocation, distanceKm } from '@/lib/nearby'
@@ -43,8 +43,8 @@ export default function HonsulScreen() {
   // locBusy 는 세션마다 새로 재는 게 맞아서 로컬로 남긴다.
   const hydrated = useHonsulFilterHydrated()
   const {
-    regionGroup, sanggwon, tag, openNow, sortMode, hasAutoInit, tab, mapView,
-    setRegionGroup, setSanggwon, setTag, setOpenNow, setSortMode, setHasAutoInit, setTab, setMapView,
+    regionGroup, sanggwon, openNow, sortMode, hasAutoInit, tab, mapView,
+    setRegionGroup, setSanggwon, setOpenNow, setSortMode, setHasAutoInit, setTab, setMapView,
   } = useHonsulFilterStore()
   // 현재 위치(거리정렬용) — 예전엔 화면 로컬 useState라 다른 탭 갔다 돌아오면(화면이 통째로
   // 다시 마운트되며) 매번 null 로 리셋됐다. "거리순" 칩은 스토어에 남아 계속 켜져 보이는데
@@ -135,13 +135,6 @@ export default function HonsulScreen() {
       (!regionGroup || groupOf.get(p.id) === regionGroup) &&
       (!sanggwon || sangOf.get(p.id) === sanggwon) &&
       (!openNow || openStatus(p.hours).open === true) &&
-      // ⚠️(2026-08-26) 카드에 보이는 해시태그(PlaceListItem)는 honsul_badges·mood_tags가
-      // 아니라 네이버 방문자 키워드 투표(keyword_votes)에서 뽑는데(mood_tags는 주석대로
-      // "현재 미사용"), 이 필터는 honsul_badges·mood_tags 멤버십만 봐서 해시태그를 눌러도
-      // 그 태그가 그 배열들엔 없어 매칭이 안 됐다(오너 제보: "해시태그 눌렀을때 검색으로
-      // 잡혀야 하는데 검색이 작동이 안된다"). 해시태그가 실제로 나오는 것과 같은 소스로
-      // 맞춘다.
-      (!tag || reviewHashtags(p.keyword_votes).includes(tag)) &&
       (!q || p.name.includes(q) || (p.region ?? '').includes(q)),
     )
     if (sortMode === 'distance' && myLoc) {
@@ -157,7 +150,7 @@ export default function HonsulScreen() {
       return [...filtered].sort((a, b) => (b.naver_review_count ?? -1) - (a.naver_review_count ?? -1))
     }
     return filtered
-  }, [all, regionGroup, sanggwon, openNow, tag, search, sortMode, myLoc, sangOf, groupOf])
+  }, [all, regionGroup, sanggwon, openNow, search, sortMode, myLoc, sangOf, groupOf])
 
   // 거리순일 때 각 슬롯에 현재 위치로부터의 거리를 보여준다(2026-08-25 오너 지시).
   const distanceById = useMemo(() => {
@@ -224,9 +217,8 @@ export default function HonsulScreen() {
   const activeChips: { label: string; onRemove: () => void }[] = []
   if (regionGroup) activeChips.push({ label: regionGroup, onRemove: () => { setRegionGroup(null); setSanggwon(null) } })
   if (sanggwon) activeChips.push({ label: sanggwon, onRemove: () => setSanggwon(null) })
-  if (tag) activeChips.push({ label: tag, onRemove: () => setTag(null) })
   if (search) activeChips.push({ label: `‘${search}’`, onRemove: () => setSearch('') })
-  const resetAll = () => { setRegionGroup(null); setSanggwon(null); setTag(null); setOpenNow(false); setSearch('') }
+  const resetAll = () => { setRegionGroup(null); setSanggwon(null); setOpenNow(false); setSearch('') }
 
   // 현재 위치 — 필터 줄 오른쪽 버튼(예전엔 FAB였다, 2026-08-24 오너 지시로 이동).
   // 위치를 잡으면 거리순도 같이 켠다(오너 지시: "현재위치 누르면 자동으로 거리순") —
@@ -341,7 +333,7 @@ export default function HonsulScreen() {
               data={list}
               keyExtractor={(p) => p.id}
               renderItem={({ item }) => (
-                <PlaceListItem place={item} onTagPress={setTag} onMapPress={openOnMap}
+                <PlaceListItem place={item} onMapPress={openOnMap}
                   distanceKm={sortMode === 'distance' ? distanceById?.get(item.id) : undefined}
                   isFavorite={favoriteIds.has(item.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.id), () => toggleFav(item.id))} />
               )}

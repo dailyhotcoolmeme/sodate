@@ -1,15 +1,23 @@
 import React, { useMemo } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
-import { type PlaceRow, openStatus, categoryCover, reviewHashtags } from '@/lib/places'
+import { type PlaceRow, openStatus, categoryCover } from '@/lib/places'
 import { formatDistanceKm } from '@/lib/nearby'
 
 /**
  * 혼술바 피드 행. 썸네일=업체 인스타 프로필(원형 아바타). 하트는 소개팅과 동일(우상단·size20·#FF6B9D).
- * 제목 오른쪽에 지도 아이콘(탭→지도탭). 영업중 옆 오늘 영업시간(회색), 그 밑에 방문자 키워드 요약.
+ * 영업중 옆 오늘 영업시간(회색) · 지역 · 거리 뒤에 "지도보기" 텍스트버튼.
+ *
+ * ⚠️(2026-08-26) 방문자 키워드 투표 해시태그를 눌러서 필터링하던 기능을 뺐다 — 네이버
+ * 키워드 투표가 업체 대부분에 똑같이 붙는 고정 체크리스트라(예: "기본안주가좋아요"도
+ * 상위7 기준 88.8%), 흔한 항목을 하나씩 빼도 다음 흔한 항목이 그 자리를 채우는
+ * "두더지 잡기"가 반복돼(오너 지적: "이 방식은 아닌거 같다") 태그로 업체를 구분하는
+ * 용도 자체가 이 데이터로는 성립이 안 된다고 판단, 해시태그 표시·필터를 통째로 제거.
+ * 제목 옆에 아이콘만 있던 지도 버튼도 같은 이유(아이콘만 버튼 금지)로 "지도보기"
+ * 텍스트버튼으로 바꾸고, 자리를 지역·거리 뒤로 옮겼다(오너 지시).
  *
  * ⚠️ 회색 보조 텍스트(영업시간·지역·거리·리뷰수)는 전부 같은 톤(textSecondary)·같은
  * 크기(12)로 통일한다 — 예전엔 줄마다 색 토큰(textSecondary/textTertiary)과 크기(12/11.5)가
@@ -19,7 +27,6 @@ interface Props {
   place: PlaceRow
   isFavorite?: boolean
   onToggleFavorite?: () => void
-  onTagPress?: (tag: string) => void
   onMapPress?: (place: PlaceRow) => void
   /** 현재 위치로부터의 거리(km) — 거리순 정렬일 때만 부모가 넘겨준다. */
   distanceKm?: number
@@ -27,13 +34,12 @@ interface Props {
 
 const AV = 54
 
-export default function PlaceListItem({ place, isFavorite = false, onToggleFavorite, onTagPress, onMapPress, distanceKm }: Props) {
+export default function PlaceListItem({ place, isFavorite = false, onToggleFavorite, onMapPress, distanceKm }: Props) {
   const router = useRouter()
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const { open, hoursLabel } = openStatus(place.hours)
   const cover = categoryCover(place.category)
-  const hashtags = reviewHashtags(place.keyword_votes)
 
   return (
     <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => router.push(`/place/${place.id}`)}>
@@ -55,39 +61,30 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
       </View>
 
       <View style={styles.info}>
-        {/* 제목 + 오른쪽 지도 아이콘 */}
+        {/* 제목 */}
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>{place.name}</Text>
-          {onMapPress && place.lat && (
-            <TouchableOpacity hitSlop={6} onPress={(e) => { e.stopPropagation?.(); onMapPress(place) }} style={styles.mapBtn}>
-              <Ionicons name="map-outline" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-          )}
         </View>
 
-        {/* 방문자 키워드를 해시태그로 — 많으면 가로 스와이프(소개팅 해시태그와 동일 스펙) */}
-        {hashtags.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll} contentContainerStyle={styles.tagRow} keyboardShouldPersistTaps="handled">
-            {hashtags.map((t) => (
-              <TouchableOpacity key={t} activeOpacity={0.6} onPress={(e) => { e.stopPropagation?.(); onTagPress?.(t) }}>
-                <Text style={styles.tag}>#{t}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-
         <View style={styles.metaRow}>
-          {open != null ? (
-            <>
-              <Text style={[styles.op, { color: open ? colors.success : colors.textTertiary }]}>{open ? '영업중' : '영업종료'}</Text>
-              {hoursLabel && <Text style={styles.hours}>{'  '}{hoursLabel}</Text>}
-            </>
-          ) : (
-            <Text style={styles.hours}>영업시간 정보 없음</Text>
+          <View style={styles.metaTextWrap}>
+            {open != null ? (
+              <>
+                <Text style={[styles.op, { color: open ? colors.success : colors.textTertiary }]}>{open ? '영업중' : '영업종료'}</Text>
+                {hoursLabel && <Text style={styles.hours}>{'  '}{hoursLabel}</Text>}
+              </>
+            ) : (
+              <Text style={styles.hours}>영업시간 정보 없음</Text>
+            )}
+            <Text style={styles.meta} numberOfLines={1}>
+              {'  ·  '}{place.region ?? ''}{distanceKm != null ? ` · ${formatDistanceKm(distanceKm)}` : ''}
+            </Text>
+          </View>
+          {onMapPress && place.lat && (
+            <TouchableOpacity hitSlop={6} onPress={(e) => { e.stopPropagation?.(); onMapPress(place) }} style={styles.mapTextBtn}>
+              <Text style={styles.mapTextBtnLabel}>지도보기</Text>
+            </TouchableOpacity>
           )}
-          <Text style={styles.meta} numberOfLines={1}>
-            {'  ·  '}{place.region ?? ''}{distanceKm != null ? ` · ${formatDistanceKm(distanceKm)}` : ''}
-          </Text>
         </View>
 
         {/* 평점 — 별도 줄(2026-08-24 오너 지시). 소개팅·소셜링은 참여현황이 한 줄 더 있어서
@@ -119,16 +116,18 @@ function makeStyles(colors: AppColors) {
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     // 소개팅 제목과 동일: fontSize 14 · weight 700 · lineHeight 19
     name: { flexShrink: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 19 },
-    mapBtn: { padding: 1 },
-    // 소개팅 해시태그(sm)와 동일: height 17 · fontSize 11 · primary · weight 700
-    tagScroll: { height: 17, flexGrow: 0, flexShrink: 0 },
-    tagRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    tag: { color: colors.primary, fontSize: 11, fontWeight: '700', lineHeight: 15 },
     metaRow: { flexDirection: 'row', alignItems: 'center' },
+    // 영업시간·지역·거리 텍스트 묶음 — flex:1 로 남는 공간만 차지해야 오른쪽
+    // "지도보기" 버튼이 항상 제자리에 붙는다(업체명이 길어 지역·거리 텍스트가
+    // 늘어져도 버튼이 밀려나지 않게).
+    metaTextWrap: { flex: 1, flexDirection: 'row', alignItems: 'center' },
     op: { fontSize: 12, fontWeight: '800' },
     // 회색 보조 텍스트 톤·크기 통일 — textSecondary/12 하나로.
     hours: { fontSize: 12, color: colors.textSecondary },
     meta: { flexShrink: 1, fontSize: 12, color: colors.textSecondary },
+    // 아이콘만 있던 지도 버튼 대신 텍스트버튼(오너 지시 2026-08-26) — 지역·거리 뒤로 위치 이동.
+    mapTextBtn: { paddingLeft: 8, paddingVertical: 2 },
+    mapTextBtnLabel: { fontSize: 12, fontWeight: '700', color: colors.primary },
     // 평점 줄 — 소개팅·소셜링의 참여현황 줄과 같은 자리(2026-08-24 오너 지시).
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     ratingScore: { fontSize: 12.5, fontWeight: '800', color: colors.textPrimary },

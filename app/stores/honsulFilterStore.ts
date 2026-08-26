@@ -17,7 +17,6 @@ import { useState, useEffect } from 'react'
 interface HonsulFilterState {
   regionGroup: string | null
   sanggwon: string | null
-  tag: string | null
   openNow: boolean
   sortMode: 'default' | 'distance' | 'rating' | 'reviewCount'
   hasAutoInit: boolean
@@ -31,7 +30,6 @@ interface HonsulFilterState {
 
   setRegionGroup: (v: string | null) => void
   setSanggwon: (v: string | null) => void
-  setTag: (v: string | null) => void
   setOpenNow: (v: boolean) => void
   setSortMode: (v: HonsulFilterState['sortMode']) => void
   setHasAutoInit: (v: boolean) => void
@@ -45,7 +43,6 @@ export const useHonsulFilterStore = create<HonsulFilterState>()(
     (set) => ({
       regionGroup: null,
       sanggwon: null,
-      tag: null,
       openNow: false,
       sortMode: 'default',
       hasAutoInit: false,
@@ -54,13 +51,12 @@ export const useHonsulFilterStore = create<HonsulFilterState>()(
 
       setRegionGroup: (regionGroup) => set({ regionGroup }),
       setSanggwon: (sanggwon) => set({ sanggwon }),
-      setTag: (tag) => set({ tag }),
       setOpenNow: (openNow) => set({ openNow }),
       setSortMode: (sortMode) => set({ sortMode }),
       setHasAutoInit: (hasAutoInit) => set({ hasAutoInit }),
       setTab: (tab) => set({ tab }),
       setMapView: (mapView) => set({ mapView }),
-      resetFilters: () => set({ regionGroup: null, sanggwon: null, tag: null, openNow: false }),
+      resetFilters: () => set({ regionGroup: null, sanggwon: null, openNow: false }),
     }),
     {
       name: 'sodate-honsul-filter',
