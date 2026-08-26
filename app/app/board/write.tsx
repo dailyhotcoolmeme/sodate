@@ -814,7 +814,10 @@ function makeStyles(colors: AppColors) {
     // 는 tentap dynamicHeight(웹뷰 높이 자기보고, 세 번 다르게 실패)와 달리 진짜
     // 네이티브 텍스트 레이아웃이라 최대높이 없이 내용만큼 그대로 늘어나게 둔다 —
     // 실기기로 직접 늘어나는지 확인 후 문제 있으면 다시 잡는다.
-    richBox: { minHeight: 160, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
+    // 오너 지시(2026-08-26): 입력박스를 더 키움. 밑에 있는 "욕설·비방…" 안내문이 스크롤
+    // 해야 보이게 되더라도 상관없다고 확인받음 — 항상 한 화면에 다 보여야 하는 제약이
+    // 아니다.
+    richBox: { minHeight: 300, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.background },
     // 리치 툴바를 화면에 직접 띄우는 자리 — KeyboardStickyView 대신 RN Keyboard
     // 이벤트로 계산한 bottom 값을 그대로 쓴다(위 kbHeight 주석 참고).
     // bottom:0 고정 + translateY 애니메이션으로 위치 이동(위 richToolbarAnimatedStyle 참고) —
