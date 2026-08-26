@@ -165,16 +165,14 @@ export default function HonsulScreen() {
     const has = new Set([...all].map((p) => groupOf.get(p.id)))
     return REGION_GROUP_ORDER.map((g) => g.key).filter((k) => has.has(k))
   }, [all, groupOf])
-  // 상권 목록(2번째 줄: 홍대·제주시청·부산·광안리…) = 매장 있는 상권만. 기존에도 매장
-  // 많은 순 정렬은 이미 돼 있었는데, 서울/경기/인천이 아닌 지역(제주·부산 등)이 매장수만
-  // 보고 섞여 들어와 있었다 — 오너 지시(2026-08-26): "이거 순서를 업체들 많은
-  // 순서로 바꿔라. 가급적 서울,경기,인천이 먼저 나오게". 서울·경기·인천 소속 상권을
-  // 먼저(그 안에서는 매장 많은 순), 나머지 지역은 순서를 매장수로 매기지 않고 1번째 줄
-  // 지역군 순서(REGION_GROUP_ORDER: 강원→충청→호남→경북→경남→제주→기타)를 그대로
-  // 따르게 하고, 같은 지역군 안에서만 매장 많은 순으로 정렬한다(오너 추가 지시: "나머지
-  // 지역들도 1번째줄 지역군에 맞춰서 정렬시켜라" — 매장수만으로 매기면 예를 들어 인기
-  // 많은 제주 상권이 강원보다 먼저 나오는 등 지역군 순서와 어긋났다).
-  const CORE_REGIONS = useMemo(() => new Set(['강남권', '강북권', '강서권', '경기', '인천']), [])
+  // 상권 목록(2번째 줄: 홍대·제주시청·부산·광안리…) = 매장 있는 상권만. 오너 지시
+  // (2026-08-26): "내가 분명히 첫번째 줄에 맞춰서 순서를 하라고 했을텐데" — 어느
+  // 지역군이 먼저 나오는지는 특별 취급(서울·경기·인천 묶음 등) 없이 무조건 1번째 줄
+  // 순서(REGION_GROUP_ORDER: 강남권→강북권→강서권→경기→인천→강원→충청→호남→경북→
+  // 경남→제주→기타)를 그대로 따르고, 같은 지역군 안에서만 매장 많은 순으로 정렬한다.
+  // 강남권이 1번째 줄 1번이니 이 규칙만으로 "서울·경기·인천이 먼저"도 자동으로 맞다 —
+  // 굳이 서울·경기·인천을 따로 떼서 재정렬하면 오히려 지역군 순서와 어긋난다(강남권
+  // 소속인데 매장 적은 상권이 인천 소속 매장 많은 상권보다 뒤로 밀리는 사고가 났었다).
   const REGION_ORDER_INDEX = useMemo(
     () => new Map(REGION_GROUP_ORDER.map((g, i) => [g.key, i])),
     [],
@@ -192,18 +190,12 @@ export default function HonsulScreen() {
       }
     }
     return [...c.entries()].sort((a, b) => {
-      const aGroup = groupBySang.get(a[0]) ?? ''
-      const bGroup = groupBySang.get(b[0]) ?? ''
-      const aCore = CORE_REGIONS.has(aGroup)
-      const bCore = CORE_REGIONS.has(bGroup)
-      if (aCore !== bCore) return aCore ? -1 : 1
-      if (aCore && bCore) return b[1] - a[1]
-      const aIdx = REGION_ORDER_INDEX.get(aGroup) ?? 999
-      const bIdx = REGION_ORDER_INDEX.get(bGroup) ?? 999
+      const aIdx = REGION_ORDER_INDEX.get(groupBySang.get(a[0]) ?? '') ?? 999
+      const bIdx = REGION_ORDER_INDEX.get(groupBySang.get(b[0]) ?? '') ?? 999
       if (aIdx !== bIdx) return aIdx - bIdx
       return b[1] - a[1]
     }).map(([s]) => s)
-  }, [all, sangOf, groupOf, regionGroup, CORE_REGIONS, REGION_ORDER_INDEX])
+  }, [all, sangOf, groupOf, regionGroup, REGION_ORDER_INDEX])
 
   const list = useMemo(() => {
     const q = search.trim()
