@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
@@ -94,9 +94,12 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
         </View>
 
         {/* 편의시설(2026-08-26) — 눌러도 필터링 안 되는 정보성 표시. 배경 박스 없이
-            핑크색 글자를 가운뎃점으로 나열(오너 지시). 다 보여줘야 해서 줄바꿈 허용. */}
+            리뷰 글자와 같은 회색, 소개팅 해시태그(HashtagChips)처럼 줄바꿈 없이
+            가로 스크롤로 넘긴다(오너 지시). */}
         {conv.length > 0 && (
-          <Text style={styles.convText}>{conv.join(' · ')}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.convScroll} keyboardShouldPersistTaps="handled">
+            <Text style={styles.convText} numberOfLines={1}>{conv.join(' · ')}</Text>
+          </ScrollView>
         )}
 
         {/* 평점 — 별도 줄(2026-08-24 오너 지시). 소개팅·소셜링은 참여현황이 한 줄 더 있어서
@@ -142,8 +145,11 @@ function makeStyles(colors: AppColors) {
     // 아이콘만 있던 지도 버튼 대신 텍스트버튼(오너 지시 2026-08-26) — 지역·거리 뒤로 위치 이동.
     mapTextBtn: { paddingLeft: 8, paddingVertical: 2 },
     mapTextBtnLabel: { fontSize: 12, fontWeight: '700', color: colors.primary },
-    // 편의시설 — 배경 박스 없이 핑크(primary)색 글자, 가운뎃점 나열(오너 지시 2026-08-26).
-    convText: { fontSize: 12, fontWeight: '700', color: colors.primary, marginTop: 1 },
+    // 편의시설 — 배경 박스 없이 리뷰 글자(ratingCount)와 같은 회색, 가운뎃점 나열,
+    // 한 줄 고정 + 가로 스크롤(오너 지시 2026-08-26, 소개팅 해시태그와 동일한 방식).
+    // HashtagChips의 tight 모드처럼 높이를 명시적으로 고정해야 슬롯마다 간격이 안 흔들린다.
+    convScroll: { height: 17, flexGrow: 0, flexShrink: 0, marginTop: 1 },
+    convText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, lineHeight: 17 },
     // 평점 줄 — 소개팅·소셜링의 참여현황 줄과 같은 자리(2026-08-24 오너 지시).
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     ratingScore: { fontSize: 12.5, fontWeight: '800', color: colors.textPrimary },

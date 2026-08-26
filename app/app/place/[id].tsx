@@ -393,9 +393,9 @@ function makeStyles(colors: AppColors) {
     kwChip: { backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
     kwChipText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
     kwCount: { color: colors.primary, fontWeight: '800' },
-    // 편의시설 — 이전엔 kwChip과 같은 배경 박스였는데, 배경 없이 가운뎃점 나열로
-    // 바꾸면서도 글자색은 그대로(kwChipText와 동일한 textSecondary/12/600) 유지.
-    convText: { flex: 1, fontSize: 12, color: colors.textSecondary, fontWeight: '600', lineHeight: 20 },
+    // 편의시설 — 배경 박스 없이 가운뎃점 나열. 글자색·두께를 바로 위 전화번호 줄
+    // (infoV: textPrimary, 기본 굵기)과 맞췄다(오너 지시 2026-08-26).
+    convText: { flex: 1, fontSize: 12, color: colors.textPrimary, fontWeight: '400', lineHeight: 20 },
     // 후기 섹션 헤더 — 소개팅 event/[id] 와 동일(제목 왼쪽, 연필+글자 오른쪽)
     reviewsSection: { paddingHorizontal: 20, paddingTop: 10, marginTop: 6 },
     reviewsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
