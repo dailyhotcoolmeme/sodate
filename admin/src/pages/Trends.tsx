@@ -5,13 +5,19 @@ import { useEffect, useState, useMemo } from 'react'
  * "지금 20~30대가 뭘 보고 있나"를 한 화면에 모아 글 소재를 고르는 용도.
  * 데이터는 서버(functions/api/trends.ts)가 각 사이트 공개 인기글 목록에서 모아온다.
  */
+interface Metric {
+  /** 그 사이트가 쓰는 이름 그대로(조회 / 추천 / 공감 / 댓글 …) */
+  label: string
+  value: string
+}
 interface TrendItem {
   source: string
   rank: number
   title: string
   url: string
-  views?: number
-  comments?: number
+  /** 목록에 표기된 작성 시각(사이트마다 형식이 달라 문자열 그대로) */
+  postedAt?: string
+  metrics: Metric[]
 }
 interface SourceResult {
   source: string
@@ -136,12 +142,18 @@ export default function Trends() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-gray-800 text-sm leading-snug break-words">{it.title}</span>
-                <span className="mt-1 flex items-center gap-2 flex-wrap text-xs text-gray-400">
+                {/* 지표 이름은 사이트가 쓰는 용어 그대로 보여준다(추천/공감 등 —
+                    오너 지시 2026-08-31). 공통 이름으로 바꾸지 않는다. */}
+                <span className="mt-1 flex items-center gap-x-2 gap-y-1 flex-wrap text-xs text-gray-400">
                   <span className={`px-1.5 py-0.5 rounded font-medium ${SOURCE_COLOR[it.source] ?? 'bg-gray-100 text-gray-600'}`}>
                     {it.source}
                   </span>
-                  {it.views != null && <span>조회 {it.views.toLocaleString()}</span>}
-                  {it.comments != null && <span>댓글 {it.comments.toLocaleString()}</span>}
+                  {it.postedAt && <span className="tabular-nums">{it.postedAt}</span>}
+                  {it.metrics.map((m) => (
+                    <span key={m.label}>
+                      {m.label} <span className="tabular-nums text-gray-500">{m.value}</span>
+                    </span>
+                  ))}
                 </span>
               </span>
             </a>

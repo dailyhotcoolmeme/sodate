@@ -4,11 +4,15 @@ import { verifySession, getCookie, COOKIE, json } from '../_lib/session'
  * 커뮤니티 인기글 모니터(2026-08-31, 오너 지시).
  *
  * 목적: 20~30대가 지금 뭘 보고 있는지를 한 화면에서 보고 글 소재를 고르기 위한 것.
- * 각 사이트의 "공개된 인기글 목록"에서 제목·링크·반응수만 모아 온다. 본문은 가져오지
- * 않는다 — 소재 파악에 필요한 건 무엇이 화제인지이지 남의 글 전문이 아니다.
+ * 각 사이트의 "공개된 인기글 목록"에서 제목·링크·작성시각·반응수만 모아 온다.
+ *
+ * ⚠️ 반응 지표는 사이트마다 이름이 다르다(추천 / 공감 / 조회 …). 오너 지시로
+ *    **각 사이트가 쓰는 용어를 그대로** 보여준다 — 억지로 '좋아요' 같은 공통 이름으로
+ *    바꾸지 않는다. 그래서 metrics 를 {label, value} 배열로 두고 파서가 그 사이트의
+ *    표기를 그대로 채운다.
  *
  * 브라우저에서 직접 부르면 CORS 에 막히므로 서버(Pages Function)에서 대신 받아온다.
- * 관리자 세션이 있어야만 호출된다(로그인 안 한 사람에게 열어둘 이유가 없다).
+ * 관리자 세션이 있어야만 호출된다.
  *
  * ⚠️ 사이트 HTML 구조는 언제든 바뀐다 — 한 곳이 깨져도 나머지는 나오도록 소스별로
  *    독립 처리하고, 실패한 소스는 error 로 표시만 하고 넘어간다.
@@ -20,14 +24,20 @@ interface Env {
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
+export interface Metric {
+  /** 그 사이트가 쓰는 이름 그대로(조회 / 추천 / 공감 / 댓글 …) */
+  label: string
+  value: string
+}
+
 export interface TrendItem {
   source: string
   rank: number
   title: string
   url: string
-  /** 조회수·댓글수 등 사이트가 노출하는 반응 지표(있는 것만) */
-  views?: number
-  comments?: number
+  /** 목록에 표기된 작성 시각. 사이트마다 형식이 달라 문자열 그대로 둔다(없으면 생략). */
+  postedAt?: string
+  metrics: Metric[]
 }
 
 function decodeEntities(s: string): string {
@@ -41,6 +51,12 @@ function stripTags(s: string): string {
   return decodeEntities(s.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
 }
 
+/** 값이 있는 지표만 담는다(0도 유효한 값이라 빈 문자열만 걸러낸다). */
+function metric(list: Metric[], label: string, value: string | undefined | null) {
+  const v = (value ?? '').trim()
+  if (v) list.push({ label, value: v })
+}
+
 async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { 'User-Agent': UA, 'Accept-Language': 'ko-KR,ko;q=0.9' },
@@ -50,7 +66,11 @@ async function fetchText(url: string): Promise<string> {
   return res.text()
 }
 
-/** 네이트판 톡톡 랭킹 — 제목·조회수·댓글수가 목록에 다 있다. */
+/**
+ * 네이트판 톡톡 랭킹.
+ * 지표 표기: "조회 17,436", "추천 58", 제목 옆 "(98)" = 댓글수.
+ * 랭킹 목록에는 작성 시각이 없다.
+ */
 async function nate(): Promise<TrendItem[]> {
   const html = await fetchText('https://pann.nate.com/talk/ranking')
   const wrap = html.match(/<ul class="post_wrap">([\s\S]*?)<\/ul>/)
@@ -60,23 +80,31 @@ async function nate(): Promise<TrendItem[]> {
   for (const li of items) {
     const href = li.match(/href="(\/talk\/\d+)"/)
     if (!href) continue
-    const text = stripTags(li)
-    // "1 제목 (댓글수) 미리보기… 조회 12,345 추천 6" 형태 → 앞의 순위·뒤의 지표를 떼어낸다
-    const rank = Number(text.match(/^(\d+)\s/)?.[1] ?? out.length + 1)
-    const title = (text.match(/^\d+\s+(.*?)\s*\(\d+\)/)?.[1] ?? text.slice(0, 80)).trim()
-    const views = Number(text.match(/조회\s*([\d,]+)/)?.[1]?.replace(/,/g, '') ?? '') || undefined
-    const comments = Number(text.match(/\((\d+)\)/)?.[1] ?? '') || undefined
-    out.push({ source: '네이트판', rank, title, url: `https://pann.nate.com${href[1]}`, views, comments })
+    const title = decodeEntities(li.match(/<h2><a[^>]*title="([^"]*)"/)?.[1] ?? '').trim()
+      || stripTags(li.match(/<h2>([\s\S]*?)<\/h2>/)?.[1] ?? '')
+    if (!title) continue
+    const metrics: Metric[] = []
+    metric(metrics, '조회', li.match(/class="count">\s*조회\s*([\d,]+)/)?.[1])
+    metric(metrics, '추천', li.match(/class="rcm">\s*추천\s*([\d,]+)/)?.[1])
+    metric(metrics, '댓글', li.match(/class="reple-num">\((\d+)\)/)?.[1])
+    out.push({
+      source: '네이트판',
+      rank: out.length + 1,
+      title,
+      url: `https://pann.nate.com${href[1]}`,
+      metrics,
+    })
   }
   return out.slice(0, 30)
 }
 
 /**
  * 더쿠 핫게시판.
- * ⚠️ 목록 맨 위에 공지(class="notice")가 여러 줄 붙어 있다 — 이걸 안 걸러내면
- * "로그인 보안 강화" 같은 운영 공지가 1~5위를 차지한다(2026-08-31 실제로 그렇게 나왔다).
- * 조회수도 행 안의 숫자 중 최대값을 쓰면 공지의 수천만 조회가 섞여 엉터리가 된다 —
- * td.m_no(조회) / a.replyNum(댓글) 처럼 자리를 지정해서 읽는다.
+ * ⚠️ 목록 맨 위에 공지(class="notice")가 여러 줄 붙어 있다 — 안 걸러내면 운영 공지가
+ *    1~5위를 차지한다(2026-08-31 실제로 그렇게 나왔다). 조회수도 행 안 숫자 중 최대값을
+ *    쓰면 공지의 수천만 조회가 섞이므로 td.m_no / a.replyNum 처럼 자리를 지정해 읽는다.
+ * 지표 표기: 조회(td.m_no), 댓글(a.replyNum). 추천 표시는 목록에 없다.
+ * 시각은 td.time — 당일 글은 "00:27", 지난 글은 "08.30" 형태.
  */
 async function theqoo(): Promise<TrendItem[]> {
   const html = await fetchText('https://theqoo.net/hot')
@@ -90,32 +118,50 @@ async function theqoo(): Promise<TrendItem[]> {
     const title = stripTags(a[2])
     if (!title) continue
     const cate = stripTags(tr.match(/<td class="cate">([\s\S]*?)<\/td>/)?.[1] ?? '')
-    const views = Number(tr.match(/<td class="m_no">([\d,]+)<\/td>/)?.[1]?.replace(/,/g, '') ?? '') || undefined
-    const comments = Number(tr.match(/class="replyNum">(\d+)</)?.[1] ?? '') || undefined
+    const metrics: Metric[] = []
+    metric(metrics, '조회', tr.match(/<td class="m_no">([\d,]+)<\/td>/)?.[1])
+    metric(metrics, '댓글', tr.match(/class="replyNum">(\d+)</)?.[1])
     out.push({
       source: '더쿠',
       rank: out.length + 1,
       title: cate ? `[${cate}] ${title}` : title,
       url: `https://theqoo.net${a[1]}`,
-      views,
-      comments,
+      postedAt: stripTags(tr.match(/<td class="time">([\s\S]*?)<\/td>/)?.[1] ?? '') || undefined,
+      metrics,
     })
   }
   return out.slice(0, 30)
 }
 
-/** 클리앙 모두의공원. */
+/**
+ * 클리앙 모두의공원.
+ * 지표 표기: 클리앙은 추천을 "공감"이라 부른다(list-like-count). 조회는 list_hit,
+ * 댓글수는 행 속성 data-comment-count 에 들어 있다.
+ * 시각은 .timestamp 에 "2026-08-31 01:10:46" 전체가 들어 있어 그걸 쓴다.
+ */
 async function clien(): Promise<TrendItem[]> {
   const html = await fetchText('https://www.clien.net/service/board/park')
+  const chunks = html.split('<div class="list_item')
   const out: TrendItem[] = []
-  const re = /href="(\/service\/board\/park\/\d+[^"#]*)"[^>]*>([\s\S]*?)<\/a>/g
-  const seen = new Set<string>()
-  let m: RegExpExecArray | null
-  while ((m = re.exec(html))) {
-    const title = stripTags(m[2])
-    if (!title || title.length < 4 || seen.has(m[1])) continue
-    seen.add(m[1])
-    out.push({ source: '클리앙', rank: out.length + 1, title, url: `https://www.clien.net${m[1]}` })
+  for (const raw of chunks.slice(1)) {
+    if (/^\s*[^>]*notice/.test(raw)) continue
+    const a = raw.match(/href="(\/service\/board\/park\/\d+[^"#]*)"/)
+    const title = decodeEntities(
+      raw.match(/data-role="list-title-text"[^>]*title="([^"]*)"/)?.[1] ?? '',
+    ).trim()
+    if (!a || !title) continue
+    const metrics: Metric[] = []
+    metric(metrics, '조회', stripTags(raw.match(/class="hit">([\s\S]*?)<\/span>/)?.[1] ?? ''))
+    metric(metrics, '공감', stripTags(raw.match(/data-role="list-like-count"><span>([\s\S]*?)<\/span>/)?.[1] ?? ''))
+    metric(metrics, '댓글', raw.match(/data-comment-count=(\d+)/)?.[1])
+    out.push({
+      source: '클리앙',
+      rank: out.length + 1,
+      title,
+      url: `https://www.clien.net${a[1]}`,
+      postedAt: raw.match(/class="timestamp">([\s\S]*?)<\/span>/)?.[1]?.trim() || undefined,
+      metrics,
+    })
   }
   return out.slice(0, 30)
 }
