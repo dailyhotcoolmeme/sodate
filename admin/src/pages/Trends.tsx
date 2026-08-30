@@ -29,6 +29,8 @@ const SOURCE_COLOR: Record<string, string> = {
   네이트판: 'bg-rose-100 text-rose-700',
   더쿠: 'bg-violet-100 text-violet-700',
   클리앙: 'bg-sky-100 text-sky-700',
+  '디시 실베': 'bg-emerald-100 text-emerald-700',
+  루리웹: 'bg-amber-100 text-amber-700',
 }
 
 export default function Trends() {

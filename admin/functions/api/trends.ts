@@ -183,11 +183,91 @@ async function clien(): Promise<TrendItem[]> {
   return out.slice(0, 30)
 }
 
+/**
+ * 디시인사이드 실시간베스트.
+ * 지표 표기: 조회(td.gall_count), 추천(td.gall_recommend), 댓글(span.reply_num "[59/2]" 앞자리).
+ * 시각은 td.gall_date 의 title 속성에 "2026-08-31 01:25:01" 전체가 들어 있다.
+ * ⚠️ 맨 위 설문·공지 행은 글번호 칸이 숫자가 아니다 — 그걸로 걸러낸다.
+ */
+async function dcinside(): Promise<TrendItem[]> {
+  const html = await fetchText('https://gall.dcinside.com/board/lists/?id=dcbest')
+  const rows = html.match(/<tr class="ub-content[\s\S]*?<\/tr>/g) ?? []
+  const out: TrendItem[] = []
+  for (const tr of rows) {
+    const num = stripTags(tr.match(/<td class="gall_num">([\s\S]*?)<\/td>/)?.[1] ?? '')
+    if (!/^\d+$/.test(num)) continue
+    const cell = tr.match(/<td class="gall_tit[^"]*">([\s\S]*?)<\/td>/)?.[1]
+    const href = cell?.match(/href="(\/board\/view\/\?[^"]+)"/)
+    if (!cell || !href) continue
+    // 댓글수 링크와 썸네일은 제목 글자에 섞이므로 먼저 걷어낸다.
+    const title = stripTags(
+      cell.replace(/<a class="reply_numbox"[\s\S]*?<\/a>/g, '').replace(/<div class="thumimg">[\s\S]*?<\/div>/g, ''),
+    )
+    if (!title) continue
+    const metrics: Metric[] = []
+    metric(metrics, '조회', stripTags(tr.match(/<td class="gall_count">([\s\S]*?)<\/td>/)?.[1] ?? '').replace('-', ''))
+    metric(metrics, '추천', stripTags(tr.match(/<td class="gall_recommend">([\s\S]*?)<\/td>/)?.[1] ?? '').replace('-', ''))
+    metric(metrics, '댓글', cell.match(/class="reply_num">\[(\d+)/)?.[1])
+    out.push({
+      source: '디시 실베',
+      rank: out.length + 1,
+      title,
+      url: `https://gall.dcinside.com${decodeEntities(href[1])}`,
+      postedAt:
+        tr.match(/<td class="gall_date"[^>]*title="([^"]+)"/)?.[1] ||
+        stripTags(tr.match(/<td class="gall_date"[^>]*>([\s\S]*?)<\/td>/)?.[1] ?? '') ||
+        undefined,
+      metrics,
+    })
+  }
+  return out.slice(0, 30)
+}
+
+/**
+ * 루리웹 유머 베스트.
+ * 지표 표기: 조회(td.hit), 추천(td.recomd), 댓글(span.num_reply "(75)").
+ * 시각은 td.time — 당일이면 "22:51".
+ * ⚠️ 맨 위 고정 3줄만 제목이 <strong>, 나머지는 <span> 이다(둘 다 class="text_over").
+ *    한쪽만 받으면 3건밖에 안 잡힌다.
+ */
+async function ruliweb(): Promise<TrendItem[]> {
+  const html = await fetchText('https://bbs.ruliweb.com/best/humor_only/now')
+  const out: TrendItem[] = []
+  for (const tr of html.split('<tr class="table_body').slice(1)) {
+    const a = tr.match(/href="(?:https?:\/\/bbs\.ruliweb\.com)?(\/best\/board\/\d+\/read\/\d+[^"]*)"/)
+    const title = stripTags(tr.match(/<(?:strong|span) class="text_over">([\s\S]*?)<\/(?:strong|span)>/)?.[1] ?? '')
+    if (!a || !title) continue
+    const metrics: Metric[] = []
+    metric(metrics, '조회', stripTags(tr.match(/<td class="hit">([\s\S]*?)<\/td>/)?.[1] ?? ''))
+    metric(metrics, '추천', stripTags(tr.match(/<td class="recomd">([\s\S]*?)<\/td>/)?.[1] ?? ''))
+    metric(metrics, '댓글', tr.match(/class="num_reply[^"]*">\s*\((\d+)\)/)?.[1])
+    out.push({
+      source: '루리웹',
+      rank: out.length + 1,
+      title,
+      url: `https://bbs.ruliweb.com${decodeEntities(a[1])}`,
+      postedAt: stripTags(tr.match(/<td class="time">([\s\S]*?)<\/td>/)?.[1] ?? '') || undefined,
+      metrics,
+    })
+  }
+  return out.slice(0, 30)
+}
+
 const SOURCES: { key: string; run: () => Promise<TrendItem[]> }[] = [
   { key: '네이트판', run: nate },
   { key: '더쿠', run: theqoo },
   { key: '클리앙', run: clien },
+  { key: '디시 실베', run: dcinside },
+  { key: '루리웹', run: ruliweb },
 ]
+
+/**
+ * 제목에 "후방"(후방주의 = 수위 있는 글)이 붙은 글은 목록에서 뺀다(오너 지시 2026-08-31).
+ * 사이트마다 [후방] · 후방주의 · 후방ㅈㅇ 등 표기가 달라 글자만 보고 거른다.
+ */
+function isBlockedTitle(title: string): boolean {
+  return title.includes('후방')
+}
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   if (!(await verifySession(env.SESSION_SECRET, getCookie(request, COOKIE)))) {
@@ -196,7 +276,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const results = await Promise.all(
     SOURCES.map(async (s) => {
       try {
-        return { source: s.key, items: await s.run(), error: null as string | null }
+        // 거른 뒤에 순위를 다시 매긴다 — 중간이 빠져 1,3,4 로 튀지 않게.
+        const items = (await s.run())
+          .filter((i) => !isBlockedTitle(i.title))
+          .map((i, idx) => ({ ...i, rank: idx + 1 }))
+        return { source: s.key, items, error: null as string | null }
       } catch (e: any) {
         // 한 곳이 막히거나 구조가 바뀌어도 나머지는 보여준다.
         return { source: s.key, items: [] as TrendItem[], error: String(e?.message ?? e).slice(0, 120) }
