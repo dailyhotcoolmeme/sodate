@@ -44,7 +44,10 @@ function decodeEntities(s: string): string {
   return s
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    // 웃긴대학은 따옴표·괄호까지 &#34; &#40; 처럼 숫자 코드로 내보낸다.
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/&amp;/g, '&')
 }
 
 function stripTags(s: string): string {
@@ -57,13 +60,15 @@ function metric(list: Metric[], label: string, value: string | undefined | null)
   if (v) list.push({ label, value: v })
 }
 
-async function fetchText(url: string): Promise<string> {
+/** charset: 아직도 EUC-KR 로 내려주는 곳이 있어(웃긴대학) 그때만 넘긴다. */
+async function fetchText(url: string, charset?: string): Promise<string> {
   const res = await fetch(url, {
     headers: { 'User-Agent': UA, 'Accept-Language': 'ko-KR,ko;q=0.9' },
     cf: { cacheTtl: 300, cacheEverything: true },
   } as RequestInit)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.text()
+  if (!charset) return res.text()
+  return new TextDecoder(charset).decode(new Uint8Array(await res.arrayBuffer()))
 }
 
 /** 네이트판은 목록에 시각이 없어 글 페이지에서 하나씩 읽어온다(실패하면 그냥 비운다). */
@@ -151,32 +156,88 @@ async function theqoo(): Promise<TrendItem[]> {
 }
 
 /**
- * 클리앙 모두의공원.
- * 지표 표기: 클리앙은 추천을 "공감"이라 부른다(list-like-count). 조회는 list_hit,
- * 댓글수는 행 속성 data-comment-count 에 들어 있다.
- * 시각은 .timestamp 에 "2026-08-31 01:10:46" 전체가 들어 있어 그걸 쓴다.
+ * 엠엘비파크 불펜 베스트.
+ * ⚠️ 이 목록은 제목·글쓴이·날짜만 내보낸다 — 조회/추천/댓글 칸 자체가 없어서
+ *    지표는 비워 둔다(글 하나하나 열어야 나오는데 요청 수가 감당이 안 된다).
+ *    날짜도 시각 없이 일자만 나온다.
  */
-async function clien(): Promise<TrendItem[]> {
-  const html = await fetchText('https://www.clien.net/service/board/park')
-  const chunks = html.split('<div class="list_item')
+async function mlbpark(): Promise<TrendItem[]> {
+  const html = await fetchText('https://mlbpark.donga.com/mp/best.php')
   const out: TrendItem[] = []
-  for (const raw of chunks.slice(1)) {
-    if (/^\s*[^>]*notice/.test(raw)) continue
-    const a = raw.match(/href="(\/service\/board\/park\/\d+[^"#]*)"/)
-    const title = decodeEntities(
-      raw.match(/data-role="list-title-text"[^>]*title="([^"]*)"/)?.[1] ?? '',
-    ).trim()
-    if (!a || !title) continue
-    const metrics: Metric[] = []
-    metric(metrics, '조회', stripTags(raw.match(/class="hit">([\s\S]*?)<\/span>/)?.[1] ?? ''))
-    metric(metrics, '공감', stripTags(raw.match(/data-role="list-like-count"><span>([\s\S]*?)<\/span>/)?.[1] ?? ''))
-    metric(metrics, '댓글', raw.match(/data-comment-count=(\d+)/)?.[1])
+  for (const tr of html.split('<tr>').slice(1)) {
+    const a = tr.match(/href='(https:\/\/mlbpark\.donga\.com\/mp\/b\.php\?[^']*m=view[^']*)'[^>]*class='txt'>([\s\S]*?)<\/a>/)
+    if (!a) continue
+    const title = stripTags(a[2])
+    if (!title) continue
     out.push({
-      source: '클리앙',
+      source: '엠팍',
       rank: out.length + 1,
       title,
-      url: `https://www.clien.net${a[1]}`,
-      postedAt: raw.match(/class="timestamp">([\s\S]*?)<\/span>/)?.[1]?.trim() || undefined,
+      url: decodeEntities(a[1]),
+      postedAt: stripTags(tr.match(/<span class='date'>([\s\S]*?)<\/span>/)?.[1] ?? '') || undefined,
+      metrics: [],
+    })
+  }
+  return out.slice(0, 30)
+}
+
+/**
+ * 오늘의유머 베스트오브베스트.
+ * 지표 표기: 조회(td.hits), 추천(td.oknok), 제목 옆 "[7]" = 댓글.
+ * 시각은 td.date — "26/08/30 20:39".
+ */
+async function todayhumor(): Promise<TrendItem[]> {
+  const html = await fetchText('https://www.todayhumor.co.kr/board/list.php?table=bestofbest')
+  const out: TrendItem[] = []
+  for (const tr of html.split('<tr class="view').slice(1)) {
+    const a = tr.match(/<td class="subject"><a href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/)
+    if (!a) continue
+    const title = stripTags(a[2])
+    if (!title) continue
+    const metrics: Metric[] = []
+    metric(metrics, '조회', stripTags(tr.match(/<td class="hits">([\s\S]*?)<\/td>/)?.[1] ?? ''))
+    metric(metrics, '추천', stripTags(tr.match(/<td class="oknok">([\s\S]*?)<\/td>/)?.[1] ?? ''))
+    metric(metrics, '댓글', tr.match(/class='list_memo_count_span'>\s*\[(\d+)\]/)?.[1])
+    out.push({
+      source: '오유',
+      rank: out.length + 1,
+      title,
+      url: `https://www.todayhumor.co.kr${decodeEntities(a[1])}`,
+      postedAt: stripTags(tr.match(/<td class="date">([\s\S]*?)<\/td>/)?.[1] ?? '') || undefined,
+      metrics,
+    })
+  }
+  return out.slice(0, 30)
+}
+
+/**
+ * 웃긴대학 웃긴자료 오늘의 베스트.
+ * ⚠️ 이 사이트만 아직 EUC-KR 이다 — 그냥 text() 로 읽으면 제목이 전부 깨진다.
+ * 지표 표기: 조회 / 추천 / 반대 (목록 머리글 그대로), 제목 옆 "[12]" = 댓글.
+ * 숫자 세 칸이 모두 같은 class="li_und" 라 나온 순서대로 조회·추천·반대로 읽는다.
+ */
+async function humoruniv(): Promise<TrendItem[]> {
+  const html = await fetchText('https://web.humoruniv.com/board/humor/list.html?table=pds&st=day', 'euc-kr')
+  const out: TrendItem[] = []
+  for (const tr of html.split('<tr id="li_chk_pds-').slice(1)) {
+    const no = tr.match(/^(\d+)/)?.[1]
+    if (!no) continue
+    const title = stripTags(tr.match(new RegExp(`<span id="title_chk_pds-${no}">([\\s\\S]*?)</span>`))?.[1] ?? '')
+    if (!title) continue
+    const nums = [...tr.matchAll(/<td width="\d+" class="li_und"[^>]*>([\s\S]*?)<\/td>/g)].map((x) => stripTags(x[1]))
+    const metrics: Metric[] = []
+    metric(metrics, '조회', nums[0])
+    metric(metrics, '추천', nums[1])
+    metric(metrics, '반대', nums[2])
+    metric(metrics, '댓글', tr.match(/class="list_comment_num">\s*\[(\d+)\]/)?.[1])
+    const date = tr.match(/class="w_date">([\s\S]*?)<\/span>/)?.[1]?.trim()
+    const time = tr.match(/class="w_time">([\s\S]*?)<\/span>/)?.[1]?.trim()
+    out.push({
+      source: '웃긴대학',
+      rank: out.length + 1,
+      title,
+      url: `https://web.humoruniv.com/board/humor/read.html?table=pds&st=day&number=${no}`,
+      postedAt: [date, time].filter(Boolean).join(' ') || undefined,
       metrics,
     })
   }
@@ -256,9 +317,11 @@ async function ruliweb(): Promise<TrendItem[]> {
 const SOURCES: { key: string; run: () => Promise<TrendItem[]> }[] = [
   { key: '네이트판', run: nate },
   { key: '더쿠', run: theqoo },
-  { key: '클리앙', run: clien },
   { key: '디시 실베', run: dcinside },
   { key: '루리웹', run: ruliweb },
+  { key: '엠팍', run: mlbpark },
+  { key: '오유', run: todayhumor },
+  { key: '웃긴대학', run: humoruniv },
 ]
 
 /**
