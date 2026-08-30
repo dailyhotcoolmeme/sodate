@@ -11,6 +11,7 @@ import Reviews from './pages/Reviews'
 import Board from './pages/Board'
 import CrawlLogs from './pages/CrawlLogs'
 import Analytics from './pages/Analytics'
+import Trends from './pages/Trends'
 
 function guard(authed: boolean, el: React.ReactNode) {
   return authed ? <Layout>{el}</Layout> : <Navigate to="/login" replace />
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/board" element={guard(authed, <Board />)} />
         <Route path="/crawl-logs" element={guard(authed, <CrawlLogs />)} />
         <Route path="/analytics" element={guard(authed, <Analytics />)} />
+        <Route path="/trends" element={guard(authed, <Trends />)} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
