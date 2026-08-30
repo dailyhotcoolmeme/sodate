@@ -96,11 +96,12 @@ export default function Trends() {
             {s}
           </button>
         ))}
+        {/* 폰에서는 칩 아래로 떨어지며 가로를 꽉 채우고, 넓은 화면에서만 오른쪽 끝으로 민다 */}
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="제목 검색"
-          className="ml-auto px-3 py-1.5 rounded-lg border border-gray-200 text-sm w-48"
+          className="w-full sm:w-48 sm:ml-auto px-3 py-1.5 rounded-lg border border-gray-200 text-sm"
         />
       </div>
 
@@ -111,56 +112,40 @@ export default function Trends() {
         </p>
       )}
 
+      {/* ⚠️ 표(table)로 그렸더니 폰에서 제목 칸이 눌려 한 글자씩 세로로 끊겼다
+          (2026-08-31 오너 지적). 목록 한 줄 = 카드 하나로 바꿔서 제목이 가로로 온전히
+          들어가게 하고, 출처·조회·댓글은 제목 아래 작은 줄로 내렸다. */}
       {loading && !results.length ? (
         <p className="text-gray-400 text-sm">불러오는 중...</p>
+      ) : !merged.length ? (
+        <div className="bg-white rounded-xl border border-gray-200 px-4 py-10 text-center text-gray-400 text-sm">
+          표시할 글이 없습니다
+        </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium w-24">출처</th>
-                <th className="px-4 py-3 text-center font-medium w-12">순위</th>
-                <th className="px-4 py-3 text-left font-medium">제목</th>
-                <th className="px-4 py-3 text-right font-medium w-24">조회</th>
-                <th className="px-4 py-3 text-right font-medium w-20">댓글</th>
-              </tr>
-            </thead>
-            <tbody>
-              {merged.map((it, i) => (
-                <tr key={`${it.source}-${it.url}-${i}`} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2.5">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SOURCE_COLOR[it.source] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {it.source}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-center text-gray-400 text-xs">{it.rank}</td>
-                  <td className="px-4 py-2.5">
-                    <a
-                      href={it.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="text-gray-800 hover:text-blue-600 hover:underline"
-                    >
-                      {it.title}
-                    </a>
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-gray-500 text-xs">
-                    {it.views != null ? it.views.toLocaleString() : '-'}
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-gray-500 text-xs">
-                    {it.comments != null ? it.comments.toLocaleString() : '-'}
-                  </td>
-                </tr>
-              ))}
-              {!merged.length && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-gray-400 text-sm">
-                    표시할 글이 없습니다
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+          {merged.map((it, i) => (
+            <a
+              key={`${it.source}-${it.url}-${i}`}
+              href={it.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex gap-3 px-4 py-3 hover:bg-gray-50 active:bg-gray-100"
+            >
+              <span className="text-gray-300 text-xs font-medium tabular-nums pt-0.5 w-5 shrink-0 text-right">
+                {it.rank}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-gray-800 text-sm leading-snug break-words">{it.title}</span>
+                <span className="mt-1 flex items-center gap-2 flex-wrap text-xs text-gray-400">
+                  <span className={`px-1.5 py-0.5 rounded font-medium ${SOURCE_COLOR[it.source] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {it.source}
+                  </span>
+                  {it.views != null && <span>조회 {it.views.toLocaleString()}</span>}
+                  {it.comments != null && <span>댓글 {it.comments.toLocaleString()}</span>}
+                </span>
+              </span>
+            </a>
+          ))}
         </div>
       )}
     </div>

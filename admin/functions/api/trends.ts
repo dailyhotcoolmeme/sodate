@@ -71,23 +71,34 @@ async function nate(): Promise<TrendItem[]> {
   return out.slice(0, 30)
 }
 
-/** 더쿠 핫게시판. */
+/**
+ * 더쿠 핫게시판.
+ * ⚠️ 목록 맨 위에 공지(class="notice")가 여러 줄 붙어 있다 — 이걸 안 걸러내면
+ * "로그인 보안 강화" 같은 운영 공지가 1~5위를 차지한다(2026-08-31 실제로 그렇게 나왔다).
+ * 조회수도 행 안의 숫자 중 최대값을 쓰면 공지의 수천만 조회가 섞여 엉터리가 된다 —
+ * td.m_no(조회) / a.replyNum(댓글) 처럼 자리를 지정해서 읽는다.
+ */
 async function theqoo(): Promise<TrendItem[]> {
   const html = await fetchText('https://theqoo.net/hot')
   const rows = html.match(/<tr[\s\S]*?<\/tr>/g) ?? []
   const out: TrendItem[] = []
   for (const tr of rows) {
-    const a = tr.match(/href="(\/hot\/\d+)"[^>]*>([\s\S]*?)<\/a>/)
+    const attrs = tr.match(/<tr([^>]*)>/)?.[1] ?? ''
+    if (/notice/.test(attrs)) continue
+    const a = tr.match(/<td class="title">[\s\S]*?<a href="(\/hot\/\d+)"[^>]*>([\s\S]*?)<\/a>/)
     if (!a) continue
     const title = stripTags(a[2])
-    if (!title || title.length < 2) continue
-    const nums = (stripTags(tr).match(/[\d,]+/g) ?? []).map((n) => Number(n.replace(/,/g, '')))
+    if (!title) continue
+    const cate = stripTags(tr.match(/<td class="cate">([\s\S]*?)<\/td>/)?.[1] ?? '')
+    const views = Number(tr.match(/<td class="m_no">([\d,]+)<\/td>/)?.[1]?.replace(/,/g, '') ?? '') || undefined
+    const comments = Number(tr.match(/class="replyNum">(\d+)</)?.[1] ?? '') || undefined
     out.push({
       source: '더쿠',
       rank: out.length + 1,
-      title,
+      title: cate ? `[${cate}] ${title}` : title,
       url: `https://theqoo.net${a[1]}`,
-      views: nums.length ? Math.max(...nums) : undefined,
+      views,
+      comments,
     })
   }
   return out.slice(0, 30)
