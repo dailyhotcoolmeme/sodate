@@ -295,29 +295,32 @@ async function dcinside(): Promise<TrendItem[]> {
 }
 
 /**
- * 루리웹 유머 베스트.
- * 지표 표기: 조회(td.hit), 추천(td.recomd), 댓글(span.num_reply "(75)").
- * 시각은 td.time — 당일이면 "22:51".
- * ⚠️ 맨 위 고정 3줄만 제목이 <strong>, 나머지는 <span> 이다(둘 다 class="text_over").
- *    한쪽만 받으면 3건밖에 안 잡힌다.
+ * 인스티즈 인기글(페이지 맨 위 green_mainboard 블록).
+ * 그 아래 목록은 최신순이라 인기글이 아니다 — <tr id="detour"> 로 된 위 블록만 읽는다.
+ * 지표 표기: 조회 · 추천 · 댓글. 숫자 칸 세 개가 전부 class="listno" 라 나온 순서대로
+ * 시각 · 조회 · 추천으로 읽고, 댓글은 제목 옆 span.cmt3 에서 가져온다.
  */
-async function ruliweb(): Promise<TrendItem[]> {
-  const html = await fetchText('https://bbs.ruliweb.com/best/humor_only/now')
+async function instiz(): Promise<TrendItem[]> {
+  const html = await fetchText('https://www.instiz.net/pt')
   const out: TrendItem[] = []
-  for (const tr of html.split('<tr class="table_body').slice(1)) {
-    const a = tr.match(/href="(?:https?:\/\/bbs\.ruliweb\.com)?(\/best\/board\/\d+\/read\/\d+[^"]*)"/)
-    const title = stripTags(tr.match(/<(?:strong|span) class="text_over">([\s\S]*?)<\/(?:strong|span)>/)?.[1] ?? '')
-    if (!a || !title) continue
+  for (const tr of html.split('<tr id="detour">').slice(1)) {
+    const a = tr.match(/href="(https:\/\/www\.instiz\.net\/pt\/\d+)[^"]*"/)
+    const raw = tr.match(/class="texthead_notice">([\s\S]*?)<span class="cmt3"/)?.[1]
+    if (!a || !raw) continue
+    const title = stripTags(raw)
+    if (!title) continue
+    const cols = [...tr.matchAll(/<td class="listno"[^>]*>([\s\S]*?)<\/td>/g)].map((x) => stripTags(x[1]))
     const metrics: Metric[] = []
-    metric(metrics, '조회', stripTags(tr.match(/<td class="hit">([\s\S]*?)<\/td>/)?.[1] ?? ''))
-    metric(metrics, '추천', stripTags(tr.match(/<td class="recomd">([\s\S]*?)<\/td>/)?.[1] ?? ''))
-    metric(metrics, '댓글', tr.match(/class="num_reply[^"]*">\s*\((\d+)\)/)?.[1])
+    metric(metrics, '조회', cols[1])
+    metric(metrics, '추천', cols[2])
+    metric(metrics, '댓글', tr.match(/class="cmt3"[^>]*>(\d+)<\/span>/)?.[1])
+    const cate = stripTags(tr.match(/class="list_category">([\s\S]*?)<\/span>/)?.[1] ?? '')
     out.push({
-      source: '루리웹',
+      source: '인스티즈',
       rank: out.length + 1,
-      title,
-      url: `https://bbs.ruliweb.com${decodeEntities(a[1])}`,
-      postedAt: stripTags(tr.match(/<td class="time">([\s\S]*?)<\/td>/)?.[1] ?? '') || undefined,
+      title: cate ? `[${cate}] ${title}` : title,
+      url: a[1],
+      postedAt: cols[0] || undefined,
       metrics,
     })
   }
@@ -328,7 +331,7 @@ const SOURCES: { key: string; run: () => Promise<TrendItem[]> }[] = [
   { key: '네이트판', run: nate },
   { key: '더쿠', run: theqoo },
   { key: '디시 실베', run: dcinside },
-  { key: '루리웹', run: ruliweb },
+  { key: '인스티즈', run: instiz },
   { key: '엠팍', run: mlbpark },
   { key: '오유', run: todayhumor },
   { key: '웃긴대학', run: humoruniv },
@@ -339,7 +342,8 @@ const SOURCES: { key: string; run: () => Promise<TrendItem[]> }[] = [
  * 사이트마다 [후방] · 후방주의 · 후방ㅈㅇ 등 표기가 달라 글자만 보고 거른다.
  */
 function isBlockedTitle(title: string): boolean {
-  return title.includes('후방')
+  // 인스티즈는 같은 뜻으로 "약후"를 쓴다 — 표기만 다르지 같은 종류라 함께 뺀다.
+  return title.includes('후방') || title.includes('약후')
 }
 
 /** 소스 하나에 허용하는 최대 시간. 이걸 넘기면 그 소스만 실패로 두고 나머지를 내보낸다. */
