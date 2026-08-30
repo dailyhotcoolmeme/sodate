@@ -60,11 +60,20 @@ function metric(list: Metric[], label: string, value: string | undefined | null)
   if (v) list.push({ label, value: v })
 }
 
-/** charset: 아직도 EUC-KR 로 내려주는 곳이 있어(웃긴대학) 그때만 넘긴다. */
+/**
+ * charset: 아직도 EUC-KR 로 내려주는 곳이 있어(웃긴대학) 그때만 넘긴다.
+ *
+ * ⚠️ 반드시 timeout 을 건다. 어떤 사이트는 클라우드플레어 IP 에서 오는 요청을 끊지도
+ *    않고 붙잡고만 있는데, 그러면 Promise.all 이 영영 안 끝나서 화면이 "불러오는 중..."
+ *    에서 멈춰버린다(2026-08-31 오너 신고). 한 곳이 늦으면 그 곳만 실패로 두고 넘어간다.
+ */
+const FETCH_TIMEOUT_MS = 8000
+
 async function fetchText(url: string, charset?: string): Promise<string> {
   const res = await fetch(url, {
     headers: { 'User-Agent': UA, 'Accept-Language': 'ko-KR,ko;q=0.9' },
     cf: { cacheTtl: 300, cacheEverything: true },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   } as RequestInit)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   if (!charset) return res.text()
@@ -165,8 +174,9 @@ async function mlbpark(): Promise<TrendItem[]> {
   const html = await fetchText('https://mlbpark.donga.com/mp/best.php')
   const out: TrendItem[] = []
   for (const tr of html.split('<tr>').slice(1)) {
-    const a = tr.match(/href='(https:\/\/mlbpark\.donga\.com\/mp\/b\.php\?[^']*m=view[^']*)'[^>]*class='txt'>([\s\S]*?)<\/a>/)
-    if (!a) continue
+    // 한 정규식에 주소·제목을 다 담으면 다른 HTML 이 왔을 때 역추적이 폭주할 수 있어 나눠 찾는다.
+    const a = tr.match(/href='([^']+)'[^>]*class='txt'>([\s\S]*?)<\/a>/)
+    if (!a || !a[1].includes('m=view')) continue
     const title = stripTags(a[2])
     if (!title) continue
     out.push({
@@ -332,21 +342,39 @@ function isBlockedTitle(title: string): boolean {
   return title.includes('후방')
 }
 
+/** 소스 하나에 허용하는 최대 시간. 이걸 넘기면 그 소스만 실패로 두고 나머지를 내보낸다. */
+const SOURCE_TIMEOUT_MS = 12000
+
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   if (!(await verifySession(env.SESSION_SECRET, getCookie(request, COOKIE)))) {
     return json({ error: 'unauthorized' }, 401)
   }
   const results = await Promise.all(
     SOURCES.map(async (s) => {
+      const startedAt = Date.now()
       try {
-        // 거른 뒤에 순위를 다시 매긴다 — 중간이 빠져 1,3,4 로 튀지 않게.
-        const items = (await s.run())
+        // 소스 하나가 늦어도 화면 전체가 멈추지 않게 시간 상한을 따로 건다
+        // (네이트판은 글 20개를 더 열어보므로 fetch 한 번보다 오래 걸린다).
+        const items = (
+          await Promise.race([
+            s.run(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('시간 초과')), SOURCE_TIMEOUT_MS),
+            ),
+          ])
+        )
+          // 거른 뒤에 순위를 다시 매긴다 — 중간이 빠져 1,3,4 로 튀지 않게.
           .filter((i) => !isBlockedTitle(i.title))
           .map((i, idx) => ({ ...i, rank: idx + 1 }))
-        return { source: s.key, items, error: null as string | null }
+        return { source: s.key, items, ms: Date.now() - startedAt, error: null as string | null }
       } catch (e: any) {
         // 한 곳이 막히거나 구조가 바뀌어도 나머지는 보여준다.
-        return { source: s.key, items: [] as TrendItem[], error: String(e?.message ?? e).slice(0, 120) }
+        return {
+          source: s.key,
+          items: [] as TrendItem[],
+          ms: Date.now() - startedAt,
+          error: String(e?.message ?? e).slice(0, 120),
+        }
       }
     }),
   )

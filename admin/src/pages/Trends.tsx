@@ -22,6 +22,8 @@ interface TrendItem {
 interface SourceResult {
   source: string
   items: TrendItem[]
+  /** 이 소스를 읽는 데 걸린 시간(ms) — 느린 곳을 찾을 때 쓴다 */
+  ms?: number
   error: string | null
 }
 
@@ -46,7 +48,9 @@ export default function Trends() {
   const load = () => {
     setLoading(true)
     setErr(null)
-    fetch('/api/trends', { credentials: 'include' })
+    // ⚠️ 상한을 안 걸면 서버가 응답을 안 줄 때 화면이 "불러오는 중..."에서 영영 멈춘다
+    //    (2026-08-31 오너 신고). 오래 걸리면 실패로 끝내고 이유를 보여준다.
+    fetch('/api/trends', { credentials: 'include', signal: AbortSignal.timeout(30000) })
       .then(async (r) => {
         if (!r.ok) throw new Error(r.status === 401 ? '로그인이 필요합니다' : `요청 실패 (${r.status})`)
         return r.json()
@@ -55,7 +59,9 @@ export default function Trends() {
         setResults(d.results ?? [])
         setFetchedAt(d.fetchedAt ?? null)
       })
-      .catch((e) => setErr(String(e.message ?? e)))
+      .catch((e) =>
+        setErr(e?.name === 'TimeoutError' ? '30초 안에 응답이 오지 않았습니다. 다시 시도해 주세요' : String(e?.message ?? e)),
+      )
       .finally(() => setLoading(false))
   }
   useEffect(load, [])
@@ -118,7 +124,8 @@ export default function Trends() {
       {err && <p className="text-sm text-red-500">{err}</p>}
       {results.some((r) => r.error) && (
         <p className="text-xs text-amber-600">
-          일부 사이트를 못 읽었습니다: {results.filter((r) => r.error).map((r) => `${r.source}(${r.error})`).join(', ')}
+          일부 사이트를 못 읽었습니다:{' '}
+          {results.filter((r) => r.error).map((r) => `${r.source}(${r.error}${r.ms != null ? `, ${(r.ms / 1000).toFixed(1)}초` : ''})`).join(', ')}
         </p>
       )}
 
