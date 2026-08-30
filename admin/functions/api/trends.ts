@@ -66,11 +66,26 @@ async function fetchText(url: string): Promise<string> {
   return res.text()
 }
 
+/** 네이트판은 목록에 시각이 없어 글 페이지에서 하나씩 읽어온다(실패하면 그냥 비운다). */
+async function nateDate(url: string): Promise<string | undefined> {
+  try {
+    const html = await fetchText(url)
+    return html.match(/<span class="date">([^<]+)<\/span>/)?.[1]?.trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * 네이트판 톡톡 랭킹.
  * 지표 표기: "조회 17,436", "추천 58", 제목 옆 "(98)" = 댓글수.
- * 랭킹 목록에는 작성 시각이 없다.
+ *
+ * ⚠️ 랭킹 목록에는 작성 시각이 없다 — 오너가 "날짜시간 붙여라"(2026-08-31) 라고 해서
+ *    글 페이지를 따로 열어 <span class="date"> 를 읽어 붙인다. 20개 병렬로 0.4초쯤 걸린다.
+ *    개수를 늘리면 Workers 의 요청당 서브요청 한도(50)에 걸리니 NATE_LIMIT 은 그대로 둘 것.
  */
+const NATE_LIMIT = 20
+
 async function nate(): Promise<TrendItem[]> {
   const html = await fetchText('https://pann.nate.com/talk/ranking')
   const wrap = html.match(/<ul class="post_wrap">([\s\S]*?)<\/ul>/)
@@ -94,8 +109,10 @@ async function nate(): Promise<TrendItem[]> {
       url: `https://pann.nate.com${href[1]}`,
       metrics,
     })
+    if (out.length >= NATE_LIMIT) break
   }
-  return out.slice(0, 30)
+  const dates = await Promise.all(out.map((i) => nateDate(i.url)))
+  return out.map((i, idx) => ({ ...i, postedAt: dates[idx] }))
 }
 
 /**
