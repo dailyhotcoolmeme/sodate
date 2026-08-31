@@ -165,9 +165,11 @@ export default function RootLayout() {
   )
 }
 
-// 네이티브 스플래시(splash-icon.png는 1024 캔버스에 그림이 62%)와 크기를 맞추기 위해
-// 화면폭의 62%로 고정. logo-stack.png는 여백이 없는 원본(821x644)이라 비율만 곱한다.
-const SPLASH_LOGO_W = Dimensions.get('window').width * 0.62
+// 네이티브 스플래시(splash-icon.png는 1024 캔버스에 그림이 33%)와 크기를 맞추기 위해
+// 화면폭의 33%로 고정. logo-stack.png는 여백이 없는 원본(429x644)이라 비율만 곱한다.
+// ⚠️ 2026-08-31 이름을 '소밋'으로 바꾸며 글자가 짧아져 그림 폭이 62% → 33%로 줄었다.
+//    두 값(여기와 splash-icon.png 안의 그림 비율)은 항상 같이 움직여야 이음새가 안 생긴다.
+const SPLASH_LOGO_W = Dimensions.get('window').width * 0.33
 
 const styles = StyleSheet.create({
   splashGate: {
@@ -179,7 +181,7 @@ const styles = StyleSheet.create({
   },
   // ⚠️ width:'%' + aspectRatio 조합은 퍼센트가 안 풀려 이미지가 원본 크기(821dp,
   // 화면폭의 2배 이상)로 터져나옴 — 2026-07-28 실제 사고. 화면폭에서 직접 계산할 것.
-  splashLogo: { width: SPLASH_LOGO_W, height: SPLASH_LOGO_W * (644 / 821) },
+  splashLogo: { width: SPLASH_LOGO_W, height: SPLASH_LOGO_W * (644 / 429) },
   configErrorWrap: {
     flex: 1,
     backgroundColor: '#0F0F0F',
