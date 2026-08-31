@@ -39,8 +39,8 @@ const TABS: { key: TabKey; label: string; route: string; Icon: IconComp }[] = [
 ]
 
 /** 아이콘 크기 — 가운데(커뮤니티)만 크게, 그리고 바 윗선 위로 올린다. */
-const ICON = 32
-const CENTER_ICON = 52
+const ICON = 34
+const CENTER_ICON = 54
 /**
  * 커뮤니티 아이콘이 바 윗선 위로 올라오는 높이 = 위쪽 투명 여백의 높이이기도 하다.
  * ⚠️ 이 값 자체가 "윗선 위로 나온 양"은 아니다. 아이콘은 바 안에서 세로 가운데
@@ -49,8 +49,8 @@ const CENTER_ICON = 52
  * 20 으로 뒀더니 아이콘 절반이 올라가 보였다(오너 지적) — 살짝만 걸치게 낮춘다.
  */
 const CENTER_LIFT = 8
-/** 바(색이 칠해지는 부분)의 높이. 54 → 50 으로 낮췄다가 살짝만 다시 올렸다(오너 지시). */
-const BAR_H = 56
+/** 바(색이 칠해지는 부분)의 높이. 56 → 50 으로 다시 낮췄다(2026-08-31 오너 지시). */
+const BAR_H = 50
 
 const CANONICAL_ROUTE: Record<TabKey, string> = {
   event: '/', socialing: '/socialing', honsul: '/honsul', my: '/my', board: '/board',
@@ -132,7 +132,13 @@ function makeStyles(colors: AppColors) {
     wrap: {
       flexDirection: 'row', alignItems: 'flex-end',
       paddingHorizontal: 4,
+      // 위쪽 CENTER_LIFT 만큼은 커뮤니티 아이콘이 올라올 투명 자리다. 그런데 이게
+      // 레이아웃 높이로 잡히면 바 윗선 위에 빈 띠가 하나 생겨 화면이 그만큼 밀린다
+      // (2026-08-31 오너 지적: "왜 탭바 선 위로 공간이 붙어 있냐").
+      // 같은 크기의 음수 마진으로 그 높이를 되돌린다 → 자리는 유지되지만(안드로이드
+      // 잘림 방지) 위 화면을 밀지 않고 그 위에 겹쳐 뜬다. 투명이라 가리는 것도 없다.
       paddingTop: CENTER_LIFT,
+      marginTop: -CENTER_LIFT,
     },
     // 실제로 색이 칠해지는 바. 좌우 끝까지, 아래는 안전영역 위까지.
     barBg: {
