@@ -83,6 +83,20 @@ export function HonsulPhotoIcon({ size, stroke }: IconProps) {
   )
 }
 
+/**
+ * 커뮤니티 탭(가운데) — 외부 선화 아이콘(assets/tab-board.png).
+ * 이것만 60px 로 크게 그려지지만, 잉크 높이 규격은 나머지와 같아 위아래 선이 맞는다.
+ */
+export function BoardPhotoIcon({ size, stroke }: IconProps) {
+  return (
+    <Image
+      source={require('../assets/tab-board.png')}
+      style={{ width: size, height: size, tintColor: stroke }}
+      resizeMode="contain"
+    />
+  )
+}
+
 export function HeartIcon({ size, fill, stroke }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 14 14">
