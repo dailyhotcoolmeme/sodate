@@ -23,11 +23,12 @@ export default function TermsScreen() {
     <View style={styles.container}>
       <TopBar showBack title="이용약관" />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
-        <Text style={styles.date}>시행일: 2026년 9월 2일 (직전 개정: 2026년 8월 13일)</Text>
+        <Text style={styles.date}>시행일: 2026년 9월 2일 (직전 개정: 2026년 8월 31일)</Text>
 
         <Text style={styles.sectionTitle}>제1조 (목적)</Text>
         <Text style={styles.body}>
-          본 약관은 모잇(이하 "서비스")이 제공하는 모바일 앱 서비스의 이용 조건 및 절차, 회사와 이용자 간의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.
+          본 약관은 주식회사 아워마인(이하 "회사")이 운영하는 모잇(이하 "서비스")의 이용 조건 및 절차, 회사와 이용자 간의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.{'\n\n'}
+          ※ 2026년 8월 31일 개정: 서비스명이 '소개팅모아'에서 '모잇'으로 변경되었습니다. 약관의 내용은 변경되지 않았습니다.
         </Text>
 
         <Text style={styles.sectionTitle}>제2조 (서비스 정의)</Text>
@@ -115,6 +116,7 @@ export default function TermsScreen() {
         <Text style={styles.sectionTitle}>제10조 (문의)</Text>
         <Text style={styles.body}>
           이용약관에 관한 문의사항은 아래로 연락 주세요.{'\n\n'}
+          회사: 주식회사 아워마인{'\n'}
           이메일: admin@ourmine.co.kr
         </Text>
       </ScrollView>

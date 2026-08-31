@@ -23,9 +23,10 @@ export default function PrivacyScreen() {
     <View style={styles.container}>
       <TopBar showBack title="개인정보처리방침" />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
-        <Text style={styles.date}>시행일: 2026년 9월 2일 (직전 개정: 2026년 8월 19일)</Text>
+        <Text style={styles.date}>시행일: 2026년 9월 2일 (직전 개정: 2026년 8월 31일)</Text>
 
         <Text style={styles.body}>
+          ※ 2026년 8월 31일 개정: 서비스명이 '소개팅모아'에서 '모잇'으로 변경되었습니다. 처리하는 개인정보의 항목·목적·보유기간은 변경되지 않았습니다.{'\n\n'}
           모잇(이하 "서비스")은 이용자의 개인정보를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다. 본 방침을 통해 수집하는 개인정보의 항목, 이용 목적, 보유 기간 등을 안내드립니다.
         </Text>
 
@@ -106,6 +107,7 @@ export default function PrivacyScreen() {
           • Supabase Inc.: 데이터 저장 및 서버 운영 (미국 서버 이용){'\n'}
           • Expo (Expo Inc.): 푸시 알림 발송 서비스{'\n'}
           • Google LLC (Google AdMob): 광고 게재 및 광고 성과 측정{'\n'}
+          • Google LLC (Google Workspace): 게시물 신고 접수 시 운영자에게 보내는 알림 메일의 발송·보관 (미국 서버 이용){'\n'}
           • Cloudflare, Inc.: 이용자가 올린 이미지·동영상 등 첨부 파일 저장 및 전송 (미국 서버 이용){'\n'}
           • 네이버클라우드 주식회사: 지도 표시 (국내 서버){'\n'}
           • OpenStreetMap Foundation: 지도 이미지 표시 대체 경로 (해외 서버, 접속 시 기기의 IP 주소가 전달됨)
@@ -128,6 +130,10 @@ export default function PrivacyScreen() {
             이전 국가: 미국 / 이전 항목: 광고 식별자{'\n'}
             이전 일시·방법: 광고 노출 시점에 SDK를 통해 전송{'\n'}
             이용 목적: 광고 게재 및 성과 측정 / 보유 기간: Google 정책에 따름{'\n\n'}
+          • 이전받는 자: Google LLC (Google Workspace){'\n'}
+            이전 국가: 미국 / 이전 항목: 신고 접수 내역(신고 대상 게시물의 제목·내용 일부, 신고 사유, 신고자 익명 식별 토큰){'\n'}
+            이전 일시·방법: 신고 접수 시점에 이메일로 전송{'\n'}
+            이용 목적: 운영자에게 신고 사실을 알려 신속히 처리하기 위함 / 보유 기간: 신고 처리 완료 후 1년{'\n\n'}
           • 이전받는 자: Cloudflare, Inc. (문의: privacyquestions@cloudflare.com){'\n'}
             이전 국가: 미국 / 이전 항목: 커뮤니티 글에 첨부한 이미지·동영상{'\n'}
             이전 일시·방법: 파일 업로드·조회 시점에 네트워크를 통해 전송{'\n'}
