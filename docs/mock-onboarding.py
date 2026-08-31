@@ -31,7 +31,7 @@ def draw_slide(sl, idx, total):
     if idx < total - 1:                                   # 건너뛰기
         d.text((W * S - 24 * S, 68 * S), '건너뛰기', font=f_skip, fill='#999999', anchor='ra')
 
-    top = 150 * S                       # slideContent paddingTop (코드와 동일)
+    top = 200 * S                       # slideContent paddingTop (코드와 동일)
     if sl['logo']:
         logo = Image.open(ROOT + 'assets/logo-stack.png').convert('RGBA')
         lh = round(200 * (698 / 821)) * S; lw = round(logo.width * lh / logo.height)
