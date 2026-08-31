@@ -19,31 +19,40 @@ const { width } = Dimensions.get('window')
 const ONBOARDING_KEY = 'sodate-onboarding-done'
 
 // 첫 슬라이드는 아이콘+제목 대신 브랜드 워드마크 이미지(하트+글자)를 쓴다.
+// ⚠️ 2026-08-31 개편: 예전엔 4장 전부 소개팅 얘기라, 처음 켠 사람은 소셜링·혼술바·
+//    커뮤니티가 있는 줄도 몰랐다. 이제 1장=브랜드, 2~5장=서비스 하나씩 소개한다.
+//    (구성·문구는 오너 확정)
 const SLIDES: { icon: keyof typeof Ionicons.glyphMap; color: string; title: string; subtitle: string; logo?: boolean }[] = [
   {
     icon: 'heart',
     color: '#FF6B9D',
     title: '모잇',
     logo: true,
-    subtitle: '전국 로테이션 소개팅 일정을\n한곳에서 모아보세요',
+    subtitle: '새로운 사람을 만나는 모든 방법',
   },
   {
-    icon: 'search',
+    icon: 'heart-circle',
+    color: '#FF6B9D',
+    title: '소개팅',
+    subtitle: '전국 로테이션 소개팅 일정을 한곳에서\n지역·나이·가격으로 골라 보고 바로 신청까지',
+  },
+  {
+    icon: 'people',
     color: '#A78BFA',
-    title: '쉽게 찾고',
-    subtitle: '지역·테마·가격으로 필터링해\n나에게 딱 맞는 소개팅을 찾아보세요',
+    title: '소셜링',
+    subtitle: '취미와 관심사로 모이는 사람들\n독서·와인·러닝… 마음 맞는 자리를 찾아보세요',
   },
   {
-    icon: 'notifications',
+    icon: 'wine',
     color: '#FB923C',
-    title: '빠르게 알림받고',
-    subtitle: '관심 업체의 새 일정이 올라오면\n제일 먼저 알려드려요',
+    title: '혼술바',
+    subtitle: '혼자 마시기 좋은 술집을 지도에서\n분위기·안주·가격까지 미리 보고 가세요',
   },
   {
-    icon: 'arrow-forward-circle',
+    icon: 'chatbubbles',
     color: '#34D399',
-    title: '바로 신청',
-    subtitle: '마음에 드는 소개팅을 찾았다면\n한 번의 터치로 신청 페이지로 이동',
+    title: '커뮤니티',
+    subtitle: '만나기 전과 만난 뒤의 이야기\n후기·질문·수다, 새 글은 알림으로 받아보세요',
   },
 ]
 
