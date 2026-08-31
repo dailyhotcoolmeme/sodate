@@ -7,7 +7,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import type { AppColors } from '@/constants/colors'
 import { NEW_TABS_ENABLED } from '@/constants/features'
 import { saveTabRoute, getTabRoute } from '@/lib/tabMemory'
-import { HeartIcon, GroupIcon, ChatIcon, CocktailIcon, UserCircleIcon, type IconProps } from '@/components/TabIcons'
+import { HeartIcon, GroupIcon, ChatIcon, CocktailIcon, UserCircleIcon, EventPhotoIcon, type IconProps } from '@/components/TabIcons'
 
 /**
  * 하단 5탭 내비게이션(2026-08-21) — 소개팅·소셜링·[커뮤니티]·혼술바·MY.
@@ -31,7 +31,7 @@ type IconComp = (p: IconProps) => React.JSX.Element
 
 /** 5개 탭 전부(가운데 커뮤니티 포함) — 순서가 곧 화면 배치 순서다. */
 const TABS: { key: TabKey; label: string; route: string; Icon: IconComp }[] = [
-  { key: 'event',     label: '소개팅',   route: '/',          Icon: HeartIcon },
+  { key: 'event',     label: '소개팅',   route: '/',          Icon: EventPhotoIcon },
   { key: 'socialing', label: '소셜링',   route: '/socialing', Icon: GroupIcon },
   { key: 'board',     label: '커뮤니티', route: '/board',     Icon: ChatIcon },
   { key: 'honsul',    label: '혼술바',   route: '/honsul',    Icon: CocktailIcon },

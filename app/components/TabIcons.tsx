@@ -1,4 +1,5 @@
 import React from 'react'
+import { Image } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 
 /**
@@ -33,6 +34,22 @@ export interface IconProps {
   fill: string
   /** 외곽선색(진한 톤) */
   stroke: string
+}
+
+/**
+ * 소개팅 탭 — 외부에서 받은 선화 아이콘(assets/tab-event.png)을 그대로 쓴다.
+ * ⚠️ 느낌 확인용 임시 적용(2026-08-31 오너 요청). 래스터 이미지라 선이 가늘고,
+ *    32px 로 줄이면 얼굴 안쪽 디테일이 뭉갠다 — 확정되면 SVG 로 받아 교체할 것.
+ * 단색(흰색 + 알파)으로 뽑아뒀기 때문에 tintColor 하나로 선택/비선택 색을 바꾼다.
+ */
+export function EventPhotoIcon({ size, stroke }: IconProps) {
+  return (
+    <Image
+      source={require('../assets/tab-event.png')}
+      style={{ width: size, height: size, tintColor: stroke }}
+      resizeMode="contain"
+    />
+  )
 }
 
 export function HeartIcon({ size, fill, stroke }: IconProps) {
