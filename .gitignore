@@ -39,3 +39,6 @@ crawler/.venv/
 
 # Claude Code 개인 설정(허락 없이는 작업 시작 못하게 하는 권한 게이트 등) — 개인용, 커밋 안 함
 .claude/settings.local.json
+
+# EAS 로컬 자격증명 — 배포 인증서 경로·비밀번호가 들어간다. 절대 커밋 금지.
+app/credentials.json
