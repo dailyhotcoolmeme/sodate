@@ -1,52 +1,86 @@
-"""모잇 로고 3종 생성기 — 하트는 원본 그대로 두고 글자 크기만 바꿔 다시 뽑는다.
+"""'모잇' 워드마크 — 원본 '소개팅모아' 글자를 그대로 잘라 붙여 만든다(오너 지시).
 
-RATIO 하나만 고치면 세 자산이 같은 비율로 다시 만들어진다.
-  RATIO = 글자 높이 / 하트 높이(231).  '소개팅모아' 때는 0.69 였는데 '모잇'은 두 글자라
-  그 비율이면 하트보다 작아 보여 키웠다(2026-08-31 오너 지시 → 0.85 → 0.90).
-출력 후 찍히는 상수들을 TopBar/_layout/onboarding/settings 에 그대로 반영할 것.
+  모  : 원본 '모' 를 통째로 복사
+  잇  : ㅇ = 원본 '아' 의 ㅇ 을 9분할로 줄임(획 두께 보존)
+        ㅣ = 원본 '팅' 의 ㅣ 그대로
+        ㅅ = 원본 '소' 의 ㅅ — 받침 자리(57 높이)에 맞춰 줄이면 획이 얇아지므로
+             줄인 뒤 팽창(MaxFilter)으로 원래 획 두께를 되살린다
+받침 음절의 뼈대(초성 0..90 / ㅣ 105..136 / 받침 11..135)는 원본 '팅' 에서 실측한 값.
 """
-from PIL import Image
-import numpy as np, sys
+from PIL import Image, ImageFilter
+import numpy as np
 
-A = '/Users/ourmine/dev/sodate/app/assets/'
-RATIO = float(sys.argv[1]) if len(sys.argv) > 1 else 0.90
+SRC = 'orig_wordmark.png'
+src = Image.open(SRC).convert('RGBA')
 
-orig = Image.open('orig_wordmark.png').convert('RGBA')     # 옛 소개팅모아 워드마크(하트 원본)
-T = Image.open('logo-letters-moit.png').convert('RGBA')    # 모잇 글자(배경 제거본, 명암 있음)
-T = T.crop(T.getbbox())   # ⚠️ 새 글자는 입체 명암이 있어 단색으로 덮으면 안 된다
-def text(h): return T.resize((round(T.width * h / T.height), h), Image.LANCZOS)
 
-H = round(231 * RATIO)
+def nine_slice(img, cols, rows, out_w, out_h):
+    lw, mw, rw = cols; th, mh, bh = rows
+    nmw, nmh = out_w - lw - rw, out_h - th - bh
+    out = Image.new('RGBA', (out_w, out_h), (0, 0, 0, 0)); y = 0
+    for (y0, h, nh) in ((0, th, th), (th, mh, nmh), (th + mh, bh, bh)):
+        x = 0
+        for (x0, w, nw) in ((0, lw, lw), (lw, mw, nmw), (lw + mw, rw, rw)):
+            p = img.crop((x0, y0, x0 + w, y0 + h))
+            if (nw, nh) != (w, h): p = p.resize((max(nw, 1), max(nh, 1)), Image.NEAREST)
+            if nw > 0 and nh > 0: out.alpha_composite(p, (x, y))
+            x += nw
+        y += nh
+    return out
 
-# 1) 가로형(톱바)
-t = text(H); X = 258 + 34; W = X + t.width
-wm = Image.new('RGBA', (W, 231), (0, 0, 0, 0))
-wm.alpha_composite(orig.crop((0, 0, 272, 231)), (0, 0))
-wm.alpha_composite(t, (X, (231 - H) // 2))
-wm.save(A + 'logo-wordmark.png')
 
-# 2) 세로형(설정·온보딩·JS 스플래시) — 하트 381 + 간격 89 + 글자
-stack_src = Image.open('logo-stack-somit-trim.png').convert('RGBA')   # 하트 0..380
-TH = round(174 * H / 159)
-t2 = text(TH); CW = max(stack_src.width, t2.width)
-st = Image.new('RGBA', (CW, 381 + 89 + TH), (0, 0, 0, 0))
-st.alpha_composite(stack_src.crop((0, 0, stack_src.width, 381)), ((CW - stack_src.width) // 2, 0))
-st.alpha_composite(t2, ((CW - t2.width) // 2, 381 + 89))
-st = st.crop(st.getbbox()); st.save(A + 'logo-stack.png')
+def alpha_only(img):
+    """색을 브랜드 핑크로 통일한 알파 이미지"""
+    a = np.array(img)
+    a[:, :, 0], a[:, :, 1], a[:, :, 2] = 234, 100, 145
+    return Image.fromarray(a, 'RGBA')
 
-# 3) 네이티브 스플래시 — 1024 캔버스 가운데
-heart_sp = Image.open('splash-icon-somit.png').convert('RGBA').crop((347, 263, 684, 557))
-TH2 = round(135 * H / 159); t3 = text(TH2)
-cw = max(heart_sp.width, t3.width); ch = heart_sp.height + 69 + TH2
-blk = Image.new('RGBA', (cw, ch), (0, 0, 0, 0))
-blk.alpha_composite(heart_sp, ((cw - heart_sp.width) // 2, 0))
-blk.alpha_composite(t3, ((cw - t3.width) // 2, heart_sp.height + 69))
-sp = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
-sp.alpha_composite(blk, ((1024 - cw) // 2, (1024 - ch) // 2))
-sp.save(A + 'splash-icon.png')
-b = sp.getbbox()
 
-print(f'글자/하트 비율 {RATIO:.0%} (글자 높이 {H})')
-print(f'  워드마크 {wm.size} → TopBar logoWordmark width = {round(W * 24 / 231)}')
-print(f'  세로형   {st.size} → 높이비 ({st.height} / {st.width})')
-print(f'  스플래시 내용폭 {(b[2]-b[0])/1024:.4f} → SPLASH_LOGO_W 배율')
+def build_it(ieung_w=88, ieung_h=52, i_x=104, i_h=58, sio_top=96, sio_w=126, sio_h=98):
+    """'잇' — 원본 글자 조각만 써서 만든다. 크기 조절은 전부 9분할(가운데 직선 구간만
+    잘라내기)로 해서 획 두께와 곡선이 원본 그대로 남는다.
+
+      ㅇ : '팅'의 받침 ㅇ(가로로 긴 스타디움)을 가로만 줄여 씀
+      ㅣ : '팅'의 ㅣ 를 세로만 줄여 씀
+      ㅅ : '소'의 ㅅ 을 세로(다리 부분)만 줄여 씀 — 아치 곡선은 손대지 않는다
+           (그냥 축소하면 획이 얇아지고, 팽창으로 되살리면 아치 구멍이 메워진다)
+    """
+    g = Image.new('RGBA', (154, 231), (0, 0, 0, 0))
+
+    # ㅇ : 팅의 받침 ㅇ (x604..729, y137..195 = 125x58) → 가로만 88 로
+    ieung = nine_slice(src.crop((604, 137, 730, 196)), (40, 45, 41), (20, 19, 20), ieung_w, ieung_h)
+    g.alpha_composite(ieung, (0, 38))
+
+    # ㅣ : 팅의 ㅣ (31x94) → 세로만 72 로 (위 20 / 가운데 / 아래 20)
+    i_bar = nine_slice(src.crop((698, 36, 729, 130)), (10, 11, 10), (20, 54, 20), 31, i_h)
+    g.alpha_composite(i_bar, (i_x, 34))
+
+    # ㅅ : 소의 ㅅ (x292..418, y38..141 = 126x103). 행 분할 = 바+아치 62 / 다리 41
+    # ⚠️ '소'의 ㅅ 아래에는 ㅗ 의 세로 기둥이 겹쳐 있다(x342..372, y120 아래).
+    #    그대로 잘라 쓰면 아치 안쪽에 네모 조각이 남는다 — 먼저 지운다.
+    siot_src = src.crop((292, 38, 418, 141)).copy()
+    from PIL import ImageDraw as _D
+    _D.Draw(siot_src).rectangle([49, 80, 82, 103], fill=(0, 0, 0, 0))
+    siot = nine_slice(siot_src, (43, 32, 46), (62, 25, 16), sio_w, sio_h)
+    g.alpha_composite(siot, (11, sio_top))
+    return g
+
+
+def build(out_path, letter_h=None):
+    heart = src.crop((0, 0, 272, 231))
+    mo = src.crop((745, 0, 899, 231))       # '모' 통째로
+    it = build_it()
+    X = 292                                  # 원본에서 글자가 시작하던 x
+    W = X + 150 + it.width
+    c = Image.new('RGBA', (W, 231), (0, 0, 0, 0))
+    c.alpha_composite(heart, (0, 0))
+    c.alpha_composite(mo, (X, 0))
+    c.alpha_composite(it, (X + 150, 0))
+    c = c.crop((0, 0, c.getbbox()[2], 231))
+    c.save(out_path)
+    print(out_path, c.size, '→ 톱바 폭(높이24)', round(c.width * 24 / 231))
+    return c
+
+
+if __name__ == '__main__':
+    build('moit_orig_wm.png')
