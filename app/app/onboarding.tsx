@@ -78,10 +78,14 @@ export default function OnboardingScreen() {
       color: colors.textTertiary,
       fontSize: 14,
     },
+    // ⚠️ 예전엔 justifyContent:'center' 라 장마다 줄 수가 다르면 아이콘·제목이 위아래로
+    //    흔들렸다(5장은 부제가 한 줄이라 유독 위로 올라갔다). 위에서부터 고정 간격으로
+    //    두어 다섯 장의 아이콘·제목·부제가 같은 높이에 오게 한다.
     slideContent: {
       alignItems: 'center',
       flex: 1,
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
+      paddingTop: 150,
     },
     brandLogo: {
       // 하트 크기를 예전과 같게 두려고 높이를 기준으로 잡는다(이름이 짧아져 폭만 줄었다).
@@ -109,6 +113,14 @@ export default function OnboardingScreen() {
       color: colors.textSecondary,
       textAlign: 'center',
       lineHeight: 24,
+      minHeight: 48,          // 두 줄 자리 고정(장마다 높이가 달라지지 않게)
+    },
+    // 1장은 제목이 따로 없다(로고 이미지에 '모잇'이 들어 있다). 그래서 부제를 조금 키워
+    // 브랜드 문구처럼 읽히게 한다 — 다른 장의 제목 자리를 대신하는 셈.
+    tagline: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.textPrimary,
     },
     dots: {
       flexDirection: 'row',
@@ -190,7 +202,7 @@ export default function OnboardingScreen() {
             <Text style={styles.title}>{slide.title}</Text>
           </>
         )}
-        <Text style={styles.subtitle}>{slide.subtitle}</Text>
+        <Text style={[styles.subtitle, slide.logo && styles.tagline]}>{slide.subtitle}</Text>
       </View>
 
       {/* 도트 인디케이터 */}

@@ -31,25 +31,28 @@ def draw_slide(sl, idx, total):
     if idx < total - 1:                                   # 건너뛰기
         d.text((W * S - 24 * S, 68 * S), '건너뛰기', font=f_skip, fill='#999999', anchor='ra')
 
-    cy = H * S // 2 - 60 * S
+    top = 150 * S                       # slideContent paddingTop (코드와 동일)
     if sl['logo']:
         logo = Image.open(ROOT + 'assets/logo-stack.png').convert('RGBA')
         lh = round(200 * (698 / 821)) * S; lw = round(logo.width * lh / logo.height)
         logo = logo.resize((lw, lh), Image.LANCZOS)
-        im.paste(logo, ((W * S - lw) // 2, cy - lh // 2), logo)
-        bottom = cy + lh // 2 + 32 * S
+        im.paste(logo, ((W * S - lw) // 2, top), logo)
+        bottom = top + lh + 32 * S
+        f_line = ImageFont.truetype(PRE % 'SemiBold', 18 * S)   # 1장은 태그라인(굵게·크게)
+        fill = TEXT
     else:
         r = 60 * S
-        d.ellipse([W * S // 2 - r, cy - r, W * S // 2 + r, cy + r], fill=sl['color'] + '22' if False else _mix(sl['color']))
+        d.ellipse([W * S // 2 - r, top, W * S // 2 + r, top + 2 * r], fill=_mix(sl['color']))
         gf = ImageFont.truetype(IONI_TTF, 60 * S)
-        ch = chr(IONI_MAP[sl['icon']])
-        d.text((W * S // 2, cy), ch, font=gf, fill=sl['color'], anchor='mm')
-        d.text((W * S // 2, cy + r + 40 * S), sl['title'], font=f_title, fill=TEXT, anchor='ma')
-        bottom = cy + r + 40 * S + 34 * S + 16 * S
+        d.text((W * S // 2, top + r), chr(IONI_MAP[sl['icon']]), font=gf, fill=sl['color'], anchor='mm')
+        d.text((W * S // 2, top + 2 * r + 40 * S), sl['title'], font=f_title, fill=TEXT, anchor='ma')
+        bottom = top + 2 * r + 40 * S + 34 * S + 16 * S
+        f_line = f_sub
+        fill = SUB
 
     y = bottom
     for line in sl['subtitle'].split('\n'):
-        d.text((W * S // 2, y), line, font=f_sub, fill=SUB, anchor='ma')
+        d.text((W * S // 2, y), line, font=f_line, fill=fill, anchor='ma')
         y += 24 * S
 
     dy = H * S - (32 + 48 + 52 + 24) * S                   # 도트
