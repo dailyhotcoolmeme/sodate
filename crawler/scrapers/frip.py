@@ -666,6 +666,16 @@ class FripScraper(BaseScraper):
                 or name.strip() in ('여', '여성', '여자')
             )
 
+            # 한 이름에 남·여가 둘 다 들어간 경우 — 뒤에 나온 쪽이 그 옵션의 성별이다.
+            # 업체가 접두사를 잘못 붙이는 실제 사례(2026-08-31, 라운드키네틱 191671):
+            #   "[영등포]남성_남성_리뷰X …" = 남성 59,900
+            #   "[영등포]남성_여성_리뷰X …" = 여성 49,900   ← 앞의 '남성_'은 오타
+            # 앞에서부터 찾으면 여성 옵션이 남성으로 잡혀 여성 가격이 통째로 틀어진다.
+            if is_male and is_female:
+                last_m = max(name.rfind('남성'), name.rfind('남자'), name.rfind('남'))
+                last_f = max(name.rfind('여성'), name.rfind('여자'), name.rfind('여'))
+                is_male, is_female = last_m > last_f, last_f > last_m
+
             # 이모지가 붙은 경우 처리 (예: "🙆‍♂️남성 참여권", "🙋‍♀️여성 참여권")
             if not is_male and not is_female:
                 if re.search(r'남', name):

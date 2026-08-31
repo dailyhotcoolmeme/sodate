@@ -122,6 +122,7 @@ class BaseScraper(ABC):
         typed_hashtags = self._load_type_hashtags(company_id)
         new_count = 0
         updated_count = 0
+        failed_count = 0
         current_urls = {e.source_url for e in events}
 
         # 관리자 검증완료(verified) 이벤트는 크롤러가 절대 건드리지 않는다 → 입력한 가격·연령 영구 보존.
@@ -331,7 +332,13 @@ class BaseScraper(ABC):
                 cur = cur_by_url.get(event.source_url)
                 if cur is None:
                     # 새 이벤트 — 그대로 insert. upsert 로 두면 on_conflict 로 안전하게 처리된다.
-                    self.supabase.table('events').upsert(data, on_conflict='source_url').execute()
+                    res = self.supabase.table('events').upsert(data, on_conflict='source_url').execute()
+                    # ⚠️ 응답에 저장된 행이 없으면 "썼다고 했지만 안 들어간 것"이다.
+                    #    2026-08-31 실제 사고: 프립 크롤이 "신규 246건"을 로그에 남겼는데
+                    #    DB 에는 한 건도 안 들어가 있었다(그 시각 Supabase 엣지가 오류를
+                    #    뱉던 중). 건수만 세고 결과를 안 보면 이런 날이 통째로 조용히 넘어간다.
+                    if not getattr(res, 'data', None):
+                        raise RuntimeError('저장 응답이 비어 있음 — 반영 안 됨')
                     new_count += 1
                 else:
                     # 기존 이벤트 — 실제로 바뀐 필드만 update. 바뀐 게 없으면 write 를 건너뛴다
@@ -346,9 +353,18 @@ class BaseScraper(ABC):
                     if changed:
                         if incoming_crawled is not None:
                             changed['crawled_at'] = incoming_crawled
-                        self.supabase.table('events').update(changed).eq('source_url', event.source_url).execute()
+                        res = (
+                            self.supabase.table('events')
+                            .update(changed)
+                            .eq('source_url', event.source_url)
+                            .execute()
+                        )
+                        # 방금 읽어서 존재를 아는 행이라, 갱신 결과가 비면 반영 실패다.
+                        if not getattr(res, 'data', None):
+                            raise RuntimeError('갱신 응답이 비어 있음 — 반영 안 됨')
                     updated_count += 1
             except Exception as e:
+                failed_count += 1
                 self.logger.error(
                     f"이벤트 저장 실패: {event.source_url} - {e} "
                     f"(저장 시도한 데이터: age_range_min={data.get('age_range_min')}, "
@@ -421,7 +437,13 @@ class BaseScraper(ABC):
             except Exception as e:
                 self.logger.warning(f"[{self.company_slug}] 스테일 정리 실패(계속): {e}")
 
-        return {'new': new_count, 'updated': updated_count, 'deleted': deleted}
+        if failed_count:
+            self.logger.error(
+                f"[{self.company_slug}] 저장 실패 {failed_count}건 "
+                f"(성공 신규 {new_count} / 갱신 {updated_count})"
+            )
+        return {'new': new_count, 'updated': updated_count, 'deleted': deleted,
+                'failed': failed_count}
 
     def log_result(
         self,
@@ -483,6 +505,21 @@ class BaseScraper(ABC):
                 error_msg = '수집 0건 — 기존 일정이 있는데 아무것도 못 가져옴(사이트 지연·파싱 깨짐 의심)'
                 self.logger.error(f"[{self.company_slug}] {error_msg}")
 
+            # ⚠️ 저장 실패는 크롤 실패로 기록한다 — 안 그러면 "성공"으로 남아 워치독이
+            #    못 잡는다(2026-08-31: 프립 246건이 저장 안 됐는데 로그는 성공이었다).
+            #    한두 건은 개별 상품 문제라 경고만, 10% 넘게 실패하면 크롤 자체가 실패다.
+            failed = result.get('failed', 0)
+            if failed:
+                attempted = result['new'] + result['updated'] + failed
+                msg = f'저장 실패 {failed}건 / 시도 {attempted}건'
+                if failed > max(5, attempted * 0.1):
+                    status = 'failed'
+                    error_msg = f'{msg} — DB 반영이 대량으로 안 됨'
+                    self.logger.error(f"[{self.company_slug}] {error_msg}")
+                else:
+                    error_msg = msg
+                    self.logger.warning(f"[{self.company_slug}] {msg}")
+
             self.log_result(
                 status=status,
                 events_found=len(events),
@@ -493,8 +530,9 @@ class BaseScraper(ABC):
             )
             self.logger.info(
                 f"[{self.company_slug}] 완료 - 신규: {result['new']}, 업데이트: {result['updated']}"
+                + (f", 저장실패: {failed}" if failed else '')
             )
-            return {'status': 'success', **result}
+            return {'status': status, **result}
 
         except Exception as e:
             duration = int((time.time() - start) * 1000)
