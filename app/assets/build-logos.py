@@ -1,7 +1,7 @@
-"""소밋 로고 3종 생성기 — 하트는 원본 그대로 두고 글자 크기만 바꿔 다시 뽑는다.
+"""모잇 로고 3종 생성기 — 하트는 원본 그대로 두고 글자 크기만 바꿔 다시 뽑는다.
 
 RATIO 하나만 고치면 세 자산이 같은 비율로 다시 만들어진다.
-  RATIO = 글자 높이 / 하트 높이(231).  '소개팅모아' 때는 0.69 였는데 '소밋'은 두 글자라
+  RATIO = 글자 높이 / 하트 높이(231).  '소개팅모아' 때는 0.69 였는데 '모잇'은 두 글자라
   그 비율이면 하트보다 작아 보여 키웠다(2026-08-31 오너 지시 → 0.85 → 0.90).
 출력 후 찍히는 상수들을 TopBar/_layout/onboarding/settings 에 그대로 반영할 것.
 """
@@ -12,9 +12,8 @@ A = '/Users/ourmine/dev/sodate/app/assets/'
 RATIO = float(sys.argv[1]) if len(sys.argv) > 1 else 0.90
 
 orig = Image.open('orig_wordmark.png').convert('RGBA')     # 옛 소개팅모아 워드마크(하트 원본)
-T = Image.open('somit_text_raw.png').convert('RGBA')       # 소밋 글자(투명 추출본)
-a = np.array(T); a[:, :, 0], a[:, :, 1], a[:, :, 2] = 234, 100, 145   # 브랜드 핑크로 통일
-T = Image.fromarray(a, 'RGBA'); T = T.crop(T.getbbox())
+T = Image.open('logo-letters-moit.png').convert('RGBA')    # 모잇 글자(배경 제거본, 명암 있음)
+T = T.crop(T.getbbox())   # ⚠️ 새 글자는 입체 명암이 있어 단색으로 덮으면 안 된다
 def text(h): return T.resize((round(T.width * h / T.height), h), Image.LANCZOS)
 
 H = round(231 * RATIO)

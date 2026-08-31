@@ -10,7 +10,7 @@ import { useNotificationStore } from '@/stores/notificationStore'
 import { useProfileSheetStore } from '@/stores/profileSheetStore'
 import { NEW_TABS_ENABLED } from '@/constants/features'
 
-// 일정↔커뮤니티 토글 치수 — 바깥 테두리 높이(24)가 옆 "소밋" 로고 높이(24)와
+// 일정↔커뮤니티 토글 치수 — 바깥 테두리 높이(24)가 옆 "모잇" 로고 높이(24)와
 // 정확히 같아야 한다(2026-08-12 오너 지시). 시스템 Switch는 iOS에서 51x31 고정이라
 // transform:scale로 흉내 내도 실측이 딱 안 맞아, 아예 자체 디자인 트랙+손잡이로 교체.
 const SEG_BORDER_H = 24
@@ -21,7 +21,7 @@ const SEG_THUMB_INSET = 2
 
 /**
  * 공용 상단 톱바 — 모든 화면 공통.
- * 왼쪽: (서브페이지면 뒤로) + 앱아이콘 + 소밋
+ * 왼쪽: (서브페이지면 뒤로) + 앱아이콘 + 모잇
  * 오른쪽: (홈이면 필터) + 햄버거 메뉴
  */
 export default function TopBar({
@@ -139,17 +139,17 @@ export default function TopBar({
     // 서브페이지 인라인 제목 — 큰 제목 대신(A안). 뒤로가기 옆, 본문 좌측선과 맞춘다.
     inlineTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.3 },
     logoBtn: { flexDirection: 'row', alignItems: 'center' },
-    // 하트+"소밋"이 한 이미지로 된 워드마크(670x231 = 2.90:1).
-    // ⚠️ 2026-08-31 앱 이름 변경 검토(소밋)에 따라 글자만 교체했다. 하트는 원본 그대로고,
+    // 하트+"모잇"이 한 이미지로 된 워드마크(595x231 = 2.58:1).
+    // ⚠️ 2026-08-31 앱 이름이 모잇으로 확정되며 글자만 교체했다. 하트는 원본 그대로고,
     //    글자는 외부에서 받은 이미지에서 흰 배경을 걷어내 원본 글자 자리(x292, y36,
     //    높이 159)에 그대로 앉혔다 — 색도 원본과 같은 #EA6491 로 맞췄다.
     // 라이트·다크 양쪽에서 보이는 핑크 버전만 사용(검정/흰색은 한쪽에서 사라짐).
-    // 소개팅|커뮤니티 알약(글자 14)과 덩치를 맞춘다. 670x231 = 2.90:1 이라
-    // 높이 24 에 맞는 폭은 70 이다.
-    // ⚠️ 글자 높이는 하트의 90%(208/231). 원래 '소개팅모아' 비율(159/231=69%)을 그대로
-    //    쓰니 두 글자뿐이라 하트보다 작아 보인다는 지적이 있어 키웠다(2026-08-31).
-    //    비율을 다시 바꾸려면 assets/build-logos.py 를 그 값으로 돌리고 여기 상수도 갱신.
-    logoWordmark: { width: 70, height: 24 },
+    // 소개팅|커뮤니티 알약(글자 14)과 덩치를 맞춘다. 595x231 = 2.58:1 이라
+    // 높이 24 에 맞는 폭은 62 다.
+    // ⚠️ 글자 높이는 하트의 90%(208/231). 두 글자뿐이라 그보다 작으면 하트에 눌린다.
+    // ⚠️ 2026-08-31 이름이 '모잇'으로 확정되며 글자를 새로 받았다(입체 스타일).
+    //    글자에 명암이 있어 예전처럼 단색이 아니다 — 색을 코드에서 바꿀 수 없다.
+    logoWordmark: { width: 62, height: 24 },
     // 일정 ↔ 게시판 전환. 예전엔 '소개팅|커뮤니티' 글자 알약이었는데(심사 중엔 심사자가
     // 눌러보게 하려고 일부러 글자를 남겨뒀었다 — docs/BOARD_SPEC.md), 통과 후 토글로 교체.
     // 켜짐=커뮤니티, 꺼짐=소개팅. 시스템 Switch는 iOS에서 정확한 높이 지정이 안 돼(51x31
@@ -271,7 +271,7 @@ export default function TopBar({
               source={require('../assets/logo-wordmark.png')}
               style={styles.logoWordmark}
               contentFit="contain"
-              accessibilityLabel="소밋"
+              accessibilityLabel="모잇"
             />
           </TouchableOpacity>
           )}

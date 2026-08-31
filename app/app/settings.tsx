@@ -140,7 +140,7 @@ export default function SettingsScreen() {
           source={require('../assets/logo-stack.png')}
           style={styles.appLogo}
           contentFit="contain"
-          accessibilityLabel="소밋"
+          accessibilityLabel="모잇"
         />
         <Text style={styles.appDesc}>
           전국 소개팅 일정을 한눈에
