@@ -7,7 +7,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import type { AppColors } from '@/constants/colors'
 import { NEW_TABS_ENABLED } from '@/constants/features'
 import { saveTabRoute, getTabRoute } from '@/lib/tabMemory'
-import { HeartIcon, GroupIcon, ChatIcon, CocktailIcon, UserCircleIcon, EventPhotoIcon, SocialingPhotoIcon, HonsulPhotoIcon, BoardPhotoIcon, type IconProps } from '@/components/TabIcons'
+import { HeartIcon, GroupIcon, ChatIcon, CocktailIcon, UserCircleIcon, EventPhotoIcon, SocialingPhotoIcon, HonsulPhotoIcon, BoardPhotoIcon, MyPhotoIcon, type IconProps } from '@/components/TabIcons'
 
 /**
  * 하단 5탭 내비게이션(2026-08-21) — 소개팅·소셜링·[커뮤니티]·혼술바·MY.
@@ -35,7 +35,7 @@ const TABS: { key: TabKey; label: string; route: string; Icon: IconComp }[] = [
   { key: 'socialing', label: '소셜링',   route: '/socialing', Icon: SocialingPhotoIcon },
   { key: 'board',     label: '커뮤니티', route: '/board',     Icon: BoardPhotoIcon },
   { key: 'honsul',    label: '혼술바',   route: '/honsul',    Icon: HonsulPhotoIcon },
-  { key: 'my',        label: 'MY',       route: '/my',        Icon: UserCircleIcon },
+  { key: 'my',        label: 'MY',       route: '/my',        Icon: MyPhotoIcon },
 ]
 
 /** 아이콘 크기 — 가운데(커뮤니티)만 크게, 그리고 바 윗선 위로 올린다. */

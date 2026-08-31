@@ -97,6 +97,19 @@ export function BoardPhotoIcon({ size, stroke }: IconProps) {
   )
 }
 
+/**
+ * MY 탭 — 외부 선화 아이콘(assets/tab-my.png). 처리 방식은 EventPhotoIcon 과 같다.
+ */
+export function MyPhotoIcon({ size, stroke }: IconProps) {
+  return (
+    <Image
+      source={require('../assets/tab-my.png')}
+      style={{ width: size, height: size, tintColor: stroke }}
+      resizeMode="contain"
+    />
+  )
+}
+
 export function HeartIcon({ size, fill, stroke }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 14 14">
