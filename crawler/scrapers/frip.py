@@ -632,6 +632,13 @@ class FripScraper(BaseScraper):
         capacity_male: Optional[int] = None
         capacity_female: Optional[int] = None
 
+        # ⚠️ 한 일정에 옵션이 여러 개 걸린다(정가 / 리뷰특가 / 얼리버드 / 와인 …).
+        #    예전엔 "프립이 응답한 순서상 첫 옵션"을 그 일정 가격으로 썼는데, 순서가
+        #    일정마다 달라 같은 상품인데 회차마다 가격이 제각각으로 보였다(2026-08-31
+        #    오너 지적: 191671 이 59,900 / 9,900 / 24,900 으로 뒤죽박죽).
+        #    이제 성별별 **최고가(= 조건 없이 누구나 내는 정가)** 를 대표 가격으로 쓴다.
+        #    얼리버드·후기작성 같은 조건부 할인을 대표값으로 쓰면, 앱에서 본 가격보다
+        #    실제가 비싼 상황이 생겨 사용자가 낚인다(오너 결정: 정가 기준).
         # 안내/공지용 아이템 키워드
         skip_kws = ['공지용', '선택 X', '안내용', '정보 확인', '선택X']
 
@@ -684,15 +691,15 @@ class FripScraper(BaseScraper):
                     is_female = True
 
             if is_male:
-                if sale_price is not None and price_male is None:
-                    price_male = sale_price
+                if sale_price is not None:
+                    price_male = sale_price if price_male is None else max(price_male, sale_price)
                 if remains is not None and seats_left_male is None:
                     seats_left_male = remains
                 if quota is not None and capacity_male is None:
                     capacity_male = quota
             elif is_female:
-                if sale_price is not None and price_female is None:
-                    price_female = sale_price
+                if sale_price is not None:
+                    price_female = sale_price if price_female is None else max(price_female, sale_price)
                 if remains is not None and seats_left_female is None:
                     seats_left_female = remains
                 if quota is not None and capacity_female is None:
