@@ -1,24 +1,17 @@
 import React, { useEffect, useMemo } from 'react'
-import { View, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
-import { useThemeStore } from '@/stores/themeStore'
 import type { AppColors } from '@/constants/colors'
 import { NEW_TABS_ENABLED } from '@/constants/features'
 import { saveTabRoute, getTabRoute } from '@/lib/tabMemory'
-import { HeartIcon, GroupIcon, ChatIcon, CocktailIcon, UserCircleIcon, EventPhotoIcon, SocialingPhotoIcon, HonsulPhotoIcon, BoardPhotoIcon, MyPhotoIcon, type IconProps } from '@/components/TabIcons'
 
 /**
- * 하단 5탭 내비게이션(2026-08-21) — 소개팅·소셜링·[커뮤니티]·혼술바·MY.
- * 커뮤니티가 본체(매일 오는 곳)라 가운데에 두고 바 윗선 위로 튀어나오게 강조한다.
- * 이름표는 없이 아이콘만 쓴다(2026-08-26 오너 지시).
- *
- * ⚠️(2026-08-26) Ionicons 단색 아이콘이 "촌스럽고 AI 만든 티 난다"는 지적을 받아
- *    Streamline "Flex color"(2톤 컬러) 세트로 교체했다 — components/TabIcons.tsx 참고.
- *    그 파일 주석에 적힌 CC BY 출처표기 의무를 반드시 유지할 것.
- *    예전엔 가운데를 핑크 원형 배경 버튼으로 감쌌는데, 오너 지시로 원형을 없애고
- *    아이콘만 키워서(44px) 바 윗선 위로 14px 올리는 방식으로 바꿨다.
+ * 하단 5탭 내비게이션(2026-08-21) — 소개팅·소셜링·[홈]·혼술바·MY.
+ * 가운데 홈(커뮤니티)이 크게 튀어나온 형태(인스타·틱톡의 중앙 강조 버튼과 같은 패턴).
+ * 커뮤니티가 본체(매일 오는 곳)라 가운데에 두고 이름 없이 아이콘만 크게 강조한다.
  *
  * ⚠️ NEW_TABS_ENABLED 가 false 인 동안 아무것도 그리지 않는다 — 운영 앱은 지금 그대로.
  *    완성 후 플래그를 켜고 새 빌드+심사로 전환한다. constants/features.ts 참고.
@@ -27,30 +20,13 @@ import { HeartIcon, GroupIcon, ChatIcon, CocktailIcon, UserCircleIcon, EventPhot
  */
 type TabKey = 'event' | 'socialing' | 'board' | 'honsul' | 'my'
 
-type IconComp = (p: IconProps) => React.JSX.Element
-
-/** 5개 탭 전부(가운데 커뮤니티 포함) — 순서가 곧 화면 배치 순서다. */
-const TABS: { key: TabKey; label: string; route: string; Icon: IconComp }[] = [
-  { key: 'event',     label: '소개팅',   route: '/',          Icon: EventPhotoIcon },
-  { key: 'socialing', label: '소셜링',   route: '/socialing', Icon: SocialingPhotoIcon },
-  { key: 'board',     label: '커뮤니티', route: '/board',     Icon: BoardPhotoIcon },
-  { key: 'honsul',    label: '혼술바',   route: '/honsul',    Icon: HonsulPhotoIcon },
-  { key: 'my',        label: 'MY',       route: '/my',        Icon: MyPhotoIcon },
+// 좌우 4개(홈 제외). 가운데 홈은 아래에서 따로 그린다.
+const SIDE_TABS: { key: TabKey; label: string; route: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'event',     label: '소개팅', route: '/',          icon: 'heart' },
+  { key: 'socialing', label: '소셜링', route: '/socialing', icon: 'sparkles' },
+  { key: 'honsul',    label: '혼술바', route: '/honsul',    icon: 'wine' },
+  { key: 'my',        label: 'MY',     route: '/my',        icon: 'person' },
 ]
-
-/** 아이콘 크기 — 가운데(커뮤니티)만 크게, 그리고 바 윗선 위로 올린다. */
-const ICON = 40
-const CENTER_ICON = 60
-/**
- * 커뮤니티 아이콘이 바 윗선 위로 올라오는 높이 = 위쪽 투명 여백의 높이이기도 하다.
- * ⚠️ 이 값 자체가 "윗선 위로 나온 양"은 아니다. 아이콘은 바 안에서 세로 가운데
- * 정렬되므로, 원래도 위아래로 (CENTER_ICON-BAR_H)/2 만큼 삐져나와 있다
- * (52 아이콘 / 50 바 → 위로 1). 실제 노출량 = 그 값 + CENTER_LIFT.
- * 20 으로 뒀더니 아이콘 절반이 올라가 보였다(오너 지적) — 살짝만 걸치게 낮춘다.
- */
-const CENTER_LIFT = 8
-/** 바(색이 칠해지는 부분)의 높이. 56 → 50 으로 다시 낮췄다(2026-08-31 오너 지시). */
-const BAR_H = 50
 
 const CANONICAL_ROUTE: Record<TabKey, string> = {
   event: '/', socialing: '/socialing', honsul: '/honsul', my: '/my', board: '/board',
@@ -66,7 +42,6 @@ const CANONICAL_ROUTE: Record<TabKey, string> = {
  */
 export default function BottomNav({ current, route }: { current: TabKey; route?: string }) {
   const colors = useColors()
-  const isDark = useThemeStore((s) => s.isDark)
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const styles = useMemo(() => makeStyles(colors), [colors])
@@ -85,75 +60,75 @@ export default function BottomNav({ current, route }: { current: TabKey; route?:
     if (active) return
     router.replace((getTabRoute(key) ?? route) as never)
   }
+  const boardOn = current === 'board'
 
-  // 선택=핑크 2톤 / 비선택=회색 2톤. Flex color 는 아이콘마다 선(진한 톤)과 면(연한 톤)이
-  // 나뉘어 있어서 색 두 개를 넘겨야 한다. 다크모드에선 연한 톤을 그대로 쓰면 눈이 아파
-  // 어두운 배경에 맞는 값을 따로 준다.
-  const tone = (on: boolean) => on
-    ? { stroke: colors.primary, fill: isDark ? '#5A2A3C' : '#FFD9E6' }
-    : { stroke: colors.textTertiary, fill: isDark ? '#2A2A31' : '#E9E9F0' }
+  // 좌우 2개씩 나누고 가운데에 홈을 끼운다.
+  const left = SIDE_TABS.slice(0, 2)
+  const right = SIDE_TABS.slice(2)
 
-  // 화면에 이름이 안 보이는 대신 스크린리더가 읽을 수 있게 accessibilityLabel 로 이름을
-  // 남긴다(빼먹으면 시각장애인이 탭을 구분하지 못한다).
-  const renderTab = (t: typeof TABS[number]) => {
+  const sideTab = (t: typeof SIDE_TABS[number]) => {
     const on = t.key === current
-    const center = t.key === 'board'
-    const { stroke, fill } = tone(on)
     return (
       <TouchableOpacity
         key={t.key} style={styles.tab} activeOpacity={0.7}
         onPress={() => go(t.key, t.route, on)}
-        accessibilityRole="tab" accessibilityLabel={t.label}
-        accessibilityState={{ selected: on }}
+        accessibilityRole="tab" accessibilityState={{ selected: on }}
       >
-        <View style={center ? styles.centerLift : undefined}>
-          <t.Icon size={center ? CENTER_ICON : ICON} stroke={stroke} fill={fill} />
-        </View>
+        <Ionicons
+          name={on ? t.icon : (`${t.icon}-outline` as keyof typeof Ionicons.glyphMap)}
+          size={22} color={on ? colors.primary : colors.textTertiary}
+        />
+        <Text style={[styles.label, on && styles.labelOn]}>{t.label}</Text>
       </TouchableOpacity>
     )
   }
 
   return (
     <View style={[styles.wrap, { paddingBottom: insets.bottom }]}>
-      {/* 바 배경은 아래쪽(BAR_H)에만 깔고, 그 위 CENTER_LIFT 만큼은 투명하게 비워둔다.
-          커뮤니티 아이콘은 그 투명 영역으로 올라오므로 "윗선 위로 튀어나온" 모양이 되면서도
-          부모 밖으로 나가지 않는다 — 안드로이드는 부모 밖 자식을 잘라버려서(overflow 무시)
-          밖으로 밀어내는 방식은 실기기에서 안 먹혔다(2026-08-27 실기기 확인). */}
-      <View style={[styles.barBg, { bottom: insets.bottom }]} pointerEvents="none" />
-      {TABS.map(renderTab)}
+      {left.map(sideTab)}
+
+      {/* 가운데 홈(커뮤니티) — 크게 튀어나온 원형 버튼, 이름 없이 아이콘만 */}
+      <View style={styles.homeSlot}>
+        <TouchableOpacity
+          style={[styles.homeBtn, boardOn && styles.homeBtnOn]}
+          activeOpacity={0.85}
+          onPress={() => go('board', '/board', boardOn)}
+          accessibilityRole="tab" accessibilityLabel="커뮤니티"
+          accessibilityState={{ selected: boardOn }}
+        >
+          <Ionicons name="chatbubble-ellipses" size={32} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {right.map(sideTab)}
     </View>
   )
 }
 
 function makeStyles(colors: AppColors) {
   return StyleSheet.create({
-    // 바깥 컨테이너는 배경이 없다(투명). 위쪽 CENTER_LIFT 만큼이 커뮤니티 아이콘이
-    // 올라올 자리이고, 실제 바 색은 아래 barBg 가 칠한다.
     wrap: {
       flexDirection: 'row', alignItems: 'flex-end',
-      paddingHorizontal: 4,
-      // 위쪽 CENTER_LIFT 만큼은 커뮤니티 아이콘이 올라올 투명 자리다. 그런데 이게
-      // 레이아웃 높이로 잡히면 바 윗선 위에 빈 띠가 하나 생겨 화면이 그만큼 밀린다
-      // (2026-08-31 오너 지적: "왜 탭바 선 위로 공간이 붙어 있냐").
-      // 같은 크기의 음수 마진으로 그 높이를 되돌린다 → 자리는 유지되지만(안드로이드
-      // 잘림 방지) 위 화면을 밀지 않고 그 위에 겹쳐 뜬다. 투명이라 가리는 것도 없다.
-      paddingTop: CENTER_LIFT,
-      marginTop: -CENTER_LIFT,
-    },
-    // 실제로 색이 칠해지는 바. 좌우 끝까지, 아래는 안전영역 위까지.
-    // 배경색(라이트 #F5F5F5)이 아니라 surface(라이트 #FFFFFF, 다크 #1A1A1A)를 쓴다 —
-    // 라이트에서 바만 흰색으로 떠 보이게 하려는 것(2026-08-31 오너 지시).
-    // 다크에서 흰색을 쓰면 눈이 아프므로 다크는 배경보다 한 톤 밝은 surface 로 간다.
-    barBg: {
-      position: 'absolute', left: 0, right: 0, height: BAR_H,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.background,
       borderTopWidth: 1, borderTopColor: colors.divider,
+      paddingHorizontal: 4,
     },
     tab: {
       flex: 1, alignItems: 'center', justifyContent: 'center',
-      height: BAR_H,
+      gap: 3, paddingTop: 9, paddingBottom: 8,
     },
-    // 가운데(커뮤니티)만 위로 끌어올린다 — 위에 비워둔 투명 여백 안으로 들어간다.
-    centerLift: { transform: [{ translateY: -CENTER_LIFT }] },
+    label: { fontSize: 10, color: colors.textTertiary },
+    labelOn: { color: colors.primary, fontWeight: '800' },
+    // 가운데 홈(메인) — 바 위쪽 선을 넘치게 크게 튀어나온다. margin-top 음수로 끌어올린다.
+    homeSlot: { flexShrink: 0, marginHorizontal: 6, marginTop: -24 },
+    homeBtn: {
+      width: 64, height: 64, borderRadius: 999,
+      backgroundColor: `${colors.primary}CC`,   // 비선택: 살짝 연하게
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 3, borderColor: colors.background,
+      shadowColor: colors.primary, shadowOpacity: 0.44, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+      elevation: 8,
+    },
+    homeBtnOn: { backgroundColor: colors.primary },
   })
 }

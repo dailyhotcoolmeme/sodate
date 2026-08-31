@@ -200,17 +200,6 @@ export default function SettingsScreen() {
           label="소개팅모아 소개"
           value="전국 로테이션 소개팅 일정 모음"
         />
-        {/* ⚠️ 라이선스 의무 표기 — 지우지 말 것.
-            하단 탭바 아이콘으로 쓰는 Streamline "Flex color" 세트는 CC BY 4.0 이라
-            상업적 이용은 자유지만 출처표기가 필수다. Streamline 공식 안내가 모바일 앱은
-            "About/Credits 페이지에 표기"라고 정하고 있어 여기(앱 정보)에 둔다.
-            아이콘 정의는 components/TabIcons.tsx 참고. */}
-        <SettingRow
-          iconName="color-palette-outline"
-          label="아이콘 출처"
-          value="Free icons from Streamline"
-          onPress={() => { Linking.openURL('https://www.streamlinehq.com/icons').catch(() => {}) }}
-        />
       </View>
 
       {/* 면책사항 */}
