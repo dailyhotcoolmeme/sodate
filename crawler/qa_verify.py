@@ -908,7 +908,7 @@ def main():
         sites = [s.strip() for s in args.site.split(',')]
 
     print(f"\n{'='*60}")
-    print(f"소개팅모아 QA 검증 — {datetime.now(KST).strftime('%Y-%m-%d %H:%M')} KST")
+    print(f"모잇 QA 검증 — {datetime.now(KST).strftime('%Y-%m-%d %H:%M')} KST")
     print(f"검증 사이트: {len(sites)}개 | 사이트당 최대 {args.limit}건")
     print(f"{'='*60}")
 

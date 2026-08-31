@@ -30,9 +30,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* 데스크탑 사이드바 */}
       <aside className="hidden md:flex md:flex-col w-56 bg-white border-r border-gray-200">
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-gray-100">
-          <img src="/favicon.png" className="w-8 h-8 rounded-lg object-cover" alt="소개팅모아" />
+          <img src="/favicon.png" className="w-8 h-8 rounded-lg object-cover" alt="모잇" />
           <div>
-            <p className="text-sm font-bold text-gray-900">소개팅모아</p>
+            <p className="text-sm font-bold text-gray-900">모잇</p>
             <p className="text-xs text-gray-400">Admin</p>
           </div>
         </div>
@@ -74,8 +74,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="md:hidden bg-white border-b border-gray-200 px-4 py-3">
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-2">
-              <img src="/favicon.png" className="w-7 h-7 rounded-lg object-cover" alt="소개팅모아" />
-              <span className="text-sm font-bold text-gray-900">소개팅모아 <span className="text-gray-400 font-normal">Admin</span></span>
+              <img src="/favicon.png" className="w-7 h-7 rounded-lg object-cover" alt="모잇" />
+              <span className="text-sm font-bold text-gray-900">모잇 <span className="text-gray-400 font-normal">Admin</span></span>
             </div>
             <button onClick={handleLogout} className="flex items-center gap-1 text-xs text-gray-400 px-2 py-1">
               <LogOut size={14} /> 로그아웃

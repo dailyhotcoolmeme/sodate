@@ -122,7 +122,7 @@ def check_url_accessible(url: str) -> tuple[bool, int]:
 def run_qa() -> int:
     """QA 실행. 오류 건수 반환 (0이면 정상)."""
     print('=' * 60)
-    print('소개팅모아 크롤링 QA 검증 시작')
+    print('모잇 크롤링 QA 검증 시작')
     print(f'기준 시각: {datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")}')
     print('=' * 60)
 
