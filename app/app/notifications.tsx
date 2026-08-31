@@ -103,7 +103,7 @@ export default function NotificationsScreen() {
               <View style={styles.rowText}>
                 <View style={styles.rowTop}>
                   <Text style={styles.rowTitle} numberOfLines={1}>
-                    {n.title ?? '소개팅모아'}
+                    {n.title ?? '모잇'}
                   </Text>
                   <Text style={styles.time}>{timeAgo(n.created_at)}</Text>
                 </View>

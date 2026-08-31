@@ -40,10 +40,10 @@ export default function ReviewSection({ reviews, myReviewIds, onEdit, onDelete, 
   const instaReviews = useMemo(() => reviews.filter((r) => r.source === 'instagram').sort(byNewest), [reviews])
   const youtubeReviews = useMemo(() => reviews.filter((r) => r.source === 'youtube').sort(byNewest), [reviews])
 
-  // 소개팅모아 탭은 항상 표시(0개여도). 나머지 출처는 있을 때만.
+  // 모잇 탭은 항상 표시(0개여도). 나머지 출처는 있을 때만.
   const tabs = useMemo(() => {
     const list: { key: TabKey; label: string; count: number }[] = [
-      { key: 'user', label: '소개팅모아', count: userReviews.length },
+      { key: 'user', label: '모잇', count: userReviews.length },
     ]
     if (blogReviews.length > 0) list.push({ key: 'blog', label: '블로그', count: blogReviews.length })
     if (instaReviews.length > 0) list.push({ key: 'instagram', label: '인스타', count: instaReviews.length })
@@ -116,7 +116,7 @@ export default function ReviewSection({ reviews, myReviewIds, onEdit, onDelete, 
         ) : (
           <View style={styles.emptyBox}>
             <Ionicons name="chatbubble-ellipses-outline" size={30} color={colors.textTertiary} />
-            <Text style={styles.emptyTitle}>아직 소개팅모아 후기가 없어요</Text>
+            <Text style={styles.emptyTitle}>아직 모잇 후기가 없어요</Text>
             <Text style={styles.emptySub}>이 업체에 다녀오셨다면 첫 후기를 남겨보세요!</Text>
           </View>
         )

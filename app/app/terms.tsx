@@ -27,7 +27,7 @@ export default function TermsScreen() {
 
         <Text style={styles.sectionTitle}>제1조 (목적)</Text>
         <Text style={styles.body}>
-          본 약관은 소개팅모아(이하 "서비스")가 제공하는 모바일 앱 서비스의 이용 조건 및 절차, 회사와 이용자 간의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.
+          본 약관은 모잇(이하 "서비스")가 제공하는 모바일 앱 서비스의 이용 조건 및 절차, 회사와 이용자 간의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.
         </Text>
 
         <Text style={styles.sectionTitle}>제2조 (서비스 정의)</Text>

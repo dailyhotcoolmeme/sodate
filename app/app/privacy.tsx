@@ -26,7 +26,7 @@ export default function PrivacyScreen() {
         <Text style={styles.date}>시행일: 2026년 9월 2일 (직전 개정: 2026년 8월 19일)</Text>
 
         <Text style={styles.body}>
-          소개팅모아(이하 "서비스")는 이용자의 개인정보를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다. 본 방침을 통해 수집하는 개인정보의 항목, 이용 목적, 보유 기간 등을 안내드립니다.
+          모잇(이하 "서비스")는 이용자의 개인정보를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다. 본 방침을 통해 수집하는 개인정보의 항목, 이용 목적, 보유 기간 등을 안내드립니다.
         </Text>
 
         <Text style={styles.sectionTitle}>1. 수집하는 개인정보 항목</Text>
@@ -184,7 +184,7 @@ export default function PrivacyScreen() {
           개인정보 처리에 관한 불만·문의는 아래로 연락 주세요.{'\n\n'}
           개인정보 보호업무 및 고충사항 처리 부서{'\n'}
           회사: 주식회사 아워마인{'\n'}
-          부서: 소개팅모아 운영팀{'\n'}
+          부서: 모잇 운영팀{'\n'}
           이메일: admin@ourmine.co.kr{'\n'}
           처리 기간: 접수 후 7일 이내
         </Text>

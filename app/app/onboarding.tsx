@@ -23,7 +23,7 @@ const SLIDES: { icon: keyof typeof Ionicons.glyphMap; color: string; title: stri
   {
     icon: 'heart',
     color: '#FF6B9D',
-    title: '소개팅모아',
+    title: '모잇',
     logo: true,
     subtitle: '전국 로테이션 소개팅 일정을\n한곳에서 모아보세요',
   },
