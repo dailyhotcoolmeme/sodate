@@ -141,9 +141,12 @@ function makeStyles(colors: AppColors) {
       marginTop: -CENTER_LIFT,
     },
     // 실제로 색이 칠해지는 바. 좌우 끝까지, 아래는 안전영역 위까지.
+    // 배경색(라이트 #F5F5F5)이 아니라 surface(라이트 #FFFFFF, 다크 #1A1A1A)를 쓴다 —
+    // 라이트에서 바만 흰색으로 떠 보이게 하려는 것(2026-08-31 오너 지시).
+    // 다크에서 흰색을 쓰면 눈이 아프므로 다크는 배경보다 한 톤 밝은 surface 로 간다.
     barBg: {
       position: 'absolute', left: 0, right: 0, height: BAR_H,
-      backgroundColor: colors.background,
+      backgroundColor: colors.surface,
       borderTopWidth: 1, borderTopColor: colors.divider,
     },
     tab: {
