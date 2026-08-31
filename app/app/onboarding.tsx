@@ -76,7 +76,7 @@ export default function OnboardingScreen() {
     },
     brandLogo: {
       // 하트 크기를 예전과 같게 두려고 높이를 기준으로 잡는다(이름이 짧아져 폭만 줄었다).
-      width: 200 * (434 / 821),
+      width: 200 * (429 / 821),
       height: 200 * (698 / 821),
       marginBottom: 32,
     },
