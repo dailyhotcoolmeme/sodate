@@ -70,6 +70,19 @@ export function SocialingPhotoIcon({ size, stroke }: IconProps) {
   )
 }
 
+/**
+ * 혼술바 탭 — 외부 선화 아이콘(assets/tab-honsul.png). 처리 방식은 EventPhotoIcon 과 같다.
+ */
+export function HonsulPhotoIcon({ size, stroke }: IconProps) {
+  return (
+    <Image
+      source={require('../assets/tab-honsul.png')}
+      style={{ width: size, height: size, tintColor: stroke }}
+      resizeMode="contain"
+    />
+  )
+}
+
 export function HeartIcon({ size, fill, stroke }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 14 14">
