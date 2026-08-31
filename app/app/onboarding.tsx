@@ -40,7 +40,7 @@ const SLIDES: { icon: keyof typeof Ionicons.glyphMap; color: string; title: stri
     icon: 'people',
     color: '#A78BFA',
     title: '소셜링',
-    subtitle: '취미와 관심사로 모이는 사람들\n독서·와인·러닝… 마음 맞는 자리를 찾아보세요',
+    subtitle: '취미와 관심사로 모이는 사람들\n독서·러닝·전시… 마음 맞는 자리를 찾아보세요',
   },
   {
     icon: 'wine',
@@ -52,7 +52,7 @@ const SLIDES: { icon: keyof typeof Ionicons.glyphMap; color: string; title: stri
     icon: 'chatbubbles',
     color: '#34D399',
     title: '커뮤니티',
-    subtitle: '만나기 전과 만난 뒤의 이야기\n후기·질문·수다, 새 글은 알림으로 받아보세요',
+    subtitle: '같은 또래끼리 이야기 나누어요',
   },
 ]
 
