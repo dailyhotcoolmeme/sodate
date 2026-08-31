@@ -39,8 +39,8 @@ const TABS: { key: TabKey; label: string; route: string; Icon: IconComp }[] = [
 ]
 
 /** 아이콘 크기 — 가운데(커뮤니티)만 크게, 그리고 바 윗선 위로 올린다. */
-const ICON = 34
-const CENTER_ICON = 54
+const ICON = 40
+const CENTER_ICON = 60
 /**
  * 커뮤니티 아이콘이 바 윗선 위로 올라오는 높이 = 위쪽 투명 여백의 높이이기도 하다.
  * ⚠️ 이 값 자체가 "윗선 위로 나온 양"은 아니다. 아이콘은 바 안에서 세로 가운데
