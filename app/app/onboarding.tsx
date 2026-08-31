@@ -85,7 +85,7 @@ export default function OnboardingScreen() {
       alignItems: 'center',
       flex: 1,
       justifyContent: 'flex-start',
-      paddingTop: 200,
+      paddingTop: 250,
     },
     brandLogo: {
       // 하트 크기를 예전과 같게 두려고 높이를 기준으로 잡는다(이름이 짧아져 폭만 줄었다).
