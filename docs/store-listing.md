@@ -8,6 +8,20 @@
 >    **스토어 콘솔에는 아직 반영하지 않았다**(재출시 빌드와 함께 제출).
 >    앱이 4개 서비스(소개팅·소셜링·혼술바·커뮤니티)로 커진 것도 함께 반영했다.
 
+
+## 법적 고지 페이지 주소 (2026-08-31 정리)
+
+| 용도 | 주소 | 비고 |
+|---|---|---|
+| 개인정보처리방침 | https://ourmine.co.kr/moit/privacy | 재출시 때 스토어에 등록할 주소 |
+| 이용약관 | https://ourmine.co.kr/moit/terms | 〃 |
+| 데이터 삭제 요청 | https://ourmine.co.kr/moit/delete-request | Play Console '데이터 삭제 요청 URL' 에 등록 |
+| (구) 소개팅모아 | https://ourmine.co.kr/sodate/privacy · /terms | **지우지 말 것** — 지금 스토어에 올라가 있는 앱이 이 주소를 쓴다 |
+
+⚠️ 도메인은 새로 사지 않는다. 회사 도메인 아래 경로만 팠다(`/moit/`).
+   앱 전용 도메인이 필요한 시점은 자체 홈페이지·광고 랜딩을 만들 때뿐이다.
+   참고로 moit.co.kr·moit.kr·moit.com·moit.app 은 이미 남이 갖고 있다(2026-08-31 확인).
+
 ## App Store (iOS)
 
 **이름** (30자) — 18자
@@ -84,8 +98,8 @@
 ```
 
 ## 기타 등록 항목
-- 지원 URL: https://ourmine.co.kr/sodate/terms
-- 개인정보처리방침 URL: https://ourmine.co.kr/sodate/privacy
+- 지원 URL: https://ourmine.co.kr/moit/terms
+- 개인정보처리방침 URL: https://ourmine.co.kr/moit/privacy
 - 스크린샷: `docs/store-assets/` (ios-6.9 / ios-6.5 / android 각 4장)
   - 필터 화면은 지역 칩 중복 문제로 오너 판단하에 제외(출시 후 정규화 예정)
 - 플레이 그래픽 이미지: `docs/store-assets/play-feature-1024x500.png`
