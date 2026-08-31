@@ -200,6 +200,14 @@ class BaseScraper(ABC):
                 _both_sold = (_sm is not None and _sf is not None and _sm <= 0 and _sf <= 0)
                 data['is_closed'] = bool(data.get('is_closed')) or _both_sold
 
+                # 정원 0 은 "정원 정보 없음"으로 본다. DB 제약이 capacity_* > 0 이라
+                # 0 을 그대로 쓰면 그 이벤트만 조용히 저장 실패한다(2026-08-31, 프립
+                # 상품 191066 에서 5건 유실 — 프립이 성별 옵션 quota 를 0 으로 내려줬다).
+                # 음수 좌석과 같은 성격의 방어라 여기 함께 둔다.
+                for _k in ('capacity_male', 'capacity_female'):
+                    if data.get(_k) is not None and data[_k] <= 0:
+                        data[_k] = None
+
             _strip = []
             if not self.WRITES_SEATS:
                 _strip += ['capacity_male', 'capacity_female', 'seats_left_male', 'seats_left_female']
