@@ -40,7 +40,7 @@ const SLIDES: { icon: keyof typeof Ionicons.glyphMap; color: string; title: stri
     icon: 'people',
     color: '#A78BFA',
     title: '소셜링',
-    subtitle: '취미와 관심사로 모이는 사람들\n독서·러닝·전시… 마음 맞는 자리를 찾아보세요',
+    subtitle: '취미와 관심사로 모이는 사람들\n독서·러닝·보드게임… 마음 맞는 자리를 찾아보세요',
   },
   {
     icon: 'wine',
