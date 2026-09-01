@@ -53,7 +53,7 @@ export function useEventDetail(id: string) {
       try {
         const { data, error: err } = await supabase
           .from('events')
-          .select('*, companies(id, name, plan, logo_url, slug, base_url, description, is_active, detail_images_visible, crawl_url, crawl_type, regions, instagram_url, created_at, updated_at, company_image_types(id, name, match_keywords, images, is_default, sort_order)), image_type:company_image_types!image_type_id(id, images)')
+          .select('*, companies(id, name, plan, partner_benefit, logo_url, slug, base_url, description, is_active, detail_images_visible, crawl_url, crawl_type, regions, instagram_url, created_at, updated_at, company_image_types(id, name, match_keywords, images, is_default, sort_order)), image_type:company_image_types!image_type_id(id, images)')
           .eq('id', id)
           .single()
 

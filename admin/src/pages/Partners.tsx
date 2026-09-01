@@ -24,6 +24,7 @@ interface Company {
   name: string
   slug: string
   plan: string
+  partner_benefit: string | null
   app_visible: boolean
 }
 
@@ -35,6 +36,7 @@ interface Place {
   plan: string
   plan_starts_at: string | null
   plan_ends_at: string | null
+  partner_benefit: string | null
 }
 
 const TABS = [
@@ -77,6 +79,40 @@ function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
   )
 }
 
+/**
+ * 혜택 문구 입력칸.
+ *
+ * 글자를 칠 때마다 저장하면 한 글자에 한 번씩 DB 를 때린다 → **입력칸을 벗어날 때
+ * (blur) 한 번만** 저장한다. 값이 그대로면 저장 자체를 건너뛴다.
+ * 비워두면 null 로 저장되고, 앱 팝업에서 혜택 줄이 통째로 빠진다(오너 지시).
+ */
+function BenefitInput({
+  value, placeholder, onSave,
+}: {
+  value: string | null
+  placeholder: string
+  onSave: (v: string | null) => void
+}) {
+  const [draft, setDraft] = useState(value ?? '')
+  // 다른 곳에서 값이 바뀌면(저장 실패 되돌림 등) 입력칸도 따라간다.
+  useEffect(() => { setDraft(value ?? '') }, [value])
+  return (
+    <div className="flex items-center gap-2">
+      <label className="text-xs text-gray-500 shrink-0">혜택</label>
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const next = draft.trim() || null
+          if (next !== (value ?? null)) onSave(next)
+        }}
+        placeholder={placeholder}
+        className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1 text-sm"
+      />
+    </div>
+  )
+}
+
 /** 앱에 그려지는 것과 같은 딱지 — 켰을 때 뭐가 보이는지 여기서 바로 확인하려고. */
 function BadgePreview() {
   return (
@@ -103,7 +139,7 @@ export default function Partners() {
       for (let from = 0; ; from += PAGE) {
         const res = await supabase
           .from('places')
-          .select('id,name,region,category,plan,plan_starts_at,plan_ends_at')
+          .select('id,name,region,category,plan,plan_starts_at,plan_ends_at,partner_benefit')
           .eq('service', 'honsul')
           .eq('is_active', true)
           .order('name')
@@ -112,7 +148,7 @@ export default function Partners() {
         rows.push(...((res.data as any) ?? []))
         if (!res.data || res.data.length < PAGE) break
       }
-      const co = await supabase.from('companies').select('id,name,slug,plan,app_visible').order('name')
+      const co = await supabase.from('companies').select('id,name,slug,plan,partner_benefit,app_visible').order('name')
       if (co.error) setErr(co.error.message)
       setCompanies((co.data as any) ?? [])
       setPlaces(rows)
@@ -160,7 +196,8 @@ export default function Partners() {
       </div>
 
       <p className="text-sm text-gray-500">
-        켜면 앱의 일정 제목·매장명 앞에 <BadgePreview /> 딱지가 붙습니다.
+        켜면 앱의 일정 제목·매장명 앞에 <BadgePreview /> 딱지가 붙고,
+        상세 화면에 들어올 때 혜택 안내 팝업이 뜹니다. 혜택 칸을 비우면 팝업에서 혜택 줄만 빠집니다.
       </p>
 
       {err && (
@@ -195,10 +232,8 @@ export default function Partners() {
             제휴 기간은 두지 않습니다 — 일정은 날짜가 지나면 피드에서 저절로 사라집니다.
           </p>
           {companies.map((c) => (
-            <div
-              key={c.id}
-              className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3"
-            >
+            <div key={c.id} className="bg-white border border-gray-200 rounded-xl px-4 py-3 space-y-2">
+              <div className="flex items-center gap-3">
               <div className="flex-1 min-w-0 flex items-center gap-2">
                 {c.plan === 'partner' && <BadgePreview />}
                 <span className="font-semibold text-gray-900 truncate">{c.name}</span>
@@ -218,6 +253,14 @@ export default function Partners() {
                   )
                 }
               />
+              </div>
+              {c.plan === 'partner' && (
+                <BenefitInput
+                  value={c.partner_benefit}
+                  placeholder="예: 5,000원 할인 (비우면 팝업에 혜택 줄 없음)"
+                  onSave={(v) => patchCompany(c.id, { partner_benefit: v }, { partner_benefit: c.partner_benefit })}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -281,6 +324,11 @@ export default function Partners() {
                       )}
                     </div>
                     <p className="text-[11px] text-gray-400">비워두면 제한 없음(시작=즉시, 종료=무기한)</p>
+                    <BenefitInput
+                      value={p.partner_benefit}
+                      placeholder="예: 칵테일 1잔 서비스 (비우면 팝업에 혜택 줄 없음)"
+                      onSave={(v) => patchPlace(p.id, { partner_benefit: v }, { partner_benefit: p.partner_benefit })}
+                    />
                   </div>
                 ))}
               </div>

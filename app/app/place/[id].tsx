@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Linking, Dimensions, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -16,6 +16,7 @@ import { getHonsulDetailNativeAdUnitId } from '@/lib/ads'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import PartnerBadge from '@/components/PartnerBadge'
+import PartnerNotice, { partnerLineText } from '@/components/PartnerNotice'
 import { isPartnerPlace } from '@/lib/partner'
 import type { AppColors } from '@/constants/colors'
 import type { ReviewRow } from '@/lib/supabase'
@@ -52,6 +53,17 @@ export default function PlaceDetailScreen() {
   // 눌러야 이동한다(2026-08-24 오너 지적 — "이 가게가 어느 가게인지 보고 이동할지 선택해야
   // 할 거 아니야"). 지도탭(honsul/index.tsx)의 PlaceMapCard 와 완전히 같은 패턴 재사용.
   const [previewPlace, setPreviewPlace] = useState<PlaceRow | null>(null)
+
+  // 제휴 혜택 팝업 — 매장 정보를 다 받은 뒤 한 번 뜬다(일정 상세와 같은 규칙).
+  // 혼술바는 신청 절차가 없고 그냥 방문하므로 안내 문장이 다르다(PartnerNotice 참고).
+  const [partnerNotice, setPartnerNotice] = useState(false)
+  const partnerShownRef = useRef(false)
+  const isPartner = isPartnerPlace(place)
+  useEffect(() => {
+    if (!place || !isPartner || partnerShownRef.current) return
+    partnerShownRef.current = true
+    setPartnerNotice(true)
+  }, [place, isPartner])
   // 탭한 점의 화면 좌표 — 카드를 그 점 바로 아래에 띄운다(2026-08-24 오너 지적: "왼쪽 밑에
   // 고정이냐, 누른 점 바로 밑에 떠야지"). 좌표를 못 구하면(null) 카드는 예전처럼 좌하단 고정.
   const [previewAnchor, setPreviewAnchor] = useState<{ x: number; y: number } | null>(null)
@@ -203,6 +215,15 @@ export default function PlaceDetailScreen() {
 
         <View style={styles.body}>
           {/* 업체명 + 찜(오른쪽 끝) */}
+          {/* 매장명 위 안내 한 줄 — 팝업은 지나가면 사라지므로 다시 읽을 자리를 남긴다. */}
+          {isPartner && (
+            <View style={styles.partnerLine}>
+              <Text style={styles.partnerLineText}>
+                {partnerLineText('place', place.partner_benefit)}
+              </Text>
+            </View>
+          )}
+
           <View style={styles.nameRow}>
             {isPartnerPlace(place) && <PartnerBadge size="md" />}
             <Text style={styles.name}>{place.name}</Text>
@@ -341,6 +362,12 @@ export default function PlaceDetailScreen() {
           Alert.alert('신고되었습니다', already ? '이미 신고한 후기입니다.' : '검토 후 조치하겠습니다.')
         }}
       />
+      <PartnerNotice
+        visible={partnerNotice}
+        kind="place"
+        benefit={place.partner_benefit}
+        onClose={() => setPartnerNotice(false)}
+      />
       <BottomNav current="honsul" route={`/place/${id}`} />
     </View>
   )
@@ -369,6 +396,8 @@ function makeStyles(colors: AppColors) {
     checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     nearbyText: { color: colors.textPrimary, fontSize: 12, fontWeight: '700' },
     body: { padding: 16, paddingBottom: 6 },
+    partnerLine: { backgroundColor: `${colors.primary}1A`, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 10 },
+    partnerLineText: { fontSize: 13, lineHeight: 18, color: colors.primary, fontWeight: '700' },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     name: { flex: 1, fontSize: 20, fontWeight: '800', color: colors.textPrimary },
     tagScroll: { height: 18, flexGrow: 0, flexShrink: 0, marginTop: 8 },

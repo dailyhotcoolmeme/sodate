@@ -32,6 +32,7 @@ export interface PlaceRow {
   plan?: string | null              // 'free' | 'partner' — partner면 '모잇 할인' 딱지
   plan_starts_at?: string | null    // 제휴 시작일 'YYYY-MM-DD' (null=제한 없음)
   plan_ends_at?: string | null      // 제휴 종료일 'YYYY-MM-DD' (null=무기한)
+  partner_benefit?: string | null   // 제휴 혜택 문구. 비면 앱에서 혜택 줄을 안 그린다
 }
 
 export interface InstaMedia {
@@ -45,7 +46,7 @@ const COLUMNS =
   'id,name,naver_place_id,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
   'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags,socials,keyword_votes,' +
   // 제휴('모잇 할인' 딱지). 매장은 상시 노출이라 기간이 있다 — lib/partner.ts 참고.
-  'plan,plan_starts_at,plan_ends_at'
+  'plan,plan_starts_at,plan_ends_at,partner_benefit'
 
 // 방문자 키워드 투표(사실) → 해시태그처럼 보여줄 태그 배열(상위순). 생성·범용 항목은 제외.
 // 공백을 없애 해시태그 형태로("술이 다양해요"→"술이다양해요"). 많으면 카드에서 가로 스와이프.

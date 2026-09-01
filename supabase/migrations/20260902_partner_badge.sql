@@ -38,3 +38,18 @@ comment on column public.companies.plan is
 -- 제휴사는 전체의 극히 일부라 부분 인덱스로 충분하다(admin 목록에서 제휴만 골라볼 때).
 create index if not exists places_partner_idx    on public.places(plan)    where plan = 'partner';
 create index if not exists companies_partner_idx on public.companies(plan) where plan = 'partner';
+
+-- ── 혜택 내용(2026-09-02 오너 지시, 딱지 붙인 직후 추가) ───────────────────────
+-- 딱지에 '모잇 할인'이라고만 쓰면 사용자가 "얼마?"를 물었을 때 앱이 답을 못 한다.
+-- 혜택은 업체마다 다르므로(5,000원 할인 / 10% / 웰컴드링크 …) 업체별로 적어둔다.
+-- 상세 진입 팝업과 제목 위 한 줄에 이 값이 그대로 들어간다.
+--
+-- 비어 있으면 혜택 줄은 **아예 안 그린다**(오너 지시) — "할인됩니다" 같은 빈 말을
+-- 채워 넣지 않는다. 행동 안내 문장만 남는다.
+alter table public.companies add column if not exists partner_benefit text;
+alter table public.places    add column if not exists partner_benefit text;
+
+comment on column public.companies.partner_benefit is
+  '제휴 혜택 문구(예: ''5,000원 할인''). 비면 앱에서 혜택 줄을 안 그린다.';
+comment on column public.places.partner_benefit is
+  '제휴 혜택 문구(예: ''칵테일 1잔 서비스''). 비면 앱에서 혜택 줄을 안 그린다.';
