@@ -33,10 +33,26 @@ import type { AppColors } from '@/constants/colors'
  */
 export type PartnerKind = 'event' | 'place'
 
-export function partnerActionText(kind: PartnerKind): string {
-  return kind === 'place'
-    ? '매장에서 모잇 앱을 보여주시면\n서비스를 받으실 수 있어요'
-    : '신청하실 때 "모잇 통해서 신청"이라고\n알려주시면 혜택을 받을 수 있어요'
+/**
+ * 안내 문장을 조각으로 돌려준다 — **사용자가 실제로 말해야 하는 말만 핑크로** 뽑기 위해서다
+ * (2026-09-02 오너 지시). 문장 전체가 한 색이면 뭘 해야 하는지가 안 집힌다.
+ * 소개팅은 따옴표 안 문구가, 혼술바는 '모잇 앱'이 그 자리다.
+ */
+type ActionPart = { text: string; em?: boolean }
+
+export function partnerActionParts(kind: PartnerKind): ActionPart[] {
+  if (kind === 'place') {
+    return [
+      { text: '매장에서 ' },
+      { text: '모잇 앱', em: true },
+      { text: '을 보여주시면\n서비스를 받으실 수 있어요' },
+    ]
+  }
+  return [
+    { text: '신청하실 때 ' },
+    { text: '"모잇 통해서 신청"', em: true },
+    { text: '이라고\n알려주시면 혜택을 받을 수 있어요' },
+  ]
 }
 
 export default function PartnerNotice({
@@ -62,7 +78,11 @@ export default function PartnerNotice({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={styles.card}>
           <Text style={styles.title}>모잇 할인</Text>
-          <Text style={styles.action}>{partnerActionText(kind)}</Text>
+          <Text style={styles.action}>
+            {partnerActionParts(kind).map((part, i) => (
+              <Text key={i} style={part.em ? styles.actionEm : undefined}>{part.text}</Text>
+            ))}
+          </Text>
           {!!b && (
             <View style={styles.benefitBox}>
               <Text style={styles.benefitText}>{b}</Text>
@@ -102,6 +122,8 @@ function makeStyles(colors: AppColors) {
     //    그래서 크기·색의 순서를 뒤집었다: 제목 > 혜택 박스 > 본문 > 확인.
     title: { fontSize: 24, lineHeight: 32, color: colors.primary, fontWeight: '900', textAlign: 'center' },
     action: { fontSize: 14, lineHeight: 21, color: colors.textSecondary, fontWeight: '600', textAlign: 'center' },
+    // 말해야 할 문구만 핑크. 중첩 Text 는 부모 스타일을 물려받으므로 색·굵기만 덮는다.
+    actionEm: { color: colors.primary, fontWeight: '800' },
     // 혜택은 박스로 둘러 강조한다 — 글자만으로는 본문에 묻힌다.
     benefitBox: {
       alignSelf: 'stretch',
