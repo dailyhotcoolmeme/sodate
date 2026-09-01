@@ -264,7 +264,6 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
         // 닉네임 읽기전용(MY 공용) — 입력칸과 같은 높이·테두리.
         nickReadonly: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceHigh, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: colors.border },
         nickReadonlyText: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
-        nickReadonlyHint: { fontSize: 11, fontWeight: '800', color: colors.textTertiary },
         // 닉네임:성별 = 1.4:1 — 좁은 화면(320)에서도 성별 버튼 하나가 50px 이상 확보돼
         // '남성'/'여성'을 줄임말 없이 온전히 넣을 수 있다.
         identityRow: { flexDirection: 'row', gap: 10 },
@@ -355,11 +354,17 @@ export default function ReviewSheet({ visible, onClose, companyId, eventId, plac
               <View style={styles.identityRow}>
                 <View style={styles.nickField}>
                   <Text style={styles.fieldLabel}>닉네임</Text>
-                  {/* MY 공용 닉네임(여기선 수정 불가, 2026-08-23 오너 지시). 없으면 MY에서 먼저 설정. */}
-                  <View style={styles.nickReadonly}>
+                  {/* MY 공용 닉네임(여기선 수정 불가, 2026-08-23 오너 지시). 없으면 MY에서 먼저 설정.
+                      ⚠️ 예전엔 눌러도 아무 반응이 없어 "MY" 라고 적어놓고 갈 방법을 안 준 꼴이었다
+                         (2026-09-01 오너 지적). 이제 누르면 시트를 닫고 MY 로 보내 팝업까지 띄운다. */}
+                  <TouchableOpacity
+                    style={styles.nickReadonly}
+                    activeOpacity={0.7}
+                    onPress={() => { closeSheet(); router.push('/my?edit=nick') }}
+                  >
                     <Text style={styles.nickReadonlyText} numberOfLines={1}>{nickname || '미설정'}</Text>
-                    <Text style={styles.nickReadonlyHint}>MY</Text>
-                  </View>
+                    <Ionicons name="pencil" size={13} color={colors.textTertiary} />
+                  </TouchableOpacity>
                 </View>
                 {!isPlace && (
                 <View style={styles.genderField}>

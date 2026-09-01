@@ -384,7 +384,7 @@ export default function BoardWriteScreen() {
         <View style={styles.topRow}>
           <View style={styles.nickCol}>
             <Text style={styles.label}>닉네임</Text>
-            <TouchableOpacity style={styles.nickReadonly} activeOpacity={0.7} onPress={() => router.push('/my')}>
+            <TouchableOpacity style={styles.nickReadonly} activeOpacity={0.7} onPress={() => router.push('/my?edit=nick')}>
               <Text style={styles.nickReadonlyText} numberOfLines={1}>{nickname || '미설정'}</Text>
               <Ionicons name="pencil" size={13} color={colors.textTertiary} />
             </TouchableOpacity>

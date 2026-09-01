@@ -149,7 +149,7 @@ export default function AlertsScreen() {
   const isSoc = alertTab === 'socialing'
   const regionOptions = useRegions(isSoc ? 'socialing' : 'dating')
   const hashtagOptions = useHashtags()
-  const companyOptions = useCompanies()
+  const companyOptions = useCompanies(isSoc ? 'socialing' : 'dating')
 
   // 섹션별 접기·펼치기 — 기기에 저장돼 다음에 열어도 마지막 상태 유지(오너 지시 2026-08-12).
   const sectionExpanded = useCollapseStore((s) => s.expanded)

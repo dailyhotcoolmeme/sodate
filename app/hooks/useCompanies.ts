@@ -5,18 +5,27 @@ import { supabase } from '@/lib/supabase'
 export type CompanyOption = { id: string; name: string }
 
 const COMPANY_CACHE_KEY = 'sodate-companies-cache'
+const COMPANY_CACHE_KEY_SOC = 'sodate-companies-cache-socialing'
 
 // 활성·미래 이벤트가 있는 업체 목록 (필터 칩용). 이벤트 많은 순.
 // 캐시 우선 → DB 최신으로 갱신. 콜드스타트 때 id→이름 해석이 늦어 필터칩에
 // UUID가 잠깐 보이던 문제 방지(캐시가 있으면 즉시 이름으로 뜸).
-export function useCompanies(): CompanyOption[] {
+//
+// ⚠️(2026-09-01 오너 지적: "소개팅 필터에서 업체에 왜 소셜링 업체가 섞여있냐!")
+// eventType 없이 전체 이벤트에서 업체를 뽑으면 소셜링만 하는 업체(트레바리·동행클럽 등)가
+// 소개팅 필터 칩에 그대로 올라온다. 같은 문제를 2026-08-24 에 지역(useRegions)에서 먼저
+// 지적받아 고쳤는데 **업체 목록은 같이 안 고쳐 그대로 남아 있었다** — 필터에 쓰는 목록
+// 훅은 지역·업체·해시태그가 한 세트다. 하나 고칠 때 나머지도 같이 볼 것.
+export function useCompanies(eventType?: 'dating' | 'socialing'): CompanyOption[] {
   const [companies, setCompanies] = useState<CompanyOption[]>([])
   const gotFresh = useRef(false)
+  const cacheKey = eventType === 'socialing' ? COMPANY_CACHE_KEY_SOC : COMPANY_CACHE_KEY
 
   useEffect(() => {
     let alive = true
+    gotFresh.current = false
     // 1) 캐시 먼저 즉시 표시. DB 응답 오면 덮어씀.
-    AsyncStorage.getItem(COMPANY_CACHE_KEY).then((raw) => {
+    AsyncStorage.getItem(cacheKey).then((raw) => {
       if (!alive || gotFresh.current || !raw) return
       try {
         setCompanies(JSON.parse(raw))
@@ -30,13 +39,14 @@ export function useCompanies(): CompanyOption[] {
       const data: any[] = []
       try {
         for (let from = 0; ; from += PAGE) {
-          const res = await supabase
+          let q = supabase
             .from('events')
             .select('company_id, companies!inner(name)')
             .eq('is_active', true)
             .eq('companies.app_visible', true)
             .gte('event_date', new Date().toISOString())
-            .range(from, from + PAGE - 1)
+          if (eventType) q = q.eq('event_type', eventType)
+          const res = await q.range(from, from + PAGE - 1)
           if (!alive) return
           if (res.data) data.push(...res.data)
           if (!res.data || res.data.length < PAGE) break
@@ -57,12 +67,12 @@ export function useCompanies(): CompanyOption[] {
         .map(([id, v]) => ({ id, name: v.name }))
       gotFresh.current = true
       setCompanies(sorted)
-      AsyncStorage.setItem(COMPANY_CACHE_KEY, JSON.stringify(sorted)).catch(() => {})
+      AsyncStorage.setItem(cacheKey, JSON.stringify(sorted)).catch(() => {})
     })()
     return () => {
       alive = false
     }
-  }, [])
+  }, [eventType])
 
   return companies
 }
