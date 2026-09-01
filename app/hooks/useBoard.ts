@@ -66,7 +66,7 @@ export function useBoardList(page: number, search = '') {
     let q = supabase
       .from('board_posts')
       .select(
-        'id,nickname,title,content,image_urls,link_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,content_hidden,owner_token,created_at',
+        'id,nickname,title,content,image_urls,link_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,content_hidden,owner_token,is_notice,created_at',
         { count: 'exact' }
       )
       .eq('is_active', true)
@@ -79,7 +79,11 @@ export function useBoardList(page: number, search = '') {
       q = q.or(`title.ilike.%${safe}%,content.ilike.%${safe}%,content_below.ilike.%${safe}%`)
     }
 
-    q.order('created_at', { ascending: false })
+    // 공지를 맨 위에 고정한다(2026-09-01 오너 지시). 여러 개면 전부 위에 최신순으로.
+    // ⚠️ 정렬 키로 올리는 방식이라 공지는 1페이지 상단에만 모인다 — 2페이지부터는 안 보인다.
+    //    공지가 페이지마다 반복되지 않아야 하므로 이게 맞다.
+    q.order('is_notice', { ascending: false })
+      .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1)
       .then(async ({ data, count, error: err }) => {
         if (err) {
@@ -122,7 +126,7 @@ export function useBoardPost(id: string) {
     try {
       const [{ data: p, error: pErr }, { data: c, error: cErr }] = await Promise.all([
         supabase.from('board_posts')
-          .select('id,nickname,title,content,content_below,image_urls,link_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,view_count,content_hidden,owner_token,is_active,created_at,updated_at')
+          .select('id,nickname,title,content,content_below,image_urls,link_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,view_count,content_hidden,owner_token,is_notice,is_active,created_at,updated_at')
           .eq('id', id).maybeSingle(),
         supabase.from('board_comments')
           .select('id,post_id,parent_id,nickname,content,owner_token,is_secret,created_at,updated_at')

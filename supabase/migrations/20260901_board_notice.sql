@@ -18,3 +18,9 @@ comment on column board_posts.is_notice is
 create index if not exists board_posts_notice_created_idx
   on board_posts (is_notice desc, created_at desc)
   where is_active;
+
+-- ⚠️ board_posts 는 anon/authenticated 에 **컬럼 단위**로 SELECT 를 준다.
+--    ALTER TABLE 로 컬럼을 더해도 새 컬럼에는 권한이 안 붙어서, 앱이 is_notice 를
+--    조회하는 순간 질의 전체가 실패한다(게시판이 '일시적인 점검 중'으로 떨어졌다).
+--    컬럼을 추가할 때는 grant 도 같이 해야 한다.
+grant select (is_notice) on board_posts to anon, authenticated;
