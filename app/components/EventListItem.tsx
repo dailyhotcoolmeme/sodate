@@ -9,6 +9,8 @@ import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
 import DeadlineBadge from './DeadlineBadge'
 import ThemeBadge from './ThemeBadge'
+import PartnerBadge from './PartnerBadge'
+import { isPartnerCompany } from '@/lib/partner'
 import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
 import PriceTierValue from '@/components/PriceTierValue'
@@ -182,6 +184,7 @@ export default function EventListItem({ event, isFavorite = false, onToggleFavor
       {/* 내용 */}
       <View style={styles.info}>
         <View style={styles.titleRow}>
+          {isPartnerCompany(event.companies) && <PartnerBadge />}
           <ThemeBadge theme={event.theme} />
           <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
         </View>

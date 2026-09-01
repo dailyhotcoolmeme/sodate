@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react'
 import EventThumbnail from './EventThumbnail'
+import PartnerBadge from './PartnerBadge'
+import { isPartnerCompany } from '@/lib/partner'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -91,7 +93,10 @@ export default function SocialingListItem({ event, isFavorite = false, onToggleF
             <Text style={styles.catBadgeText}>{group.label}</Text>
           </View>
         )}
-        <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
+        <View style={styles.titleRow}>
+          {isPartnerCompany(event.companies) && <PartnerBadge />}
+          <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
+        </View>
         <Text style={styles.meta}>{formatDate(event.event_date)} · {event.location_region}</Text>
 
         {/* 참가비 + 정원·남녀 참여현황을 한 줄에 — 마감 표시는 소개팅과 동일하게
@@ -152,7 +157,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     // 카테고리 배지 — 제목 위 별도 줄. primary 계열 톤으로 눈에 띄되 과하지 않게.
     catBadge: { alignSelf: 'flex-start', backgroundColor: `${colors.primary}22`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 2 },
     catBadgeText: { fontSize: 11, fontWeight: '800', color: colors.primary },
-    title: { fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 19 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    title: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 19 },
     meta: { fontSize: 12, color: colors.textSecondary },
     partBlock: { marginTop: 3, gap: 2 },
     partRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },

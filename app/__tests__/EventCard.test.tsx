@@ -70,6 +70,8 @@ const mockEvent: EventWithCompany = {
     slug: 'frip',
     name: '프립',
     logo_url: null,
+    plan: 'free',
+    partner_benefit: null,
     base_url: 'https://frip.co.kr',
     crawl_url: 'https://frip.co.kr/events',
     crawl_type: 'static',

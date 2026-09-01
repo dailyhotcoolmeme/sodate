@@ -1,6 +1,9 @@
-import React, { useMemo, useEffect, useState, useCallback } from 'react'
+import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react'
 import AppSpinner from '@/components/AppSpinner'
 import EventThumbnail from '@/components/EventThumbnail'
+import PartnerBadge from '@/components/PartnerBadge'
+import PartnerNotice, { partnerLineText } from '@/components/PartnerNotice'
+import { isPartnerCompany } from '@/lib/partner'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
 import BottomNav from '@/components/BottomNav'
@@ -140,6 +143,13 @@ export default function EventDetailScreen() {
     heartBtnActive: {},
     heartIcon: { fontSize: 20, color: colors.textTertiary },
     heartIconActive: { color: '#FF6B9D' },
+    // 딱지와 제목을 한 줄에. 제목이 길어지면 딱지가 아니라 제목이 줄바꿈된다.
+    // ⚠️ 위쪽 titleRow(업체명+하트)와 다른 줄이다 — 이름을 겹치게 쓰면 뒤에 선언한 쪽이
+    //    앞을 통째로 덮어써서 업체명 줄 간격이 조용히 바뀐다.
+    partnerLine: { backgroundColor: `${colors.primary}1A`, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 10 },
+    partnerLineText: { fontSize: 13, lineHeight: 18, color: colors.primary, fontWeight: '700' },
+    partnerTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 14 },
+    titleText: { flex: 1, marginBottom: 0 },
     title: {
       fontSize: 22,
       color: colors.textPrimary,
@@ -328,6 +338,21 @@ export default function EventDetailScreen() {
   const [editTarget, setEditTarget] = useState<ReviewSheetInitial | null>(null)
   const [myReviewIds, setMyReviewIds] = useState<string[]>([])
   const [reportTarget, setReportTarget] = useState<string | null>(null)
+
+  // 제휴 혜택 팝업 — 화면에 들어오면 한 번 뜬다(2026-09-02 오너 지시).
+  // ⚠️ 조건을 event 로딩 완료 뒤로 두는 이유: 혜택 문구가 조회 결과에 들어 있어서,
+  //    로딩 중에 띄우면 빈 팝업이 떴다가 글자가 나중에 채워진다. 스피너 위에 뜨는
+  //    팝업은 그 자체로 고장처럼 보이기도 한다.
+  // '다시 보지 않기'는 두지 않는다(오너 지시). 대신 shownRef 로 이 화면에 머무는
+  // 동안에는 다시 뜨지 않게 한다 — 스크롤·리렌더마다 뜨면 못 쓴다.
+  const [partnerNotice, setPartnerNotice] = useState(false)
+  const partnerShownRef = useRef(false)
+  const isPartner = isPartnerCompany(event?.companies)
+  useEffect(() => {
+    if (!event || !isPartner || partnerShownRef.current) return
+    partnerShownRef.current = true
+    setPartnerNotice(true)
+  }, [event, isPartner])
   // 상세설명 접기/펼치기 (기본 접힘) + 실제 콘텐츠 높이(더보기 노출 판단)
   const [descExpanded, setDescExpanded] = useState(false)
   const [descContentH, setDescContentH] = useState(0)
@@ -506,8 +531,23 @@ export default function EventDetailScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 제목 */}
-        <Text style={styles.title}>{cleanText(event.title)}</Text>
+        {/* 제목 — 제휴업체면 딱지가 제목 앞에 붙는다(카드와 같은 규칙, 2026-09-02).
+            제목이 두 줄 이상이면 딱지는 첫 줄에 맞춰 위로 붙는다(alignItems flex-start). */}
+        {/* 제목 위 안내 한 줄 — 팝업은 지나가면 사라지므로 다시 읽을 자리를 남긴다.
+            여기엔 '모잇 할인'을 다시 쓰지 않는다: 바로 아래 제목 앞에 딱지가 있어
+            같은 말이 두 줄 연속으로 나온다. 딱지는 표시, 이 줄은 행동. */}
+        {isPartner && (
+          <View style={styles.partnerLine}>
+            <Text style={styles.partnerLineText}>
+              {partnerLineText('event', event.companies?.partner_benefit)}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.partnerTitleRow}>
+          {isPartnerCompany(event.companies) && <PartnerBadge size="md" />}
+          <Text style={[styles.title, styles.titleText]}>{cleanText(event.title)}</Text>
+        </View>
 
         {/* 테마 배지 + 한줄 설명 (있을 때만) */}
         {getThemeBadge(event.theme) && (
@@ -703,6 +743,12 @@ export default function EventDetailScreen() {
       onReported={(already) => {
         Alert.alert('신고되었습니다', already ? '이미 신고한 후기입니다.' : '검토 후 조치하겠습니다.')
       }}
+    />
+    <PartnerNotice
+      visible={partnerNotice}
+      kind="event"
+      benefit={event.companies?.partner_benefit}
+      onClose={() => setPartnerNotice(false)}
     />
     <BottomNav current={isSocialing ? 'socialing' : 'event'} route={`/event/${id}`} />
     </View>

@@ -1,8 +1,8 @@
-import React, { useMemo, useState, useCallback } from 'react'
+import React, { useMemo, useState, useCallback, useEffect } from 'react'
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking, Alert, Modal, Pressable, TextInput } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
-import { useRouter, useFocusEffect } from 'expo-router'
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import BottomNav from '@/components/BottomNav'
@@ -69,15 +69,16 @@ export default function MyScreen() {
   const [scrapCount, setScrapCount] = useState(0)
   const [reviewCount, setReviewCount] = useState(0)
   const [blockedCount, setBlockedCount] = useState(0)
-  // 닉네임 편집(전 서비스 공용 — 여기서만 바꾼다). 각 작성화면엔 닉네임칸 없음.
-  const [nickEdit, setNickEdit] = useState(false)
+  // 프로필 편집 팝업 — 닉네임·나이·성별을 한 팝업에서 함께 고친다(2026-09-01 오너 제안).
+  // 예전엔 닉네임 팝업과 내 정보(나이·성별) 팝업이 따로였다. 프로필 한 덩어리를 두 번
+  // 나눠 열게 할 이유가 없고, 댓글·후기에서 닉네임을 고치러 넘어온 사람이 그 자리에서
+  // 나이·성별까지 한 번에 끝낼 수 있다.
+  const [profileEdit, setProfileEdit] = useState(false)
   const [nickDraft, setNickDraft] = useState('')
   // 프로필 아바타(움직이는 thumbs) — 선택값은 avatarStore에 저장, 첫 실행 시 랜덤 자동 배정.
   const { avatarId, setAvatarId } = useAvatarStore()
   const avatar = getAvatar(avatarId)
   const [avatarPick, setAvatarPick] = useState(false)
-  // 내 정보(나이·성별) 편집 — 바텀시트 대신 팝업. 닉네임 밑 보조 설정.
-  const [profEdit, setProfEdit] = useState(false)
   const [ageDraft, setAgeDraft] = useState('')
   const [genderDraft, setGenderDraft] = useState<'male' | 'female' | null>(null)
 
@@ -94,21 +95,36 @@ export default function MyScreen() {
     getBlockedAuthors().then((b) => setBlockedCount(b.length))
   }, [refetchPosts, refetchComments, refetchFavs]))
 
-  const openProfEdit = () => { setAgeDraft(myAge ? String(myAge) : ''); setGenderDraft(myGender); setProfEdit(true) }
-  const saveProf = () => {
-    const age = parseInt(ageDraft, 10)
-    setMyAge(!isNaN(age) && age > 0 && age < 100 ? age : null)
-    setMyGender(genderDraft)
-    setProfEdit(false)
-  }
+  const { edit } = useLocalSearchParams<{ edit?: string }>()
 
-  const openNickEdit = () => { setNickDraft(nickname); setNickEdit(true) }
-  const saveNick = async () => {
+  const openProfileEdit = useCallback(() => {
+    setNickDraft(nickname)
+    setAgeDraft(myAge ? String(myAge) : '')
+    setGenderDraft(myGender)
+    setProfileEdit(true)
+  }, [nickname, myAge, myGender])
+
+  // 댓글·후기·글쓰기에서 닉네임을 눌러 넘어온 경우(`/my?edit=nick`) 팝업을 자동으로 띄운다
+  // (2026-09-01 오너 지시). 닉네임을 자동 생성해 두는 ensureNickname 이 끝나야 초안이
+  // 빈칸으로 열리지 않으므로 nickname 이 채워진 뒤에 연다.
+  //
+  // ⚠️ 연 다음 파라미터를 지운다. 안 지우면 사용자가 팝업을 닫아도 이 화면에 다시
+  //    포커스가 올 때마다 계속 다시 열린다.
+  useEffect(() => {
+    if (edit !== 'nick' || !nickname) return
+    openProfileEdit()
+    router.setParams({ edit: undefined })
+  }, [edit, nickname, openProfileEdit, router])
+
+  const saveProfile = async () => {
     const v = nickDraft.trim()
     if (v.length < 2 || v.length > 20) { Alert.alert('알림', '닉네임은 2~20자로 입력해주세요.'); return }
     await setLastNickname(v)
     setNickname(v)
-    setNickEdit(false)
+    const age = parseInt(ageDraft, 10)
+    setMyAge(!isNaN(age) && age > 0 && age < 100 ? age : null)
+    setMyGender(genderDraft)
+    setProfileEdit(false)
   }
 
   // 관심 — 소개팅/소셜링/혼술바 각각 카운트
@@ -128,7 +144,7 @@ export default function MyScreen() {
         style={{ flex: 1 }} showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
       >
-        {/* 프로필 요약 — 닉네임 탭=닉네임 편집(전 서비스 공용), 나이·성별 탭=내 정보 시트 */}
+        {/* 프로필 요약 — 닉네임·나이·성별 어느 줄을 눌러도 같은 '프로필 설정' 팝업이 열린다. */}
         <View style={styles.profile}>
           <TouchableOpacity style={[styles.avatar, avatar && styles.avatarImg]} activeOpacity={0.7} onPress={() => setAvatarPick(true)}>
             {avatar
@@ -137,11 +153,11 @@ export default function MyScreen() {
             <View style={styles.avatarEdit}><Ionicons name="camera" size={12} color="#fff" /></View>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <TouchableOpacity style={styles.nickRow} activeOpacity={0.7} onPress={openNickEdit}>
+            <TouchableOpacity style={styles.nickRow} activeOpacity={0.7} onPress={openProfileEdit}>
               <Text style={styles.nickname}>{nickname || '닉네임 설정'}</Text>
               <Ionicons name="pencil" size={14} color={colors.textTertiary} />
             </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.7} onPress={openProfEdit}>
+            <TouchableOpacity activeOpacity={0.7} onPress={openProfileEdit}>
               <Text style={styles.profileSub}>{profileSub} ›</Text>
             </TouchableOpacity>
           </View>
@@ -175,13 +191,17 @@ export default function MyScreen() {
       </ScrollView>
       <BottomNav current="my" />
 
-      {/* 닉네임 편집 — 여기서 바꾸면 커뮤·소개팅·소셜링·혼술바 글/후기에 모두 적용된다. */}
-      <Modal visible={nickEdit} transparent animationType="fade" onRequestClose={() => setNickEdit(false)} statusBarTranslucent>
+      {/* 프로필 설정 — 닉네임·나이·성별을 한 번에. 닉네임은 커뮤·소개팅·소셜링·혼술바
+          글/후기에 모두 적용되고, 나이·성별은 일정 추천에 쓰인다.
+          댓글·후기·글쓰기에서 닉네임을 누르면 '/my?edit=nick' 으로 넘어와 이 팝업이 바로 뜬다. */}
+      <Modal visible={profileEdit} transparent animationType="fade" onRequestClose={() => setProfileEdit(false)} statusBarTranslucent>
         <View style={styles.mOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setNickEdit(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setProfileEdit(false)} />
           <View style={styles.mCard}>
-            <Text style={styles.mTitle}>닉네임 설정</Text>
-            <Text style={styles.mSub}>글·후기에 함께 쓰이는 공용 닉네임이에요.</Text>
+            <Text style={styles.mTitle}>프로필 설정</Text>
+            {/* 한 글자만 다음 줄로 떨어지지 않게 짧게 — 긴 문장은 '요.' 만 홀로 내려간다. */}
+            <Text style={styles.mSub}>닉네임은 글·후기에, 나이·성별은 일정 추천에 쓰여요.</Text>
+            <Text style={styles.mFieldLabel}>닉네임</Text>
             <View style={styles.mInputRow}>
               <TextInput
                 style={styles.mInput}
@@ -199,21 +219,6 @@ export default function MyScreen() {
                 <Text style={styles.mDiceText}>랜덤</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.mBtns}>
-              <TouchableOpacity style={styles.mCancel} onPress={() => setNickEdit(false)}><Text style={styles.mCancelText}>취소</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.mSave} onPress={saveNick}><Text style={styles.mSaveText}>저장</Text></TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 내 정보(나이·성별) 편집 — 팝업. 설정하면 나에게 맞는 이벤트만 보여준다. */}
-      <Modal visible={profEdit} transparent animationType="fade" onRequestClose={() => setProfEdit(false)} statusBarTranslucent>
-        <View style={styles.mOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setProfEdit(false)} />
-          <View style={styles.mCard}>
-            <Text style={styles.mTitle}>내 정보</Text>
-            <Text style={styles.mSub}>설정하면 나에게 맞는 소개팅·소셜링만 보여드려요.</Text>
             <Text style={styles.mFieldLabel}>나이</Text>
             <View style={styles.mInputRow}>
               <TextInput
@@ -247,8 +252,8 @@ export default function MyScreen() {
               ))}
             </View>
             <View style={styles.mBtns}>
-              <TouchableOpacity style={styles.mCancel} onPress={() => setProfEdit(false)}><Text style={styles.mCancelText}>취소</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.mSave} onPress={saveProf}><Text style={styles.mSaveText}>저장</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.mCancel} onPress={() => setProfileEdit(false)}><Text style={styles.mCancelText}>취소</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.mSave} onPress={saveProfile}><Text style={styles.mSaveText}>저장</Text></TouchableOpacity>
             </View>
           </View>
         </View>

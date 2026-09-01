@@ -90,7 +90,7 @@ export default function HomeScreen() {
     for (const r of regionOptions) (buckets[regionGroupKey(r.label)] ??= []).push(r.id)
     return REGION_GROUP_ORDER.filter((g) => buckets[g.key]?.length).map((g) => ({ key: g.key, ids: buckets[g.key] }))
   }, [regionOptions])
-  const companyOptions = useCompanies()
+  const companyOptions = useCompanies('dating')
   const { sortBy, setSortBy, excludeClosed, setExcludeClosed } = useFilterStore()
   const { favoriteIds, toggle: toggleFavorite } = useFavorites()
   // 내 정보(나이·성별) 시트는 전역(ProfileSheet, _layout)으로 이동 — 홈에서도 TopBar '내 정보'로 열림

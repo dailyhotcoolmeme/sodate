@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, Image, ScrollView } from 'rea
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { useColors } from '@/hooks/useColors'
+import PartnerBadge from './PartnerBadge'
+import { isPartnerPlace } from '@/lib/partner'
 import type { AppColors } from '@/constants/colors'
 import { type PlaceRow, openStatus, categoryCover, topConveniences } from '@/lib/places'
 import { formatDistanceKm } from '@/lib/nearby'
@@ -69,6 +71,7 @@ export default function PlaceListItem({ place, isFavorite = false, onToggleFavor
       <View style={styles.info}>
         {/* 제목 */}
         <View style={styles.nameRow}>
+          {isPartnerPlace(place) && <PartnerBadge />}
           <Text style={styles.name} numberOfLines={1}>{place.name}</Text>
         </View>
 

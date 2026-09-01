@@ -242,7 +242,9 @@ export default function BoardPostScreen() {
 
   // 닉네임은 가장 최근에 쓴 값을 물고 간다(후기 작성과 동일). 여기서 바꾸면
   // 그 값이 다음부터 기본값이 된다 — 저장은 lib/board.ts 에서 한다.
-  useEffect(() => { getLastNickname().then((n) => n && setNickname(n)) }, [])
+  // MY 에서 바꾸고 돌아오면 즉시 반영돼야 하므로 마운트 1회가 아니라 포커스마다 읽는다
+  // (닉네임을 여기서 못 고치게 바꾼 2026-09-01 이후로는 이게 유일한 갱신 경로다).
+  useFocusEffect(useCallback(() => { getLastNickname().then((n) => n && setNickname(n)) }, []))
   // 조회수는 화면에 감춰뒀지만 값은 쌓아둔다(나중에 켜면 그때까지 숫자가 그대로).
   useEffect(() => { if (id) markViewed(id) }, [id])
   // 목록에서 읽은 글을 연하게 표시하기 위한 기기 저장(2026-08-13 오너 지시).
@@ -743,17 +745,21 @@ export default function BoardPostScreen() {
           {/* 닉네임은 입력칸을 만졌을 때만 펼친다. 마지막에 쓴 값이 채워져 있어서
               보통은 손댈 일이 없는데 늘 한 줄을 차지하고 있었다.
               비밀 댓글 체크도 같은 줄에 둔다 — 늘 보이면 자리만 차지한다.
-              수정 중에는 비밀 여부를 바꿀 수 없다(이미 본 사람과 못 본 사람이 갈린다). */}
+              수정 중에는 비밀 여부를 바꿀 수 없다(이미 본 사람과 못 본 사람이 갈린다).
+
+              ⚠️ 닉네임은 **여기서 못 고친다**(2026-09-01 오너 지시). 전 서비스 공용이라
+                 MY 에서만 바꾼다 — 글쓰기·후기와 같은 규칙인데 댓글칸만 입력칸이 남아
+                 있었다. 누르면 MY 로 보내고 닉네임 팝업까지 바로 띄운다. */}
           {composing && (
             <View style={styles.composeOptionRow}>
-              <TextInput
-                style={styles.nickInput}
-                value={nickname}
-                onChangeText={setNickname}
-                placeholder="닉네임"
-                placeholderTextColor={colors.textTertiary}
-                maxLength={20}
-              />
+              <TouchableOpacity
+                style={styles.nickReadonly}
+                activeOpacity={0.7}
+                onPress={() => router.push('/my?edit=nick')}
+              >
+                <Text style={styles.nickReadonlyText} numberOfLines={1}>{nickname || '미설정'}</Text>
+                <Ionicons name="pencil" size={13} color={colors.textTertiary} />
+              </TouchableOpacity>
               {!editing && (
                 <TouchableOpacity
                   style={styles.secretToggle}
@@ -809,7 +815,6 @@ export default function BoardPostScreen() {
         secret={replySecret}
         sending={replySending}
         colors={colors}
-        onChangeNickname={setReplyNickname}
         onChangeDraft={setReplyDraft}
         onToggleSecret={toggleReplySecret}
         onCancel={() => setReplyModal(null)}
@@ -838,7 +843,7 @@ export default function BoardPostScreen() {
  */
 function ReplyModal({
   target, nickname, draft, secret, sending, colors,
-  onChangeNickname, onChangeDraft, onToggleSecret, onCancel, onSubmit,
+  onChangeDraft, onToggleSecret, onCancel, onSubmit,
 }: {
   target: BoardComment | null
   nickname: string
@@ -846,12 +851,12 @@ function ReplyModal({
   secret: boolean
   sending: boolean
   colors: AppColors
-  onChangeNickname: (v: string) => void
   onChangeDraft: (v: string) => void
   onToggleSecret: () => void
   onCancel: () => void
   onSubmit: () => void
 }) {
+  const router = useRouter()
   const styles = useMemo(() => makeReplyModalStyles(colors), [colors])
   // 메인 댓글칸과 같은 규칙 — 닉네임 칸은 입력칸을 만졌을 때만 펼친다.
   // 팝업이 새로 열릴 때(대상이 바뀔 때)마다 접힌 상태로 되돌린다.
@@ -869,15 +874,16 @@ function ReplyModal({
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
         <View style={styles.card}>
           <Text style={styles.title}>{target?.nickname}님에게 답글</Text>
+          {/* 메인 댓글칸과 동일 — 닉네임은 읽기 전용이고 MY 에서만 바꾼다. */}
           {nickComposing && (
-            <TextInput
-              style={styles.nickInput}
-              value={nickname}
-              onChangeText={onChangeNickname}
-              placeholder="닉네임"
-              placeholderTextColor={colors.textTertiary}
-              maxLength={20}
-            />
+            <TouchableOpacity
+              style={styles.nickReadonly}
+              activeOpacity={0.7}
+              onPress={() => { onCancel(); router.push('/my?edit=nick') }}
+            >
+              <Text style={styles.nickReadonlyText} numberOfLines={1}>{nickname || '미설정'}</Text>
+              <Ionicons name="pencil" size={13} color={colors.textTertiary} />
+            </TouchableOpacity>
           )}
           <TextInput
             style={styles.draftInput}
@@ -946,10 +952,13 @@ function makeReplyModalStyles(colors: AppColors) {
       elevation: 12,
     },
     title: { fontSize: 14, fontWeight: '700', color: colors.primary },
-    nickInput: {
-      fontSize: 13, color: colors.textPrimary, backgroundColor: colors.surfaceHigh,
-      borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8,
+    // 닉네임 읽기전용(MY 공용) — 메인 댓글칸과 같은 규격.
+    nickReadonly: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      backgroundColor: colors.surfaceHigh, borderRadius: 8,
+      paddingHorizontal: 10, paddingVertical: 8,
     },
+    nickReadonlyText: { flex: 1, fontSize: 13, color: colors.textPrimary, fontWeight: '600' },
     draftInput: {
       minHeight: 90, maxHeight: 160, fontSize: 14, lineHeight: 20, color: colors.textPrimary,
       backgroundColor: colors.surfaceHigh, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
@@ -1169,11 +1178,13 @@ function makeStyles(colors: AppColors) {
     inputRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     // 닉네임 칸과 '비밀' 체크를 한 줄에 — 둘 다 입력칸을 만졌을 때만 나온다.
     composeOptionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
-    nickInput: {
-      minWidth: 110, fontSize: 13, color: colors.textPrimary,
+    // 닉네임 읽기전용(MY 공용) — 예전 입력칸과 같은 크기·색. 연필로 'MY 에서 바꾼다'를 암시.
+    nickReadonly: {
+      flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 110,
       backgroundColor: colors.surfaceHigh, borderRadius: 8,
       paddingHorizontal: 10, paddingVertical: 7,
     },
+    nickReadonlyText: { fontSize: 13, color: colors.textPrimary, fontWeight: '600' },
     secretToggle: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     secretToggleText: { fontSize: 13, color: colors.textSecondary },
     secretToggleTextOn: { color: colors.primary, fontWeight: '700' },

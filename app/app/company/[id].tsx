@@ -17,6 +17,8 @@ import { Image } from 'expo-image'
 import { useCompany } from '@/hooks/useCompany'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
+import PartnerBadge from '@/components/PartnerBadge'
+import { isPartnerCompany } from '@/lib/partner'
 import EventCard from '@/components/EventCard'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 import { addRecentView } from '@/lib/recentViews'
@@ -91,6 +93,8 @@ export default function CompanyDetailScreen() {
       fontWeight: '700',
     },
     headerInfo: { flex: 1 },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    nameText: { flexShrink: 1 },
     companyName: {
       fontSize: 20,
       color: colors.textPrimary,
@@ -208,7 +212,10 @@ export default function CompanyDetailScreen() {
           </View>
         )}
         <View style={styles.headerInfo}>
-          <Text style={styles.companyName}>{cleanText(company.name)}</Text>
+          <View style={styles.nameRow}>
+            {isPartnerCompany(company) && <PartnerBadge size="md" />}
+            <Text style={[styles.companyName, styles.nameText]}>{cleanText(company.name)}</Text>
+          </View>
           {company.description && (
             <Text style={styles.companyDesc} numberOfLines={2}>
               {cleanText(company.description)}
