@@ -14,6 +14,8 @@ import { sourcesForGroupKeys } from '@/constants/socialingCategories'
 // 페이지네이션(스크롤시 추가 로드)으로 전환 — DB 부하도 한 번에 몰리지 않고 분산됨
 // (마침 그날 Supabase Disk IO 예산 경고 메일도 받아 한 번에 다 끌어오는 걸 피하는 게 유리).
 const PAGE_SIZE = 60
+// 렌더마다 새로 만들면 안 되는 빈 배열(참조 고정) — deps 안정화용. 위 주석 참고.
+const EMPTY_ARR: string[] = []
 
 // 2026-08-07: select('*')가 피드 카드에서 안 쓰는 필드(특히 description — 평균 1,300자,
 // 최대 6,000자 크롤 텍스트)까지 매번 끌고 와서 페이지당 응답이 258KB였다. 카드가 실제로
@@ -60,6 +62,21 @@ function writeEventsCache(storeKey: string, key: string, events: EventWithCompan
 // 조인 테이블이라 PostgREST or() 로직트리 안에서 직접 필터링이 안 돼(둘 다 실측 확인),
 // events에 검색용으로 동기화해둔 hashtags_search·company_name 컬럼을 대신 쓴다
 // (supabase/migrations/20260814_events_search_fields.sql).
+// 소셜링 카드의 "마감" 배지는 is_closed 서버 플래그뿐 아니라 "정원이 다 찼는지"
+// (총정원≤참여인원)도 같이 본다(SocialingListItem.tsx/SocialingCard.tsx와 동일 공식 —
+// 문토·트레바리·동행 등 소셜링 소스가 마감 여부를 크롤링 시점에 정확히 못 주는 경우가
+// 있어 참여인원이 정원을 채우면 앱이 자체 보완 판단한다). 소개팅은 배지가 is_closed만
+// 보므로 서버 쿼리(is_closed만 거름)와 항상 일치했지만, 소셜링은 배지 기준과 필터
+// 기준이 서로 달라서 "마감제외"를 켜도 정원 다 찬 모임(is_closed=false)이 안 사라지는
+// 사고가 났다(오너 제보 2026-08-26, 스크린샷으로 확인). 배지와 같은 기준으로 한 번 더
+// 걸러 일치시킨다.
+function isSocialingEventClosed(e: EventWithCompany): boolean {
+  const stats = e.participant_stats
+  const cap = stats?.total_capacity
+  const cur = stats?.total_count
+  return !!e.is_closed || (cap != null && cur != null && cur >= cap)
+}
+
 function searchOrFilter(term: string): string {
   // 쉼표·괄호는 or 구문의 구분자라 검색어에 들어가면 질의가 깨진다(board 검색과 동일 이유).
   const safe = term.trim().replace(/[,()]/g, ' ')
@@ -95,25 +112,29 @@ export function useEvents(
   const { myAge, myGender } = useProfileStore()
 
   // 소셜링은 나이·테마·해시태그·시간대·업체·기간 필터가 없다(데이터 없음/미사용) → 빈 값.
+  // ⚠️ 빈 배열은 반드시 상수(EMPTY_ARR)를 써야 한다. `isSoc ? [] : x` 처럼 매 렌더 새 배열을
+  //    만들면 cacheKey/useCallback deps 가 매번 달라져 fetch 가 무한 반복된다(스피너가 계속
+  //    돌아 화면이 깜빡이는 것처럼 보였다 — 2026-08-24 오너 지적).
   const regions = isSoc ? soc.regions : dating.regions
+  const minPrice = isSoc ? soc.minPrice : dating.minPrice
   const maxPrice = isSoc ? soc.maxPrice : dating.maxPrice
   const days = isSoc ? soc.days : dating.days
   const sortBy = isSoc ? soc.sortBy : dating.sortBy
   const excludeClosed = isSoc ? soc.excludeClosed : dating.excludeClosed
-  const socGroups = isSoc ? soc.groups : []
+  const socGroups = isSoc ? soc.groups : EMPTY_ARR
   const dateStart = isSoc ? null : dating.dateStart
   const dateEnd = isSoc ? null : dating.dateEnd
-  const themes = isSoc ? [] : dating.themes
-  const hashtags = isSoc ? [] : dating.hashtags
-  const ageGroups = isSoc ? [] : dating.ageGroups
-  const timeSlots = isSoc ? [] : dating.timeSlots
-  const companies = isSoc ? [] : dating.companies
+  const themes = isSoc ? EMPTY_ARR : dating.themes
+  const hashtags = isSoc ? EMPTY_ARR : dating.hashtags
+  const ageGroups = isSoc ? EMPTY_ARR : dating.ageGroups
+  const timeSlots = isSoc ? EMPTY_ARR : dating.timeSlots
+  const companies = isSoc ? EMPTY_ARR : dating.companies
   const effMyAge = isSoc ? null : myAge   // 소셜링은 내 나이 필터 미적용(나이 데이터 없음)
 
   // 캐시를 구분하는 키 — buildQuery가 실제로 참조하는 필터 전부를 담는다.
   const cacheKey = useMemo(() => JSON.stringify({
-    regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge: effMyAge, search, eventType, socGroups,
-  }), [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, effMyAge, search, eventType, socGroups])
+    regions, dateStart, dateEnd, minPrice, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, myAge: effMyAge, search, eventType, socGroups,
+  }), [regions, dateStart, dateEnd, minPrice, maxPrice, themes, hashtags, ageGroups, days, timeSlots, companies, sortBy, excludeClosed, effMyAge, search, eventType, socGroups])
   const cacheSlot = useMemo(() => cacheStoreKey(eventType), [eventType])
 
   const buildQuery = useCallback((from: number, to: number) => {
@@ -161,11 +182,16 @@ export function useEvents(
       query = query.lte('event_date', new Date(`${dateEnd}T23:59:59`).toISOString())
     }
 
-    // 가격 필터
-    if (maxPrice !== null) {
-      query = query.or(
-        `price_male.lte.${maxPrice},price_female.lte.${maxPrice}`
-      )
+    // 가격 필터 — 최소·최대 직접 입력 지원(2026-08-24 오너 지시). 남녀 중 하나라도
+    // 범위 안에 들면 표시(가격이 갈리는 이벤트에서 한쪽만 맞아도 보여야 하므로).
+    if (minPrice !== null || maxPrice !== null) {
+      const bounds = (col: 'price_male' | 'price_female') => {
+        const parts: string[] = []
+        if (minPrice !== null) parts.push(`${col}.gte.${minPrice}`)
+        if (maxPrice !== null) parts.push(`${col}.lte.${maxPrice}`)
+        return parts.length > 1 ? `and(${parts.join(',')})` : parts[0]
+      }
+      query = query.or(`${bounds('price_male')},${bounds('price_female')}`)
     }
 
     // 테마 필터 (theme is string[] in DB)
@@ -215,7 +241,9 @@ export function useEvents(
       query = query.in('event_hour', hoursForTimeSlots(timeSlots))
     }
 
-    // 정렬
+    // 정렬. 값이 같은 행끼리는 DB가 매 요청마다 순서를 다르게 줄 수 있어(정렬 불안정),
+    // 캐시로 먼저 그린 목록과 서버 응답의 순서가 달라 카드가 자리를 바꾸며 깜빡였다
+    // (2026-08-24 오너 지적: 소셜링 상단 2개가 왔다갔다). id 를 마지막 기준으로 넣어 고정한다.
     if (sortBy === 'created') {
       query = query.order('created_at', { ascending: false })
     } else if (sortBy === 'price_low') {
@@ -225,9 +253,10 @@ export function useEvents(
     } else {
       query = query.order('event_date', { ascending: true })
     }
+    query = query.order('id', { ascending: true })
 
     return query.range(from, to)
-  }, [regions, dateStart, dateEnd, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, effMyAge, search, days, timeSlots, eventType, isSoc, socGroups])
+  }, [regions, dateStart, dateEnd, minPrice, maxPrice, themes, hashtags, ageGroups, companies, sortBy, excludeClosed, effMyAge, search, days, timeSlots, eventType, isSoc, socGroups])
 
   /**
    * 한 페이지를 받아온다.
@@ -243,8 +272,13 @@ export function useEvents(
     const { data, error: err } = await buildQuery(from, from + PAGE_SIZE - 1)
     if (err) throw err
     const rows = (data ?? []) as EventWithCompany[]
-    return { rows, lastPage: page, exhausted: rows.length < PAGE_SIZE }
-  }, [buildQuery])
+    // exhausted 는 반드시 걸러내기 전 개수로 판단한다 — 걸러진 뒤 개수로 판단하면
+    // 마감 카드가 많은 페이지에서 실제로는 더 있는데도 "끝"으로 오판해 다음 페이지를
+    // 영영 안 불러온다.
+    const exhausted = rows.length < PAGE_SIZE
+    const filtered = (isSoc && excludeClosed) ? rows.filter((r) => !isSocialingEventClosed(r)) : rows
+    return { rows: filtered, lastPage: page, exhausted }
+  }, [buildQuery, isSoc, excludeClosed])
 
   // opts.silent: 화면엔 이미 캐시된 목록이 보이는 상태에서 뒤에서 조용히 최신화할 때 씀
   // (스피너를 다시 띄우지 않고, 실패해도 이미 보이는 화면을 에러로 덮지 않음).

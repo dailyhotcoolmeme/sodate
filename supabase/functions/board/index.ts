@@ -217,12 +217,23 @@ function youtubeId(raw: string): string | null {
     return null
   }
 }
-/** linkUrls 원본을 검증 — 하나라도 유튜브가 아니면 에러 문구를 돌려준다. */
+// 인스타그램 게시물·릴스만(2026-08-24, 유튜브 옆에 추가) — 앱 쪽 lib/instagram.ts와 동일 규칙.
+function isInstagramUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw)
+    const host = u.hostname.replace(/^www\./, '')
+    if (host !== 'instagram.com') return false
+    return /^\/(p|reel|reels|tv)\//.test(u.pathname)
+  } catch {
+    return false
+  }
+}
+/** linkUrls 원본을 검증 — 하나라도 유튜브·인스타가 아니면 에러 문구를 돌려준다. */
 function resolveLinks(raw: unknown): { links: string[] } | { error: string } {
   if (!Array.isArray(raw)) return { links: [] }
   const links = raw.map((u) => String(u).trim()).filter(Boolean).slice(0, MAX_LINKS)
   for (const u of links) {
-    if (!youtubeId(u)) return { error: '유튜브 링크만 첨부할 수 있어요.' }
+    if (!youtubeId(u) && !isInstagramUrl(u)) return { error: '유튜브·인스타그램 링크만 첨부할 수 있어요.' }
   }
   return { links }
 }
@@ -652,7 +663,7 @@ serve(async (req) => {
       const ids = (rows ?? []).map((r: any) => r.post_id)
       if (ids.length === 0) return json({ posts: [] })
       const { data: posts } = await supabase.from('board_posts')
-        .select('id,nickname,title,content,image_urls,link_urls,upvotes,downvotes,comment_count,view_count,tag_id,board_tags(label),is_active,image_hidden,created_at')
+        .select('id,nickname,title,content,image_urls,link_urls,upvotes,downvotes,comment_count,view_count,tag_id,board_tags(label),is_active,content_hidden,created_at')
         .in('id', ids).eq('is_active', true)
       const byId = new Map((posts ?? []).map((p: any) => {
         const { board_tags, ...rest } = p

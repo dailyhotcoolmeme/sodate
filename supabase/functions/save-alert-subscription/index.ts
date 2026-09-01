@@ -20,6 +20,10 @@ serve(async (req) => {
     company_ids?: string[]
     notify_new?: boolean
     notify_deadline?: boolean
+    /** 'dating'(소개팅) | 'socialing'(소셜링) — 한 기기가 둘을 따로 구독한다(2026-08-24) */
+    event_type?: 'dating' | 'socialing'
+    /** 소셜링 전용: 카테고리 그룹 키(reading/movie/active…) */
+    socialing_groups?: string[]
     /** true면 조건은 무시하고 이 push_token의 구독을 끈다(알림 해제 버튼) */
     unsubscribe?: boolean
   }
@@ -30,6 +34,8 @@ serve(async (req) => {
   }
 
   const { token, regions, max_price, themes, hashtags, company_ids, notify_new, notify_deadline, unsubscribe } = body
+  const eventType = body.event_type === 'socialing' ? 'socialing' : 'dating'
+  const socialingGroups = body.socialing_groups
   if (!token) {
     return new Response(JSON.stringify({ error: 'token is required' }), { status: 400 })
   }
@@ -45,12 +51,14 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Push token not found. Register token first.' }), { status: 404 })
   }
 
-  // 기존 구독 upsert (push_token_id 기준으로 1개만 유지)
+  // 기존 구독 upsert — (push_token_id, event_type) 기준으로 타입별 1개씩 유지
   const { data, error } = await supabase
     .from('alert_subscriptions')
     .upsert(
       {
         push_token_id: pushToken.id,
+        event_type: eventType,
+        socialing_groups: socialingGroups ?? null,
         regions: regions ?? null,
         max_price: max_price ?? null,
         themes: themes ?? null,
@@ -61,7 +69,7 @@ serve(async (req) => {
         is_active: !unsubscribe,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'push_token_id' }
+      { onConflict: 'push_token_id,event_type' }
     )
     .select('id')
     .single()

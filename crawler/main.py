@@ -1,4 +1,4 @@
-"""소개팅모아 크롤러 메인 실행 파일"""
+"""모잇(sodate) 크롤러 메인 실행 파일"""
 import sys
 from dotenv import load_dotenv
 

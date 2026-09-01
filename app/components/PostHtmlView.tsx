@@ -1,15 +1,22 @@
-import React, { useState } from 'react'
-import { Text, View, StyleSheet, type StyleProp, type TextStyle } from 'react-native'
+import React from 'react'
+import { Text, StyleSheet, type StyleProp, type TextStyle } from 'react-native'
 import { RICH_EDITOR_AVAILABLE } from './BoardRichEditor'
 
 /**
  * 게시글 본문 렌더러. 리치 글(HTML)이면 서식대로, 아니면 평문.
- * - HTML 렌더는 webview 가 있을 때만(재빌드 후). 없으면 태그를 벗겨 평문으로 보여준다(옛 앱 호환).
+ * - HTML 렌더는 react-native-enriched-html(완전 네이티브)이 있을 때만. 없으면 태그를
+ *   벗겨 평문으로 보여준다(옛 앱 호환).
  * - 옛 평문 글은 그대로 <Text> 로 렌더.
+ *
+ * ⚠️(2026-08-25) 예전엔 웹뷰로 렌더했는데(높이를 웹뷰가 스스로 재서 보고하는 방식),
+ * 그 높이 보고가 화면에 반영이 안 따라가서 글 마지막 줄이 중간에서 잘린 채 몇 초가
+ * 지나도 안 고쳐지는 사고가 났다(오너 제보: "텍스트가 잘리고 있는 상황" — 실기기
+ * 글로 재현·확정). 웹뷰를 아예 없애는 쪽(EnrichedText, 글쓰기 입력칸과 같은
+ * 라이브러리)으로 교체 — 네이티브 텍스트 레이아웃이라 이 문제군 자체가 성립 안 한다.
  */
-let WebView: any = null
+let EnrichedText: any = null
 if (RICH_EDITOR_AVAILABLE) {
-  WebView = require('react-native-webview').WebView
+  EnrichedText = require('react-native-enriched-html').EnrichedText
 }
 
 export function isHtml(s: string | null | undefined): boolean {
@@ -29,56 +36,33 @@ function stripTags(html: string): string {
 interface Props {
   content: string
   textStyle: StyleProp<TextStyle>
-  colors: { textPrimary: string; background: string; primary: string }
+  colors: { textPrimary: string; textSecondary: string; background: string; primary: string; border: string }
 }
 
 export default function PostHtmlView({ content, textStyle, colors }: Props) {
-  const [height, setHeight] = useState(40)
-
   if (!isHtml(content)) {
     return <Text style={textStyle} selectable>{content}</Text>
   }
-  if (!WebView) {
-    // 옛 앱(webview 없음)에서 리치 글을 볼 때 — 태그 벗겨 평문으로.
+  if (!EnrichedText) {
+    // 옛 앱(라이브러리 없음)에서 리치 글을 볼 때 — 태그 벗겨 평문으로.
     return <Text style={textStyle} selectable>{stripTags(content)}</Text>
   }
 
-  // 리치 글 HTML 을 webview 로 렌더(높이는 내용에 맞춰 자동). 링크/이미지 최대폭 제한.
-  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-    <style>
-      body{margin:0;padding:0;font-family:-apple-system,system-ui,'Apple SD Gothic Neo',sans-serif;
-        font-size:15px;line-height:1.55;color:${colors.textPrimary};background:${colors.background};
-        word-break:break-word;-webkit-text-size-adjust:100%;}
-      img{max-width:100%;height:auto;border-radius:8px;}
-      a{color:${colors.primary};}
-      blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid ${colors.primary}55;color:${colors.textPrimary};opacity:.85;}
-      pre,code{background:rgba(127,127,127,.14);border-radius:6px;padding:1px 5px;font-size:13.5px;}
-      pre{padding:10px;overflow:auto;}
-      ul,ol{padding-left:22px;} h1,h2,h3{margin:.4em 0;}
-    </style></head><body>${content}
-    <script>
-      function post(){window.ReactNativeWebView && window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));}
-      window.addEventListener('load',post); setTimeout(post,300);
-      new (window.ResizeObserver||function(){this.observe=function(){}})(post).observe(document.body);
-    </script></body></html>`
-
   return (
-    <View style={[styles.wrap, { height }]}>
-      <WebView
-        originWhitelist={['*']}
-        source={{ html }}
-        style={{ backgroundColor: 'transparent', height }}
-        scrollEnabled={false}
-        showsVerticalScrollIndicator={false}
-        onMessage={(e: any) => {
-          const h = Math.ceil(Number(e.nativeEvent.data))
-          if (h && Math.abs(h - height) > 2) setHeight(h)
-        }}
-      />
-    </View>
+    <EnrichedText
+      selectable
+      // 글쓰기 입력칸(BoardRichEditorImpl)과 같은 htmlStyle — 인용구·목록·체크박스가
+      // 쓰기 화면과 보기 화면에서 다르게 보이면 안 된다(2026-08-26 취소선·인용구·
+      // 목록·링크 추가, 목록점/체크박스 색상·크기 조정).
+      htmlStyle={{
+        a: { color: colors.primary },
+        blockquote: { color: colors.textSecondary, borderColor: colors.border },
+        ul: { bulletColor: colors.textPrimary },
+        ulCheckbox: { boxColor: colors.primary, boxSize: 18 },
+      }}
+      style={StyleSheet.flatten([{ color: colors.textPrimary }, textStyle])}
+    >
+      {content}
+    </EnrichedText>
   )
 }
-
-const styles = StyleSheet.create({
-  wrap: { width: '100%' },
-})

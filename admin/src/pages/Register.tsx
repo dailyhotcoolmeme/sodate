@@ -6,7 +6,8 @@ import DateTimePicker from '../components/DateTimePicker'
 import HashtagEditor from '../components/HashtagEditor'
 
 /**
- * 일정 관리 페이지(메뉴명 '일정 관리', 경로 /register) — 크롤링된 일정을 검수·수정한다.
+ * 소개팅 일정 페이지(메뉴명 '소개팅 일정', 경로 /register) — 크롤링된 일정을 검수·수정한다.
+ * 소셜링은 /socialing(Socialing.tsx), 혼술바는 /places(Places.tsx) 로 따로 있다.
  * 오너 입력값이 정답(source of truth).
  *
  * 자동(시스템): 업체별 예정 날짜 + 확인링크 + 지역을 event_candidates 에서 읽어 리스트업.
@@ -100,17 +101,35 @@ export default function Register() {
 
   // events 를 그대로 자동 리스트업 (정원·잔여·가격은 채워졌으면 표시, 비었으면 빈칸)
   // 표시 범위: 오늘 ~ 오늘+2개월
+  //
+  // ⚠️ 이 페이지는 '소개팅'만 다룬다(event_type='dating'). 소셜링은 정원·가격이
+  //    남녀로 갈리지 않고 카테고리·해시태그로 관리해서 화면이 아예 다르다 →
+  //    /socialing 으로 분리했다(2026-09-01 오너 지시: "메뉴로 구분해야지").
+  // ⚠️ 예전엔 limit 을 안 걸어서 PostgREST 기본 상한(1000행)에 조용히 잘렸다.
+  //    2개월치가 소개팅만 1,500건이라 뒤쪽이 화면에 아예 안 나왔다. 페이지로 나눠
+  //    전부 가져온다.
   async function loadCandidates() {
     setLoading(true)
     const now = new Date()
     const horizon = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
-    const { data, error } = await supabase
-      .from('events')
-      .select('id, title, image_type_id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, price_detail, age_male, age_female, hashtags, is_closed, is_active, is_featured, source, companies(name, slug)')
-      .gte('event_date', now.toISOString())
-      .lte('event_date', horizon.toISOString())
-      .order('company_id')
-      .order('event_date')
+    const COLS = 'id, title, image_type_id, company_id, event_date, source_url, location_region, capacity_male, seats_left_male, price_male, capacity_female, seats_left_female, price_female, price_detail, age_male, age_female, hashtags, is_closed, is_active, is_featured, source, companies(name, slug)'
+    const PAGE = 1000
+    let data: any[] = []
+    let error: any = null
+    for (let from = 0; ; from += PAGE) {
+      const res = await supabase
+        .from('events')
+        .select(COLS)
+        .eq('event_type', 'dating')
+        .gte('event_date', now.toISOString())
+        .lte('event_date', horizon.toISOString())
+        .order('company_id')
+        .order('event_date')
+        .range(from, from + PAGE - 1)
+      if (res.error) { error = res.error; break }
+      data = data.concat(res.data ?? [])
+      if ((res.data?.length ?? 0) < PAGE) break
+    }
     if (error) {
       // ⚠️ 세션이 없으면 프록시가 {"error":"unauthorized"}(401)를 주는데 message 필드가 없어
       //    "로딩 오류: undefined"만 떴다. 원인을 알 수 없는 메시지는 없느니만 못하다.
@@ -266,6 +285,9 @@ export default function Register() {
       is_active: row.is_active,
       is_featured: row.is_featured,
       source: 'verified', // 오너가 손댄 이벤트 → 발견 재실행 시 덮어쓰지 않음(crawl만 교체)
+      // 이 페이지는 소개팅 전용이다. 직접 추가한 일정이 event_type 없이 저장되면
+      // 소개팅 목록에서도 소셜링 목록에서도 안 보이는 미아가 된다.
+      event_type: 'dating',
     }
     const { error } = await supabase.from('events').upsert(payload, { onConflict: 'source_url' })
     savingKeys.current.delete(key)
@@ -503,7 +525,7 @@ export default function Register() {
   return (
     <div className="p-4 md:p-8 max-w-[1500px] min-w-0">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">일정 관리</h1>
+        <h1 className="text-xl font-bold text-gray-900">소개팅 일정</h1>
         <p className="text-sm text-gray-500 mt-1">
           크롤링된 일정이 자동으로 올라옵니다. <b>[확인하기]</b>로 원본을 보고 가격·연령을 채우세요.
           <b>칸을 벗어나면 즉시 저장</b>됩니다. 비어 있는 칸은 테두리로 표시됩니다.

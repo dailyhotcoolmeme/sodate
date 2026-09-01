@@ -208,7 +208,7 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
             activeOpacity={0.8}
           >
             <Ionicons
-              name="heart"
+              name="bookmark"
               size={18}
               color={isFavorite ? '#FF6B9D' : colors.textTertiary}
             />

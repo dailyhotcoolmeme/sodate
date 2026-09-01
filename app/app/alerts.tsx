@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import {
   View,
@@ -25,12 +26,15 @@ import { useRegions, type RegionOption } from '@/hooks/useRegions'
 import { useHashtags } from '@/hooks/useHashtags'
 import { useCompanies } from '@/hooks/useCompanies'
 import { REGION_GROUP_ORDER, regionGroupKey, TAG_GROUP_ORDER, tagGroupKey } from '@/constants/chipGroups'
+import { SOCIALING_GROUPS } from '@/constants/socialingCategories'
 import { supabase } from '@/lib/supabase'
 import { track } from '@/lib/analytics'
 import { useCollapseStore } from '@/stores/collapseStore'
 import CollapsibleSection from '@/components/CollapsibleSection'
 
-const ALERT_SETTINGS_KEY = 'sodate-alert-settings'
+const ALERT_SETTINGS_KEY = 'sodate-alert-settings'          // 소개팅(기존 키 유지 — 기존 사용자 설정 보존)
+const ALERT_SETTINGS_KEY_SOC = 'sodate-alert-settings-socialing'  // 소셜링
+const alertKeyFor = (t: 'dating' | 'socialing') => (t === 'socialing' ? ALERT_SETTINGS_KEY_SOC : ALERT_SETTINGS_KEY)
 
 export default function AlertsScreen() {
   const insets = useSafeAreaInsets()
@@ -127,9 +131,23 @@ export default function AlertsScreen() {
     },
     saveBtnDisabled: { opacity: 0.6 },
     saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    // 소개팅/소셜링 탭 — 혼술바(피드·지도)와 동일한 밑줄 탭 규격. 새로 만들지 않는다.
+    alertTabs: {
+      flexDirection: 'row', alignItems: 'flex-end', gap: 18,
+      borderBottomWidth: 1, borderBottomColor: colors.divider, marginBottom: 16,
+    },
+    alertTab: { paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+    alertTabOn: { borderBottomColor: colors.primary },
+    alertTabText: { fontSize: 15, fontWeight: '700', color: colors.textTertiary },
+    alertTabTextOn: { color: colors.textPrimary, fontWeight: '800' },
   }), [colors])
 
-  const regionOptions = useRegions()
+  // 소개팅/소셜링 탭 — 한 기기가 둘을 따로 구독한다(서버는 (token,event_type) 로 각각 저장).
+  // 지역 목록도 이 탭에 맞춰 각각 다르게 받는다(2026-08-24 오너 지적: 필터가 소개팅·소셜링
+  // 구분 없이 똑같이 보이던 문제 — 여기 알림 설정도 같은 훅을 써서 동일하게 겪고 있었다).
+  const [alertTab, setAlertTab] = useState<'dating' | 'socialing'>('dating')
+  const isSoc = alertTab === 'socialing'
+  const regionOptions = useRegions(isSoc ? 'socialing' : 'dating')
   const hashtagOptions = useHashtags()
   const companyOptions = useCompanies()
 
@@ -160,6 +178,8 @@ export default function AlertsScreen() {
   const [selectedRegions, setSelectedRegions] = useState<string[]>([])
   const [selectedHashtags, setSelectedHashtags] = useState<string[]>([])
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
+  // 소셜링 전용: 카테고리 그룹(독서·영화·운동…)
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([])
   // 신규 진입 시 기본은 꺼짐 — 사용자가 직접 켜야 한다(오너 지시 2026-08-11).
   const [notifyNew, setNotifyNew] = useState(false)
   const [notifyDeadline, setNotifyDeadline] = useState(false)
@@ -172,9 +192,13 @@ export default function AlertsScreen() {
     regions: string[]; hashtags: string[]; companies: string[]; notifyNew: boolean; notifyDeadline: boolean
   } | null>(null)
 
-  // AsyncStorage에서 로컬 설정 불러오기
+  // AsyncStorage에서 로컬 설정 불러오기 — 탭(소개팅/소셜링)마다 따로 저장·복원한다.
   React.useEffect(() => {
-    AsyncStorage.getItem(ALERT_SETTINGS_KEY).then((raw) => {
+    setLoadingExisting(true)
+    AsyncStorage.getItem(alertKeyFor(alertTab)).then((raw) => {
+      // 탭 전환 시 이전 탭 값이 남지 않게 초기화부터
+      setSelectedRegions([]); setSelectedHashtags([]); setSelectedCompanies([]); setSelectedGroups([])
+      setNotifyNew(false); setNotifyDeadline(false); setSavedSummary(null)
       if (raw) {
         try {
           const saved = JSON.parse(raw)
@@ -188,12 +212,13 @@ export default function AlertsScreen() {
           setSelectedCompanies(companies)
           setNotifyNew(nNew)
           setNotifyDeadline(nDeadline)
+          setSelectedGroups(saved.socialing_groups ?? [])
           setSavedSummary({ regions, hashtags, companies, notifyNew: nNew, notifyDeadline: nDeadline })
         } catch {}
       }
       setLoadingExisting(false)
     })
-  }, [])
+  }, [alertTab])
 
   // 업체 상세에서 '알림 받기'로 넘어온 경우 그 업체를 미리 골라 둔다. 저장은 사용자가
   // 직접 눌러야 한다 — 넘어오자마자 저장해 버리면 본인이 뭘 켰는지 모르게 된다.
@@ -275,16 +300,19 @@ export default function AlertsScreen() {
           company_ids: selectedCompanies.length > 0 ? selectedCompanies : null,
           notify_new: notifyNew,
           notify_deadline: notifyDeadline,
+          event_type: alertTab,
+          socialing_groups: isSoc && selectedGroups.length > 0 ? selectedGroups : null,
         },
       })
 
       if (error) throw error
 
       // AsyncStorage에 로컬 저장 (다음 진입 시 즉시 복원)
-      await AsyncStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify({
+      await AsyncStorage.setItem(alertKeyFor(alertTab), JSON.stringify({
         regions: selectedRegions,
         hashtags: selectedHashtags,
         company_ids: selectedCompanies,
+        socialing_groups: selectedGroups,
         notify_new: notifyNew,
         notify_deadline: notifyDeadline,
       }))
@@ -296,6 +324,8 @@ export default function AlertsScreen() {
           company_ids: selectedCompanies,
           notify_new: notifyNew,
           notify_deadline: notifyDeadline,
+          event_type: alertTab,
+          socialing_groups: isSoc && selectedGroups.length > 0 ? selectedGroups : null,
         },
       })
       setSavedSummary({
@@ -384,9 +414,24 @@ export default function AlertsScreen() {
 
   return (
     <View style={styles.container}>
-    <TopBar showBack />
+    <TopBar showBack title="알림 설정" />
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-      <Text style={styles.pageTitle}>알림 설정</Text>
+
+      {/* 소개팅 / 소셜링 — 각각 따로 구독한다(2026-08-24 오너 지시) */}
+      <View style={styles.alertTabs}>
+        {(['dating', 'socialing'] as const).map((t) => (
+          <TouchableOpacity
+            key={t}
+            style={[styles.alertTab, alertTab === t && styles.alertTabOn]}
+            onPress={() => setAlertTab(t)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.alertTabText, alertTab === t && styles.alertTabTextOn]}>
+              {t === 'dating' ? '소개팅' : '소셜링'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* 지금 실제로 저장된 알림 상태 — 눈에 띄게(오너 지시). 아래 편집 중인 값이
           아니라 마지막으로 저장한 값만 보여준다. */}
@@ -472,6 +517,32 @@ export default function AlertsScreen() {
         })}
       </CollapsibleSection>
 
+      {/* 소셜링 탭: 카테고리(독서·영화·운동…) — 소개팅의 태그 자리를 대신한다 */}
+      {isSoc && (
+        <CollapsibleSection
+          title="관심 카테고리"
+          expanded={!!sectionExpanded['alerts:hashtag']}
+          onToggle={() => toggleSection('alerts:hashtag')}
+        >
+          <Text style={styles.hint}>선택하지 않으면 모든 카테고리 알림을 받습니다</Text>
+          <View style={styles.chipRow}>
+            {SOCIALING_GROUPS.map((g) => {
+              const on = selectedGroups.includes(g.key)
+              return (
+                <TouchableOpacity
+                  key={g.key}
+                  style={[styles.chip, on && styles.chipSelected]}
+                  onPress={() => setSelectedGroups((prev) => (on ? prev.filter((k) => k !== g.key) : [...prev, g.key]))}
+                >
+                  <Text style={[styles.chipText, on && styles.chipTextSelected]}>{g.label}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        </CollapsibleSection>
+      )}
+
+      {!isSoc && (
       <CollapsibleSection
         title="관심 태그"
         expanded={!!sectionExpanded['alerts:hashtag']}
@@ -513,8 +584,9 @@ export default function AlertsScreen() {
           </View>
         ))}
       </CollapsibleSection>
+      )}
 
-      {companyOptions.length > 0 && (
+      {!isSoc && companyOptions.length > 0 && (
         <CollapsibleSection
           title="관심 업체"
           expanded={!!sectionExpanded['alerts:company']}
@@ -557,7 +629,7 @@ export default function AlertsScreen() {
       <View style={styles.row}>
         <View>
           <Text style={styles.label}>새 일정 알림</Text>
-          <Text style={styles.subLabel}>조건에 맞는 새 소개팅이 등록되면 알림 (매일 오전 8시·오후 8시)</Text>
+          <Text style={styles.subLabel}>조건에 맞는 새 {isSoc ? '소셜링' : '소개팅'}이 등록되면 알림 (매일 오전 8시·오후 8시)</Text>
         </View>
         <Switch
           value={notifyNew}
@@ -569,7 +641,7 @@ export default function AlertsScreen() {
       <View style={styles.row}>
         <View>
           <Text style={styles.label}>마감 임박 알림 (D-1)</Text>
-          <Text style={styles.subLabel}>관심 일정 마감 하루 전 알림 (매일 오후 8시경)</Text>
+          <Text style={styles.subLabel}>관심 {isSoc ? '모임' : '일정'} 마감 하루 전 알림 (매일 오후 8시경)</Text>
         </View>
         <Switch
           value={notifyDeadline}
@@ -589,6 +661,7 @@ export default function AlertsScreen() {
 
     </ScrollView>
     <LoadingOverlay visible={saving || unsubscribing} />
+    <BottomNav current="my" route="/alerts" />
     </View>
   )
 }

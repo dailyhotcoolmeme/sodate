@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
 import SwipeSegment from '@/components/SwipeSegment'
 import BottomNav from '@/components/BottomNav'
+import { NEW_TABS_ENABLED } from '@/constants/features'
 import AppSpinner from '@/components/AppSpinner'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import BoardBannerAd from '@/components/BoardBannerAd'
@@ -47,6 +48,16 @@ import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 const FAB_BOTTOM_OFFSET = 18   // writeBtnAbs의 bottom
 const FAB_HEIGHT = 44          // writeBtn 실측 높이(paddingVertical 12*2 + 내용 약 20)
 const AD_FAB_GAP = 16          // 광고 바로 밑~버튼 사이 원하는 간격
+// 4탭 바텀 내비 높이(safe-area 제외한 바 자체). FAB(화면 기준 absolute)를 이만큼 더
+// 올려야 안 가린다 — 안드로이드 3버튼 내비처럼 insets.bottom 이 작은 기기에서 글쓰기
+// 버튼이 내비에 가려졌다(2026-08-24 오너 지적). BottomNav.tsx 의
+// tab paddingTop9+paddingBottom8+아이콘22+라벨 기준.
+//
+// ⚠️ 스크롤 콘텐츠의 paddingBottom(위 KeyboardAwareScrollView)에는 이 값을 넣지 않는다 —
+// BottomNav 는 FAB 와 달리 일반 flex 형제라 자기 높이만큼 스크롤뷰(flex:1)의 뷰포트를
+// 이미 줄여놓는다. 거기에 또 더하면 스크롤 맨 밑에 내비 높이만큼의 빈 공간이 두 번
+// 잡혀 하단이 휑해 보인다(2026-08-24 오너 지적: "하단 빈공간이 왜 갑자기 넓어졌지").
+const BOTTOM_NAV_H = NEW_TABS_ENABLED ? 56 : 0
 export default function BoardListScreen() {
   const router = useRouter()
   const colors = useColors()
@@ -290,7 +301,7 @@ export default function BoardListScreen() {
       ) : (
         <KeyboardAwareScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[wideContent, { flexGrow: 1, paddingBottom: insets.bottom + FAB_BOTTOM_OFFSET + FAB_HEIGHT + AD_FAB_GAP }]}
+          contentContainerStyle={[wideContent, { flexGrow: 1, paddingBottom: (NEW_TABS_ENABLED ? 0 : insets.bottom) + FAB_BOTTOM_OFFSET + FAB_HEIGHT + AD_FAB_GAP }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -335,7 +346,7 @@ export default function BoardListScreen() {
           renderToHardwareTextureAndroid를 줘서 별도 레이어로 띄우면 항상 위에 그려진다
           (iOS는 원래 문제없어 영향 없음, 이 prop이 TouchableOpacity 타입엔 없어 View로 감쌈). */}
       <View
-        style={[styles.writeBtnAbs, { bottom: insets.bottom + FAB_BOTTOM_OFFSET }]}
+        style={[styles.writeBtnAbs, { bottom: insets.bottom + BOTTOM_NAV_H + FAB_BOTTOM_OFFSET }]}
         renderToHardwareTextureAndroid
       >
         <TouchableOpacity

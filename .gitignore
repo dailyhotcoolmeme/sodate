@@ -36,3 +36,14 @@ supabase/.temp/
 
 # 크롤러 로컬 검증용 가상환경(스크래퍼를 DB 없이 돌려보는 용도)
 crawler/.venv/
+
+# Claude Code 개인 설정(허락 없이는 작업 시작 못하게 하는 권한 게이트 등) — 개인용, 커밋 안 함
+.claude/settings.local.json
+
+# EAS 로컬 자격증명 — 배포 인증서 경로·비밀번호가 들어간다. 절대 커밋 금지.
+app/credentials.json
+
+# 스토어 제출용 빌드 산출물 — 100MB 넘어서 GitHub 이 거부한다(2026-09-01).
+# 필요하면 EAS 에서 다시 받는다.
+docs/store-assets/*.aab
+docs/store-assets/*.ipa

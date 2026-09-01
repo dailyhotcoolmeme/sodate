@@ -25,7 +25,10 @@ type Variant = 'text' | 'thumb'
  * 상세페이지 신청 버튼 위에 들어가는 컴팩트 네이티브 광고.
  * CTA(신청하기)와 헷갈리지 않도록 외곽선형 + 회색 톤 + "광고" 배지로 명확히 구분한다.
  */
-export default function AdBanner({ variant = 'thumb' }: { variant?: Variant }) {
+// ⚠️(2026-08-26) 혼술바 상세에도 소개팅 상세와 같은 방식으로 광고를 붙이면서, 리포트를
+// 섹션별로 나누려고 애드몹에 전용 네이티브 광고 단위를 새로 만들었다(오너 지시 — "재사용하지
+// 말고 새로 붙이라고"). adUnitId를 안 넘기면 기존과 동일하게 소개팅 상세 단위를 쓴다.
+export default function AdBanner({ variant = 'thumb', adUnitId }: { variant?: Variant; adUnitId?: string }) {
   const colors = useColors()
   const [ad, setAd] = useState<NativeAd | null>(null)
 
@@ -33,7 +36,7 @@ export default function AdBanner({ variant = 'thumb' }: { variant?: Variant }) {
     let mounted = true
     let loaded: NativeAd | null = null
     // 어떤 광고 단위로 나갔는지 남긴다 — 테스트 ID로 새는 실행을 구분하기 위함
-    const unitId = getDetailNativeAdUnitId()
+    const unitId = adUnitId ?? getDetailNativeAdUnitId()
     NativeAd.createForAdRequest(unitId)
       .then((nativeAd) => {
         if (mounted) {
@@ -64,7 +67,7 @@ export default function AdBanner({ variant = 'thumb' }: { variant?: Variant }) {
       mounted = false
       loaded?.destroy()
     }
-  }, [variant])
+  }, [variant, adUnitId])
 
   const styles = useMemo(() => StyleSheet.create({
     // 외곽선형 카드 — primary 신청버튼과 색/형태로 확실히 구분

@@ -18,6 +18,7 @@ import { useState, useEffect } from 'react'
 interface SocialingFilterState {
   groups: string[]
   regions: string[]
+  minPrice: number | null
   maxPrice: number | null
   days: number[]
   sortBy: 'date' | 'created' | 'price_low' | 'price_high'
@@ -26,6 +27,7 @@ interface SocialingFilterState {
   toggleGroup: (key: string) => void
   toggleRegion: (id: string) => void
   setRegionsBulk: (ids: string[], on: boolean) => void
+  setMinPrice: (price: number | null) => void
   setMaxPrice: (price: number | null) => void
   toggleDay: (d: number) => void
   setSortBy: (sort: SocialingFilterState['sortBy']) => void
@@ -33,6 +35,7 @@ interface SocialingFilterState {
   applyDraft: (draft: {
     groups: string[]
     regions: string[]
+    minPrice: number | null
     maxPrice: number | null
     days: number[]
   }) => void
@@ -44,6 +47,7 @@ export const useSocialingFilterStore = create<SocialingFilterState>()(
     (set) => ({
       groups: [],
       regions: [],
+      minPrice: null,
       maxPrice: null,
       days: [],
       sortBy: 'date',
@@ -63,6 +67,7 @@ export const useSocialingFilterStore = create<SocialingFilterState>()(
             ? Array.from(new Set([...s.regions, ...ids]))
             : s.regions.filter((x) => !ids.includes(x)),
         })),
+      setMinPrice: (minPrice) => set({ minPrice }),
       setMaxPrice: (maxPrice) => set({ maxPrice }),
       toggleDay: (d) =>
         set((s) => ({ days: s.days.includes(d) ? s.days.filter((x) => x !== d) : [...s.days, d] })),
@@ -72,7 +77,7 @@ export const useSocialingFilterStore = create<SocialingFilterState>()(
       // 네트워크 요청 쏘는 것 방지).
       applyDraft: (draft) => set(draft),
       resetFilters: () =>
-        set({ groups: [], regions: [], maxPrice: null, days: [], sortBy: 'date', excludeClosed: false }),
+        set({ groups: [], regions: [], minPrice: null, maxPrice: null, days: [], sortBy: 'date', excludeClosed: false }),
     }),
     {
       name: 'sodate-socialing-filter',
@@ -98,11 +103,11 @@ export function useSocialingFilterHydrated(): boolean {
 }
 
 // 활성 필터 개수(필터 버튼 배지용)
-export function socialingActiveFilterCount(s: Pick<SocialingFilterState, 'groups' | 'regions' | 'maxPrice' | 'days'>): number {
+export function socialingActiveFilterCount(s: Pick<SocialingFilterState, 'groups' | 'regions' | 'minPrice' | 'maxPrice' | 'days'>): number {
   return [
     s.groups.length > 0 ? 1 : 0,
     s.regions.length > 0 ? 1 : 0,
-    s.maxPrice !== null ? 1 : 0,
+    s.minPrice !== null || s.maxPrice !== null ? 1 : 0,
     s.days.length > 0 ? 1 : 0,
   ].reduce((a, b) => a + b, 0)
 }

@@ -1,0 +1,86 @@
+name: Crawl Honsul (혼술바 영업시간·후기)
+
+# 혼술바(places)는 앱 1.1.0으로 정식 출시됐는데, 정작 정기 갱신이 네이버 평점
+# 주 1회(naver-rating.yml)뿐이었다. 영업시간을 채우는 naver_hours_crawl.mjs 와
+# 후기를 모으는 place_reviews_crawl.py 는 어떤 워크플로우에도 등록된 적이 없어
+# 수동 실행 때만 돌았고, 2026-09-01 점검 때 데이터가 9일째 그대로였다.
+#
+# 영업시간·휴무는 수시로 바뀌고 우리 약관에도 "방문 전 확인하라"고 써둔 항목이라
+# 정기 갱신이 필요하다. 후기는 장식용이라 주기를 더 길게 둔다.
+#
+# 다른 혼술 작업과 겹치지 않게 요일을 갈랐다:
+#   월 reviews.yml(소개팅 후기) / 수 naver-rating.yml(평점) / 목·일 여기
+on:
+  schedule:
+    - cron: '0 17 * * 3'   # 매주 목요일 02:00 KST — 영업시간 전체 재확인
+    - cron: '0 17 * * 6'   # 매주 일요일 02:00 KST — 후기 보충
+  workflow_dispatch:
+    inputs:
+      job:
+        description: '무엇을 돌릴지'
+        required: false
+        default: 'both'
+        type: choice
+        options: [both, hours, reviews]
+
+concurrency:
+  group: honsul
+  cancel-in-progress: false
+
+jobs:
+  hours:
+    # 목요일(=cron 3) 또는 수동 실행에서 hours/both 를 고른 경우
+    if: >
+      github.event_name == 'schedule' && github.event.schedule == '0 17 * * 3'
+      || github.event_name == 'workflow_dispatch' && (inputs.job == 'hours' || inputs.job == 'both')
+    runs-on: ubuntu-22.04
+    # 500곳 × 약 0.8초 + 재시도 여유
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 영업시간 재확인
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          node naver_hours_crawl.mjs refresh
+
+  reviews:
+    # 일요일(=cron 6) 또는 수동 실행에서 reviews/both 를 고른 경우
+    if: >
+      github.event_name == 'schedule' && github.event.schedule == '0 17 * * 6'
+      || github.event_name == 'workflow_dispatch' && (inputs.job == 'reviews' || inputs.job == 'both')
+    runs-on: ubuntu-22.04
+    # 매장마다 블로그·유튜브 검색 + 1.2초 대기 — 넉넉히.
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: crawler/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          cd crawler
+          pip install -r requirements.txt
+
+      - name: 매장 후기 보충
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          python place_reviews_crawl.py 150

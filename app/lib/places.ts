@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 export interface PlaceRow {
   id: string
   name: string
+  naver_place_id: string | null      // 지도 원형 마커 이미지 키(honsul/marker/{naver_place_id}.png)
   category: string | null            // 종류: 위스키바/칵테일바/와인바/이자카야/펍/바
   region: string | null
   address_road: string | null
@@ -38,12 +39,39 @@ export interface InstaMedia {
 }
 
 const COLUMNS =
-  'id,name,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
+  'id,name,naver_place_id,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
   'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags,socials,keyword_votes'
 
 // 방문자 키워드 투표(사실) → 해시태그처럼 보여줄 태그 배열(상위순). 생성·범용 항목은 제외.
 // 공백을 없애 해시태그 형태로("술이 다양해요"→"술이다양해요"). 많으면 카드에서 가로 스와이프.
-const SUMMARY_SKIP = new Set(['친절해요', '매장이 청결해요', '화장실이 깨끗해요', '주차', '응대가 좋아요'])
+// ⚠️(2026-08-26) 전체 500곳 집계 결과 '술이다양해요·혼술하기좋아요·대화하기좋아요·
+// 인테리어가멋져요·음악이좋아요·음식이맛있어요' 6개가 각각 82~96%의 업체에 다 붙어있어서
+// (혼술바라면 사실상 다 해당되는, 네이버 고정 체크리스트 항목) 상위 7개를 뽑으면 이 6개가
+// 항상 먼저 채워지고 정작 업체별로 갈리는 태그(음료맛집·가성비·사진맛집 등, 대개 20%
+// 미만)는 밀려났다 — 카드 해시태그가 다 비슷해 보이고, 그 태그를 눌러 필터링해도 거의
+// 전체 목록이 그대로 나와 필터 역할을 못 했다(오너 지적: "거의 대부분 혼술바 업체들이
+// 비슷한 해시태그로 나와서 의미가 없을 거 같은데"). 이 6개도 제외 목록에 추가해 남은
+// 자리를 실제 변별력 있는 태그가 채우게 한다.
+const SUMMARY_SKIP = new Set([
+  '친절해요', '매장이 청결해요', '화장실이 깨끗해요', '주차', '응대가 좋아요',
+  '술이 다양해요', '혼술하기 좋아요', '대화하기 좋아요', '인테리어가 멋져요', '음악이 좋아요', '음식이 맛있어요',
+])
+/** 지도 원형 마커 이미지 URL — gen_map_markers.py가 profile_image 출처(네이버 긁어온 사진·
+ *  업체 직접 등록 사진 가리지 않고) 전부를 정사각 크롭+흰 테두리 원형으로 다듬어
+ *  naver_place_id 로 R2에 저장해둔다(honsul/marker/{naver_place_id}.png).
+ *
+ *  ⚠️(2026-08-25) 예전엔 profile_image 문자열에서 URL 패턴을 추측해 변환했는데(naverpic
+ *  경로만 인식), 업체가 직접 등록한 사진(profile 경로, 당시 10곳)은 아예 undefined로
+ *  떨어져 지도에서만 기본 도형 마커로 나왔다(오너 지적: "원형 사진 마커가 없는 업체도
+ *  아니었고..애초에 사진 마커 없는 업체가 있냐고!"). 그 자리를 메우려고 원본 이미지를
+ *  그대로 썼더니 이번엔 정사각(원본 비율) 그대로 나와 "이미지를 동그라미로 보여줘야지"라고
+ *  또 지적받았다 — gen_map_markers.py 자체는 원래 출처를 안 가리므로, naver_place_id 로
+ *  직접 만든 마커 URL을 쓰는 게 맞는 방법이었다. */
+export function placeMarkerUrl(p: Pick<PlaceRow, 'profile_image' | 'naver_place_id'>): string | undefined {
+  if (!p.profile_image || !p.naver_place_id) return undefined
+  return `https://sodate-admin.pages.dev/media/honsul/marker/${p.naver_place_id}.png`
+}
+
 export function reviewHashtags(votes: Record<string, number> | null | undefined, max = 7): string[] {
   if (!votes) return []
   return Object.entries(votes)
@@ -51,6 +79,27 @@ export function reviewHashtags(votes: Record<string, number> | null | undefined,
     .sort((a, b) => b[1] - a[1])
     .slice(0, max)
     .map(([k]) => k.replace(/\s+/g, ''))
+}
+
+// 편의시설(conveniences) — 흔한 순(500곳 실측). 카드 4번째 줄엔 "무선인터넷·간편결제"처럼
+// 거의 다 있는 것보다 "주차·노키즈존·반려동물동반"처럼 업체마다 갈리는 게 먼저 보여야
+// 의미가 있다(2026-08-26 오너 승인 — 해시태그 때와 같은 이유: reviewHashtags 주석 참고).
+// 목록에 없는 새 값은 순위 밖(흔함 취급)으로 맨 뒤에 둔다.
+const CONVENIENCE_RARE_FIRST = [
+  '발렛파킹', '유아시설 (놀이방)', '유아의자', '방문접수/출장', '포장', '배달',
+  '반려동물 동반', '대기공간', '주차', '노키즈존', '예약', '남/녀 화장실 구분',
+  '단체 이용 가능', '간편결제', '무선 인터넷',
+]
+export function topConveniences(list: string[] | null | undefined, max = 3): string[] {
+  if (!list || list.length === 0) return []
+  return [...list]
+    .filter(Boolean)
+    .sort((a, b) => {
+      const ai = CONVENIENCE_RARE_FIRST.indexOf(a)
+      const bi = CONVENIENCE_RARE_FIRST.indexOf(b)
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+    })
+    .slice(0, max)
 }
 
 // 종류별 커버 아이콘(Ionicons — 이모지는 시뮬/기기에서 깨질 수 있어 사용 안 함)·색
@@ -135,11 +184,23 @@ export function osmTiles(lat: number, lng: number, w: number, h: number, z = 16)
   return { tiles, project }
 }
 
-export async function fetchNearbyCoords(exceptId: string): Promise<{ lat: number | null; lng: number | null }[]> {
+/** 주변 매장 — 히어로 지도 미리보기 카드에 필요한 필드까지 전부 한 번에 가져온다.
+ *  예전엔 좌표만 가져와서, 점을 누를 때마다 fetchPlace() 로 또 네트워크를 타서 카드가
+ *  "한참 뒤에" 떴다(2026-08-24 오너 지적) — 탭하는 순간 이미 메모리에 있는 값을 바로
+ *  보여주도록 한 번에 미리 받아둔다.
+ *
+ *  ⚠️(2026-08-24, 두 번째 지적: "점 누를때 뜨는게 느려터졌다") — 원인은 이 함수 자체였다.
+ *  radiusDeg 없이 전국 모든 honsul 매장을 이미지·소셜 등 전체 컬럼까지 다 긁어오고
+ *  있었다 — "주변"인데 전국을 다 받아오니 느릴 수밖에. lat/lng 기준 대략 5km 박스로
+ *  좁힌다(위경도 1도 ≈ 111km, 0.045 ≈ 5km).
+ */
+export async function fetchNearbyPlaces(exceptId: string, lat: number, lng: number, radiusDeg = 0.045): Promise<PlaceRow[]> {
   const sb = supabase as unknown as { from: (t: string) => any }
-  const { data } = await sb.from('places').select('id,lat,lng')
+  const { data } = await sb.from('places').select(COLUMNS)
     .eq('service', 'honsul').eq('is_active', true).not('lat', 'is', null)
-  return ((data ?? []) as any[]).filter((p) => p.id !== exceptId).map((p) => ({ lat: p.lat, lng: p.lng }))
+    .gte('lat', lat - radiusDeg).lte('lat', lat + radiusDeg)
+    .gte('lng', lng - radiusDeg).lte('lng', lng + radiusDeg)
+  return ((data ?? []) as PlaceRow[]).filter((p) => p.id !== exceptId)
 }
 
 export async function fetchPlace(id: string): Promise<PlaceRow | null> {

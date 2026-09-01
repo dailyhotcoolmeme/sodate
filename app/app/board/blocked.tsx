@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import { useColors } from '@/hooks/useColors'
 import { wideContent } from '@/constants/layout'
 import { getBlockedAuthors, unblockAuthor, type BlockedAuthor } from '@/lib/boardIdentity'
@@ -28,8 +29,7 @@ export default function BlockedAuthorsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack onLogoPress={() => router.replace('/board')} />
-      <Text style={styles.heading}>차단 목록</Text>
+      <TopBar showBack title="차단 목록" onLogoPress={() => router.replace('/board')} />
 
       {list.length === 0 ? (
         <View style={styles.center}>
@@ -37,7 +37,7 @@ export default function BlockedAuthorsScreen() {
           <Text style={styles.emptyText}>차단한 작성자가 없어요</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[wideContent, { paddingBottom: insets.bottom + 20 }]}>
+        <ScrollView contentContainerStyle={[wideContent, { paddingTop: 8, paddingBottom: insets.bottom + 20 }]}>
           {list.map((b) => (
             <View key={b.key} style={styles.row}>
               <Text style={styles.nickname}>{b.nickname}</Text>
@@ -48,6 +48,7 @@ export default function BlockedAuthorsScreen() {
           ))}
         </ScrollView>
       )}
+      <BottomNav current="my" route="/board/blocked" />
     </View>
   )
 }

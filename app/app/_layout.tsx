@@ -41,6 +41,19 @@ export default function RootLayout() {
           // 여기서 띄우면 앱이 뭔지 보기도 전에 물어 대부분 거부한다.
         } else if (alive) {
           runPostOnboardingSetup()
+          // 앱을 켜면 커뮤니티부터 보여준다(2026-09-01 오너 지시).
+          // 파일 기반 라우팅이라 시작 경로는 '/'(소개팅)로 고정돼 있어 여기서 바꿔 끼운다.
+          //
+          // ⚠️ 알림을 눌러서 앱이 켜진 경우는 건드리면 안 된다. 아래 별도 effect 가
+          //    /event/{id} 로 보내는데, 그 push 보다 이 replace 가 늦게 끝나면 방금 연
+          //    일정 화면을 커뮤니티로 덮어버린다(둘 다 비동기라 순서가 매번 다르다).
+          //    그래서 알림 여부를 여기서 먼저 확인하고, 있으면 손대지 않는다.
+          let fromNotification = false
+          try {
+            const res = await Notifications.getLastNotificationResponseAsync()
+            fromNotification = !!(res?.notification?.request?.content?.data as any)?.event_id
+          } catch { /* 알림 조회 실패는 무시 — 평소대로 커뮤니티로 */ }
+          if (alive && !fromNotification) router.replace('/board')
         }
       } finally {
         if (alive) setGateOff(true)
@@ -124,6 +137,7 @@ export default function RootLayout() {
         <Stack.Screen name="my/index" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="my/scraps" options={{ headerShown: false }} />
         <Stack.Screen name="my/recent" options={{ headerShown: false }} />
+        <Stack.Screen name="my/reviews" options={{ headerShown: false }} />
         <Stack.Screen name="board/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="board/write" options={{ headerShown: false }} />
         <Stack.Screen name="board/mine" options={{ headerShown: false }} />
@@ -164,9 +178,11 @@ export default function RootLayout() {
   )
 }
 
-// 네이티브 스플래시(splash-icon.png는 1024 캔버스에 그림이 62%)와 크기를 맞추기 위해
-// 화면폭의 62%로 고정. logo-stack.png는 여백이 없는 원본(821x644)이라 비율만 곱한다.
-const SPLASH_LOGO_W = Dimensions.get('window').width * 0.62
+// 네이티브 스플래시(splash-icon.png는 1024 캔버스에 그림이 33%)와 크기를 맞추기 위해
+// 화면폭의 33%로 고정. logo-stack.png는 여백이 없는 원본(429x698)이라 비율만 곱한다.
+// ⚠️ 2026-08-31 이름을 '모잇'으로 바꾸며 글자가 짧아져 그림 폭이 62% → 33%로 줄었다.
+//    두 값(여기와 splash-icon.png 안의 그림 비율)은 항상 같이 움직여야 이음새가 안 생긴다.
+const SPLASH_LOGO_W = Dimensions.get('window').width * 0.33
 
 const styles = StyleSheet.create({
   splashGate: {
@@ -178,7 +194,7 @@ const styles = StyleSheet.create({
   },
   // ⚠️ width:'%' + aspectRatio 조합은 퍼센트가 안 풀려 이미지가 원본 크기(821dp,
   // 화면폭의 2배 이상)로 터져나옴 — 2026-07-28 실제 사고. 화면폭에서 직접 계산할 것.
-  splashLogo: { width: SPLASH_LOGO_W, height: SPLASH_LOGO_W * (644 / 821) },
+  splashLogo: { width: SPLASH_LOGO_W, height: SPLASH_LOGO_W * (698 / 429) },
   configErrorWrap: {
     flex: 1,
     backgroundColor: '#0F0F0F',

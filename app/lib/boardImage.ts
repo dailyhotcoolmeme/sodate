@@ -50,18 +50,28 @@ export async function pickAndUpload(mode: PickMode = 'photo'): Promise<{ url: st
   }
   const { picker: ImagePicker, manipulator: ImageManipulator } = native
 
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
-  if (!perm.granted) {
-    return { error: '사진 접근을 허용해야 첨부할 수 있어요. 설정에서 권한을 켜주세요.' }
-  }
+  // ⚠️(2026-08-25) 권한 요청·사진첩 열기가 아래 본문 try/catch 밖에 있어서, 여기서
+  // 예외가 나면(권한 팝업 타이밍 등) 이 함수가 그대로 던져버렸다 — 호출부(write.tsx)가
+  // richUploading state 를 못 내려서 사진·GIF 버튼이 영구로 죽는 사고로 이어졌다
+  // (오너 지적: "이제는 이미지 눌러도 반응이 없다"). 이 단계도 감싸서 항상 정상적인
+  // { error } 값으로 돌려준다.
+  let perm, picked
+  try {
+    perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      return { error: '사진 접근을 허용해야 첨부할 수 있어요. 설정에서 권한을 켜주세요.' }
+    }
 
-  // base64: true — GIF는 원본 그대로 올려야 해서(아래) 리사이즈 전에 원본 바이트가 필요하다.
-  const picked = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 1,
-    allowsMultipleSelection: false,
-    base64: true,
-  })
+    // base64: true — GIF는 원본 그대로 올려야 해서(아래) 리사이즈 전에 원본 바이트가 필요하다.
+    picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+      allowsMultipleSelection: false,
+      base64: true,
+    })
+  } catch {
+    return { error: '사진첩을 열지 못했어요. 잠시 후 다시 시도해주세요.' }
+  }
   if (picked.canceled || !picked.assets?.length) return null
 
   try {
@@ -145,7 +155,11 @@ export const isGifUrl = (url: string): boolean => /\.gif(\?|$)/i.test(url)
  *   (있으면) 실패 안내를 함께 돌려준다.
  */
 export async function pickAndUploadMany(
-  remaining: number
+  remaining: number,
+  // 여러 장 올릴 때 몇 번째 장을 올리는 중인지 알려준다(오너 지시: "이미지가 본문에
+  // 첨부될때 스피너에 몇번째장 첨부중인지 1/5.. 2/5.. 숫자로 표시해줘라. 그래야
+  // 인내하고 기다릴 수 있다") — 화면 쪽(write.tsx)이 이걸로 스피너에 진행 상황을 띄운다.
+  onProgress?: (current: number, total: number) => void
 ): Promise<{ urls: string[]; skipped: number; error?: string } | null> {
   const native = loadNative()
   if (!native) {
@@ -153,20 +167,30 @@ export async function pickAndUploadMany(
   }
   const { picker: ImagePicker, manipulator: ImageManipulator } = native
 
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
-  if (!perm.granted) {
-    return { urls: [], skipped: 0, error: '사진 접근을 허용해야 첨부할 수 있어요. 설정에서 권한을 켜주세요.' }
-  }
+  // pickAndUpload 와 같은 이유(위 참고)로 권한·사진첩 열기 단계도 감싼다.
+  let perm, picked
+  try {
+    perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      return { urls: [], skipped: 0, error: '사진 접근을 허용해야 첨부할 수 있어요. 설정에서 권한을 켜주세요.' }
+    }
 
-  const picked = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 1,
-    allowsMultipleSelection: true,
-    // 고를 수 있는 상한을 시스템 선택창에 그대로 알려준다 — 사용자가 애초에 초과 선택을 못 하게.
-    selectionLimit: Math.max(1, remaining),
-    // 다중 선택은 GIF 원본 바이트가 필요 없다(사진만 받는다). base64 를 안 받아 메모리를 아낀다.
-    base64: false,
-  })
+    picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 1,
+      allowsMultipleSelection: true,
+      // 고를 수 있는 상한을 시스템 선택창에 그대로 알려준다 — 사용자가 애초에 초과 선택을 못 하게.
+      selectionLimit: Math.max(1, remaining),
+      // 사진마다 선택 순서를 숫자 배지로 보여준다(오너 지시: "이미지 고르는 팝업에서
+      // 1/10, 2/10 이런식으로 선택되게 해라. 그래야 10장까지 된다는걸 알테니까") —
+      // iOS 15+ 전용 시스템 사진 선택기 옵션, 안드로이드는 시스템 자체에 이 기능이 없다.
+      orderedSelection: true,
+      // 다중 선택은 GIF 원본 바이트가 필요 없다(사진만 받는다). base64 를 안 받아 메모리를 아낀다.
+      base64: false,
+    })
+  } catch {
+    return { urls: [], skipped: 0, error: '사진첩을 열지 못했어요. 잠시 후 다시 시도해주세요.' }
+  }
   if (picked.canceled || !picked.assets?.length) return null
 
   // iOS 는 고른 순서대로, 안드로이드도 대부분 순서를 유지한다. 시스템이 주는 순서를 그대로 쓴다.
@@ -177,7 +201,10 @@ export async function pickAndUploadMany(
   const urls: string[] = []
   let failed = 0
   const ownerToken = await getOrCreateToken()
+  let i = 0
   for (const asset of take) {
+    i++
+    onProgress?.(i, take.length)
     // 다중 선택은 사진만 — 혹시 GIF 가 섞이면 그 한 장만 건너뛴다(정지프레임으로 뭉개지는 걸 막는다).
     if (asset.mimeType === 'image/gif' || /\.gif$/i.test(asset.uri)) { failed++; continue }
     try {

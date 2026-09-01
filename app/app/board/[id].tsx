@@ -7,12 +7,13 @@ import {
 // 입력줄만 띄우고 목록을 그대로 두면 아래쪽 댓글이 덮여 손이 닿지 않는다
 // (2026-08-01 오너 지적 후 조사). RN 기본 KeyboardAvoidingView 는 여러 줄 입력에서
 // 동작하지 않으므로(react-native#16826) 이 라이브러리 것을 쓴다.
-import { KeyboardAvoidingView, KeyboardController, KeyboardEvents, useKeyboardState } from 'react-native-keyboard-controller'
+import { KeyboardAvoidingView, KeyboardController, KeyboardEvents } from 'react-native-keyboard-controller'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
+import { confirmScrap } from '@/lib/confirmToggle'
 import AppSpinner from '@/components/AppSpinner'
 import ReportSheet from '@/components/ReportSheet'
 import LoadingOverlay from '@/components/LoadingOverlay'
@@ -33,6 +34,7 @@ import { NEW_TABS_ENABLED } from '@/constants/features'
 import { wideContent } from '@/constants/layout'
 import { openOutlink } from '@/lib/outlink'
 import { youtubeThumbnail } from '@/lib/youtube'
+import { isInstagramUrl } from '@/lib/instagram'
 import type { BoardComment } from '@/lib/board'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
 
@@ -109,7 +111,6 @@ export default function BoardPostScreen() {
   const { id, commentId } = useLocalSearchParams<{ id: string; commentId?: string }>()
   const router = useRouter()
   const colors = useColors()
-  const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
   const { post, postBlocked, comments, myVote, isMine, myCommentIds, loading, error, refetch } = useBoardPost(id)
@@ -128,7 +129,6 @@ export default function BoardPostScreen() {
   const [editing, setEditing] = useState<BoardComment | null>(null)
   const [sending, setSending] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'post' | 'comment' | 'content'; id: string } | null>(null)
-  const keyboardShown = useKeyboardState((k) => k.isVisible)
   const scrollY = useRef(0)
   const [composing, setComposing] = useState(false)   // 입력칸을 만졌는가(닉네임 줄 펼침)
   // 댓글 입력칸 높이를 직접 정한다. `minHeight` 는 최솟값일 뿐이라 iOS 는 내부
@@ -262,7 +262,7 @@ export default function BoardPostScreen() {
   // 스크랩 초기 상태(로컬 캐시). NEW_TABS 전환 전엔 버튼이 안 보이므로 굳이 서버 조회 안 함.
   useEffect(() => { if (NEW_TABS_ENABLED) isScrapped(id).then(setScrapOn) }, [id])
 
-  const handleScrap = async () => {
+  const doScrap = async () => {
     if (scrapping) return
     setScrapping(true)
     const prev = scrapOn
@@ -272,6 +272,8 @@ export default function BoardPostScreen() {
     if ('error' in r) { setScrapOn(prev); Alert.alert('알림', r.error); return }
     setScrapOn(r.scrapped)
   }
+  // 누르자마자 바로 적용하지 않고 팝업으로 한 번 확인받고 적용한다(2026-08-25 오너 지시).
+  const handleScrap = () => confirmScrap(scrapOn, doScrap)
 
   const handleDelete = () => {
     Alert.alert('글 삭제', '이 글을 삭제할까요? 댓글도 함께 사라집니다.', [
@@ -583,26 +585,8 @@ export default function BoardPostScreen() {
 
         {/* 첨부(사진+링크) 신고 누적 시 이미지처럼 통째로 안 그리고 가림 문구로 대신한다
             (2026-08-13 일반화 — 반투명 덮개는 밝은 사진·썸네일이 비쳐 보여 가린 게
-            아니었던 예전 문제와 동일하게 피한다). */}
-        {!!post.link_urls?.length && (
-          <View style={styles.images}>
-            {post.content_hidden ? (
-              <View style={[styles.imageWrap, styles.imageBlocked]}>
-                <Ionicons name="eye-off-outline" size={22} color={colors.textSecondary} />
-                <Text style={styles.imageBlockedText}>첨부 검수 중</Text>
-                <Text style={styles.imageBlockedSub}>신고가 접수되어 확인하고 있습니다</Text>
-              </View>
-            ) : post.link_urls.map((u) => (
-              <TouchableOpacity key={u} style={styles.imageWrap} onPress={() => openOutlink(u)} activeOpacity={0.85}>
-                <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.image} contentFit="cover" />
-                <View style={styles.linkPlayBadge}>
-                  <Ionicons name="play" size={22} color="#fff" />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
+            아니었던 예전 문제와 동일하게 피한다). 사진을 유튜브/인스타 링크보다 먼저
+            보여준다(2026-08-26 오너 지시: "이미지가 먼저 나오고 유튜브가 나중에"). */}
         {!!post.image_urls?.length && (
           <View style={styles.images}>
             {post.content_hidden ? (
@@ -616,6 +600,36 @@ export default function BoardPostScreen() {
                 <LazyPostImage uri={u} style={styles.image} scrollTick={scrollTick} />
               </View>
             ))}
+          </View>
+        )}
+
+        {!!post.link_urls?.length && (
+          <View style={styles.images}>
+            {post.content_hidden ? (
+              <View style={[styles.imageWrap, styles.imageBlocked]}>
+                <Ionicons name="eye-off-outline" size={22} color={colors.textSecondary} />
+                <Text style={styles.imageBlockedText}>첨부 검수 중</Text>
+                <Text style={styles.imageBlockedSub}>신고가 접수되어 확인하고 있습니다</Text>
+              </View>
+            ) : post.link_urls.map((u) => {
+              const ig = isInstagramUrl(u)
+              return (
+                <TouchableOpacity key={u} style={styles.imageWrap} onPress={() => openOutlink(u)} activeOpacity={0.85}>
+                  {ig ? (
+                    <View style={[styles.image, styles.igLinkPlaceholder]}>
+                      <Ionicons name="logo-instagram" size={30} color={colors.textSecondary} />
+                    </View>
+                  ) : (
+                    <>
+                      <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.image} contentFit="cover" />
+                      <View style={styles.linkPlayBadge}>
+                        <Ionicons name="play" size={22} color="#fff" />
+                      </View>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )
+            })}
           </View>
         )}
 
@@ -701,8 +715,13 @@ export default function BoardPostScreen() {
       </ScrollView>
 
       {/* 댓글 입력 — 화면 아래 붙박이. 위 KeyboardAvoidingView 가 키보드만큼 영역을
-          줄여주므로 따로 띄우지 않는다. */}
-      <View style={[styles.inputWrap, { paddingBottom: (keyboardShown ? 8 : insets.bottom + 8) }]}>
+          줄여주므로 따로 띄우지 않는다.
+          ⚠️ 안전영역(insets.bottom)을 여기서 더하면 안 된다 — 이 화면은 아래에
+          BottomNav 를 깔고 있고 그 쪽이 이미 안전영역을 먹는다. 예전엔 여기서도
+          더해서 입력칸과 탭바 사이에 제스처바 높이만큼 빈 띠가 생겼다
+          (2026-09-01 오너 지적). 키보드가 올라오면 탭바가 가려지지만 그때도
+          키보드 바로 위에 붙으므로 추가 여백은 필요 없다. */}
+      <View style={[styles.inputWrap, { paddingBottom: 8 }]}>
           {/* 키보드 닫는 버튼은 두지 않는다. 목록을 아래로 쓸어내리면 닫힌다
               (keyboardDismissMode="interactive"). 애플 가이드라인도 키보드 위에는
               '지금 하는 일에 관련된' 컨트롤만 두고 시스템 기능을 겹쳐 놓지 말라고
@@ -801,6 +820,7 @@ export default function BoardPostScreen() {
           refetch()
         }}
       />
+      <BottomNav current="board" route={`/board/${id}`} />
     </View>
   )
 }
@@ -1074,6 +1094,8 @@ function makeStyles(colors: AppColors) {
     images: { paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
     imageWrap: { position: 'relative', borderRadius: 10, overflow: 'hidden' },
     image: { width: '100%', height: 220, backgroundColor: colors.surfaceHigh },
+    // 인스타는 공개 썸네일 규칙이 없어 아이콘 자리표시로 대신한다(2026-08-24).
+    igLinkPlaceholder: { alignItems: 'center', justifyContent: 'center' },
     // 가림 = 사진을 아예 안 그리고 이 자리를 대신 채운다
     imageBlocked: {
       height: 220, alignItems: 'center', justifyContent: 'center', gap: 5,

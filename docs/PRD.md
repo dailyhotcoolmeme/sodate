@@ -1,9 +1,9 @@
-# 소개팅모아 - Product Requirements Document (PRD)
+# 모잇(sodate) - Product Requirements Document (PRD)
 
 ## 1. 서비스 개요
 
 ### 서비스명
-**소개팅모아** (가칭 / 추후 변경 가능)
+**모잇** (2026-08-31 확정. 그 전 이름은 모잇, 내부 식별자는 sodate 그대로)
 
 ### 한 줄 정의
 > 전국 로테이션 소개팅 업체의 일정, 가격, 잔여석을 한곳에서 모아보고 바로 신청할 수 있는 앱

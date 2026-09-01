@@ -30,14 +30,14 @@ type ReviewWithCompany = ReviewRow & { companies: { name: string; slug: string }
 type TabKey = 'user' | 'naver_blog' | 'instagram' | 'youtube' | 'mine'
 
 const TAB_ORDER: { key: TabKey; label: string }[] = [
-  { key: 'user', label: '소개팅모아' },
+  { key: 'user', label: '모잇' },
   { key: 'naver_blog', label: '블로그' },
   { key: 'instagram', label: '인스타' },
   { key: 'youtube', label: '유튜브' },
 ]
 
 const SOURCE_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  user: { label: '소개팅모아', icon: 'chatbubble-ellipses' },
+  user: { label: '모잇', icon: 'chatbubble-ellipses' },
   naver_blog: { label: '네이버 블로그', icon: 'logo-rss' },
   instagram: { label: '인스타그램', icon: 'logo-instagram' },
   youtube: { label: '유튜브', icon: 'logo-youtube' },
@@ -188,10 +188,10 @@ export default function ReviewsScreen() {
     [reviews, myReviewIds, myPlaceReviews]
   )
 
-  // 소개팅모아 탭은 후기가 없어도 항상 표시(작성 유도). 나머지는 데이터 있을 때만. 내 후기는 항상 마지막.
+  // 모잇 탭은 후기가 없어도 항상 표시(작성 유도). 나머지는 데이터 있을 때만. 내 후기는 항상 마지막.
   const tabs = useMemo(() => {
     const list: { key: TabKey; label: string; count: number }[] = [
-      { key: 'user', label: '소개팅모아', count: counts['user'] ?? 0 },
+      { key: 'user', label: '모잇', count: counts['user'] ?? 0 },
     ]
     for (const t of TAB_ORDER) {
       if (t.key === 'user') continue
@@ -244,9 +244,8 @@ export default function ReviewsScreen() {
 
   return (
     <View style={styles.container}>
-      <TopBar showBack />
+      <TopBar showBack title="후기 모아보기" />
       <View style={styles.header}>
-        <Text style={styles.title}>후기 모아보기</Text>
         <Text style={styles.subtitle}>실제 참여자들의 솔직한 후기</Text>
       </View>
 
@@ -319,7 +318,7 @@ export default function ReviewsScreen() {
           ) : currentTab === 'user' ? (
             <>
               <Ionicons name="chatbubble-ellipses-outline" size={32} color={colors.textTertiary} />
-              <Text style={styles.emptyText}>아직 소개팅모아 후기가 없어요</Text>
+              <Text style={styles.emptyText}>아직 모잇 후기가 없어요</Text>
               <Text style={styles.emptySubText}>소개팅 참여 후 첫 후기를 남겨보세요!</Text>
             </>
           ) : (

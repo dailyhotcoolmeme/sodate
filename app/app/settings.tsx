@@ -140,7 +140,7 @@ export default function SettingsScreen() {
           source={require('../assets/logo-stack.png')}
           style={styles.appLogo}
           contentFit="contain"
-          accessibilityLabel="소개팅모아"
+          accessibilityLabel="모잇"
         />
         <Text style={styles.appDesc}>
           전국 소개팅 일정을 한눈에
@@ -197,7 +197,7 @@ export default function SettingsScreen() {
         />
         <SettingRow
           iconName="information-circle-outline"
-          label="소개팅모아 소개"
+          label="모잇 소개"
           value="전국 로테이션 소개팅 일정 모음"
         />
       </View>
@@ -205,9 +205,9 @@ export default function SettingsScreen() {
       {/* 면책사항 */}
       <View style={styles.disclaimer}>
         <Text style={styles.disclaimerText}>
-          소개팅모아는 각 업체의 공개된 정보를 수집·제공하는 서비스입니다.{'\n'}
+          모잇은 각 업체의 공개된 정보를 수집·제공하는 서비스입니다.{'\n'}
           실제 신청 및 결제는 각 업체 사이트에서 진행됩니다.{'\n'}
-          업체와의 분쟁에 대해 소개팅모아는 책임지지 않습니다.
+          업체와의 분쟁에 대해 모잇은 책임지지 않습니다.
         </Text>
       </View>
 
@@ -229,10 +229,11 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       borderBottomWidth: 1,
       borderBottomColor: colors.divider,
     },
-    // 세로형 로고(하트 위 · 글자 아래). 원본 821x644 비율 유지.
+    // 세로형 로고(하트 위 · 글자 아래). 원본 429x698 비율 유지.
     appLogo: {
-      width: 118,
-      height: 118 * (644 / 821),
+      // 하트 크기를 예전과 같게 두려고 높이를 기준으로 잡는다(이름이 짧아져 폭만 줄었다).
+      width: 118 * (429 / 821),
+      height: 118 * (698 / 821),
       marginBottom: 10,
     },
     appDesc: {

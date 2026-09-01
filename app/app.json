@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "소개팅모아",
+    "name": "모잇",
     "slug": "sodate",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "platforms": [
       "ios",
       "android"
@@ -20,7 +20,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sodate.app",
-      "buildNumber": "9",
+      "buildNumber": "10",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleDevelopmentRegion": "ko",
@@ -28,7 +28,8 @@
           "ko",
           "en"
         ],
-        "NSPhotoLibraryUsageDescription": "게시판 글에 사진을 첨부할 때 사진첩에 접근합니다."
+        "NSPhotoLibraryUsageDescription": "게시판 글에 사진을 첨부할 때 사진첩에 접근합니다.",
+        "_comment_location": "위치 권한 문구는 아래 plugins 의 expo-location 설정에서 넣는다(그쪽이 Always 키 제거까지 같이 처리). 여기 중복으로 쓰면 어느 쪽이 이기는지 헷갈리니 두지 않는다."
       }
     },
     "android": {
@@ -41,7 +42,7 @@
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
       ],
-      "versionCode": 6
+      "versionCode": 7
     },
     "plugins": [
       "expo-router",
@@ -67,6 +68,18 @@
           "photosPermission": "게시판 글에 사진을 첨부할 때 사진첩에 접근합니다.",
           "cameraPermission": false,
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "_comment": "⚠️(2026-08-26) 이 플러그인 설정이 없으면 expo-location 이 iOS 권한 문구를 영문 기본값('Allow $(PRODUCT_NAME) to access your location')으로 넣어버린다 — 애플 심사지침 5.1.1 위반(구체적 목적 명시 필요)이라 리젝 사유다. 또 쓰지도 않는 '항상 허용'(Always) 키 2종이 자동으로 들어가 스토어 개인정보 라벨이 실제보다 부풀려졌다. 코드는 requestForegroundPermissionsAsync 만 쓴다(lib/nearby.ts) — 앱 사용 중 권한 하나만 남기고 나머지는 false 로 지운다.",
+          "locationWhenInUsePermission": "내 주변 혼술바를 거리순으로 보여드리기 위해 현재 위치를 사용합니다. 위치 정보는 기기 안에서만 계산되며 서버에 저장되지 않습니다.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [
@@ -96,7 +109,7 @@
       }
     },
     "owner": "dailyhotcoolmeme",
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": "1.1.0",
     "updates": {
       "url": "https://u.expo.dev/1b634f2b-480e-4108-b994-c92c3a0dc4b4",
       "fallbackToCacheTimeout": 8000,

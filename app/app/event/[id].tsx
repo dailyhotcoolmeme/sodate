@@ -3,6 +3,8 @@ import AppSpinner from '@/components/AppSpinner'
 import EventThumbnail from '@/components/EventThumbnail'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
+import { confirmFavorite } from '@/lib/confirmToggle'
 import {
   View,
   Text,
@@ -374,9 +376,10 @@ export default function EventDetailScreen() {
   useEffect(() => {
     if (event) {
       track('event_view', { eventId: event.id, companyId: event.company_id })
-      // MY '최근 본 것' 기록(2026-08-21) — 로컬 저장, 무해. 화면 노출은 MY 탭이 열릴 때부터.
+      // MY '최근 본 기록' 기록(2026-08-21, kind 세분화 2026-08-24) — 로컬 저장, 무해.
       addRecentView({
-        kind: 'event', id: event.id, title: event.title,
+        kind: event.event_type === 'socialing' ? 'socialing' : 'dating',
+        id: event.id, title: event.title,
         sub: [event.companies?.name, event.location_region].filter(Boolean).join(' · ') || undefined,
       })
     }
@@ -431,7 +434,13 @@ export default function EventDetailScreen() {
 
   return (
     <View style={styles.screen}>
-      <TopBar showBack />
+      {/* ⚠️(2026-08-26) 이 상세화면은 소개팅·소셜링 이벤트가 같이 쓰는 화면이라, 톱바
+          로고를 눌렀을 때 무조건 소개팅 홈(/)으로 보내던 기본 동작(TopBar 자체 로직,
+          segment='event'|'board' 2분법이라 5탭 개편 이전 그대로였다)이 소셜링에서 열었을
+          때도 소개팅으로 튕겨서 흐름이 끊겼다(오너 지시: "상세페이지에서 톱바 아이콘
+          누르면 해당 메뉴들의 서브홈 화면으로 보내라"). 실제로 어느 쪽 이벤트인지
+          아는 이 화면이 직접 목적지를 정해준다. */}
+      <TopBar showBack onLogoPress={() => router.replace(isSocialing ? '/socialing' : '/')} />
     <ScrollView
       style={styles.container}
       showsVerticalScrollIndicator={false}
@@ -481,16 +490,16 @@ export default function EventDetailScreen() {
           ) : null}
           <TouchableOpacity
             style={[styles.heartBtn, favoriteIds.has(event.id) && styles.heartBtnActive]}
-            onPress={() => {
+            onPress={() => confirmFavorite(favoriteIds.has(event.id), () => {
               track(favoriteIds.has(event.id) ? 'event_favorite_remove' : 'event_favorite_add', {
                 eventId: event.id, companyId: event.company_id,
                 properties: { from_screen: 'detail' },
               })
               toggleFavorite(event.id)
-            }}
+            })}
           >
             <Ionicons
-              name="heart"
+              name="bookmark"
               size={20}
               color={favoriteIds.has(event.id) ? '#FF6B9D' : colors.textTertiary}
             />
@@ -646,12 +655,10 @@ export default function EventDetailScreen() {
         {/* 신청 버튼 (마감 시 회색 비활성) */}
         {renderCta()}
 
-        {/* 업체 후기 섹션 */}
+        {/* 후기 섹션 — 업체명 붙이지 않고 "후기"로 통일(오너 지시 2026-08-24, "문토 후기"·"프립 후기" 등 제각각이던 것) */}
         <View style={styles.reviewsSection}>
           <View style={styles.reviewsHeader}>
-            <Text style={styles.sectionTitle}>
-              {event.companies?.name ?? '업체'} 후기
-            </Text>
+            <Text style={styles.sectionTitle}>후기</Text>
             {/* 후기 작성 — 제목 라인 오른쪽 끝에 연필+글자만(박스 없음) */}
             {companyId && (
               <TouchableOpacity style={styles.writeInline} onPress={openWrite} hitSlop={8} activeOpacity={0.7}>
@@ -665,7 +672,9 @@ export default function EventDetailScreen() {
             <View style={{ alignItems: 'center', marginVertical: 16 }}><AppSpinner size={32} /></View>
           ) : (
             <ReviewSection
-              reviews={reviews}
+              // 소셜링은 자체 후기만 — 외부 크롤링 후기(블로그·인스타·유튜브)는 소개팅
+              // 업체 위주로 모은 것이라 소셜링과 안 맞는다(오너 지시 2026-08-24: "빼기로 했잖아").
+              reviews={isSocialing ? reviews.filter((r) => r.source === 'user') : reviews}
               myReviewIds={myReviewIds}
               onEdit={openEdit}
               onDelete={handleDelete}
@@ -695,6 +704,7 @@ export default function EventDetailScreen() {
         Alert.alert('신고되었습니다', already ? '이미 신고한 후기입니다.' : '검토 후 조치하겠습니다.')
       }}
     />
+    <BottomNav current={isSocialing ? 'socialing' : 'event'} route={`/event/${id}`} />
     </View>
   )
 }

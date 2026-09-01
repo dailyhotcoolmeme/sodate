@@ -6,6 +6,7 @@ import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { pickAndUpload, pickAndUploadMany, MAX_IMAGES, isGifUrl } from '@/lib/boardImage'
 import { youtubeId, youtubeThumbnail } from '@/lib/youtube'
+import { isInstagramUrl } from '@/lib/instagram'
 import LoadingOverlay from '@/components/LoadingOverlay'
 
 /**
@@ -74,8 +75,6 @@ export function BoardEditorInput({
 }) {
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
-  // 썸네일 누르면 전체보기(2026-08-14 오너 지시) — X 버튼과는 별도 터치 영역이라 겹치지 않는다.
-  const [previewUri, setPreviewUri] = useState<string | null>(null)
 
   return (
     <View style={styles.wrap}>
@@ -93,20 +92,37 @@ export function BoardEditorInput({
 
       <LoadingOverlay visible={api.uploading} />
 
-      {images.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
-          {images.map((u) => (
-            <View key={u} style={styles.thumbWrap}>
-              <TouchableOpacity onPress={() => setPreviewUri(u)} activeOpacity={0.85}>
-                <Image source={{ uri: u }} style={styles.thumb} contentFit="cover" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.thumbX} onPress={() => api.removeImage(u)} hitSlop={6}>
-                <Ionicons name="close" size={13} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-      )}
+      <BoardImageChips images={images} onRemove={api.removeImage} />
+    </View>
+  )
+}
+
+/**
+ * 첨부 이미지 썸네일 줄 — 사진첩에서 고른 순서대로 가로 나열, 누르면 전체보기, X로 제거.
+ * 유튜브 링크(BoardLinkChips)와 같은 자리·같은 모양(2026-08-25 오너 지시: "모든 컨텐츠
+ * 첨부는 유튜브처럼 썸네일로 박스 밖에 첨부하게 하자") — 본문(리치 에디터 포함) 안에는
+ * 넣지 않고 게시글 본문 밑에 별도 갤러리로만 나온다.
+ */
+export function BoardImageChips({ images, onRemove }: { images: string[]; onRemove: (u: string) => void }) {
+  const colors = useColors()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+  // 썸네일 누르면 전체보기(2026-08-14 오너 지시) — X 버튼과는 별도 터치 영역이라 겹치지 않는다.
+  const [previewUri, setPreviewUri] = useState<string | null>(null)
+  if (images.length === 0) return null
+  return (
+    <>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
+        {images.map((u) => (
+          <View key={u} style={styles.thumbWrap}>
+            <TouchableOpacity onPress={() => setPreviewUri(u)} activeOpacity={0.85}>
+              <Image source={{ uri: u }} style={styles.thumb} contentFit="cover" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.thumbX} onPress={() => onRemove(u)} hitSlop={6}>
+              <Ionicons name="close" size={13} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ))}
+      </ScrollView>
 
       <Modal visible={!!previewUri} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
         <Pressable style={styles.previewOverlay} onPress={() => setPreviewUri(null)}>
@@ -118,7 +134,7 @@ export function BoardEditorInput({
           </TouchableOpacity>
         </Pressable>
       </Modal>
-    </View>
+    </>
   )
 }
 
@@ -157,35 +173,54 @@ function makeStyles(colors: AppColors) {
 }
 
 /**
- * 게시판 유튜브 링크 첨부(2026-08-13). 인앱 재생은 안 하고 외부(유튜브 앱/브라우저)에서
- * 재생 — 오너 결정으로 1단계는 유튜브만. 썸네일은 img.youtube.com URL 패턴으로
- * API 호출 없이 바로 만든다.
+ * 게시판 유튜브·인스타그램 링크 첨부(2026-08-13 유튜브, 2026-08-24 인스타 추가). 인앱
+ * 재생은 안 하고 외부(유튜브/인스타 앱 또는 브라우저)에서 열람. 유튜브는 썸네일을
+ * img.youtube.com URL 패턴으로 API 호출 없이 바로 만들고, 인스타는 공개 썸네일 규칙이
+ * 없어 아이콘 자리표시로 대신한다(lib/instagram.ts 참고).
  *
  * 갯수 제한은 두지 않는다(2026-08-13 오너 지시) — 아웃링크라 서버 비용이 없고,
  * 스팸 여부는 신고·차단 등 admin 운영으로 관리한다.
  */
-export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) => void) {
+export type LinkMode = 'youtube' | 'instagram'
+
+// onInsertToContent — 리치 에디터 본문 안에도 같이 넣어달라는 오너 지시(2026-08-25:
+// "첨부 컨텐츠들은 모두 본문 내부에 넣게 하라고!! 왜 이걸 해결을 못하냐고" — 사진은
+// 본문 안, 유튜브·인스타는 밖(첨부 갤러리)이라 자리가 갈렸었다). 아래 썸네일 갤러리
+// (BoardLinkChips, 상세페이지 재생 썸네일)는 그대로 두고, 본문에도 넣는다.
+// ⚠️(2026-08-25) 처음엔 본문에 링크 텍스트(주소 문자열)만 넣었는데, 오너가 "저게
+// 썸네일 유튜브라고 생각하냐!!" 라고 지적 — 맞는 말이다, 주소만 덜렁 있으면 유튜브인지
+// 알 수가 없다. mode 를 같이 넘겨서 write.tsx 가 유튜브면 실제 썸네일 이미지까지 본문에
+// 넣게 한다(인스타는 공개 썸네일 URL 규칙이 없어 링크 텍스트까지만 가능).
+export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) => void, onInsertToContent?: (url: string, mode: LinkMode) => void) {
   const [modalVisible, setModalVisible] = useState(false)
+  const [mode, setMode] = useState<LinkMode>('youtube')
   const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const openAdd = () => {
+  const openAdd = (m: LinkMode = 'youtube') => {
+    setMode(m)
     setInput('')
     setError(null)
     setModalVisible(true)
   }
   const confirmAdd = () => {
     const url = input.trim()
-    if (!youtubeId(url)) {
-      setError('유튜브 링크만 첨부할 수 있어요. (youtube.com, youtu.be)')
+    const valid = mode === 'youtube' ? !!youtubeId(url) : isInstagramUrl(url)
+    if (!valid) {
+      setError(
+        mode === 'youtube'
+          ? '유튜브 링크만 첨부할 수 있어요. (youtube.com, youtu.be)'
+          : '인스타그램 게시물·릴스 링크만 첨부할 수 있어요. (instagram.com/p/... 또는 /reel/...)'
+      )
       return
     }
     if (!links.includes(url)) onChangeLinks([...links, url])
+    onInsertToContent?.(url, mode)
     setModalVisible(false)
   }
 
   return {
-    modalVisible, input, setInput, error, openAdd, confirmAdd,
+    modalVisible, mode, input, setInput, error, openAdd, confirmAdd,
     cancel: () => setModalVisible(false),
     removeLink: (u: string) => onChangeLinks(links.filter((x) => x !== u)),
   }
@@ -193,43 +228,55 @@ export function useBoardLinks(links: string[], onChangeLinks: (next: string[]) =
 
 export type BoardLinksApi = ReturnType<typeof useBoardLinks>
 
-/** 첨부된 링크를 이미지 썸네일과 같은 자리에 재생 배지 붙여 보여준다. */
+/** 첨부된 링크를 이미지 썸네일과 같은 자리에 보여준다. 유튜브=썸네일+재생배지, 인스타=아이콘 자리표시. */
 export function BoardLinkChips({ api, links }: { api: BoardLinksApi; links: string[] }) {
   const colors = useColors()
   const styles = useMemo(() => makeLinkStyles(colors), [colors])
   if (links.length === 0) return null
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
-      {links.map((u) => (
-        <View key={u} style={styles.thumbWrap}>
-          <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.thumb} contentFit="cover" />
-          <View style={styles.playBadge}>
-            <Ionicons name="play" size={12} color="#fff" />
+      {links.map((u) => {
+        const ig = isInstagramUrl(u)
+        return (
+          <View key={u} style={styles.thumbWrap}>
+            {ig ? (
+              <View style={[styles.thumb, styles.igThumb]}>
+                <Ionicons name="logo-instagram" size={26} color={colors.textSecondary} />
+              </View>
+            ) : (
+              <>
+                <Image source={{ uri: youtubeThumbnail(u) ?? undefined }} style={styles.thumb} contentFit="cover" />
+                <View style={styles.playBadge}>
+                  <Ionicons name="play" size={12} color="#fff" />
+                </View>
+              </>
+            )}
+            <TouchableOpacity style={styles.thumbX} onPress={() => api.removeLink(u)} hitSlop={6}>
+              <Ionicons name="close" size={13} color="#fff" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.thumbX} onPress={() => api.removeLink(u)} hitSlop={6}>
-            <Ionicons name="close" size={13} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      ))}
+        )
+      })}
     </ScrollView>
   )
 }
 
-/** 유튜브 URL 붙여넣기 팝업 — write.tsx의 말머리 선택 팝업과 같은 방식(화면 가운데 카드). */
+/** 유튜브·인스타 URL 붙여넣기 팝업 — write.tsx의 말머리 선택 팝업과 같은 방식(화면 가운데 카드). */
 export function LinkInputModal({ api }: { api: BoardLinksApi }) {
   const colors = useColors()
   const styles = useMemo(() => makeLinkStyles(colors), [colors])
+  const isYoutube = api.mode === 'youtube'
   return (
     <Modal visible={api.modalVisible} transparent animationType="fade" onRequestClose={api.cancel} statusBarTranslucent>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={api.cancel} />
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>유튜브 링크 추가</Text>
+          <Text style={styles.modalTitle}>{isYoutube ? '유튜브 링크 추가' : '인스타그램 링크 추가'}</Text>
           <TextInput
             style={styles.modalInput}
             value={api.input}
             onChangeText={api.setInput}
-            placeholder="https://youtube.com/watch?v=..."
+            placeholder={isYoutube ? 'https://youtube.com/watch?v=...' : 'https://instagram.com/p/...'}
             placeholderTextColor={colors.textTertiary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -256,6 +303,8 @@ function makeLinkStyles(colors: AppColors) {
     thumbs: { gap: 8, paddingTop: 8, paddingBottom: 2, paddingRight: 8 },
     thumbWrap: { position: 'relative' },
     thumb: { width: 76, height: 76, borderRadius: 8, backgroundColor: colors.surfaceHigh },
+    // 인스타는 공개 썸네일 규칙이 없어 아이콘 자리표시로 대신한다.
+    igThumb: { alignItems: 'center', justifyContent: 'center' },
     playBadge: {
       position: 'absolute', right: 4, bottom: 4,
       width: 20, height: 20, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.72)',

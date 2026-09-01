@@ -29,7 +29,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             <span className="text-white font-bold text-lg">소</span>
           </div>
           <div>
-            <h1 className="text-lg font-bold text-gray-900">소개팅모아</h1>
+            <h1 className="text-lg font-bold text-gray-900">모잇</h1>
             <p className="text-xs text-gray-400">관리자 콘솔</p>
           </div>
         </div>

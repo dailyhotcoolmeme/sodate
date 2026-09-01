@@ -24,10 +24,18 @@ FRIP_GQL = 'https://gql.frip.co.kr/graphql'
 FRIP_BASE = 'https://frip.co.kr'
 
 # 소개팅 관련 카테고리 ID
-#   2841=소셜/게더링(파티성), 2834=미팅(12대12 로테이션 소개팅 등 핵심), 2844=파티
+#   2352=소셜/모임 상위 카테고리(아래 3개를 전부 포함하는 부모), 2841=소셜/게더링(파티성),
+#   2834=미팅(12대12 로테이션 소개팅 등 핵심), 2844=파티
 # 과거 2841만 봐서 미팅(2834) 카테고리 전체(로테이션 소개팅 다수)를 놓쳤음.
 # 술19금(2392)은 순수 음주 클래스 노이즈 우려로 제외. source_url로 중복 제거됨.
-CATEGORY_IDS = [2841, 2834, 2844]
+#
+# ⚠️(2026-08-31) 하위 3개만 보면 절반을 놓친다. 업체가 상품을 상위 카테고리에만 달아두면
+#    하위 목록에 아예 안 잡히기 때문이다. 실측: 하위 3개 합계 165개 / 2352 단독 415개이고
+#    165개는 전부 2352에도 들어 있다(2352가 완전한 상위집합). 2352에만 있고 제목 키워드를
+#    통과하는 소개팅 상품이 159개였다. 발단은 한 업체(로테이션소개팅_라운드키네틱,
+#    상품 191671)가 "왜 우리 앱에 안 올라오냐"고 메일을 보낸 것 — 그 상품도 2352에만 있었다.
+#    하위 3개를 남겨두는 이유는 2834(미팅) 표시가 제목 키워드 필터 면제 판단에 쓰이기 때문.
+CATEGORY_IDS = [2352, 2841, 2834, 2844]
 
 # 미팅 카테고리 — 이 카테고리 상품은 제목 키워드 필터를 면제한다(카테고리 자체가 소개팅).
 MEETING_CATEGORY_ID = 2834
@@ -624,6 +632,13 @@ class FripScraper(BaseScraper):
         capacity_male: Optional[int] = None
         capacity_female: Optional[int] = None
 
+        # ⚠️ 한 일정에 옵션이 여러 개 걸린다(정가 / 리뷰특가 / 얼리버드 / 와인 …).
+        #    예전엔 "프립이 응답한 순서상 첫 옵션"을 그 일정 가격으로 썼는데, 순서가
+        #    일정마다 달라 같은 상품인데 회차마다 가격이 제각각으로 보였다(2026-08-31
+        #    오너 지적: 191671 이 59,900 / 9,900 / 24,900 으로 뒤죽박죽).
+        #    이제 성별별 **최고가(= 조건 없이 누구나 내는 정가)** 를 대표 가격으로 쓴다.
+        #    얼리버드·후기작성 같은 조건부 할인을 대표값으로 쓰면, 앱에서 본 가격보다
+        #    실제가 비싼 상황이 생겨 사용자가 낚인다(오너 결정: 정가 기준).
         # 안내/공지용 아이템 키워드
         skip_kws = ['공지용', '선택 X', '안내용', '정보 확인', '선택X']
 
@@ -658,6 +673,16 @@ class FripScraper(BaseScraper):
                 or name.strip() in ('여', '여성', '여자')
             )
 
+            # 한 이름에 남·여가 둘 다 들어간 경우 — 뒤에 나온 쪽이 그 옵션의 성별이다.
+            # 업체가 접두사를 잘못 붙이는 실제 사례(2026-08-31, 라운드키네틱 191671):
+            #   "[영등포]남성_남성_리뷰X …" = 남성 59,900
+            #   "[영등포]남성_여성_리뷰X …" = 여성 49,900   ← 앞의 '남성_'은 오타
+            # 앞에서부터 찾으면 여성 옵션이 남성으로 잡혀 여성 가격이 통째로 틀어진다.
+            if is_male and is_female:
+                last_m = max(name.rfind('남성'), name.rfind('남자'), name.rfind('남'))
+                last_f = max(name.rfind('여성'), name.rfind('여자'), name.rfind('여'))
+                is_male, is_female = last_m > last_f, last_f > last_m
+
             # 이모지가 붙은 경우 처리 (예: "🙆‍♂️남성 참여권", "🙋‍♀️여성 참여권")
             if not is_male and not is_female:
                 if re.search(r'남', name):
@@ -666,15 +691,15 @@ class FripScraper(BaseScraper):
                     is_female = True
 
             if is_male:
-                if sale_price is not None and price_male is None:
-                    price_male = sale_price
+                if sale_price is not None:
+                    price_male = sale_price if price_male is None else max(price_male, sale_price)
                 if remains is not None and seats_left_male is None:
                     seats_left_male = remains
                 if quota is not None and capacity_male is None:
                     capacity_male = quota
             elif is_female:
-                if sale_price is not None and price_female is None:
-                    price_female = sale_price
+                if sale_price is not None:
+                    price_female = sale_price if price_female is None else max(price_female, sale_price)
                 if remains is not None and seats_left_female is None:
                     seats_left_female = remains
                 if quota is not None and capacity_female is None:

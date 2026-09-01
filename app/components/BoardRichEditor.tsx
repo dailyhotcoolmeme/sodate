@@ -1,21 +1,51 @@
-import React, { forwardRef, useImperativeHandle, useRef } from 'react'
-import { UIManager, View, TextInput, StyleSheet } from 'react-native'
+import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, Component, type ReactNode } from 'react'
+import { View, TextInput, StyleSheet } from 'react-native'
 import type { AppColors } from '@/constants/colors'
+import type { RichEditorState } from './BoardRichEditorImpl'
 
 /**
- * 게시판 본문 리치텍스트 에디터(tentap). 네이버카페급 서식.
+ * 게시판 본문 리치텍스트 에디터(react-native-enriched-html, Software Mansion —
+ * 완전 네이티브, 웹뷰 없음). tentap(웹뷰 기반)이 이번 세션에만 세 번 다른 방식으로
+ * 실패해서(먹통 화면·이미지 무한로딩·진입 즉시 폭주) 교체했다(오너 지시 2026-08-25).
  *
- * ⚠️ tentap 은 react-native-webview(네이티브)에 의존한다. 재빌드 전 바이너리엔
- * webview 가 없어 import 시점에 크래시하므로(네이버 지도와 동일), webview 등록
- * 여부를 감지해 있을 때만 tentap 구현체를 require 한다. 없으면 평문 입력칸으로 폴백.
- * → 현재 앱은 폴백(평문), 재빌드 후 리치에디터 활성. 이후 에디터는 OTA 로 다듬는다.
+ * New Architecture(Fabric) 전용 라이브러리라 구형 아키텍처에선 아예 안 뜬다 — 그런
+ * 경우까지 포함해 require 실패든 렌더 중 크래시든 평문 입력칸으로 자동 폴백한다.
  */
-export const RICH_EDITOR_AVAILABLE = !!UIManager.getViewManagerConfig?.('RNCWebView')
+let Impl: React.ComponentType<any> | null = null
+let requireError: string | null = null
+try {
+  Impl = require('./BoardRichEditorImpl').default
+} catch (e: any) {
+  Impl = null
+  requireError = String(e?.message ?? e)
+}
+export const RICH_EDITOR_AVAILABLE = Impl !== null
+
+class RichEditorBoundary extends Component<{ onFallback: (reason: string) => void; children: ReactNode }, { crashed: boolean }> {
+  state = { crashed: false }
+  static getDerivedStateFromError() { return { crashed: true } }
+  componentDidCatch(error: Error) { this.props.onFallback(`render_crash: ${error?.message ?? error}`) }
+  render() { return this.state.crashed ? null : this.props.children }
+}
 
 export interface RichEditorHandle {
   getHTML: () => Promise<string>
   insertImage: (url: string) => void
+  insertLinkText: (url: string) => void
   focus: () => void
+  blur: () => void
+  toggleBold: () => void
+  toggleItalic: () => void
+  toggleUnderline: () => void
+  toggleStrikeThrough: () => void
+  toggleBlockQuote: () => void
+  toggleOrderedList: () => void
+  toggleUnorderedList: () => void
+  toggleCheckboxList: () => void
+  setLink: (start: number, end: number, text: string, url: string) => void
+  removeLink: (start: number, end: number) => void
+  /** 링크 삽입 모달을 열 때 현재 커서/선택 범위를 동기 조회한다(비어있으면 start===end). */
+  getSelection: () => { start: number; end: number; text: string }
 }
 
 export interface RichEditorProps {
@@ -23,21 +53,36 @@ export interface RichEditorProps {
   placeholder?: string
   onChangeText?: (plainText: string) => void
   onReady?: () => void
+  /** 굵게/기울임/밑줄 버튼 활성 표시용 — 하단(키보드 위) 툴바가 이 값으로 토글 상태를 그린다. */
+  onStateChange?: (state: RichEditorState) => void
+  /** require 실패했거나(모듈 자체 로드 실패) 렌더 중 죽었을 때 한 번 호출된다(원인 문자열 포함) —
+   *  상위(write.tsx)가 이걸 받아 자기 화면 전체를 예전 평문 모드로 바꿔야 한다(이 컴포넌트
+   *  안에서만 조용히 폴백하면 상위의 첨부 툴바가 안 뜬 채로 남아 "에디터도 안 뜨고 툴바도
+   *  없다" 상태가 된다). */
+  onUnavailable?: (reason: string) => void
 }
 
-let Impl: React.ComponentType<any> | null = null
-if (RICH_EDITOR_AVAILABLE) {
-  Impl = require('./BoardRichEditorImpl').default
-}
-
-/** 폴백(평문) — webview 없는 현재 바이너리용. getHTML 은 평문을 문단으로 감싼다. */
+/** 폴백(평문) — New Architecture 아니거나 라이브러리 로드 실패 시. getHTML 은 평문을 문단으로 감싼다. */
 const Fallback = forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColors }>(
   function Fallback({ initialHTML, placeholder, onChangeText, colors }, ref) {
     const valueRef = useRef(stripHtml(initialHTML || ''))
     useImperativeHandle(ref, () => ({
       getHTML: async () => escapeToHtml(valueRef.current),
       insertImage: () => {},
+      insertLinkText: () => {},
       focus: () => {},
+      blur: () => {},
+      toggleBold: () => {},
+      toggleItalic: () => {},
+      toggleUnderline: () => {},
+      toggleStrikeThrough: () => {},
+      toggleBlockQuote: () => {},
+      toggleOrderedList: () => {},
+      toggleUnorderedList: () => {},
+      toggleCheckboxList: () => {},
+      setLink: () => {},
+      removeLink: () => {},
+      getSelection: () => ({ start: 0, end: 0, text: '' }),
     }), [])
     return (
       <View style={{ minHeight: 260 }}>
@@ -57,7 +102,18 @@ const Fallback = forwardRef<RichEditorHandle, RichEditorProps & { colors: AppCol
 
 export default forwardRef<RichEditorHandle, RichEditorProps & { colors: AppColors }>(
   function BoardRichEditor(props, ref) {
-    if (Impl) return <Impl ref={ref} {...props} />
+    const [crashed, setCrashed] = useState(false)
+    const { onUnavailable } = props
+    useEffect(() => {
+      if (!Impl) onUnavailable?.(`require_failed: ${requireError}`)
+    }, [])
+    if (Impl && !crashed) {
+      return (
+        <RichEditorBoundary onFallback={(reason) => { setCrashed(true); onUnavailable?.(reason) }}>
+          <Impl ref={ref} {...props} />
+        </RichEditorBoundary>
+      )
+    }
     return <Fallback ref={ref} {...props} />
   }
 )

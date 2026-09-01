@@ -51,6 +51,10 @@ HEARTBEATS = {
     # 주 1회라 조용히 실패하면 일주일이 빈다. 넉넉히 8일로 두고 그때만 잡는다
     # (2026-07-31 오너 승인). 자가복구 재발화가 먹으면 메일은 안 나간다.
     'reviews.yml': ('주1회 후기 크롤', 8 * 24 * 60, {}),
+    # 혼술바 — 목(영업시간)·일(후기) 두 번이라 최대 간격이 4일. 5일로 둔다.
+    # 이 감시가 없으면 또 조용히 멈춘 채로 몇 주가 간다(2026-09-01에 실제로 그랬다).
+    'honsul.yml': ('주2회 혼술바 영업시간·후기', 5 * 24 * 60, {}),
+    'naver-rating.yml': ('주1회 혼술바 평점', 8 * 24 * 60, {}),
 }
 
 
@@ -353,9 +357,9 @@ def build_urgent_message(sb, issues):
     elif owner_items:
         subject = f'🚨 긴급 {len(owner_items)}건 — {label}' if label else f'🚨 긴급 {len(owner_items)}건'
     else:
-        subject = f'⚠️ 소개팅모아 워치독 — 자동조치가 반복됨 {len(auto_items)}건'
+        subject = f'⚠️ 모잇 워치독 — 자동조치가 반복됨 {len(auto_items)}건'
 
-    lines = [f'소개팅모아 워치독 {now_kst}', '']
+    lines = [f'모잇 워치독 {now_kst}', '']
     if owner_items:
         lines.append(f'■ 지금 손봐야 합니다 {len(owner_items)}건 — 그동안 옛 일정이 앱에 그대로 노출됩니다')
         for _fp, _p, i, _n, days in owner_items:
@@ -405,8 +409,8 @@ def build_ops_digest(sb, issues):
             return None, None
 
     now_kst = now.astimezone().strftime('%m/%d')
-    subject = f'📋 소개팅모아 일간 점검 — 운영 과제 {len(errors)}건'
-    lines = [f'소개팅모아 운영 과제 요약 {now_kst}', '',
+    subject = f'📋 모잇 일간 점검 — 운영 과제 {len(errors)}건'
+    lines = [f'모잇 운영 과제 요약 {now_kst}', '',
              '급한 장애가 아니라 시간 날 때 채워 넣을 것들입니다.',
              '진짜 장애는 이 메일이 아니라 🚨 제목의 긴급 메일로 따로 갑니다.', '']
     for i in errors[:OPS_DIGEST_MAX_LINES]:
@@ -457,7 +461,7 @@ def send_kakao(text: str) -> None:
     print(f'카카오 전송 결과: {r.status_code} {r.text[:200]}')
 
 
-def send_email(text: str, subject: str = '🚨 소개팅모아 워치독 — 문제 발견') -> None:
+def send_email(text: str, subject: str = '🚨 모잇 워치독 — 문제 발견') -> None:
     """Resend API로 이메일 전송. 카카오 '나에게 보내기'는 푸시알림이 안 떠서(2026-07-25 확인)
     실제 알아채는 용도는 이메일이 정본 — 둘 다 보내되 이메일이 주력."""
     api_key = os.environ.get('RESEND_API_KEY')

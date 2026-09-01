@@ -40,13 +40,15 @@ import { useCompanies } from '@/hooks/useCompanies'
 import TopBar from '@/components/TopBar'
 import SwipeSegment from '@/components/SwipeSegment'
 import BottomNav from '@/components/BottomNav'
-import BoardSwipeHint from '@/components/BoardSwipeHint'
 import { useFilterStore, useFilterHydrated, type FilterState } from '@/stores/filterStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { track } from '@/lib/analytics'
 import { warmNativeAdPool, getFeedNativeAdUnitId } from '@/lib/ads'
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/eventSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
+import { saveScrollOffset } from '@/lib/scrollMemory'
+import { useScrollRestore } from '@/hooks/useScrollRestore'
+import { confirmFavorite } from '@/lib/confirmToggle'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
 const SORT_OPTIONS: SortOption[] = [
@@ -73,12 +75,12 @@ export default function HomeScreen() {
   // 지시, 커뮤니티 검색과는 별개). 최근 검색어는 기기에 저장(lib/eventSearchHistory).
   const [search, setSearch] = useState('')
   const [searchModalVisible, setSearchModalVisible] = useState(false)
-  const { events, loading, loadingMore, error, refetch, loadMore } = useEvents(search)
+  const { events, loading, loadingMore, hasMore, error, refetch, loadMore } = useEvents(search)
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
   const { refreshing, onRefresh } = useRefreshIndicator(loading, refetch)
   const [filterVisible, setFilterVisible] = useState(false)
-  const { regions, themes, maxPrice, dateStart, dateEnd, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, setRegionsBulk, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
-  const regionOptions = useRegions()
+  const { regions, themes, minPrice, maxPrice, dateStart, dateEnd, hashtags, ageGroups, days, timeSlots, companies, ageGroupLabels, activeFilterCount, regionLabels, toggleRegion, setRegionsBulk, toggleTheme, toggleHashtag, toggleAgeGroup, toggleDay, toggleTimeSlot, toggleCompany, resetFilters } = useFilter()
+  const regionOptions = useRegions('dating')
   const filterHydrated = useFilterHydrated()  // persist 로드 완료 전엔 필터칩 렌더 보류(깜빡임 방지)
 
   // 홈 지역 빠른탭 = 군(강남권·강북권·강서권·경기·인천·충청·호남·경북·경남·기타) 순서
@@ -554,6 +556,11 @@ export default function HomeScreen() {
   // 안 바뀌게 한다(펼치려면 8px 아래로, 접으려면 60px 넘게 — 확실히 한쪽으로 넘어가야 함).
   const EXPAND_AT = 8
   const COLLAPSE_AT = 60
+  // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
+  // 복원 로직은 hooks/useScrollRestore.ts 참고(세 번째 재설계 — 한 번만 판정하지 않고
+  // 콘텐츠가 자랄 때마다 계속 다시 맞춘다). 페이지네이션 목록이라 loadMore 를 넘긴다.
+  const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
+    useScrollRestore('dating-feed', flatListRef, { hasMore, loadMore })
   const onScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     setShowFab(y > 300)
@@ -564,15 +571,20 @@ export default function HomeScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
+    // 복원이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이 자체적으로 흘리는
+    // y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로 덮어써버린다.
+    if (restoredScrollRef.current) saveScrollOffset('dating-feed', y)
   }, [chipsAnim])
 
   const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
-    track(isCurrent ? 'event_favorite_remove' : 'event_favorite_add', {
-      eventId,
-      companyId,
-      properties: { from_screen: 'home' },
+    confirmFavorite(isCurrent, () => {
+      track(isCurrent ? 'event_favorite_remove' : 'event_favorite_add', {
+        eventId,
+        companyId,
+        properties: { from_screen: 'home' },
+      })
+      toggleFavorite(eventId)
     })
-    toggleFavorite(eventId)
   }, [toggleFavorite])
 
   const handleSortChange = useCallback((sortId: FilterState['sortBy']) => {
@@ -639,7 +651,17 @@ export default function HomeScreen() {
     if (!name) return
     activeChips.push({ label: name, onRemove: () => toggleCompany(id) })
   })
-  if (maxPrice !== null) activeChips.push({ label: `${(maxPrice / 10000).toFixed(0)}만원 이하`, onRemove: () => useFilterStore.getState().setMaxPrice(null) })
+  if (minPrice !== null || maxPrice !== null) {
+    const won = (n: number) => `${(n / 10000).toFixed(0)}만원`
+    const priceLabel =
+      minPrice !== null && maxPrice !== null ? `${won(minPrice)}~${won(maxPrice)}`
+        : minPrice !== null ? `${won(minPrice)} 이상`
+        : `${won(maxPrice!)} 이하`
+    activeChips.push({
+      label: priceLabel,
+      onRemove: () => { useFilterStore.getState().setMinPrice(null); useFilterStore.getState().setMaxPrice(null) },
+    })
+  }
   if (dateStart && dateEnd) {
     const fmt = (d: string) => d.slice(5).replace('-', '.')
     activeChips.push({ label: `${fmt(dateStart)}~${fmt(dateEnd)}`, onRemove: () => useFilterStore.getState().setDateRange(null, null) })
@@ -822,11 +844,15 @@ export default function HomeScreen() {
           <AppSpinner />
         </View>
       ) : (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, opacity: listVisible ? 1 : 0 }}>
         <FlatList
           ref={flatListRef}
           onScroll={onScroll}
-          onContentSizeChange={(_w, h) => { if (Platform.OS === 'android') setAndroidContentHeight(h) }}
+          onScrollBeginDrag={onScrollBeginDrag}
+          onContentSizeChange={(w, h) => {
+            if (Platform.OS === 'android') setAndroidContentHeight(h)
+            restoreOnContentSizeChange(w, h)
+          }}
           onLayout={(e) => { if (Platform.OS === 'android') setAndroidListHeight(e.nativeEvent.layout.height) }}
           scrollEventThrottle={100}
           data={listData}
@@ -861,7 +887,7 @@ export default function HomeScreen() {
           }
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+          contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
           showsVerticalScrollIndicator={true}
           indicatorStyle={isDark ? 'white' : 'black'}
         />
@@ -894,9 +920,6 @@ export default function HomeScreen() {
           <Ionicons name="chevron-up" size={22} color="#fff" />
         </TouchableOpacity>
       )}
-
-      {/* 커뮤니티를 한 번도 안 가본 기기에만 — 왼쪽 스와이프하면 커뮤니티라는 힌트(2026-08-14 오너 지시) */}
-      <BoardSwipeHint />
 
       <EventSearchModal
         visible={searchModalVisible}

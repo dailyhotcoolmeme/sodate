@@ -10,7 +10,7 @@ import { useNotificationStore } from '@/stores/notificationStore'
 import { useProfileSheetStore } from '@/stores/profileSheetStore'
 import { NEW_TABS_ENABLED } from '@/constants/features'
 
-// 일정↔커뮤니티 토글 치수 — 바깥 테두리 높이(24)가 옆 "소개팅모아" 로고 높이(24)와
+// 일정↔커뮤니티 토글 치수 — 바깥 테두리 높이(24)가 옆 "모잇" 로고 높이(24)와
 // 정확히 같아야 한다(2026-08-12 오너 지시). 시스템 Switch는 iOS에서 51x31 고정이라
 // transform:scale로 흉내 내도 실측이 딱 안 맞아, 아예 자체 디자인 트랙+손잡이로 교체.
 const SEG_BORDER_H = 24
@@ -21,11 +21,12 @@ const SEG_THUMB_INSET = 2
 
 /**
  * 공용 상단 톱바 — 모든 화면 공통.
- * 왼쪽: (서브페이지면 뒤로) + 앱아이콘 + 소개팅모아
+ * 왼쪽: (서브페이지면 뒤로) + 앱아이콘 + 모잇
  * 오른쪽: (홈이면 필터) + 햄버거 메뉴
  */
 export default function TopBar({
   showBack = false,
+  title,
   onLogoPress,
   onBeforeNavigate,
   segment,
@@ -36,6 +37,9 @@ export default function TopBar({
   onCloseToggleTip,
 }: {
   showBack?: boolean
+  /** 서브페이지 인라인 제목(2026-08-24 조사·오너 A안 확정). 주면 로고·토글 대신
+   *  가운데 작은 제목을 그린다 — Apple HIG·문토 방식(하위 화면은 큰 제목 안 씀). */
+  title?: string
   onLogoPress?: () => void
   onBeforeNavigate?: () => void // 메뉴 이동 직전(예: 열린 모달 닫기)
   // 일정 ↔ 게시판 전환. 지금 있는 화면에 따라 알아서 정해지므로 보통 안 넘겨도 된다.
@@ -132,12 +136,21 @@ export default function TopBar({
     },
     left: { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0, flexShrink: 1 },
     backBtn: { paddingRight: 2 },
+    // 서브페이지 인라인 제목 — 큰 제목 대신(A안). 뒤로가기 옆, 본문 좌측선과 맞춘다.
+    inlineTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.3 },
     logoBtn: { flexDirection: 'row', alignItems: 'center' },
-    // 하트+"소개팅모아"가 한 이미지로 된 워드마크(원본 1042x231 = 4.51:1).
+    // 하트+"모잇"이 한 이미지로 된 워드마크(653x231 = 2.83:1).
+    // ⚠️ 2026-08-31 앱 이름이 모잇으로 확정되며 글자만 교체했다. 하트는 원본 그대로고,
+    //    글자는 외부에서 받은 이미지에서 흰 배경을 걷어내 원본 글자 자리(x292, y36,
+    //    높이 159)에 그대로 앉혔다 — 색도 원본과 같은 #EA6491 로 맞췄다.
     // 라이트·다크 양쪽에서 보이는 핑크 버전만 사용(검정/흰색은 한쪽에서 사라짐).
-    // 소개팅|커뮤니티 알약(글자 14)과 덩치를 맞춘다. 원본 1042x231 = 4.51:1 이라
-    // 높이 24 에 맞는 폭은 108 이다(2026-07-31 오너 지적).
-    logoWordmark: { width: 108, height: 24 },
+    // 소개팅|커뮤니티 알약(글자 14)과 덩치를 맞춘다. 653x231 = 2.83:1 이라
+    // 높이 24 에 맞는 폭은 68 이다.
+    // ⚠️ 글자 높이는 하트의 90%(208/231). 두 글자뿐이라 그보다 작으면 하트에 눌린다.
+    // ⚠️ '모잇' 글자는 외부에서 받은 레터링(assets/logo-letters-moit.png)이다.
+    //    옛 글자 재조합 → 폰트 조판을 거쳐 이걸로 확정했다(2026-08-31). 하트만 원본.
+    //    크기·자간을 바꾸려면 assets/build-logos.py 를 돌리고 여기 상수도 갱신.
+    logoWordmark: { width: 68, height: 24 },
     // 일정 ↔ 게시판 전환. 예전엔 '소개팅|커뮤니티' 글자 알약이었는데(심사 중엔 심사자가
     // 눌러보게 하려고 일부러 글자를 남겨뒀었다 — docs/BOARD_SPEC.md), 통과 후 토글로 교체.
     // 켜짐=커뮤니티, 꺼짐=소개팅. 시스템 Switch는 iOS에서 정확한 높이 지정이 안 돼(51x31
@@ -222,7 +235,7 @@ export default function TopBar({
       ? [{ label: '차단 목록', icon: 'eye-off-outline', action: () => router.push('/board/blocked') }]
       : [
           { label: '후기 모음', icon: 'chatbubble-ellipses-outline', action: () => router.push('/reviews') },
-          { label: '관심 모임', icon: 'heart-outline', action: () => router.push('/favorites') },
+          { label: '관심 모임', icon: 'bookmark', action: () => router.push('/favorites') },
           { label: '알림 설정', icon: 'notifications-outline', action: () => router.push('/alerts') },
           { label: '내 정보', icon: 'person-outline', action: () => useProfileSheetStore.getState().openSheet() },
         ]),
@@ -248,6 +261,9 @@ export default function TopBar({
               <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
           )}
+          {title ? (
+            <Text style={styles.inlineTitle} numberOfLines={1}>{title}</Text>
+          ) : (
           <TouchableOpacity style={styles.logoBtn} activeOpacity={0.7}
             // 게시판 안에서는 게시판 홈으로 간다. 로고를 눌렀다고 일정으로 튕기면
             // 쓰던 흐름이 끊긴다(2026-07-31 오너 지적).
@@ -256,13 +272,14 @@ export default function TopBar({
               source={require('../assets/logo-wordmark.png')}
               style={styles.logoWordmark}
               contentFit="contain"
-              accessibilityLabel="소개팅모아"
+              accessibilityLabel="모잇"
             />
           </TouchableOpacity>
+          )}
 
           {/* 소개팅↔커뮤니티 토글 — 5탭 개편(NEW_TABS_ENABLED)에선 탭으로 이동하므로 제거.
               운영 앱(2탭)은 그대로 유지. */}
-          {!NEW_TABS_ENABLED && (<>
+          {!NEW_TABS_ENABLED && !title && (<>
           <View style={styles.segSwitchWrap}>
             <TouchableOpacity
               activeOpacity={0.85}

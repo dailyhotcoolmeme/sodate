@@ -68,7 +68,7 @@ async function sendMail(subject: string, html: string, text: string): Promise<vo
     auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
   })
   await transport.sendMail({
-    from: `"소개팅모아 신고 알림" <${GMAIL_USER}>`,
+    from: `"모잇 신고 알림" <${GMAIL_USER}>`,
     to: NOTIFY_TO,
     subject,
     text,
@@ -152,7 +152,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     }
 
-    const subject = `[소개팅모아] ${typeLabel} 신고 · ${title || '(내용 없음)'}`
+    const subject = `[모잇] ${typeLabel} 신고 · ${title || '(내용 없음)'}`
     const text = `${typeLabel} 신고가 접수됐습니다 (누적 ${reportCount}건)\n` +
       `글: ${title}\n작성자: ${author}\n신고 사유: ${report.reason || '(사유 없음)'}\n\n` +
       `신고 대상 내용:\n${contentPreview}\n\n관리자: ${ADMIN_URL}`

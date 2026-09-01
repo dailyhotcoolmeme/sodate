@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { NEW_TABS_ENABLED } from '@/constants/features'
+import { saveTabRoute, getTabRoute } from '@/lib/tabMemory'
 
 /**
  * 하단 5탭 내비게이션(2026-08-21) — 소개팅·소셜링·[홈]·혼술바·MY.
@@ -27,16 +28,38 @@ const SIDE_TABS: { key: TabKey; label: string; route: string; icon: keyof typeof
   { key: 'my',        label: 'MY',     route: '/my',        icon: 'person' },
 ]
 
-export default function BottomNav({ current }: { current: TabKey }) {
+const CANONICAL_ROUTE: Record<TabKey, string> = {
+  event: '/', socialing: '/socialing', honsul: '/honsul', my: '/my', board: '/board',
+}
+
+/**
+ * route(각 화면이 넘겨주는 자기 자신의 실제 경로, 예: `/event/${id}`) — 예전엔 여기서
+ * usePathname() 으로 "지금 경로"를 알아내 저장했는데, 화면 전환 애니메이션 도중에는
+ * 옛 화면·새 화면이 잠깐 같이 떠 있을 수 있어 pathname 이 엉뚱한 화면의 것으로 잘못
+ * 저장되는 경쟁 상태가 있었다(2026-08-25 오너 확인: "소개팅을 눌러도 소셜링만 눌러진다",
+ * "MY 눌러도 혼술바가 눌러진다" — 라우터 타이밍에 좌우되는 값이라 재현이 들쭉날쭉했다).
+ * 대신 각 화면이 자기 id 로 직접 만든, 라우터 타이밍과 무관한 고정 문자열을 넘기게 한다.
+ */
+export default function BottomNav({ current, route }: { current: TabKey; route?: string }) {
   const colors = useColors()
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const styles = useMemo(() => makeStyles(colors), [colors])
+  const myRoute = route ?? CANONICAL_ROUTE[current]
+
+  // 이 화면이 지금 자기 탭 구역에서 "마지막으로 보던 화면"이 된다 — 상세페이지도 포함.
+  // 나중에 다른 탭 갔다가 이 탭으로 돌아오면 목록이 아니라 여기로 돌아온다.
+  useEffect(() => {
+    if (NEW_TABS_ENABLED) saveTabRoute(current, myRoute)
+  }, [current, myRoute])
 
   // 플래그가 꺼져 있으면 렌더 자체를 안 한다 — 운영 앱에 영향 0.
   if (!NEW_TABS_ENABLED) return null
 
-  const go = (route: string, active: boolean) => { if (!active) router.replace(route as never) }
+  const go = (key: TabKey, route: string, active: boolean) => {
+    if (active) return
+    router.replace((getTabRoute(key) ?? route) as never)
+  }
   const boardOn = current === 'board'
 
   // 좌우 2개씩 나누고 가운데에 홈을 끼운다.
@@ -48,7 +71,7 @@ export default function BottomNav({ current }: { current: TabKey }) {
     return (
       <TouchableOpacity
         key={t.key} style={styles.tab} activeOpacity={0.7}
-        onPress={() => go(t.route, on)}
+        onPress={() => go(t.key, t.route, on)}
         accessibilityRole="tab" accessibilityState={{ selected: on }}
       >
         <Ionicons
@@ -69,11 +92,11 @@ export default function BottomNav({ current }: { current: TabKey }) {
         <TouchableOpacity
           style={[styles.homeBtn, boardOn && styles.homeBtnOn]}
           activeOpacity={0.85}
-          onPress={() => go('/board', boardOn)}
+          onPress={() => go('board', '/board', boardOn)}
           accessibilityRole="tab" accessibilityLabel="커뮤니티"
           accessibilityState={{ selected: boardOn }}
         >
-          <Ionicons name="chatbubble-ellipses" size={27} color="#fff" />
+          <Ionicons name="chatbubble-ellipses" size={32} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -96,10 +119,10 @@ function makeStyles(colors: AppColors) {
     },
     label: { fontSize: 10, color: colors.textTertiary },
     labelOn: { color: colors.primary, fontWeight: '800' },
-    // 가운데 홈 — 바 위로 16 튀어나온다. margin-top 음수로 끌어올린다.
-    homeSlot: { flexShrink: 0, marginHorizontal: 6, marginTop: -16 },
+    // 가운데 홈(메인) — 바 위쪽 선을 넘치게 크게 튀어나온다. margin-top 음수로 끌어올린다.
+    homeSlot: { flexShrink: 0, marginHorizontal: 6, marginTop: -24 },
     homeBtn: {
-      width: 56, height: 56, borderRadius: 999,
+      width: 64, height: 64, borderRadius: 999,
       backgroundColor: `${colors.primary}CC`,   // 비선택: 살짝 연하게
       alignItems: 'center', justifyContent: 'center',
       borderWidth: 3, borderColor: colors.background,

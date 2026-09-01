@@ -143,6 +143,7 @@ describe('filterStore', () => {
       regions: ['이태원'],
       dateStart: '2026-08-01',
       dateEnd: '2026-08-31',
+      minPrice: null,
       maxPrice: 30000,
       themes: ['파티'],
       savedAt: Date.now(),

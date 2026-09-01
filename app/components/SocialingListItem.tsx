@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
-import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
 import { groupForCategory } from '@/constants/socialingCategories'
 
@@ -55,6 +54,12 @@ export default function SocialingListItem({ event, isFavorite = false, onToggleF
   const cap = stats?.total_capacity
   const cur = stats?.total_count
 
+  // 소셜링은 성별 구분 없는 단일 참가비 — price_male(=price_female) 사용, 0이면 무료.
+  const fee = event.price_male ?? event.price_female
+  const hasGender = mc != null || fc != null
+  // 마감 = 서버 플래그 or 정원 다 참(정원·현재인원 있을 때).
+  const closed = event.is_closed || (cap != null && cur != null && cur >= cap)
+
   const handlePress = () => {
     // 소셜링도 소개팅과 같은 방식 — 눌러서 상세로. 아직 상세가 없으면 아웃링크로 바로.
     router.push(`/event/${event.id}`)
@@ -87,23 +92,24 @@ export default function SocialingListItem({ event, isFavorite = false, onToggleF
           </View>
         )}
         <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
-        <HashtagChips hashtags={event.hashtags} size="sm" tight />
         <Text style={styles.meta}>{formatDate(event.event_date)} · {event.location_region}</Text>
 
+        {/* 참가비 + 정원·남녀 참여현황을 한 줄에 — 마감 표시는 소개팅과 동일하게
+            카드 전체 오버레이(아래 closedOverlay) 하나로 통일한다(2026-08-24 오너 지시,
+            가격 옆 별도 "마감" 배지는 중복이라 없앰). 마감이어도 정원·참여 숫자는 그대로 보여준다. */}
         <View style={styles.partBlock}>
-          {(mc != null || fc != null) ? (
-            <View style={styles.partRow}>
-              {mc != null && <Text style={[styles.gtag, styles.gMale]}>남 {mc}</Text>}
-              {fc != null && <Text style={[styles.gtag, styles.gFemale]}>여 {fc}</Text>}
-            </View>
-          ) : cap != null ? (
-            <View style={styles.partRow}>
-              <Ionicons name="people-outline" size={13} color={colors.textSecondary} />
-              <Text style={styles.partText}>정원 {cap}명 중 <Text style={styles.partHi}>{cur ?? 0}명</Text> 참여</Text>
-            </View>
-          ) : (
-            <Text style={styles.partMuted}>신청 · 대기 가능</Text>
-          )}
+          <View style={styles.partRow}>
+            {fee != null && (
+              <Text style={styles.priceText}>{fee === 0 ? '무료' : `${fee.toLocaleString()}원`}</Text>
+            )}
+            {(hasGender || cap != null) && (
+              <Text style={styles.partMuted}>
+                {hasGender
+                  ? `${cap != null ? `정원 ${cap}명 · ` : ''}남 ${mc ?? 0} · 여 ${fc ?? 0}`
+                  : `정원 ${cap}명${cur != null ? ` · ${cur}명 참여` : ''}`}
+              </Text>
+            )}
+          </View>
         </View>
       </View>
 
@@ -114,12 +120,13 @@ export default function SocialingListItem({ event, isFavorite = false, onToggleF
           onPress={(e) => { e.stopPropagation?.(); onToggleFavorite() }}
           activeOpacity={0.8}
         >
-          <Ionicons name="heart" size={20} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
+          <Ionicons name="bookmark" size={20} color={isFavorite ? '#FF6B9D' : colors.textTertiary} />
         </TouchableOpacity>
       )}
 
-      {/* 마감 오버레이 — 소개팅과 동일 */}
-      {event.is_closed && (
+      {/* 마감 오버레이 — 소개팅과 동일 형태(가격 옆 배지는 없앰). 서버 플래그뿐 아니라
+          정원이 다 찬 경우(집계가 아직 안 왔을 때)도 여기서 같이 잡는다. */}
+      {closed && (
         <View style={styles.closedOverlay} pointerEvents="none">
           <View style={styles.closedBadge}>
             <Text style={styles.closedBadgeText}>마감</Text>
@@ -147,14 +154,15 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     catBadgeText: { fontSize: 11, fontWeight: '800', color: colors.primary },
     title: { fontSize: 14, color: colors.textPrimary, fontWeight: '700', lineHeight: 19 },
     meta: { fontSize: 12, color: colors.textSecondary },
-    partBlock: { marginTop: 3, minHeight: 20, justifyContent: 'center' },
-    partRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    partBlock: { marginTop: 3, gap: 2 },
+    partRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+    priceText: { fontSize: 13.5, fontWeight: '800', color: colors.textPrimary },
     gtag: { fontSize: 11, fontWeight: '800', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, overflow: 'hidden' },
     gMale: { color: '#7fb3e0', backgroundColor: 'rgba(91,155,213,0.16)' },
     gFemale: { color: colors.primary, backgroundColor: `${colors.primary}1f` },
     partText: { fontSize: 12, color: colors.textPrimary, fontWeight: '600' },
     partHi: { color: colors.success, fontWeight: '800' },
-    partMuted: { fontSize: 12, color: colors.textTertiary },
+    partMuted: { fontSize: 12, color: colors.primary, fontWeight: '600' },
     heart: { paddingLeft: 4, paddingTop: 2 },
     closedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
     closedBadge: { backgroundColor: 'rgba(24,24,27,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10 },

@@ -2,6 +2,7 @@ import React, { useMemo, useEffect } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import AppSpinner from '@/components/AppSpinner'
 import TopBar from '@/components/TopBar'
+import BottomNav from '@/components/BottomNav'
 import {
   View,
   Text,
@@ -266,6 +267,7 @@ export default function CompanyDetailScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+    <BottomNav current="event" route={`/company/${id}`} />
     </View>
   )
 }

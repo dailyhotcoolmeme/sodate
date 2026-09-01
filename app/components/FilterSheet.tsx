@@ -7,13 +7,14 @@ import {
   ScrollView,
   Modal,
   TextInput,
+  Platform,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
 import { useRegions } from '@/hooks/useRegions'
 import { REGION_GROUP_ORDER, regionGroupKey, TAG_GROUP_ORDER, tagGroupKey } from '@/constants/chipGroups'
 import { useCompanies } from '@/hooks/useCompanies'
 import { useHashtags } from '@/hooks/useHashtags'
-import TopBar from '@/components/TopBar'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { DAY_OPTIONS, TIME_SLOTS } from '@/constants/filters'
@@ -35,11 +36,18 @@ const PRICE_OPTIONS: { value: number | null; label: string }[] = [
   { value: 100000, label: '10만원 이하' },
 ]
 
+/** 가격 직접 입력 — 숫자만 남기고, 비었으면 null(제한 없음)로. */
+function parsePriceInput(text: string): number | null {
+  const digits = text.replace(/[^0-9]/g, '')
+  return digits ? Number(digits) : null
+}
+
 // FilterSheet가 실제로 편집하는 필드들의 초안(draft) 타입 — 나머지(정렬 등)는 스토어를 안 거친다.
 type FilterDraft = {
   regions: string[]
   dateStart: string | null
   dateEnd: string | null
+  minPrice: number | null
   maxPrice: number | null
   hashtags: string[]
   ageGroups: string[]
@@ -53,6 +61,7 @@ function draftFromStore(s: ReturnType<typeof useFilterStore.getState>): FilterDr
     regions: s.regions,
     dateStart: s.dateStart,
     dateEnd: s.dateEnd,
+    minPrice: s.minPrice,
     maxPrice: s.maxPrice,
     hashtags: s.hashtags,
     ageGroups: s.ageGroups,
@@ -78,7 +87,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible])
 
-  const { regions, dateStart, dateEnd, maxPrice, hashtags, ageGroups, days, timeSlots, companies } = draft
+  const { regions, dateStart, dateEnd, minPrice, maxPrice, hashtags, ageGroups, days, timeSlots, companies } = draft
 
   const toggleRegion = (id: string) =>
     setDraft((d) => ({
@@ -91,6 +100,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
       regions: on ? Array.from(new Set([...d.regions, ...ids])) : d.regions.filter((x) => !ids.includes(x)),
     }))
   const setDateRange = (s: string | null, e: string | null) => setDraft((d) => ({ ...d, dateStart: s, dateEnd: e }))
+  const setMinPrice = (p: number | null) => setDraft((d) => ({ ...d, minPrice: p }))
   const setMaxPrice = (p: number | null) => setDraft((d) => ({ ...d, maxPrice: p }))
   const toggleHashtag = (tag: string) =>
     setDraft((d) => ({
@@ -117,7 +127,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
 
   const colors = useColors()
   const insets = useSafeAreaInsets()
-  const regionOptions = useRegions()
+  const regionOptions = useRegions('dating')
   const companyOptions = useCompanies()
   const hashtagOptions = useHashtags()
   const [hashtagQuery, setHashtagQuery] = useState('')
@@ -163,68 +173,53 @@ export default function FilterSheet({ visible, onClose }: Props) {
       flex: 1,
       backgroundColor: colors.background,
     },
-    header: {
+    // 헤더 — MY "알림 설정" 페이지(TopBar showBack+title)와 동일 규격. 모달이라
+    // 뒤로가기가 router.back() 이 아니라 onClose 라 TopBar 대신 직접 그린다.
+    // Android 는 pageSheet 가 상태바를 안 피해가므로 안전영역을 더해야 한다(iOS는 이미 아래에서 시작).
+    topRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
+      justifyContent: 'space-between',
+      paddingHorizontal: 14,
+      paddingTop: Platform.OS === 'android' ? insets.top + 10 : 10,
+      paddingVertical: 10,
       borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      borderBottomColor: colors.divider,
     },
-    headerTitle: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: colors.textPrimary,
-    },
+    topLeft: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    topBack: { paddingRight: 2 },
+    topTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.3 },
+    topReset: { fontSize: 14, fontWeight: '700', color: colors.textTertiary },
     toggleAllRow: {
       alignItems: 'flex-end',
       paddingTop: 12,
       paddingBottom: 4,
     },
     toggleAllText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+    // 하단 바 — 초기화는 상단으로 옮겼으니 적용하기 하나만 전체 너비로 남는다.
+    // 그림자 없앰(오너 지시 2026-08-24) — 알림 설정 "저장" 버튼과 동일하게 flat.
     applyBar: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      flexDirection: 'row',
-      gap: 10,
       paddingHorizontal: 16,
       paddingTop: 10,
       backgroundColor: colors.background,
       borderTopWidth: 1,
       borderTopColor: colors.border,
     },
-    barBtn: {
-      flex: 1,                 // 초기화·적용하기 동일 너비
-      borderRadius: 14,
-      paddingVertical: 15,
+    applyFab: {
+      borderRadius: 12,
+      paddingVertical: 16,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    resetBtn: {
-      backgroundColor: colors.surfaceHigh,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    resetBtnText: {
-      color: colors.textPrimary,
-      fontSize: 16,
-      fontWeight: '700',
-    },
-    applyFab: {
       backgroundColor: colors.primary,
-      shadowColor: '#000',
-      shadowOpacity: 0.18,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 6,
     },
     applyFabText: {
       color: '#fff',
       fontSize: 16,
-      fontWeight: '800',
+      fontWeight: '700',
     },
     section: {
       paddingVertical: 16,
@@ -252,6 +247,15 @@ export default function FilterSheet({ visible, onClose }: Props) {
       gap: 8,
       flexWrap: 'wrap',
     },
+    priceRangeLabel: { fontSize: 12, fontWeight: '600', color: colors.textTertiary, marginTop: 14, marginBottom: 8 },
+    priceRangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    priceInput: {
+      flex: 1, minWidth: 0, backgroundColor: colors.surfaceHigh, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.textPrimary,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    priceRangeDash: { fontSize: 14, color: colors.textTertiary },
+    priceRangeUnit: { fontSize: 13, color: colors.textSecondary },
     groupTop: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginTop: 12, marginBottom: 2 },
     groupRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 8, gap: 8 },
     groupRowLabel: { width: 60, paddingLeft: 10, paddingTop: 7, fontSize: 13, fontWeight: '700', color: colors.textSecondary },
@@ -315,7 +319,7 @@ export default function FilterSheet({ visible, onClose }: Props) {
   const handleReset = () => {
     resetFilters()
     setDraft({
-      regions: [], dateStart: null, dateEnd: null, maxPrice: null,
+      regions: [], dateStart: null, dateEnd: null, minPrice: null, maxPrice: null,
       hashtags: [], ageGroups: [], days: [], timeSlots: [], companies: [],
     })
   }
@@ -328,12 +332,18 @@ export default function FilterSheet({ visible, onClose }: Props) {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        {/* pageSheet 모달은 이미 상태바 아래에서 시작한다. 여기서 안전영역 여백을
-            또 주면 홈 화면보다 한참 아래에서 시작해 보인다(2026-07-31 오너 지적). */}
-        <TopBar onBeforeNavigate={onClose} noSafeTop />
-        {/* 헤더 — 초기화·적용은 하단 플로팅으로 이동 */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>필터</Text>
+        {/* 헤더 — MY "알림 설정"과 동일하게 뒤로가기+인라인 제목. 초기화는 여기 오른쪽으로
+            옮겼다(예전엔 하단 플로팅 버튼이었음, 2026-08-24 오너 지시). */}
+        <View style={styles.topRow}>
+          <View style={styles.topLeft}>
+            <TouchableOpacity onPress={onClose} style={styles.topBack} hitSlop={8}>
+              <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.topTitle}>필터</Text>
+          </View>
+          <TouchableOpacity onPress={handleReset} hitSlop={8}>
+            <Text style={styles.topReset}>초기화</Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 96 }}>
@@ -528,6 +538,28 @@ export default function FilterSheet({ visible, onClose }: Props) {
                 />
               ))}
             </View>
+            {/* 직접 입력(2026-08-24 오너 지시) — 프리셋과 별개로 최소·최대를 직접 정한다. */}
+            <Text style={styles.priceRangeLabel}>직접 입력</Text>
+            <View style={styles.priceRangeRow}>
+              <TextInput
+                style={styles.priceInput}
+                placeholder="최소"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="number-pad"
+                value={minPrice != null ? String(minPrice) : ''}
+                onChangeText={(t) => setMinPrice(parsePriceInput(t))}
+              />
+              <Text style={styles.priceRangeDash}>~</Text>
+              <TextInput
+                style={styles.priceInput}
+                placeholder="최대"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="number-pad"
+                value={maxPrice != null ? String(maxPrice) : ''}
+                onChangeText={(t) => setMaxPrice(parsePriceInput(t))}
+              />
+              <Text style={styles.priceRangeUnit}>원</Text>
+            </View>
           </CollapsibleSection>
 
           {/* 업체 */}
@@ -555,12 +587,9 @@ export default function FilterSheet({ visible, onClose }: Props) {
           <View style={{ height: insets.bottom + 24 }} />
         </ScrollView>
 
-        {/* 하단 플로팅 바 — 초기화 · 적용하기 한 줄, 동일 너비 */}
+        {/* 하단 플로팅 바 — 적용하기만 전체 너비로(초기화는 상단으로 옮김) */}
         <View style={[styles.applyBar, { paddingBottom: insets.bottom + 10 }]}>
-          <TouchableOpacity style={[styles.barBtn, styles.resetBtn]} onPress={handleReset} activeOpacity={0.85}>
-            <Text style={styles.resetBtnText}>초기화</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.barBtn, styles.applyFab]} onPress={handleApply} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.applyFab} onPress={handleApply} activeOpacity={0.85}>
             <Text style={styles.applyFabText}>적용하기</Text>
           </TouchableOpacity>
         </View>
