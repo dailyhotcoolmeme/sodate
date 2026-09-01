@@ -67,11 +67,13 @@ export default function PartnerNotice({
         {/* 바깥을 눌러도 닫힌다 — 확인만 누르게 가두면 팝업이 함정처럼 느껴진다. */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={styles.card}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>모잇 할인</Text>
-          </View>
+          <Text style={styles.title}>모잇 할인</Text>
           <Text style={styles.action}>{partnerActionText(kind)}</Text>
-          {!!b && <Text style={styles.benefit}>{b}</Text>}
+          {!!b && (
+            <View style={styles.benefitBox}>
+              <Text style={styles.benefitText}>{b}</Text>
+            </View>
+          )}
           <TouchableOpacity style={styles.ok} onPress={onClose} activeOpacity={0.85}>
             <Text style={styles.okText}>확인</Text>
           </TouchableOpacity>
@@ -100,19 +102,33 @@ function makeStyles(colors: AppColors) {
       alignItems: 'center',
       gap: 14,
     },
-    // 카드에 붙는 딱지와 같은 모양(꽉 찬 핑크·반지름 6)이라 "그 딱지 얘기"임이 바로 읽힌다.
-    badge: { backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 4.5 },
-    badgeText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
-    action: { fontSize: 15, lineHeight: 22, color: colors.textPrimary, fontWeight: '600', textAlign: 'center' },
-    benefit: { fontSize: 19, lineHeight: 26, color: colors.primary, fontWeight: '800', textAlign: 'center' },
+    // ⚠️ 이 팝업에서 제일 눈에 띄어야 하는 건 **혜택**이지 닫기 버튼이 아니다.
+    //    처음엔 '확인'을 꽉 찬 핑크 큰 버튼으로 두고 혜택은 그냥 글자였는데, 화면에서
+    //    제일 크고 진한 것이 닫기 버튼이라 눈이 거기로 갔다(2026-09-02 오너 지적).
+    //    그래서 크기·색의 순서를 뒤집었다: 제목 > 혜택 박스 > 본문 > 확인.
+    title: { fontSize: 24, lineHeight: 32, color: colors.primary, fontWeight: '900', textAlign: 'center' },
+    action: { fontSize: 14, lineHeight: 21, color: colors.textSecondary, fontWeight: '600', textAlign: 'center' },
+    // 혜택은 박스로 둘러 강조한다 — 글자만으로는 본문에 묻힌다.
+    benefitBox: {
+      alignSelf: 'stretch',
+      backgroundColor: `${colors.primary}1F`,
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      alignItems: 'center',
+    },
+    benefitText: { fontSize: 22, lineHeight: 30, color: colors.primary, fontWeight: '900', textAlign: 'center' },
+    // 확인은 조용하게. 눌러야 닫히는 건 알아야 하니 버튼 모양은 유지하되 색을 뺀다.
     ok: {
       alignSelf: 'stretch',
       marginTop: 2,
-      paddingVertical: 13,
+      paddingVertical: 12,
       borderRadius: 12,
       alignItems: 'center',
-      backgroundColor: colors.primary,
+      backgroundColor: colors.surfaceHigh,
     },
-    okText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+    okText: { fontSize: 15, fontWeight: '700', color: colors.textSecondary },
   })
 }
