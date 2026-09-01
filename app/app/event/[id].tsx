@@ -2,7 +2,7 @@ import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react'
 import AppSpinner from '@/components/AppSpinner'
 import EventThumbnail from '@/components/EventThumbnail'
 import PartnerBadge from '@/components/PartnerBadge'
-import PartnerNotice, { partnerLineText } from '@/components/PartnerNotice'
+import PartnerNotice from '@/components/PartnerNotice'
 import { isPartnerCompany } from '@/lib/partner'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
@@ -146,8 +146,6 @@ export default function EventDetailScreen() {
     // 딱지와 제목을 한 줄에. 제목이 길어지면 딱지가 아니라 제목이 줄바꿈된다.
     // ⚠️ 위쪽 titleRow(업체명+하트)와 다른 줄이다 — 이름을 겹치게 쓰면 뒤에 선언한 쪽이
     //    앞을 통째로 덮어써서 업체명 줄 간격이 조용히 바뀐다.
-    partnerLine: { backgroundColor: `${colors.primary}1A`, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 10 },
-    partnerLineText: { fontSize: 13, lineHeight: 18, color: colors.primary, fontWeight: '700' },
     partnerTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 14 },
     titleText: { flex: 1, marginBottom: 0 },
     title: {
@@ -533,17 +531,6 @@ export default function EventDetailScreen() {
 
         {/* 제목 — 제휴업체면 딱지가 제목 앞에 붙는다(카드와 같은 규칙, 2026-09-02).
             제목이 두 줄 이상이면 딱지는 첫 줄에 맞춰 위로 붙는다(alignItems flex-start). */}
-        {/* 제목 위 안내 한 줄 — 팝업은 지나가면 사라지므로 다시 읽을 자리를 남긴다.
-            여기엔 '모잇 할인'을 다시 쓰지 않는다: 바로 아래 제목 앞에 딱지가 있어
-            같은 말이 두 줄 연속으로 나온다. 딱지는 표시, 이 줄은 행동. */}
-        {isPartner && (
-          <View style={styles.partnerLine}>
-            <Text style={styles.partnerLineText}>
-              {partnerLineText('event', event.companies?.partner_benefit)}
-            </Text>
-          </View>
-        )}
-
         <View style={styles.partnerTitleRow}>
           {isPartnerCompany(event.companies) && <PartnerBadge size="md" />}
           <Text style={[styles.title, styles.titleText]}>{cleanText(event.title)}</Text>

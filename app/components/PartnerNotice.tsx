@@ -23,6 +23,11 @@ import type { AppColors } from '@/constants/colors'
  * 소개팅은 신청 절차가 있고, 혼술바는 그냥 방문한다. 그래서 안내 문장이 다르다.
  * '신청서에'라고 못 박지 않는 이유는 신청이 폼일 수도 전화·DM일 수도 있어서다.
  *
+ * ## 제목 위 안내 줄은 없다(2026-09-02 오너 지시로 제거)
+ * 팝업을 다시 읽을 자리로 제목 위에 핑크 한 줄을 뒀었는데, 그 화면은 딱지·해시태그·
+ * 가격이 전부 핑크라 한 줄이 더 붙자 "온통 핑크색이라 정신없다"는 지적을 받았다.
+ * 안내는 팝업 하나로 끝낸다.
+ *
  * ## 다시 보지 않기를 두지 않는다(오너 지시)
  * 한 번 체크해두면 정작 필요할 때 안 뜬다. 상세 진입 1회당 한 번만 뜨므로 성가시지 않다.
  */
@@ -32,17 +37,6 @@ export function partnerActionText(kind: PartnerKind): string {
   return kind === 'place'
     ? '매장에서 모잇 앱을 보여주시면\n서비스를 받으실 수 있어요'
     : '신청하실 때 "모잇 통해서 신청"이라고\n알려주시면 혜택을 받을 수 있어요'
-}
-
-/** 상세 제목 위 한 줄. 팝업과 같은 말을 한 줄로 줄인 것 — 팝업은 지나가면 사라진다. */
-export function partnerLineText(kind: PartnerKind, benefit?: string | null): string {
-  const b = (benefit ?? '').trim()
-  if (kind === 'place') {
-    return b ? `모잇 앱을 보여주시면 ${b}` : '모잇 앱을 보여주시면 서비스를 받으실 수 있어요'
-  }
-  return b
-    ? `"모잇 통해서 신청"이라고 알려주시면 ${b}`
-    : '"모잇 통해서 신청"이라고 알려주시면 혜택을 받을 수 있어요'
 }
 
 export default function PartnerNotice({

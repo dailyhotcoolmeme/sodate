@@ -16,7 +16,7 @@ import { getHonsulDetailNativeAdUnitId } from '@/lib/ads'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import PartnerBadge from '@/components/PartnerBadge'
-import PartnerNotice, { partnerLineText } from '@/components/PartnerNotice'
+import PartnerNotice from '@/components/PartnerNotice'
 import { isPartnerPlace } from '@/lib/partner'
 import type { AppColors } from '@/constants/colors'
 import type { ReviewRow } from '@/lib/supabase'
@@ -215,15 +215,6 @@ export default function PlaceDetailScreen() {
 
         <View style={styles.body}>
           {/* 업체명 + 찜(오른쪽 끝) */}
-          {/* 매장명 위 안내 한 줄 — 팝업은 지나가면 사라지므로 다시 읽을 자리를 남긴다. */}
-          {isPartner && (
-            <View style={styles.partnerLine}>
-              <Text style={styles.partnerLineText}>
-                {partnerLineText('place', place.partner_benefit)}
-              </Text>
-            </View>
-          )}
-
           <View style={styles.nameRow}>
             {isPartnerPlace(place) && <PartnerBadge size="md" />}
             <Text style={styles.name}>{place.name}</Text>
@@ -396,8 +387,6 @@ function makeStyles(colors: AppColors) {
     checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     nearbyText: { color: colors.textPrimary, fontSize: 12, fontWeight: '700' },
     body: { padding: 16, paddingBottom: 6 },
-    partnerLine: { backgroundColor: `${colors.primary}1A`, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 10 },
-    partnerLineText: { fontSize: 13, lineHeight: 18, color: colors.primary, fontWeight: '700' },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     name: { flex: 1, fontSize: 20, fontWeight: '800', color: colors.textPrimary },
     tagScroll: { height: 18, flexGrow: 0, flexShrink: 0, marginTop: 8 },
