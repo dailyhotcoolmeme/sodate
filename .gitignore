@@ -42,3 +42,8 @@ crawler/.venv/
 
 # EAS 로컬 자격증명 — 배포 인증서 경로·비밀번호가 들어간다. 절대 커밋 금지.
 app/credentials.json
+
+# 스토어 제출용 빌드 산출물 — 100MB 넘어서 GitHub 이 거부한다(2026-09-01).
+# 필요하면 EAS 에서 다시 받는다.
+docs/store-assets/*.aab
+docs/store-assets/*.ipa
