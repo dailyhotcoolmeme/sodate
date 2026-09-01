@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import EventThumbnail from './EventThumbnail'
 import DeadlineBadge from './DeadlineBadge'
+import PartnerBadge from './PartnerBadge'
+import { isPartnerCompany } from '@/lib/partner'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import type { EventWithCompany } from '@/lib/supabase'
@@ -81,7 +83,12 @@ export default function SocialingCard({ event, isFavorite = false, onToggleFavor
         {group && (
           <View style={styles.catBadge}><Text style={styles.catBadgeText}>{group.label}</Text></View>
         )}
-        <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
+        {/* 제휴업체면 제목 앞에 딱지. 소개팅 카드(titleRow)와 같은 구조로 맞춘다 —
+            딱지는 제 폭만 차지하고 제목이 남은 폭을 쓴다(2026-09-02). */}
+        <View style={styles.titleRow}>
+          {isPartnerCompany(event.companies) && <PartnerBadge />}
+          <Text style={styles.title} numberOfLines={2}>{cleanTitle(event.title)}</Text>
+        </View>
         <View style={styles.metaRow}>
           <Text style={styles.meta}>{formatDate(event.event_date)}</Text>
           <Text style={styles.metaDot}>·</Text>
@@ -141,7 +148,8 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
     content: { padding: 16, gap: 4 },
     catBadge: { alignSelf: 'flex-start', backgroundColor: `${colors.primary}22`, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
     catBadgeText: { fontSize: 11, fontWeight: '800', color: colors.primary },
-    title: { fontSize: 16, color: colors.textPrimary, fontWeight: '700', lineHeight: 21 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    title: { flex: 1, fontSize: 16, color: colors.textPrimary, fontWeight: '700', lineHeight: 21 },
     metaRow: { flexDirection: 'row', alignItems: 'center' },
     meta: { fontSize: 13, color: colors.textSecondary },
     metaDot: { fontSize: 13, color: colors.textTertiary, marginHorizontal: 5 },

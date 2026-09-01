@@ -15,6 +15,8 @@ import AdBanner from '@/components/AdBanner'
 import { getHonsulDetailNativeAdUnitId } from '@/lib/ads'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
+import PartnerBadge from '@/components/PartnerBadge'
+import { isPartnerPlace } from '@/lib/partner'
 import type { AppColors } from '@/constants/colors'
 import type { ReviewRow } from '@/lib/supabase'
 import {
@@ -202,6 +204,7 @@ export default function PlaceDetailScreen() {
         <View style={styles.body}>
           {/* 업체명 + 찜(오른쪽 끝) */}
           <View style={styles.nameRow}>
+            {isPartnerPlace(place) && <PartnerBadge size="md" />}
             <Text style={styles.name}>{place.name}</Text>
             <TouchableOpacity onPress={() => confirmFavorite(isFav, () => toggle(place.id))} hitSlop={8} activeOpacity={0.8}>
               <Ionicons name="bookmark" size={22} color={isFav ? '#FF6B9D' : colors.textTertiary} />

@@ -53,6 +53,8 @@ export interface Database {
           description: string | null
           instagram_url: string | null
           is_active: boolean
+          /** 'free' | 'partner' — partner 면 일정에 '모잇 할인' 딱지가 붙는다(2026-09-02) */
+          plan: string
           created_at: string
           updated_at: string
         }

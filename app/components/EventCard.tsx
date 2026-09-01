@@ -17,6 +17,8 @@ import HashtagChips from './HashtagChips'
 import { daysUntil } from '@/lib/dday'
 import PriceTierValue from '@/components/PriceTierValue'
 import EventThumbnail from './EventThumbnail'
+import PartnerBadge from './PartnerBadge'
+import { isPartnerCompany } from '@/lib/partner'
 import FavoriteButton from './FavoriteButton'
 
 interface Props {
@@ -225,6 +227,9 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
 
         {/* 테마 배지 + 제목 (같은 줄) */}
         <View style={styles.titleRow}>
+          {/* 제휴업체 딱지 — 테마 배지보다 앞. 둘 다 붙는 일은 드물지만, 붙으면
+              '모잇 할인'이 먼저 읽혀야 한다(2026-09-02 오너 지시). */}
+          {isPartnerCompany(event.companies) && <PartnerBadge />}
           <ThemeBadge theme={event.theme} />
           <Text style={styles.title} numberOfLines={2}>
             {cleanTitle(event.title)}

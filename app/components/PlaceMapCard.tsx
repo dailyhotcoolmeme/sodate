@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { useColors } from '@/hooks/useColors'
+import PartnerBadge from './PartnerBadge'
+import { isPartnerPlace } from '@/lib/partner'
 import type { AppColors } from '@/constants/colors'
 import { openStatus, reviewHashtags, type PlaceRow } from '@/lib/places'
 
@@ -58,6 +60,7 @@ export default function PlaceMapCard({
         <Image source={{ uri: place.profile_image ?? place.thumbnail_url ?? undefined }} style={styles.photo} contentFit="cover" />
         <View style={styles.info}>
           <View style={styles.titleRow}>
+            {isPartnerPlace(place) && <PartnerBadge />}
             <Text style={styles.name} numberOfLines={compact ? 2 : 1}>{place.name}</Text>
             {/* compact(히어로 지도 미리보기)에선 즐겨찾기 뺀다 — 안 그래도 좁은데 더 좁아진다
                 (2026-08-24 오너 지적). 상세로 들어가면 거기서 찜하면 된다. */}

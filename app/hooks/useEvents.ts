@@ -27,7 +27,7 @@ const FEED_COLUMNS =
   'price_male, price_female, price_detail, age_male, age_female, theme, hashtags, ' +
   'is_closed, seats_left_male, seats_left_female, source_url, event_type, socialing_category, ' +
   // 소셜링 참여현황(성비 or 총정원)은 participant_stats 로 그린다 — 소셜링 카드 전용.
-  'participant_stats, companies!inner(id, name, slug)'
+  'participant_stats, companies!inner(id, name, slug, plan)'
 
 // 2026-08-07: 앱을 새로 열 때마다 첫 화면이 빈 스피너로 시작했다. 마지막으로 본 첫 페이지를
 // 기기에 저장해뒀다가, 같은 필터 조합으로 다시 열면 그 캐시를 즉시 보여주고(스피너 생략)

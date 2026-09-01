@@ -1,6 +1,8 @@
 import React, { useMemo, useEffect, useState, useCallback } from 'react'
 import AppSpinner from '@/components/AppSpinner'
 import EventThumbnail from '@/components/EventThumbnail'
+import PartnerBadge from '@/components/PartnerBadge'
+import { isPartnerCompany } from '@/lib/partner'
 import { Ionicons } from '@expo/vector-icons'
 import TopBar from '@/components/TopBar'
 import BottomNav from '@/components/BottomNav'
@@ -140,6 +142,11 @@ export default function EventDetailScreen() {
     heartBtnActive: {},
     heartIcon: { fontSize: 20, color: colors.textTertiary },
     heartIconActive: { color: '#FF6B9D' },
+    // 딱지와 제목을 한 줄에. 제목이 길어지면 딱지가 아니라 제목이 줄바꿈된다.
+    // ⚠️ 위쪽 titleRow(업체명+하트)와 다른 줄이다 — 이름을 겹치게 쓰면 뒤에 선언한 쪽이
+    //    앞을 통째로 덮어써서 업체명 줄 간격이 조용히 바뀐다.
+    partnerTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 14 },
+    titleText: { flex: 1, marginBottom: 0 },
     title: {
       fontSize: 22,
       color: colors.textPrimary,
@@ -506,8 +513,12 @@ export default function EventDetailScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 제목 */}
-        <Text style={styles.title}>{cleanText(event.title)}</Text>
+        {/* 제목 — 제휴업체면 딱지가 제목 앞에 붙는다(카드와 같은 규칙, 2026-09-02).
+            제목이 두 줄 이상이면 딱지는 첫 줄에 맞춰 위로 붙는다(alignItems flex-start). */}
+        <View style={styles.partnerTitleRow}>
+          {isPartnerCompany(event.companies) && <PartnerBadge size="md" />}
+          <Text style={[styles.title, styles.titleText]}>{cleanText(event.title)}</Text>
+        </View>
 
         {/* 테마 배지 + 한줄 설명 (있을 때만) */}
         {getThemeBadge(event.theme) && (
