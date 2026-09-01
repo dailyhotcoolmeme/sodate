@@ -1,16 +1,23 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { logout } from '../lib/auth'
-import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut, MessageSquareWarning, MessagesSquare, Flame } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut, MessageSquareWarning, MessagesSquare, Flame, Users, Wine, Star } from 'lucide-react'
 
 // 메뉴 순서 = 쓰는 빈도. 매일 보는 것(일정·업체·후기)이 앞, 가끔 보는 것(분석·로그)이 뒤.
 // ⚠️ /events(옛 '이벤트')는 메뉴에서 뺐다 — /register와 같은 events 테이블을 다뤄
 //    중복이었다. 거기에만 있던 앱 노출·추천·삭제·검색은 일정 관리로 옮겼다.
 //    라우트는 살려둬서 북마크나 직접 접근은 계속 동작한다.
+// ⚠️ 앱의 네 서비스(소개팅·소셜링·혼술바·커뮤니티)를 메뉴로 갈랐다
+//    (2026-09-01 오너 지시: "소개팅이랑 소셜링을 왜 같은 걸 쓰려고 하냐, 메뉴로
+//    구분해야지"). 한 화면에 섞여 있을 때는 조회 상한에 걸려 뒤쪽이 아예 안 보였고,
+//    소셜링에 없는 남녀 정원·가격 칸이 화면을 차지하고 있었다.
 const NAV = [
   { to: '/', label: '대시보드', icon: LayoutDashboard },
-  { to: '/register', label: '일정 관리', icon: CalendarDays },
+  { to: '/register', label: '소개팅 일정', icon: CalendarDays },
+  { to: '/socialing', label: '소셜링 일정', icon: Users },
+  { to: '/places', label: '혼술바', icon: Wine },
+  { to: '/place-reviews', label: '혼술바 후기', icon: Star },
   { to: '/companies', label: '업체 관리', icon: Building2 },
-  { to: '/reviews', label: '후기 관리', icon: MessageSquareWarning },
+  { to: '/reviews', label: '소개팅 후기', icon: MessageSquareWarning },
   { to: '/board', label: '게시판 관리', icon: MessagesSquare },
   { to: '/trends', label: '커뮤니티 인기글', icon: Flame },
   { to: '/analytics', label: '분석', icon: BarChart3 },
