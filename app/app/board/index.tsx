@@ -683,8 +683,9 @@ function makeStyles(colors: AppColors) {
     // (안드로이드에서 넣은 이모지가 아이폰에서 잘리던 문제, 2026-08-08 오너 지적).
     rowTitle: { flexShrink: 1, fontSize: 14.5, lineHeight: 20, color: colors.textPrimary },
     rowTag: { color: colors.primary, fontWeight: '800' },
-    // 공지 딱지 — 말머리(핑크)와 헷갈리지 않게 본문색 계열로 굵게만 준다.
-    rowNotice: { color: colors.textPrimary, fontWeight: '800' },
+    // 공지 딱지 — 말머리와 같은 핑크(2026-09-01 오너 지시).
+    // ⚠️ 읽은 글이어도 흐려지지 않는다(말머리와 다른 점) — 공지는 계속 눈에 띄어야 한다.
+    rowNotice: { color: colors.primary, fontWeight: '800' },
     // 읽은 글의 말머리 — primary 핑크에 알파를 줘서 연하게(테마 무관, primary가 라이트/다크 동일).
     rowTagRead: { color: `${colors.primary}80` },
     // 추천이 많으면 굵게, 비추가 많으면 흐리게(오너 확정). 흐려질 뿐 지워지지 않는다.
