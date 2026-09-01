@@ -41,6 +41,19 @@ export default function RootLayout() {
           // 여기서 띄우면 앱이 뭔지 보기도 전에 물어 대부분 거부한다.
         } else if (alive) {
           runPostOnboardingSetup()
+          // 앱을 켜면 커뮤니티부터 보여준다(2026-09-01 오너 지시).
+          // 파일 기반 라우팅이라 시작 경로는 '/'(소개팅)로 고정돼 있어 여기서 바꿔 끼운다.
+          //
+          // ⚠️ 알림을 눌러서 앱이 켜진 경우는 건드리면 안 된다. 아래 별도 effect 가
+          //    /event/{id} 로 보내는데, 그 push 보다 이 replace 가 늦게 끝나면 방금 연
+          //    일정 화면을 커뮤니티로 덮어버린다(둘 다 비동기라 순서가 매번 다르다).
+          //    그래서 알림 여부를 여기서 먼저 확인하고, 있으면 손대지 않는다.
+          let fromNotification = false
+          try {
+            const res = await Notifications.getLastNotificationResponseAsync()
+            fromNotification = !!(res?.notification?.request?.content?.data as any)?.event_id
+          } catch { /* 알림 조회 실패는 무시 — 평소대로 커뮤니티로 */ }
+          if (alive && !fromNotification) router.replace('/board')
         }
       } finally {
         if (alive) setGateOff(true)

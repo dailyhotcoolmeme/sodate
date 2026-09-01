@@ -164,7 +164,9 @@ export default function OnboardingScreen() {
 
   const handleFinish = async () => {
     await AsyncStorage.setItem(ONBOARDING_KEY, 'true')
-    router.replace('/')
+    // 온보딩을 막 끝낸 사람도 앱 첫 화면은 커뮤니티다(2026-09-01 오너 지시).
+    // 여기만 '/' 로 두면 처음 켠 사용자만 소개팅 화면으로 떨어져 기준이 달라진다.
+    router.replace('/board')
     // 시스템 권한 팝업(알림 → 추적)은 여기서 처음 뜬다. 앱을 켜자마자 아무 맥락 없이
     // 물으면 대부분 거부하고, 알림을 거부하면 이 앱의 핵심인 새 일정·마감 알림을
     // 영영 못 보낸다. 온보딩으로 앱이 뭔지 본 다음에 묻는다.
