@@ -157,19 +157,23 @@ export default function HonsulScreen() {
     if (!hydrated || hasAutoInit) return
     setHasAutoInit(true)
     ;(async () => {
+      // ⚠️ 버튼 문구와 구성은 애플 심사 지침 5.1.1(iv) 때문에 이 형태여야 한다.
+      //    2026-09-01 이것 때문에 1.1.0 이 반려됐다. 애플이 지적한 두 가지:
+      //      ① '위치 사용' 처럼 특정 답을 유도하는 버튼 문구를 쓰지 말 것
+      //         ("Use words like 'Continue' or 'Next' on the button instead")
+      //      ② 안내를 띄웠으면 반드시 OS 권한 요청으로 이어질 것 — '나중에' 로
+      //         OS 팝업 자체를 건너뛰게 두지 말 것
+      //    그래서 중립적인 '계속' 하나만 두고, 안내를 본 뒤에는 항상 OS 팝업으로 간다.
+      //    (권한을 실제로 거부하는 선택은 OS 팝업에서 하면 된다.)
       if (!(await isLocationGranted())) {
-        const ok = await new Promise<boolean>((resolve) => {
+        await new Promise<void>((resolve) => {
           Alert.alert(
-            '내 주변 혼술바를 찾아드릴까요?',
-            '현재 위치를 사용하면 가까운 곳부터 순서대로 보여드려요.\n위치 정보는 기기 안에서만 거리 계산에 쓰이고 서버에 저장되지 않습니다.',
-            [
-              { text: '나중에', style: 'cancel', onPress: () => resolve(false) },
-              { text: '위치 사용', onPress: () => resolve(true) },
-            ],
-            { cancelable: true, onDismiss: () => resolve(false) },
+            '내 주변 혼술바',
+            '가까운 곳부터 순서대로 보여드리기 위해 현재 위치를 확인합니다.\n위치 정보는 기기 안에서 거리 계산에만 쓰이고 서버에 저장되지 않습니다.',
+            [{ text: '계속', onPress: () => resolve() }],
+            { cancelable: false },
           )
         })
-        if (!ok) { setSortMode('reviewCount'); return }
       }
       setLocBusy(true)
       const loc = await getMyLocation()

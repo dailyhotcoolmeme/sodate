@@ -1,5 +1,17 @@
+import { AppState } from 'react-native'
 import mobileAds from 'react-native-google-mobile-ads'
 import { registerForPushNotifications } from '@/hooks/usePushNotification'
+
+/** 앱이 포그라운드(active)가 될 때까지 기다린다. ATT 팝업은 active 에서만 뜬다. */
+function waitUntilActive(timeoutMs = 5000): Promise<void> {
+  if (AppState.currentState === 'active') return Promise.resolve()
+  return new Promise((resolve) => {
+    const done = () => { sub.remove(); clearTimeout(t); resolve() }
+    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') done() })
+    // 영영 active 가 안 되는 경우(백그라운드 실행 등)에 매달리지 않게 상한을 둔다.
+    const t = setTimeout(done, timeoutMs)
+  })
+}
 
 // 온보딩을 넘긴 뒤에 한 번만 도는 초기화 — 시스템 권한 팝업 2개와 AdMob 초기화.
 //
@@ -28,9 +40,23 @@ export async function runPostOnboardingSetup(): Promise<void> {
   }
 
   // 2) 추적 권한(iOS ATT) → 3) AdMob 초기화
+  //
+  // ⚠️ iOS 는 앱이 UIApplicationStateActive 가 아니면 ATT 팝업을 **아무 말 없이 건너뛴다**
+  //    (에러도 안 나고 status 만 undetermined 로 돌아온다). 바로 위에서 알림 권한 팝업을
+  //    띄웠다 닫은 직후가 정확히 그 구간이라, 새로 설치한 기기에서 추적 팝업이 안 떴다.
+  //    2026-09-01 애플이 이걸 Guideline 2.1 로 반려했다
+  //    ("we are unable to locate the App Tracking Transparency permission request").
+  //    그래서 (a) 앱이 active 가 될 때까지 기다리고 (b) 한 박자 쉰 뒤에 요청한다.
   try {
-    const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency')
-    await requestTrackingPermissionsAsync()
+    const { requestTrackingPermissionsAsync, getTrackingPermissionsAsync } =
+      await import('expo-tracking-transparency')
+    const cur = await getTrackingPermissionsAsync()
+    // 이미 답한 사용자에게 다시 묻지 않는다(iOS 가 한 번만 보여준다).
+    if (cur.status === 'undetermined' || cur.canAskAgain) {
+      await waitUntilActive()
+      await new Promise((r) => setTimeout(r, 700))
+      await requestTrackingPermissionsAsync()
+    }
   } catch {
     // 안드로이드·ATT 없는 구버전 iOS는 통과. 거부해도 광고 자체는 나간다
     // (비맞춤으로 내려갈 뿐) 이라 실패를 삼켜도 된다.
