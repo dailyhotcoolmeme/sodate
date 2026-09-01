@@ -75,6 +75,11 @@ class YeoninScraper(BaseScraper):
     SCHEDULE_URL = 'https://yeonin.co.kr/schedule'
     LIST_URL = 'https://yeonin.co.kr/list'
 
+    # 상품 이름에서 '무엇'(상품 종류)을 떼어내고 '어디'(지역 문구)만 남긴다.
+    # 예) '서울 강남 로테이션 소개팅' → '서울 강남'
+    # 이미지 배너 alt 에는 대괄호 표기가 없어서 이 방식으로 지역을 얻는다.
+    _STRIP_KIND_RE = re.compile(r'\s*(?:12:12\s*)?(?:직장인\s*)?로테이션\s*소개팅\s*$')
+
     def __init__(self):
         super().__init__('yeonin')
 
@@ -186,6 +191,7 @@ class YeoninScraper(BaseScraper):
         events: list[EventModel] = []
         products: dict[str, str] = {}   # idx → 지역
         names: dict[str, str] = {}      # idx → 상품명(이벤트 제목)
+        links: list[dict] = []          # 상품 링크 원본(실패 원인 구분용)
 
         try:
             with sync_playwright() as p:
@@ -209,13 +215,35 @@ class YeoninScraper(BaseScraper):
                 url = summary['h'] if 'bmode' in summary['h'] else summary['h'] + '&bmode=view'
                 page.goto(url, timeout=30000, wait_until='domcontentloaded')
                 page.wait_for_timeout(3000)
-                for it in page.eval_on_selector_all(
-                        'a[href*="shop_view"]', 'els=>els.map(e=>({h:e.href,t:e.innerText.trim()}))'):
+                # ⚠️ 상품 링크의 '이름'은 한 군데서만 오지 않는다.
+                #    ~2026-08: 글자 링크였다  → <a>[강남 논현] 12:12 직장인 로테이션 소개팅</a>
+                #    2026-09~: 이미지 배너다 → <a><img alt="서울 강남 로테이션 소개팅"></a>
+                #    이미지로 바뀌자 innerText 가 빈 문자열이 되어 11개 상품을 전부
+                #    건너뛰었고, 41회 연속 크롤 실패로 이틀치 일정이 멈췄다
+                #    (2026-09-01 오너 지적). 언제든 다시 글자로 돌아갈 수 있으니
+                #    글자 → img alt → title 순으로 훑는다.
+                links = page.eval_on_selector_all('a[href*="shop_view"]', '''els=>els.map(e=>({
+                    h: e.href,
+                    t: e.innerText.trim(),
+                    alt: ((e.querySelector('img')||{}).alt||'').trim(),
+                    title: (e.getAttribute('title')||'').trim(),
+                }))''')
+                for it in links:
                     m = re.search(r'idx=(\d+)', it['h'])
-                    reg = re.search(r'\[([^\]]+)\]', it['t'] or '')
-                    if m and reg and m.group(1) not in products:
-                        products[m.group(1)] = reg.group(1).strip()
-                        names[m.group(1)] = (it['t'] or '').split('\n')[0].strip() or reg.group(1).strip()
+                    if not m or m.group(1) in products:
+                        continue
+                    label = (it['t'] or '').split('\n')[0].strip() or it['alt'] or it['title']
+                    if not label:
+                        continue
+                    # 대괄호 표기가 있으면 그 안이 지역명. 없으면(이미지 alt) 상품 종류를
+                    # 떼어낸 나머지가 지역 문구다 — '서울 강남 로테이션 소개팅' → '서울 강남'.
+                    # 지역 문구는 줄이지 않고 통째로 넘긴다(utils/region 원칙).
+                    reg = re.search(r'\[([^\]]+)\]', label)
+                    region = reg.group(1).strip() if reg else self._STRIP_KIND_RE.sub('', label).strip()
+                    if not region:
+                        continue
+                    products[m.group(1)] = region
+                    names[m.group(1)] = label
 
                 browser.close()
         except Exception as e:
@@ -225,6 +253,12 @@ class YeoninScraper(BaseScraper):
         if not products:
             # 상품을 못 찾았는데 빈 배열을 돌려주면 base_scraper 가 기존 이벤트를
             # stale 로 보고 지울 수 있다. 예외로 올려 크롤 실패로 남긴다.
+            # 링크는 있는데 이름만 못 읽은 경우를 구분해서 남긴다 — 다음에 또 이러면
+            # 어디를 봐야 하는지 로그만 보고 알 수 있게.
+            if links:
+                raise RuntimeError(
+                    f'연인어때 상품 링크 {len(links)}개를 찾았으나 지역명을 못 읽음 '
+                    f'— 링크 표기 방식 변경 의심(글자/img alt/title 모두 비어 있음)')
             raise RuntimeError('연인어때 지역 상품 0개 — 사이트 구조 변경 의심')
         self.logger.info(f'지역 상품 {len(products)}개 발견')
 
