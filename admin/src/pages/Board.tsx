@@ -1,6 +1,6 @@
 import { useEffect, useState, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
-import { Flag, EyeOff, Eye, Trash2, ImageOff, ShieldBan, Plus, Lock, UserSearch, X, Youtube } from 'lucide-react'
+import { Flag, EyeOff, Eye, Trash2, ImageOff, ShieldBan, Plus, Lock, UserSearch, X, Youtube, Megaphone } from 'lucide-react'
 
 /**
  * 게시판 관리 — 신고 대응이 핵심이다.
@@ -23,8 +23,15 @@ interface Post {
   content_report_count: number
   is_active: boolean
   content_hidden: boolean
+  is_notice: boolean
   created_at: string
 }
+
+/**
+ * 공지글 작성자 이름. 앱 목록·상세에 이 이름 그대로 보인다(2026-09-01 오너 지시).
+ * 사용자가 같은 닉네임을 쓸 수 있으므로 앱에서는 이름이 아니라 is_notice 로 판별한다.
+ */
+const OPERATOR_NICK = '모잇 운영자'
 
 interface BoardTag {
   id: string
@@ -58,7 +65,7 @@ interface Report {
   created_at: string
 }
 
-type Tab = 'reported' | 'all' | 'hidden' | 'comments' | 'tags'
+type Tab = 'reported' | 'notice' | 'all' | 'hidden' | 'comments' | 'tags'
 
 export default function Board() {
   const [tab, setTab] = useState<Tab>('reported')  // 신고된 것부터 본다
@@ -76,6 +83,13 @@ export default function Board() {
    *  글 하나·댓글 하나만으로는 안 된다(2026-08-13 오너 지시). */
   const [userActivity, setUserActivity] = useState<{ token: string; posts: Post[]; comments: Comment[] } | null>(null)
   const [userActivityLoading, setUserActivityLoading] = useState(false)
+  /** 공지 작성 폼 */
+  const [noticeTitle, setNoticeTitle] = useState('')
+  const [noticeBody, setNoticeBody] = useState('')
+  const [noticeSaving, setNoticeSaving] = useState(false)
+  /** 운영자 댓글 입력 (글 id → 입력 중인 내용) */
+  const [opComment, setOpComment] = useState<Record<string, string>>({})
+  const [opCommentSaving, setOpCommentSaving] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
@@ -112,6 +126,63 @@ export default function Board() {
       .select('secret_content').eq('id', c.id).maybeSingle()
     if (error) { alert(`실패: ${error.message}`); return }
     setRevealed((prev) => ({ ...prev, [c.id]: (data as any)?.secret_content ?? '(내용 없음)' }))
+  }
+
+  /**
+   * 공지글 등록. 게시판 맨 위에 고정되고 작성자는 '모잇 운영자'로 보인다.
+   *
+   * ⚠️ owner_token 은 앱에서 '내가 쓴 글'(수정·삭제 권한)과 차단 대상을 가르는 값이다.
+   *    공지에 고정 문자열을 넣으면 그 값을 아는 사람이 공지를 지울 수 있고, 사용자가
+   *    운영자를 차단하면 공지가 안 보인다. 매번 새 난수를 넣어 아무에게도 안 묶어둔다.
+   */
+  async function createNotice() {
+    const title = noticeTitle.trim()
+    const content = noticeBody.trim()
+    if (!title) { alert('제목을 입력하세요.'); return }
+    if (!content) { alert('내용을 입력하세요.'); return }
+    setNoticeSaving(true)
+    const { data, error } = await supabase.from('board_posts').insert({
+      nickname: OPERATOR_NICK,
+      title,
+      content,
+      owner_token: crypto.randomUUID(),
+      is_notice: true,
+      is_active: true,
+    }).select('*').single()
+    setNoticeSaving(false)
+    if (error) { alert(`등록 실패: ${error.message}`); return }
+    setPosts((prev) => [data as Post, ...prev])
+    setNoticeTitle(''); setNoticeBody('')
+    setMsg('공지를 등록했습니다.')
+  }
+
+  /** 이미 있는 글을 공지로 올리거나 내린다(사용자 글도 공지로 올릴 수 있다). */
+  async function toggleNotice(p: Post) {
+    const next = !p.is_notice
+    const { error } = await supabase.from('board_posts').update({ is_notice: next }).eq('id', p.id)
+    if (error) { alert(`실패: ${error.message}`); return }
+    setPosts((prev) => prev.map((x) => (x.id === p.id ? { ...x, is_notice: next } : x)))
+  }
+
+  /** 운영자 이름으로 댓글을 단다. 공지 문의에 답하거나 안내를 덧붙일 때 쓴다. */
+  async function addOperatorComment(postId: string) {
+    const content = (opComment[postId] ?? '').trim()
+    if (!content) return
+    setOpCommentSaving(postId)
+    const { data, error } = await supabase.from('board_comments').insert({
+      post_id: postId,
+      nickname: OPERATOR_NICK,
+      content,
+      owner_token: crypto.randomUUID(),
+      is_active: true,
+    }).select('id,post_id,parent_id,nickname,content,is_secret,report_count,is_active,created_at').single()
+    setOpCommentSaving(null)
+    if (error) { alert(`댓글 실패: ${error.message}`); return }
+    setComments((prev) => [data as Comment, ...prev])
+    // 목록의 댓글 수도 바로 맞춰준다(앱은 트리거로 갱신되지만 이 화면은 다시 안 읽는다).
+    setPosts((prev) => prev.map((x) => (x.id === postId ? { ...x, comment_count: x.comment_count + 1 } : x)))
+    setOpComment((prev) => ({ ...prev, [postId]: '' }))
+    setMsg('댓글을 등록했습니다.')
   }
 
   /** 말머리 등록 — admin이 넣은 문자열 그대로 저장한다([말머리1] 처럼 대괄호까지 직접 입력). */
@@ -244,12 +315,14 @@ export default function Board() {
   const shownPosts = posts.filter((p) => {
     if (tab === 'reported') return p.report_count > 0 || p.content_report_count > 0
     if (tab === 'hidden') return !p.is_active || p.content_hidden
+    if (tab === 'notice') return p.is_notice
     return true
   })
   const shownComments = tab === 'comments' ? comments : []
 
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: 'reported', label: '신고됨', count: posts.filter((p) => p.report_count > 0 || p.content_report_count > 0).length },
+    { key: 'notice', label: '공지', count: posts.filter((p) => p.is_notice).length },
     { key: 'all', label: '전체 글', count: posts.length },
     { key: 'hidden', label: '숨김·가림', count: posts.filter((p) => !p.is_active || p.content_hidden).length },
     { key: 'comments', label: '댓글', count: comments.length },
@@ -267,12 +340,14 @@ export default function Board() {
         {msg && <span className="text-gray-600 bg-gray-50 rounded-lg px-3 py-1.5 text-sm">{msg}</span>}
       </div>
 
-      <div className="flex items-center gap-2 mb-4 border-b border-gray-200">
+      {/* 좁은 화면에서 탭 글자가 버튼 안에서 두 줄로 쪼개지던 것을 막는다(2026-09-01 오너 지적).
+          각 탭은 한 줄 고정, 넘치면 줄 전체를 가로로 넘긴다(스크롤바는 숨김). */}
+      <div className="tab-scroll flex items-center gap-2 mb-4 border-b border-gray-200">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${
               tab === t.key ? 'border-pink-500 text-pink-600' : 'border-transparent text-gray-400 hover:text-gray-600'
             }`}
           >
@@ -280,6 +355,42 @@ export default function Board() {
           </button>
         ))}
       </div>
+
+      {/* 공지 작성 — 공지 탭에서만. 등록하면 게시판 맨 위에 '모잇 운영자' 이름으로 붙는다. */}
+      {tab === 'notice' && (
+        <div className="mb-4 bg-white rounded-xl border border-gray-200 p-4 space-y-3 max-w-3xl">
+          <div className="flex items-center gap-2">
+            <Megaphone size={16} className="text-pink-500" />
+            <h2 className="text-sm font-bold text-gray-900">공지 작성</h2>
+            <span className="text-xs text-gray-400">작성자는 &lsquo;{OPERATOR_NICK}&rsquo;로 표시됩니다</span>
+          </div>
+          <input
+            value={noticeTitle}
+            onChange={(e) => setNoticeTitle(e.target.value)}
+            placeholder="제목"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+          />
+          <textarea
+            value={noticeBody}
+            onChange={(e) => setNoticeBody(e.target.value)}
+            placeholder="내용"
+            rows={5}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={createNotice}
+              disabled={noticeSaving}
+              className="rounded-lg bg-pink-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {noticeSaving ? '등록 중...' : '공지 등록'}
+            </button>
+            <span className="text-xs text-gray-400">
+              공지는 전부 목록 맨 위에 최신순으로 쌓입니다. 내리려면 아래 목록에서 <b>공지 해제</b>를 누르세요.
+            </span>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-gray-400 text-sm">불러오는 중...</p>
@@ -459,6 +570,16 @@ export default function Board() {
                             <ImageOff size={12} /> {p.content_hidden ? '첨부 복구' : '첨부 가림'}
                           </button>
                         )}
+                        <button
+                          onClick={() => toggleNotice(p)}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium ${
+                            p.is_notice
+                              ? 'border-pink-300 bg-pink-50 text-pink-600 hover:bg-pink-100'
+                              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <Megaphone size={12} /> {p.is_notice ? '공지 해제' : '공지 지정'}
+                        </button>
                         <button onClick={() => viewUserActivity('post', p.id)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
                           <UserSearch size={12} /> 활동 보기
                         </button>
@@ -472,6 +593,30 @@ export default function Board() {
                     <tr className="border-t border-gray-100 bg-gray-50/60">
                       <td colSpan={7} className="px-4 py-3 space-y-2">
                         <p className="text-xs text-gray-700 whitespace-pre-wrap">{p.content}</p>
+
+                        {/* 운영자 댓글 — 공지 문의에 답하거나 안내를 덧붙일 때. 앱에는
+                            '모잇 운영자' 이름으로 보인다(2026-09-01 오너 지시). */}
+                        <div className="pt-2 border-t border-gray-200">
+                          <p className="mb-1.5 text-xs font-medium text-gray-500">
+                            운영자 댓글 달기 <span className="font-normal text-gray-400">— &lsquo;{OPERATOR_NICK}&rsquo; 이름으로 등록됩니다</span>
+                          </p>
+                          <div className="flex items-start gap-2">
+                            <textarea
+                              value={opComment[p.id] ?? ''}
+                              onChange={(e) => setOpComment((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                              placeholder="댓글 내용"
+                              rows={2}
+                              className="flex-1 min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+                            />
+                            <button
+                              onClick={() => addOperatorComment(p.id)}
+                              disabled={opCommentSaving === p.id || !(opComment[p.id] ?? '').trim()}
+                              className="shrink-0 rounded-lg bg-pink-500 px-3 py-2 text-xs font-medium text-white disabled:opacity-40"
+                            >
+                              {opCommentSaving === p.id ? '등록 중' : '등록'}
+                            </button>
+                          </div>
+                        </div>
                         {reports.length > 0 && (
                           <div className="space-y-1.5 pt-2 border-t border-gray-200">
                             <p className="text-xs font-medium text-gray-500">신고 사유 ({reports.length}건)</p>

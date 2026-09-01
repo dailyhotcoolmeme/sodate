@@ -216,7 +216,7 @@ export default function Socialing() {
             <button
               key={v}
               onClick={() => setFilterActive(v)}
-              className={`px-3 py-2 ${filterActive === v ? 'bg-pink-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`whitespace-nowrap px-3 py-2 ${filterActive === v ? 'bg-pink-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {label}
             </button>

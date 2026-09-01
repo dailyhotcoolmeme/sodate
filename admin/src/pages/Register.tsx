@@ -584,16 +584,17 @@ export default function Register() {
 
       {/* 상태 탭 — 입력 완료를 앞에 두고 기본으로 연다(오너 확정 2026-07-30).
           업체에 들어가면 대개 이미 입력해둔 일정을 확인·수정하는 일이 먼저다. */}
-      <div className="flex items-center gap-2 mb-4 border-b border-gray-200">
+      {/* 탭 글자가 버튼 안에서 두 줄로 쪼개지지 않게 — 한 줄 고정 + 넘치면 가로 스크롤(2026-09-01) */}
+      <div className="tab-scroll flex items-center gap-2 mb-4 border-b border-gray-200">
         <button
           onClick={() => setStatusTab('done')}
-          className={`px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${statusTab === 'done' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+          className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${statusTab === 'done' ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
         >
           ✅ 입력 완료 <span className="ml-0.5">{doneRows.length}</span>
         </button>
         <button
           onClick={() => setStatusTab('todo')}
-          className={`px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${statusTab === 'todo' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+          className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${statusTab === 'todo' ? 'border-amber-500 text-amber-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
         >
           🔴 해야할 것 <span className="ml-0.5">{todoRows.length}</span>
         </button>
@@ -659,8 +660,8 @@ export default function Register() {
 // 업체 탭 칩 스타일 (선택=핑크, 비선택=회색)
 function tabClass(active: boolean): string {
   return active
-    ? 'px-3.5 py-2 rounded-lg text-sm font-semibold bg-pink-500 text-white'
-    : 'px-3.5 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+    ? 'whitespace-nowrap px-3.5 py-2 rounded-lg text-sm font-semibold bg-pink-500 text-white'
+    : 'whitespace-nowrap px-3.5 py-2 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
 }
 
 // 입력칸 공통 규격 — 높이 32px 고정. 컴포넌트마다 제각각이던 것을 하나로 묶는다.

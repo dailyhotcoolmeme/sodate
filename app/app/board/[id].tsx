@@ -642,22 +642,28 @@ export default function BoardPostScreen() {
         )}
 
         <View style={styles.votes}>
-          <TouchableOpacity
-            style={[styles.voteBtn, myVote === 1 && styles.voteBtnOn]}
-            onPress={() => handleVote(1)}
-            disabled={voting}
-          >
-            <Ionicons name={myVote === 1 ? 'thumbs-up' : 'thumbs-up-outline'} size={17} color={myVote === 1 ? colors.primary : colors.textSecondary} />
-            <Text style={[styles.voteText, myVote === 1 && styles.voteTextOn]}>추천 {post.upvotes}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.voteBtn, myVote === -1 && styles.voteBtnOn]}
-            onPress={() => handleVote(-1)}
-            disabled={voting}
-          >
-            <Ionicons name={myVote === -1 ? 'thumbs-down' : 'thumbs-down-outline'} size={17} color={myVote === -1 ? colors.primary : colors.textSecondary} />
-            <Text style={[styles.voteText, myVote === -1 && styles.voteTextOn]}>비추 {post.downvotes}</Text>
-          </TouchableOpacity>
+          {/* 공지에는 추천·비추천을 두지 않는다(2026-09-01 오너 확정) — 운영자 안내문에
+              비추천이 쌓이는 그림을 피한다. 댓글은 그대로 받는다. */}
+          {!post.is_notice && (
+            <>
+              <TouchableOpacity
+                style={[styles.voteBtn, myVote === 1 && styles.voteBtnOn]}
+                onPress={() => handleVote(1)}
+                disabled={voting}
+              >
+                <Ionicons name={myVote === 1 ? 'thumbs-up' : 'thumbs-up-outline'} size={17} color={myVote === 1 ? colors.primary : colors.textSecondary} />
+                <Text style={[styles.voteText, myVote === 1 && styles.voteTextOn]}>추천 {post.upvotes}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.voteBtn, myVote === -1 && styles.voteBtnOn]}
+                onPress={() => handleVote(-1)}
+                disabled={voting}
+              >
+                <Ionicons name={myVote === -1 ? 'thumbs-down' : 'thumbs-down-outline'} size={17} color={myVote === -1 ? colors.primary : colors.textSecondary} />
+                <Text style={[styles.voteText, myVote === -1 && styles.voteTextOn]}>비추 {post.downvotes}</Text>
+              </TouchableOpacity>
+            </>
+          )}
           {/* 스크랩 — MY 탭 개편(2026-08-21)과 함께 노출. 전환 전까지 NEW_TABS 로 숨긴다. */}
           {NEW_TABS_ENABLED && (
             <TouchableOpacity

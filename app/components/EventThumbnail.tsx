@@ -59,6 +59,24 @@ function OutlinedText({
   )
 }
 
+/**
+ * 목록용으로 줄인 썸네일 주소.
+ *
+ * 문토(images.munto.kr)는 원본을 그대로 내려준다 — 한 장에 300~620KB 라, 목록 20장이면
+ * 12MB 를 받는다(2026-09-01 오너 "썸네일 불러오는 게 느리다" 제보로 실측). 다행히
+ * `?s=가로x세로` 를 붙이면 서버가 줄여서 준다 — 610KB → 15KB(97% 감소) 로 확인했다.
+ * 프립(cloudinary)은 URL 에 이미 w_500,q_auto 가 들어 있어 손댈 필요가 없고,
+ * 혼술바는 우리가 R2 에 줄여 올려둔 것(13KB)이라 그대로 둔다.
+ *
+ * ⚠️ 이미 파라미터가 붙어 있으면 건드리지 않는다(중복 부착 방지).
+ */
+function sizedUrl(url: string, size: 'large' | 'small' | 'detail'): string {
+  if (!url.includes('images.munto.kr') || url.includes('?')) return url
+  // 목록 썸네일은 최대 120pt 남짓이라 3배 해상도로도 400 이면 충분하다.
+  const px = size === 'detail' ? 800 : size === 'small' ? 200 : 400
+  return `${url}?s=${px}x${px}`
+}
+
 export default function EventThumbnail({
   url,
   companyName,
@@ -81,7 +99,7 @@ export default function EventThumbnail({
   if (!forceCover && url && !thumbErr && !isBadThumb(url)) {
     return (
       <Image
-        source={{ uri: url }}
+        source={{ uri: sizedUrl(url, size) }}
         style={style as StyleProp<ImageStyle>}
         contentFit="cover"
         transition={200}

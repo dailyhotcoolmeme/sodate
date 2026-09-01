@@ -121,9 +121,6 @@ export default function MyScreen() {
   const genderLabel = myGender === 'male' ? '남' : myGender === 'female' ? '여' : null
   const profileSub = [myAge ? `${myAge}세` : null, genderLabel].filter(Boolean).join(' · ') || '나이·성별 미설정'
 
-  const contact = () =>
-    Linking.openURL('mailto:admin@ourmine.co.kr').catch(() => Alert.alert('오류', '메일 앱을 열 수 없습니다'))
-
   return (
     <View style={styles.container}>
       <TopBar />
@@ -172,7 +169,8 @@ export default function MyScreen() {
         </View>
         <Row colors={colors} icon="shield-checkmark-outline" label="개인정보처리방침" onPress={() => router.push('/privacy')} />
         <Row colors={colors} icon="document-text-outline" label="이용약관" onPress={() => router.push('/terms')} />
-        <Row colors={colors} icon="mail-outline" label="제휴문의" onPress={contact} />
+        {/* 예전엔 빈 메일이 바로 열렸다 — 안내 화면을 먼저 보여준다(2026-09-01 오너 지시). */}
+        <Row colors={colors} icon="mail-outline" label="제휴문의" onPress={() => router.push('/partner')} />
         <Row colors={colors} icon="cube-outline" label="버전" right={APP_VERSION} />
       </ScrollView>
       <BottomNav current="my" />

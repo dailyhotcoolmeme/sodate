@@ -193,7 +193,7 @@ export default function Places() {
             <button
               key={v}
               onClick={() => setFilterActive(v as any)}
-              className={`px-3 py-2 ${filterActive === v ? 'bg-pink-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`whitespace-nowrap px-3 py-2 ${filterActive === v ? 'bg-pink-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {label}
             </button>
@@ -201,7 +201,7 @@ export default function Places() {
         </div>
         <button
           onClick={() => setFilterFlaw((v) => !v)}
-          className={`rounded-lg border px-3 py-2 text-sm ${filterFlaw ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+          className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${filterFlaw ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
         >
           빠진 정보만 {flawed}
         </button>

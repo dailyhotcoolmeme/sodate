@@ -99,11 +99,6 @@ export default function SettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
-  const handleContact = () =>
-    Linking.openURL('mailto:admin@ourmine.co.kr').catch(() =>
-      Alert.alert('오류', '메일 앱을 열 수 없습니다')
-    )
-
   // 이 화면에 들어오면 새 버전을 확인하고, 있으면 **알아서 받아 적용**한다.
   // 사용자가 업데이트 상태를 들여다보고 눌러줄 거라 기대하면 안 된다(오너 지적 2026-08-17).
   const [updateState, setUpdateState] = useState<UpdateState>(
@@ -177,11 +172,11 @@ export default function SettingsScreen() {
           label="이용약관"
           onPress={() => router.push('/terms')}
         />
+        {/* 예전엔 빈 메일이 바로 열렸다 — 안내 화면을 먼저 보여준다(2026-09-01 오너 지시). */}
         <SettingRow
           iconName="mail-outline"
           label="제휴문의"
-          value="admin@ourmine.co.kr"
-          onPress={handleContact}
+          onPress={() => router.push('/partner')}
         />
       </View>
 

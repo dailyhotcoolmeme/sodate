@@ -341,6 +341,8 @@ export interface Database {
           content_report_count: number
           is_active: boolean
           content_hidden: boolean
+          /** 공지글. 목록 맨 위에 고정되고 추천·비추천 버튼이 숨겨진다(admin 에서만 지정). */
+          is_notice: boolean
           created_at: string
           updated_at: string
         }

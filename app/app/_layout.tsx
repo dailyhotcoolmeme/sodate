@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
 import { runPostOnboardingSetup } from '@/lib/initAds'
 import { useThemeStore } from '@/stores/themeStore'
+import { useStartupStore } from '@/stores/startupStore'
 import { usePushNotification } from '@/hooks/usePushNotification'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { initAppUpdateChecker } from '@/lib/appUpdates'
@@ -56,12 +57,14 @@ export default function RootLayout() {
           if (alive && !fromNotification) router.replace('/board')
         }
       } finally {
+        // 갈 곳이 정해졌다 — 소개팅 피드가 미뤄둔 조회를 이제 해도 된다.
+        useStartupStore.getState().done()
         if (alive) setGateOff(true)
       }
     }
     checkOnboarding()
     // 안전장치: AsyncStorage가 지연돼도 게이트가 영구히 남지 않도록
-    const t = setTimeout(() => { if (alive) setGateOff(true) }, 1500)
+    const t = setTimeout(() => { useStartupStore.getState().done(); if (alive) setGateOff(true) }, 1500)
     return () => { alive = false; clearTimeout(t) }
   }, [])
 
@@ -149,6 +152,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="privacy" options={{ headerShown: false }} />
         <Stack.Screen name="terms" options={{ headerShown: false }} />
+        <Stack.Screen name="partner" options={{ headerShown: false }} />
         <Stack.Screen
           name="onboarding"
           options={{ headerShown: false, gestureEnabled: false, contentStyle: { backgroundColor: colors.background } }}

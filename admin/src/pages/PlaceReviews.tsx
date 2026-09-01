@@ -163,7 +163,7 @@ export default function PlaceReviews() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium ${tab === t ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium ${tab === t ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
               {label} {n}
             </button>

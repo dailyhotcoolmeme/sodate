@@ -4,6 +4,7 @@ import { supabase, type EventWithCompany } from '@/lib/supabase'
 import { useFilterStore, useFilterHydrated } from '@/stores/filterStore'
 import { useSocialingFilterStore, useSocialingFilterHydrated } from '@/stores/socialingFilterStore'
 import { useProfileStore } from '@/stores/profileStore'
+import { useStartupStore } from '@/stores/startupStore'
 import { AGE_GROUP_FILTERS } from '@/constants/ageGroups'
 import { hoursForTimeSlots } from '@/constants/filters'
 import { sourcesForGroupKeys } from '@/constants/socialingCategories'
@@ -93,6 +94,8 @@ export function useEvents(
   search = '',
   eventType: 'dating' | 'socialing' = 'dating',
 ) {
+  // 시작 직후(커뮤니티로 넘어가는 중)인지. 넘어가고 나면 false 가 되어 조회가 돈다.
+  const startupRedirecting = useStartupStore((st) => st.redirecting)
   const [events, setEvents] = useState<EventWithCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -321,6 +324,9 @@ export function useEvents(
     // 하이드레이션 완료 후 실제 값으로 또 한 번 — 매번 앱을 켤 때마다 요청이 두 번 나갔다.
     // 하이드레이션 끝날 때까지 기다렸다가 그때 딱 한 번만 쏜다.
     if (!hydrated) return
+    // 앱을 켜자마자 커뮤니티로 넘어가는 중이면 이 조회를 하지 않는다 — 소개팅 피드가
+    // 잠깐 마운트됐다 버려지는 사이에 60건을 끌어오느라 시작이 느렸다(2026-09-01).
+    if (startupRedirecting) return
 
     if (!didInitialLoad.current) {
       didInitialLoad.current = true
@@ -342,7 +348,7 @@ export function useEvents(
 
     // 최초 로드 이후 필터가 바뀌어서 다시 도는 경우는 기존과 동일하게 동작
     fetchEvents()
-  }, [hydrated, fetchEvents, cacheKey, cacheSlot])
+  }, [startupRedirecting, hydrated, fetchEvents, cacheKey, cacheSlot])
 
   return { events, loading, loadingMore, hasMore, error, refetch: fetchEvents, loadMore }
 }
