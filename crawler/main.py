@@ -32,6 +32,7 @@ from scrapers.otr_lounge import OtrLoungeScraper
 from scrapers.unibridge_social import UnibridgeSocialScraper
 from scrapers.trevari import TrevariScraper
 from scrapers.donghaeng import DonghaengScraper
+from scrapers.yeonsoop import YeonsoopScraper
 from utils.logger import get_logger
 
 logger = get_logger('main')
@@ -54,6 +55,9 @@ SCRAPERS = [
     # 소셜링 신규 소스(2026-08-21) — event_type='socialing'. 소개팅 피드엔 안 섞임.
     TrevariScraper,
     DonghaengScraper,
+    # 연숲(2026-09-01, 제휴 문의로 합류) — 웹사이트가 없어 인스타 캡션을 파싱한다.
+    # 소개팅·소셜링을 둘 다 열어서 게시물마다 event_type 을 갈라 넣는다.
+    YeonsoopScraper,
 ]
 
 # ⚠️(2026-07-24 오너 지적으로 폐기) discover_candidates.py 전담 방침이 있었으나
