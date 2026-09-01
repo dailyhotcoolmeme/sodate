@@ -1,1 +1,19 @@
 @import "tailwindcss";
+
+/*
+ * 탭 줄 — 좁은 화면(모바일)에서 가로로 넘길 때 쓴다.
+ *
+ * 예전엔 그냥 flex 라서 폭이 모자라면 버튼 '안'에서 글자가 줄바꿈됐다
+ * ("숨김·/가림 0" 처럼 두 줄로 쪼개져 읽기 힘들었다 — 2026-09-01 오너 지적).
+ * 이제 각 탭은 한 줄로 두고(whitespace-nowrap) 줄 전체를 가로 스크롤한다.
+ * 스크롤바는 숨긴다 — 오너 규칙(가로 스크롤바 노출 금지).
+ */
+.tab-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* 구 Edge */
+}
+.tab-scroll::-webkit-scrollbar {
+  display: none;              /* Chrome·Safari */
+}

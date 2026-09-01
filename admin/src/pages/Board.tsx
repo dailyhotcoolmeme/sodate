@@ -340,12 +340,14 @@ export default function Board() {
         {msg && <span className="text-gray-600 bg-gray-50 rounded-lg px-3 py-1.5 text-sm">{msg}</span>}
       </div>
 
-      <div className="flex items-center gap-2 mb-4 border-b border-gray-200">
+      {/* 좁은 화면에서 탭 글자가 버튼 안에서 두 줄로 쪼개지던 것을 막는다(2026-09-01 오너 지적).
+          각 탭은 한 줄 고정, 넘치면 줄 전체를 가로로 넘긴다(스크롤바는 숨김). */}
+      <div className="tab-scroll flex items-center gap-2 mb-4 border-b border-gray-200">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${
               tab === t.key ? 'border-pink-500 text-pink-600' : 'border-transparent text-gray-400 hover:text-gray-600'
             }`}
           >
