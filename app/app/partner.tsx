@@ -186,7 +186,7 @@ export default function PartnerScreen() {
         {/* ⑦ 문의하기 */}
         <TouchableOpacity style={styles.cta} onPress={sendMail} activeOpacity={0.85}>
           <Ionicons name="mail-outline" size={18} color="#fff" />
-          <Text style={styles.ctaText}>{current.label} 제휴 문의하기</Text>
+          <Text style={styles.ctaText}>제휴 문의 메일 보내기</Text>
         </TouchableOpacity>
         <Text style={styles.ctaHint}>
           누르면 메일 앱이 열립니다. 항목만 채워 보내주세요.{'\n'}
