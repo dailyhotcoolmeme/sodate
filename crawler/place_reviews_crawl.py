@@ -5,13 +5,24 @@
 - 대상: service=honsul (재개: 이미 후기 있는 place 는 건너뜀).
 - 키워드=매장명. 결과 중 매장 핵심명이 실제로 언급된 것만 저장(일반명 오매칭 방지).
 - 블로그(naver_blog)/유튜브(youtube) 각각 소스별. 인스타는 IP차단 이슈로 제외.
+
+⚠️ 예전엔 Supabase Management API(개인 PAT, ~/.config/sodate/supabase-pat)로 SQL 을
+   직접 날렸다. 그 PAT 가 개발자 노트북에만 있어서 이 스크립트는 어떤 워크플로우에도
+   등록할 수 없었고, 결국 수동 실행만 되다가 방치됐다(2026-09-01 점검에서 발견 —
+   혼술바 데이터가 9일째 그대로였다). 지금은 크롤러 공용 자격증명
+   (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)만으로 PostgREST 를 쓴다. GitHub Actions
+   시크릿에 이미 있는 값이라 스케줄 등록에 새 비밀이 필요 없다.
 """
-import os, re, sys, json, time, urllib.request
+import os, re, sys, json, time, urllib.request, urllib.parse
+from dotenv import load_dotenv
 from scrapers.review_naver import fetch_naver_blog_results
 from scrapers.review_youtube import fetch_youtube_results
 
-PROJECT = 'xgcldcnqfqcugkcifyae'
-PAT = open(os.path.expanduser('~/.config/sodate/supabase-pat')).read().strip()
+load_dotenv()
+SB_URL = (os.environ.get('SUPABASE_URL') or '').rstrip('/')
+SB_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or ''
+if not SB_URL or not SB_KEY:
+    raise SystemExit('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 가 없습니다(.env 또는 환경변수).')
 UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36'
 # 업종·일반어만 substring 제거(지역어는 여기서 빼지 않음 — 브랜드 조각남 방지, 지역은 is_area 로 처리)
 GENERIC = re.compile(r'(혼술집|혼술바|혼술|이자카야|포차|BAR|bar|직영점|본점)')
@@ -22,23 +33,37 @@ BRAND_STOP = {'혼밥', '이유', '대세', '낙원', '분위기', '감성', '�
               '내집', '술한잔', '단골', '주막', '아지트', '쉼표', '휴식', '동네', '골목', '만남'}
 
 
-def run_sql(sql):
+def _rest(path, method='GET', body=None, extra_headers=None):
+    """PostgREST 호출(재시도 포함). path 는 '/rest/v1/...' 부터."""
     last = None
+    headers = {'apikey': SB_KEY, 'Authorization': f'Bearer {SB_KEY}',
+               'Content-Type': 'application/json', 'User-Agent': UA}
+    headers.update(extra_headers or {})
+    data = json.dumps(body).encode() if body is not None else None
     for attempt in range(4):
-        req = urllib.request.Request(
-            f'https://api.supabase.com/v1/projects/{PROJECT}/database/query',
-            data=json.dumps({'query': sql}).encode(), method='POST',
-            headers={'Authorization': f'Bearer {PAT}', 'Content-Type': 'application/json', 'User-Agent': UA})
+        req = urllib.request.Request(SB_URL + path, data=data, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=60) as r:
-                return json.loads(r.read().decode())
+                raw = r.read().decode()
+                return json.loads(raw) if raw.strip() else []
         except urllib.error.HTTPError as e:
             if e.code in (500, 502, 503, 504, 544, 429):   # 일시 오류 → 재시도
                 last = e; time.sleep(3 * (attempt + 1)); continue
-            raise
+            raise RuntimeError(f'{e.code} {e.read().decode()[:200]}') from e
         except Exception as e:
             last = e; time.sleep(3 * (attempt + 1)); continue
     raise last
+
+
+def fetch_all(path_with_query, page=1000):
+    """PostgREST 기본 상한(1000행)에 잘리지 않게 끝까지 가져온다."""
+    out = []
+    for start in range(0, 100000, page):
+        rows = _rest(f'{path_with_query}&offset={start}&limit={page}')
+        out += rows
+        if len(rows) < page:
+            break
+    return out
 
 
 def core_tokens(name):
@@ -102,26 +127,28 @@ def clean_content(text):
     return t
 
 
-def q(v):
-    if v is None:
-        return 'null'
-    return "'" + str(v).replace("'", "''") + "'"
-
-
 def main():
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else 10**9
-    # 각 place 의 blog/youtube 보유 여부까지 함께(이미 있는 소스는 재수집 안 함 → 중복 방지)
-    places = run_sql("select p.id, p.name, "
-                     "exists(select 1 from place_reviews r where r.place_id=p.id and r.source='naver_blog') as has_blog, "
-                     "exists(select 1 from place_reviews r where r.place_id=p.id and r.source='youtube') as has_yt "
-                     "from places p where p.service='honsul' "
-                     "and not (exists(select 1 from place_reviews r where r.place_id=p.id and r.source='naver_blog') "
-                     "         and exists(select 1 from place_reviews r where r.place_id=p.id and r.source='youtube')) "
-                     "order by p.naver_review_count desc nulls last limit %d;" % limit)
+    # PostgREST 에는 EXISTS 서브쿼리가 없다. 매장(500곳)과 후기의 (place_id, source)만
+    # 통째로 받아 파이썬에서 맞춘다 — 둘 다 작아서 SQL 한 방보다 느릴 일이 없다.
+    meta = fetch_all('/rest/v1/places?service=eq.honsul&select=id,name,region,naver_review_count&order=id')
+    have = fetch_all('/rest/v1/place_reviews?select=place_id,source&order=place_id')
+    blog_ids = {r['place_id'] for r in have if r['source'] == 'naver_blog'}
+    yt_ids = {r['place_id'] for r in have if r['source'] == 'youtube'}
+
+    places = [
+        {'id': m['id'], 'name': m['name'],
+         'has_blog': m['id'] in blog_ids, 'has_yt': m['id'] in yt_ids}
+        for m in meta
+        if not (m['id'] in blog_ids and m['id'] in yt_ids)   # 둘 다 있으면 건너뜀
+    ]
+    # 리뷰 많은 매장부터(= 이용자가 많이 보는 곳부터). None 은 뒤로.
+    order = {m['id']: (m.get('naver_review_count') or -1) for m in meta}
+    places.sort(key=lambda p: order.get(p['id'], -1), reverse=True)
+    places = places[:limit]
     print(f'대상 {len(places)}곳')
     # 전 매장명+지역으로 브랜드 고유토큰 판별기 구성(지역명 오매칭 방지)
-    meta = run_sql("select name, region from places where service='honsul';")
-    distinctive = build_distinctive([m['name'] for m in meta], [m['region'] for m in meta])
+    distinctive = build_distinctive([m['name'] for m in meta], [m.get('region') for m in meta])
     total = 0
     for i, p in enumerate(places, 1):
         toks = distinctive(p['name'])
@@ -150,13 +177,20 @@ def main():
             rows.append(r)
         rows = rows[:8]
         if rows:
-            vals = ','.join(
-                "(%s,%s,%s,%s,%s,%s,true)" % (
-                    q(p['id']), q(r['source']), q(clean_content(r.get('content'))), q(r.get('source_url')),
-                    q(r.get('thumbnail_url')), q(r.get('published_at')))
-                for r in rows)
-            run_sql("insert into place_reviews (place_id, source, content, source_url, thumbnail_url, published_at, is_active) "
-                    "values %s on conflict do nothing;" % vals)
+            payload = [{
+                'place_id': p['id'],
+                'source': r['source'],
+                'content': clean_content(r.get('content')),
+                'source_url': r.get('source_url'),
+                'thumbnail_url': r.get('thumbnail_url'),
+                'published_at': r.get('published_at'),
+                'is_active': True,
+            } for r in rows]
+            # 같은 원문 URL 이 두 번 들어가지 않게 — 옛 SQL 의 on conflict do nothing 자리.
+            # ⚠️ PostgREST 는 on_conflict 를 URL 로 안 주면 Prefer 의 ignore-duplicates 를
+            #    무시하고 409(중복키)를 던진다. place_reviews 는 source_url 이 유니크다.
+            _rest('/rest/v1/place_reviews?on_conflict=source_url', 'POST', payload,
+                  {'Prefer': 'resolution=ignore-duplicates,return=minimal'})
             total += len(rows)
         if i % 10 == 0:
             print(f'  … {i}/{len(places)} · 누적 후기 {total}')
