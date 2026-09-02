@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import MenuStats from '../components/MenuStats'
 import { CalendarDays, Heart, MousePointerClick, Smartphone } from 'lucide-react'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -197,6 +198,9 @@ export default function Dashboard() {
           </BarChart>
         </ResponsiveContainer>
       </div>
+
+      {/* 메뉴별 상세 — 소개팅·소셜링·혼술바·커뮤니티 탭(2026-09-03 오너 지시) */}
+      <MenuStats />
 
       {/* 일별 트렌드 */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
