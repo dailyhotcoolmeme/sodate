@@ -171,7 +171,7 @@ export default function RootLayout() {
       {!gateOff && (
         <View style={styles.splashGate} pointerEvents="none">
           <Image
-            source={require('../assets/logo-stack.png')}
+            source={require('../assets/logo-stack-white.png')}
             style={styles.splashLogo}
             resizeMode="contain"
           />
@@ -191,7 +191,8 @@ const SPLASH_LOGO_W = Dimensions.get('window').width * 0.33
 const styles = StyleSheet.create({
   splashGate: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0F0F0F',
+    // 네이티브 스플래시와 같은 색 — 다르면 그 경계에서 한 번 번쩍인다(2026-09-02 핑크로 변경).
+    backgroundColor: '#FF6B9D',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 999,
