@@ -124,11 +124,17 @@ export default function PlaceMap({ focus, pins, activeId, zoom = 15, style, show
     const rest = pins
     const cx = worldX(camera.lng, camera.zoom)
     const cy = worldY(camera.lat, camera.zoom)
+    // ⚠️ 화면 밖 핀까지 전부 묶고 그리고 있었다. 500곳이면 클러스터 계산이 500×500(12만 5천
+    //    번)이고, 마커도 화면에 안 보이는 것까지 네이티브 뷰로 만들어진다. 마커를 탭하면
+    //    카메라가 움직이고(줌 16), 그때마다 이게 통째로 다시 돌아서 업체박스가 반박자
+    //    늦게 떴다(2026-09-02 오너: "아직도 반박자 느리다").
+    //    화면 밖 한 뼘(150px) 너머는 애초에 계산에서 뺀다 — 어차피 안 보인다.
+    const M = 150
     const points = rest.map((p) => ({
       pin: p,
       x: size.width / 2 + (worldX(p.lng, camera.zoom) - cx),
       y: size.height / 2 + (worldY(p.lat, camera.zoom) - cy),
-    }))
+    })).filter((pt) => pt.x > -M && pt.x < size.width + M && pt.y > -M && pt.y < size.height + M)
     const used = new Array(points.length).fill(false)
     const rawGroups: (typeof points)[] = []
     for (let i = 0; i < points.length; i++) {
@@ -158,9 +164,13 @@ export default function PlaceMap({ focus, pins, activeId, zoom = 15, style, show
   // 선택 핀은 배열(active) 또는 activeId 어느 쪽으로 와도 받는다 — 히어로 지도는 아직
   // 핀에 active:true 를 박아 넘긴다(핀이 한두 개라 재생성 비용이 없다).
   const activePin = pins.find((p) => p.active || (activeId != null && p.id === activeId))
-  const individualPins = cluster
-    ? (activePin && !singles.some((p) => p.id === activePin.id) ? [activePin, ...singles] : singles)
-    : pins
+  // useMemo 로 배열 정체성을 고정한다 — 안 그러면 렌더마다 새 배열이라 아래 프리페치
+  // useEffect 가 매번 다시 돈다.
+  const individualPins = useMemo(() => (
+    cluster
+      ? (activePin && !singles.some((p) => p.id === activePin.id) ? [activePin, ...singles] : singles)
+      : pins
+  ), [cluster, activePin, singles, pins])
   const isActive = (p: MapPin) => p.active === true || (activeId != null && p.id === activeId)
   // 실제로 그려질 마커 이미지만 미리 받는다. 예전엔 혼술바 목록을 받자마자 화면 밖
   // 499개를 전부 Image.prefetch 했다 — 마커 PNG 가 한 장 24.5KB 라 **약 12MB** 를,
