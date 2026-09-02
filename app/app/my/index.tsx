@@ -18,6 +18,7 @@ import { getScrappedIds, getBlockedAuthors } from '@/lib/boardIdentity'
 import { useAvatarStore } from '@/stores/avatarStore'
 import { getAvatar, randomAvatarId } from '@/lib/avatars'
 import AvatarPicker from '@/components/AvatarPicker'
+import Constants from 'expo-constants'
 
 /**
  * MY 탭 — 개인 활동·설정을 한곳에 모은 화면(2026-08-21, 후배 검토 통과).
@@ -29,7 +30,9 @@ import AvatarPicker from '@/components/AvatarPicker'
  *
  * ⚠️ NEW_TABS_ENABLED 가 false 인 동안은 이 화면으로 올 길이 없다(바텀 내비가 안 뜸).
  */
-const APP_VERSION = '1.0.0'
+// ⚠️ 손으로 적어둔 값이라 1.1.0 을 내고도 화면엔 1.0.0 으로 남아 있었다(2026-09-02 발견).
+// app.json 의 version 을 그대로 읽어 다시는 어긋나지 않게 한다.
+const APP_VERSION = Constants.expoConfig?.version ?? '-'
 
 function Row({
   icon, label, right, badge, onPress, colors,
