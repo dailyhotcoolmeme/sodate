@@ -13,21 +13,23 @@ export interface PlaceRow {
   address_road: string | null
   lat: number | null
   lng: number | null
-  tel: string | null
-  instagram: string | null
-  naver_url: string | null
+  tel?: string | null                 // 상세 전용
+  instagram?: string | null           // 상세 전용
+  naver_url?: string | null           // 상세 전용
   hours: Record<string, string> | null   // {"월":"18:30~00:30",...}
-  late_night: boolean
+  late_night?: boolean                // 상세 전용
   conveniences: string[]
   naver_rating: number | null
   naver_review_count: number | null
   thumbnail_url: string | null
   profile_image: string | null       // 업체 인스타 프로필 이미지(R2 재호스팅) — 피드 썸네일
-  images: string[]                   // 네이버 대표사진(현재 미사용, 인스타로 전환)
-  instagram_media: InstaMedia[]      // 업체 인스타 게시물/릴스(사진·영상)
-  honsul_badges: string[]            // 특징 태그(술종류多·대화·음악·심야 …)
-  mood_tags: string[]                // (통합) 현재 미사용
-  socials: Record<string, string>    // {instagram, facebook, x, youtube, homepage}
+  images?: string[]                   // 상세 전용(현재 미사용, 인스타로 전환)
+  instagram_media?: InstaMedia[]      // 상세 전용 — 업체 인스타 게시물/릴스
+  honsul_badges?: string[]            // 상세 전용
+  mood_tags?: string[]                // 상세 전용(현재 미사용)
+  socials?: Record<string, string>    // 상세 전용 {instagram, facebook, …}
+  /** 목록·지도 카드용으로 미리 뽑아둔 리뷰 해시태그(상위 3개). 원본은 keyword_votes. */
+  review_tags?: string[]
   keyword_votes?: Record<string, number> | null   // 상세 전용: 네이버 키워드 투표 원본
   plan?: string | null              // 'free' | 'partner' — partner면 '모잇 할인' 딱지
   plan_starts_at?: string | null    // 제휴 시작일 'YYYY-MM-DD' (null=제한 없음)
@@ -42,11 +44,27 @@ export interface InstaMedia {
   url: string
 }
 
-const COLUMNS =
-  'id,name,naver_place_id,category,region,address_road,lat,lng,tel,instagram,naver_url,' +
-  'hours,late_night,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,images,instagram_media,honsul_badges,mood_tags,socials,keyword_votes,' +
+/**
+ * 목록·지도용 컬럼(2026-09-02 분리).
+ *
+ * 혼술바 탭은 500곳을 한 번에 받는다(지도 핀 계산에 전수가 필요). 예전엔 상세 화면에서만
+ * 쓰는 컬럼까지 전부 실어 **1,015KB** 였다 — 그중 keyword_votes 하나가 353KB(44%)였고,
+ * 목록에서 그걸 쓰는 곳은 지도 미리보기 카드의 해시태그 **1개**뿐이었다.
+ * 그 태그는 review_tags 로 미리 뽑아 두고(20260902c 마이그레이션), 원본은 상세에서만 읽는다.
+ *
+ * 여기서 뺀 것: tel · instagram · naver_url · late_night · images · instagram_media ·
+ *               honsul_badges · mood_tags · socials · partner_benefit · keyword_votes
+ * (전부 app/place/[id].tsx 에서만 쓴다 — 목록·지도 컴포넌트에는 참조가 없음을 확인함)
+ */
+const LIST_COLUMNS =
+  'id,name,naver_place_id,category,region,address_road,lat,lng,' +
+  'hours,conveniences,naver_rating,naver_review_count,thumbnail_url,profile_image,review_tags,' +
   // 제휴('모잇 할인' 딱지). 매장은 상시 노출이라 기간이 있다 — lib/partner.ts 참고.
-  'plan,plan_starts_at,plan_ends_at,partner_benefit'
+  'plan,plan_starts_at,plan_ends_at'
+
+/** 상세 화면용 — 전부. */
+const COLUMNS = LIST_COLUMNS +
+  ',tel,instagram,naver_url,late_night,images,instagram_media,honsul_badges,mood_tags,socials,keyword_votes,partner_benefit'
 
 // 방문자 키워드 투표(사실) → 해시태그처럼 보여줄 태그 배열(상위순). 생성·범용 항목은 제외.
 // 공백을 없애 해시태그 형태로("술이 다양해요"→"술이다양해요"). 많으면 카드에서 가로 스와이프.
@@ -141,7 +159,7 @@ export async function fetchPlaces(): Promise<PlaceRow[]> {
   }
   const { data, error } = await sb
     .from('places')
-    .select(COLUMNS)
+    .select(LIST_COLUMNS)
     .eq('service', 'honsul')
     .eq('is_active', true)
     .order('name')
@@ -202,7 +220,7 @@ export function osmTiles(lat: number, lng: number, w: number, h: number, z = 16)
  */
 export async function fetchNearbyPlaces(exceptId: string, lat: number, lng: number, radiusDeg = 0.045): Promise<PlaceRow[]> {
   const sb = supabase as unknown as { from: (t: string) => any }
-  const { data } = await sb.from('places').select(COLUMNS)
+  const { data } = await sb.from('places').select(LIST_COLUMNS)
     .eq('service', 'honsul').eq('is_active', true).not('lat', 'is', null)
     .gte('lat', lat - radiusDeg).lte('lat', lat + radiusDeg)
     .gte('lng', lng - radiusDeg).lte('lng', lng + radiusDeg)
@@ -213,7 +231,7 @@ export async function fetchPlace(id: string): Promise<PlaceRow | null> {
   const sb = supabase as unknown as { from: (t: string) => any }
   const { data, error } = await sb
     .from('places')
-    .select(COLUMNS + ',keyword_votes')
+    .select(COLUMNS)
     .eq('id', id)
     .maybeSingle()
   if (error) throw error

@@ -9,13 +9,13 @@
     ],
     "orientation": "portrait",
     "_comment_backgroundColor": "네이티브 창/루트뷰 배경. 없으면 스플래시가 끝나고 JS 첫 프레임이 그려지기 전까지 시스템 기본 배경(라이트모드=흰색)이 잠깐 보인다(2026-07-28 오너 지적). 스플래시와 같은 색으로 맞춰 이음새를 없앤다. expo-system-ui가 이 값을 네이티브에 반영한다.",
-    "backgroundColor": "#0F0F0F",
+    "backgroundColor": "#FF6B9D",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0F0F0F"
+      "backgroundColor": "#FF6B9D"
     },
     "ios": {
       "supportsTablet": true,
@@ -61,7 +61,12 @@
           "userTrackingUsageDescription": "회원님께 더 관련성 높은 광고를 제공하기 위해 사용됩니다."
         }
       ],
-      "expo-tracking-transparency",
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "회원님께 더 관련성 높은 광고를 제공하기 위해 사용됩니다."
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -112,7 +117,7 @@
     "runtimeVersion": "1.1.0",
     "updates": {
       "url": "https://u.expo.dev/1b634f2b-480e-4108-b994-c92c3a0dc4b4",
-      "fallbackToCacheTimeout": 8000,
+      "fallbackToCacheTimeout": 0,
       "requestHeaders": {
         "expo-channel-name": "production"
       }

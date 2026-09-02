@@ -40,7 +40,10 @@ export default function PlaceMapCard({
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors, compact), [colors, compact])
   const { open, hoursLabel } = openStatus(place.hours)
-  const tag = reviewHashtags(place.keyword_votes, 1)[0]
+  // ⚠️ 예전엔 keyword_votes(원본 투표 맵)에서 즉석으로 뽑았는데, 그 컬럼 하나가 목록
+  //    500곳 기준 353KB(전체의 44%)였다 — 태그 하나 때문에. 지금은 서버에서 미리 뽑아둔
+  //    review_tags 를 쓴다(20260902c 마이그레이션). 규칙은 reviewHashtags 와 동일.
+  const tag = place.review_tags?.[0] ?? reviewHashtags(place.keyword_votes, 1)[0]
 
   const wrapStyle = useMemo(() => {
     if (!compact || !anchor || !containerWidth) return styles.wrap
