@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useColors } from '@/hooks/useColors'
 import { runPostOnboardingSetup } from '@/lib/initAds'
+import { track } from '@/lib/analytics'
 
 const { width } = Dimensions.get('window')
 const ONBOARDING_KEY = 'sodate-onboarding-done'
@@ -153,6 +154,9 @@ export default function OnboardingScreen() {
   }), [colors])
 
   const isLast = step === SLIDES.length - 1
+  // 첫 실행 안내 몇 장째까지 봤는지(2026-09-03). 첫 장에서 나가면 그게 제일 큰 손실인데
+  // 지금은 그걸 볼 방법이 없다.
+  useEffect(() => { track('onboarding_step', { properties: { step, total: SLIDES.length } }) }, [step])
 
   const handleNext = () => {
     if (isLast) {

@@ -135,7 +135,7 @@ export default function BannerCarousel({ menu }: { menu: BannerMenu }) {
     const b = banners[index]
     if (!b || seenRef.current.has(b.id)) return
     seenRef.current.add(b.id)
-    track('banner_impression', { properties: { banner_id: b.id, menu } })
+    track('banner_impression', { menu, properties: { banner_id: b.id } })
   }, [index, banners, menu])
 
   const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -145,7 +145,7 @@ export default function BannerCarousel({ menu }: { menu: BannerMenu }) {
   }
 
   const open = (b: BannerRow) => {
-    track('banner_click', { properties: { banner_id: b.id, menu, target: b.target_type } })
+    track('banner_click', { menu, properties: { banner_id: b.id, target: b.target_type } })
     const v = b.target_value
     if (!v) return
     switch (b.target_type) {

@@ -24,6 +24,7 @@ import PlaceMapCard from '@/components/PlaceMapCard'
 import AdListItem from '@/components/AdListItem'
 import { warmNativeAdPool, getHonsulFeedNativeAdUnitId } from '@/lib/ads'
 import { useRouter, useFocusEffect } from 'expo-router'
+import { track } from '@/lib/analytics'
 
 /**
  * 혼술바 탭 — 상시 매장(places). 피드/지도 두 탭. 종류는 (현재 2종뿐이라) 헤더칩에서 뺌 →
@@ -250,6 +251,17 @@ export default function HonsulScreen() {
 
   // 화면 마운트 시 미리 몇 개 채워둔다(lib/ads.ts 참고) — 소개팅 피드와 동일한 이유.
   useEffect(() => { warmNativeAdPool(getHonsulFeedNativeAdUnitId(), 'honsul-feed') }, [])
+  // 메뉴 계측(2026-09-03) — 이 화면에는 계측이 하나도 없어서 혼술바 사용 기록이 0건이었다.
+  useEffect(() => { track('menu_view', { menu: 'honsul' }) }, [])
+  // ⚠️ 검색 기록은 결과가 나온 뒤에 남긴다 — setSearch 직후에 세면 아직 **이전 검색의**
+  //    결과 수가 들어 있어서, 0건 검색어를 찾으려는 목적이 어긋난다(2026-09-03).
+  const searchLogged = useRef<string | null>(null)
+  useEffect(() => {
+    const q = search.trim()
+    if (!q || searchLogged.current === q) return
+    searchLogged.current = q
+    track('search', { menu: 'honsul', properties: { term: q, result_count: list.length } })
+  }, [search, list.length])
 
   // 피드(목록형 FlatList)에만 광고를 섞은 별도 배열 — list 자체는 지도탭 핀 계산에도
   // 쓰이므로(pinnedMapPlaces) 그대로 두고 건드리지 않는다.
@@ -472,7 +484,7 @@ export default function HonsulScreen() {
               통일 — 처음에 검정/흰색으로 했던 건 오너 지적으로 되돌림. 내 주변 버튼은
               필터 줄(현재 위치)로 옮겼다. */}
           <View style={[styles.fabStack, { bottom: insets.bottom + 14 }]}>
-            <TouchableOpacity style={styles.fabPrimary} onPress={() => setTab('map')} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.fabPrimary} onPress={() => { track('map_mode', { menu: 'honsul', properties: { mode: 'map' } }); setTab('map') }} activeOpacity={0.85}>
               <Ionicons name="map-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -521,7 +533,7 @@ export default function HonsulScreen() {
                       place={focused}
                       isFavorite={favoriteIds.has(focused.id)}
                       onToggleFavorite={() => confirmFavorite(favoriteIds.has(focused.id), () => toggleFav(focused.id))}
-                      onOpen={() => router.push(`/place/${focused.id}`)}
+                      onOpen={() => { track('item_view', { menu: 'honsul', properties: { id: focused.id, title: focused.name, from: 'map' } }); router.push(`/place/${focused.id}`) }}
                       onClose={() => setFocused(null)}
                     />
                   )}
@@ -548,7 +560,7 @@ export default function HonsulScreen() {
               <Ionicons name={myLoc ? 'navigate' : 'navigate-outline'} size={18} color={myLoc ? colors.primary : colors.textSecondary} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.fabPrimary} onPress={() => setTab('feed')} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.fabPrimary} onPress={() => { track('map_mode', { menu: 'honsul', properties: { mode: 'feed' } }); setTab('feed') }} activeOpacity={0.85}>
               <Ionicons name="list-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>

@@ -14,6 +14,7 @@ import PlaceMapCard from '@/components/PlaceMapCard'
 import AdBanner from '@/components/AdBanner'
 import { getHonsulDetailNativeAdUnitId } from '@/lib/ads'
 import { openOutlink } from '@/lib/outlink'
+import { track } from '@/lib/analytics'
 import { useColors } from '@/hooks/useColors'
 import PartnerBadge from '@/components/PartnerBadge'
 import PartnerNotice from '@/components/PartnerNotice'
@@ -62,6 +63,7 @@ export default function PlaceDetailScreen() {
   useEffect(() => {
     if (!place || !isPartner || partnerShownRef.current) return
     partnerShownRef.current = true
+    track('partner_notice_view', { menu: 'honsul', properties: { place_id: place.id, place: place.name } })
     setPartnerNotice(true)
   }, [place, isPartner])
   // 탭한 점의 화면 좌표 — 카드를 그 점 바로 아래에 띄운다(2026-08-24 오너 지적: "왼쪽 밑에
@@ -110,6 +112,8 @@ export default function PlaceDetailScreen() {
   // MY '최근 본 기록' 기록(2026-08-24) — 로컬 저장, 무해. 이전엔 이 화면만 누락돼 있었다.
   useEffect(() => {
     if (place) {
+      // 매장 상세 열람(2026-09-03). 이름을 같이 남겨 어느 매장이 인기인지 본다.
+      track('item_view', { menu: 'honsul', properties: { id: place.id, title: place.name, region: place.region ?? null } })
       addRecentView({
         kind: 'place', id: place.id, title: place.name,
         sub: place.region ?? undefined,
@@ -245,7 +249,7 @@ export default function PlaceDetailScreen() {
               style={styles.ratingRow}
               activeOpacity={place.naver_url ? 0.7 : 1}
               disabled={!place.naver_url}
-              onPress={() => place.naver_url && openOutlink(place.naver_url)}
+              onPress={() => { if (!place.naver_url) return; track('outlink_click', { menu: 'honsul', properties: { kind: 'naver', place_id: place.id } }); openOutlink(place.naver_url) }}
             >
               <Ionicons name="star" size={14} color="#FFB800" />
               <Text style={styles.ratingScore}>{place.naver_rating.toFixed(2)}</Text>
@@ -267,7 +271,7 @@ export default function PlaceDetailScreen() {
                 <Ionicons name="logo-instagram" size={16} color={colors.textPrimary} />
                 <Text style={styles.igTitle}>이 가게 인스타</Text>
               </View>
-              {place.instagram && <TouchableOpacity onPress={() => openOutlink(place.instagram!)}><Text style={styles.igAll}>전체 보기 ›</Text></TouchableOpacity>}
+              {place.instagram && <TouchableOpacity onPress={() => { track('outlink_click', { menu: 'honsul', properties: { kind: 'instagram', place_id: place.id } }); openOutlink(place.instagram!) }}><Text style={styles.igAll}>전체 보기 ›</Text></TouchableOpacity>}
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.igScroll}>
               {media.map((m) => (

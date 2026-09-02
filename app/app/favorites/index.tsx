@@ -61,7 +61,7 @@ export default function FavoritesScreen() {
   // 당김 표시는 다른 앱처럼 잠깐 붙잡아 둔다(거리는 iOS 기본값 그대로)
   const { refreshing, onRefresh } = useRefreshIndicator(eventsLoading, refetch)
 
-  React.useEffect(() => { track('screen_view', { properties: { screen: 'favorites' } }) }, [])
+  React.useEffect(() => { track('screen_view', { properties: { screen_name: 'favorites' } }) }, [])
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const colors = useColors()
   const styles = useMemo(() => makeStyles(colors), [colors])
