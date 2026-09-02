@@ -192,6 +192,9 @@ export default function MyScreen() {
         {/* 예전엔 빈 메일이 바로 열렸다 — 안내 화면을 먼저 보여준다(2026-09-01 오너 지시). */}
         <Row colors={colors} icon="mail-outline" label="제휴문의" onPress={() => router.push('/partner')} />
         <Row colors={colors} icon="cube-outline" label="버전" right={APP_VERSION} />
+        {/* 프로필 캐릭터 출처 표기 — DiceBear adventurer-neutral 은 CC BY 4.0 이라 제작자를
+            밝혀야 쓸 수 있다(2026-09-03 캐릭터 교체). 지우면 라이선스 위반이다. */}
+        <Row colors={colors} icon="happy-outline" label="캐릭터" right="DiceBear · Lisa Wischofsky (CC BY 4.0)" />
       </ScrollView>
       <BottomNav current="my" />
 
