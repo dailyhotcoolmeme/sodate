@@ -35,7 +35,13 @@ export default function RootLayout() {
     let alive = true
     async function checkOnboarding() {
       try {
-        const done = await AsyncStorage.getItem(ONBOARDING_KEY)
+        // ⚠️ 예전엔 온보딩 여부를 읽고 **그다음에** 알림 응답을 조회했다. 둘 다 네이티브
+        //    왕복이라 시간이 더해졌고, 그 합만큼 첫 화면이 늦게 떴다(둘은 서로 의존하지
+        //    않는다). 2026-09-02: 동시에 던지고 둘 다 오면 진행한다.
+        const [done, notifRes] = await Promise.all([
+          AsyncStorage.getItem(ONBOARDING_KEY),
+          Notifications.getLastNotificationResponseAsync().catch(() => null),
+        ])
         if (!done) {
           router.replace('/onboarding')
           // 처음 켠 사용자의 ATT 동의창은 온보딩 마지막에서 띄운다(app/onboarding.tsx).
@@ -49,11 +55,7 @@ export default function RootLayout() {
           //    /event/{id} 로 보내는데, 그 push 보다 이 replace 가 늦게 끝나면 방금 연
           //    일정 화면을 커뮤니티로 덮어버린다(둘 다 비동기라 순서가 매번 다르다).
           //    그래서 알림 여부를 여기서 먼저 확인하고, 있으면 손대지 않는다.
-          let fromNotification = false
-          try {
-            const res = await Notifications.getLastNotificationResponseAsync()
-            fromNotification = !!(res?.notification?.request?.content?.data as any)?.event_id
-          } catch { /* 알림 조회 실패는 무시 — 평소대로 커뮤니티로 */ }
+          const fromNotification = !!(notifRes?.notification?.request?.content?.data as any)?.event_id
           if (alive && !fromNotification) router.replace('/board')
         }
       } finally {
