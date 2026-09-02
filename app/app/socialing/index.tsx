@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, Refresh
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
+import BannerCarousel from '@/components/BannerCarousel'
 import BottomNav from '@/components/BottomNav'
 import SocialingListItem from '@/components/SocialingListItem'
 import SocialingCard from '@/components/SocialingCard'
@@ -260,6 +261,7 @@ export default function SocialingScreen() {
           style={{ opacity: listVisible ? 1 : 0 }}
           data={listData}
           keyExtractor={(item) => item.type === 'ad' ? item.key : item.event.id}
+          ListHeaderComponent={<BannerCarousel menu="socialing" />}
           renderItem={({ item }) => {
             if (item.type === 'ad') return <AdListItem slot="socialing-feed" adUnitId={getSocialingFeedNativeAdUnitId()} variant={item.adIndex % 2 === 0 ? 'thumb' : 'wide'} />
             return viewMode === 'card' ? (

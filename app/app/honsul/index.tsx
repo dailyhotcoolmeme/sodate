@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, Refresh
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
+import BannerCarousel from '@/components/BannerCarousel'
 import BottomNav from '@/components/BottomNav'
 import PlaceListItem from '@/components/PlaceListItem'
 import EventSearchModal from '@/components/EventSearchModal'
@@ -469,6 +470,7 @@ export default function HonsulScreen() {
               style={{ opacity: listVisible ? 1 : 0 }}
               data={feedListData}
               keyExtractor={(item) => item.type === 'ad' ? item.key : item.place.id}
+              ListHeaderComponent={<BannerCarousel menu="honsul" />}
               renderItem={({ item }) => {
                 if (item.type === 'ad') return <AdListItem slot="honsul-feed" adUnitId={getHonsulFeedNativeAdUnitId()} variant={item.adIndex % 2 === 0 ? 'thumb' : 'wide'} />
                 const p = item.place

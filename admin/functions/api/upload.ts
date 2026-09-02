@@ -34,7 +34,14 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (!(file instanceof File)) return json({ error: 'no_file' }, 400)
 
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(SAFE, '')
-  const key = `detail/${slug}/${typeId}/${crypto.randomUUID()}.${ext}`
+
+  // 저장 위치. 원래 상세 이미지 전용이라 `detail/{업체}/{유형}/` 로 굳어 있었는데,
+  // 배너(2026-09-02)처럼 업체에 속하지 않는 이미지가 생겨 폴더를 고를 수 있게 열었다.
+  // 값을 그대로 경로에 쓰므로 SAFE 로 걸러 상위 폴더 탈출(`../`)을 막는다.
+  const folder = String(form.get('folder') || '').replace(SAFE, '-')
+  const key = folder
+    ? `${folder}/${crypto.randomUUID()}.${ext}`
+    : `detail/${slug}/${typeId}/${crypto.randomUUID()}.${ext}`
 
   await env.MEDIA.put(key, file.stream(), {
     httpMetadata: { contentType: file.type || 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' },

@@ -25,6 +25,20 @@ export async function uploadDetailImage(file: File, slug: string, typeId: string
   return data.url as string
 }
 
+/**
+ * 배너 이미지 업로드(2026-09-02). 상세 이미지와 달리 업체에 속하지 않으므로
+ * `promo/banner/` 폴더에 따로 쌓는다 — 업로드 API 의 folder 인자를 쓴다.
+ */
+export async function uploadBannerImage(file: File): Promise<string> {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('folder', 'promo/banner')
+  const res = await fetch('/api/upload', { method: 'POST', body: fd, credentials: 'include' })
+  if (!res.ok) throw new Error(`업로드 실패 (${res.status})`)
+  const data = await res.json()
+  return data.url as string
+}
+
 export async function deleteDetailImage(url: string): Promise<void> {
   const key = detailImageKey(url)
   if (!key) return

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { AlertTriangle, Search, Handshake } from 'lucide-react'
+import BannerManager from '../components/BannerManager'
 
 /**
  * 제휴 관리 — '모잇 할인' 딱지를 켜고 끄는 곳(2026-09-02 오너 지시).
@@ -42,6 +43,7 @@ interface Place {
 const TABS = [
   { key: 'company', label: '소개팅·소셜링 업체' },
   { key: 'place', label: '혼술바' },
+  { key: 'banner', label: '배너' },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
 
@@ -190,15 +192,19 @@ export default function Partners() {
     <div className="p-4 md:p-8 space-y-4">
       <div className="flex items-baseline gap-2 flex-wrap">
         <h1 className="text-xl font-bold text-gray-900">제휴 관리</h1>
-        <span className="text-sm text-gray-400">
-          업체 {partnerCompanies.length}곳 · 혼술바 {partnerPlaces.length}곳
-        </span>
+        {tab !== 'banner' && (
+          <span className="text-sm text-gray-400">
+            업체 {partnerCompanies.length}곳 · 혼술바 {partnerPlaces.length}곳
+          </span>
+        )}
       </div>
 
+      {tab !== 'banner' && (
       <p className="text-sm text-gray-500">
         켜면 앱의 일정 제목·매장명 앞에 <BadgePreview /> 딱지가 붙고,
         상세 화면에 들어올 때 혜택 안내 팝업이 뜹니다. 혜택 칸을 비우면 팝업에서 혜택 줄만 빠집니다.
       </p>
+      )}
 
       {err && (
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
@@ -223,7 +229,9 @@ export default function Partners() {
         ))}
       </div>
 
-      {loading && <p className="text-sm text-gray-400">불러오는 중…</p>}
+      {tab === 'banner' && <BannerManager />}
+
+      {loading && tab !== 'banner' && <p className="text-sm text-gray-400">불러오는 중…</p>}
 
       {/* ── 소개팅·소셜링 업체 — 17곳뿐이라 전부 보여준다 ── */}
       {!loading && tab === 'company' && (

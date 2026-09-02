@@ -39,7 +39,13 @@ export type AnalyticsEventType =
   | 'ad_load_success'
   | 'ad_load_fail'
   // 자체 홍보 배너(AdMob 아님) 탭 — 커뮤니티 피드 맨 위(2026-08-19).
+  // ⚠️ 2026-09-02 배너가 admin 관리형(banners 테이블)으로 바뀌면서 아래 두 종류로 대체됐다.
+  //    이 값은 그 전 기록을 읽을 때 필요해서 남겨둔다(새로 쓰지 않는다).
   | 'promo_banner_tap'
+  // 메뉴 상단 배너(2026-09-02) — 노출은 "실제로 화면에 보인 장"만 센다.
+  // 그래야 "몇 번 보이고 몇 번 눌렸나"가 나온다. properties: { banner_id, menu }
+  | 'banner_impression'
+  | 'banner_click'
 
 interface AnalyticsPayload {
   event_type: AnalyticsEventType

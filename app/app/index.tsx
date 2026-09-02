@@ -19,6 +19,7 @@ import { Image } from 'expo-image'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import EventSearchModal from '@/components/EventSearchModal'
+import BannerCarousel from '@/components/BannerCarousel'
 import EventCard from '@/components/EventCard'
 import EventListItem from '@/components/EventListItem'
 import AdListItem from '@/components/AdListItem'
@@ -884,6 +885,7 @@ export default function HomeScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
+          ListHeaderComponent={<BannerCarousel menu="dating" />}
           ListEmptyComponent={<EmptyState error={error} onRetry={refetch} />}
           ListFooterComponent={
             loadingMore ? (
