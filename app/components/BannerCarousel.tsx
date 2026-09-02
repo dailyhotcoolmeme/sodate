@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
+  Text,
   StyleSheet,
   TouchableOpacity,
   Linking,
@@ -49,6 +50,25 @@ const SIDE = 16
 // 배너 원본 1110×276 = 4:1 (2026-08-19 오너가 고른 비율).
 const ASPECT = 1110 / 276
 const AUTO_MS = 5000
+
+/**
+ * 광고 표시(2026-09-02). 배너 이미지에 표기가 없어도 **앱이 자동으로** 얹는다 —
+ * 표기를 이미지 제작자(업체)에게 맡기면 빠진 배너가 반드시 생긴다.
+ *
+ * 대가를 받고 게재하면 경제적 이해관계를 밝혀야 한다(표시광고법). 우리는 돈을 받지는
+ * 않지만 노출을 주고 업체는 우리 이용자에게 할인을 주므로 상호 대가로 볼 여지가 있다.
+ * 스토어(애플·구글)도 광고가 콘텐츠와 구분될 것을 요구한다.
+ *
+ * 문구는 'Ad', 자리는 우측 하단, 눈에 띄지 않게(오너 지시). 배경 이미지가 밝든 어둡든
+ * 읽히도록 반투명 검정 위에 흰 글자를 얹는다.
+ */
+function AdMark({ styles }: { styles: any }) {
+  return (
+    <View style={styles.adMark} pointerEvents="none">
+      <Text style={styles.adMarkText}>Ad</Text>
+    </View>
+  )
+}
 
 export default function BannerCarousel({ menu }: { menu: BannerMenu }) {
   const colors = useColors()
@@ -143,6 +163,12 @@ export default function BannerCarousel({ menu }: { menu: BannerMenu }) {
         wrap: { paddingHorizontal: SIDE, paddingTop: 10, paddingBottom: 4 },
         page: { width, height, borderRadius: 12, overflow: 'hidden' },
         image: { width: '100%', height: '100%' },
+        adMark: {
+          position: 'absolute', right: 7, bottom: 7,
+          backgroundColor: 'rgba(0,0,0,0.42)', borderRadius: 4,
+          paddingHorizontal: 5, paddingVertical: 1.5,
+        },
+        adMarkText: { color: 'rgba(255,255,255,0.86)', fontSize: 9.5, fontWeight: '700', letterSpacing: 0.2 },
         dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 8 },
         dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
         dotOn: { backgroundColor: colors.primary, width: 16 },
@@ -164,6 +190,7 @@ export default function BannerCarousel({ menu }: { menu: BannerMenu }) {
           onPress={() => open(b)}
         >
           <Image source={{ uri: b.image_url }} style={styles.image} contentFit="cover" transition={200} />
+          <AdMark styles={styles} />
         </TouchableOpacity>
       </View>
     )
@@ -189,6 +216,7 @@ export default function BannerCarousel({ menu }: { menu: BannerMenu }) {
             onPress={() => open(b)}
           >
             <Image source={{ uri: b.image_url }} style={styles.image} contentFit="cover" transition={200} />
+            <AdMark styles={styles} />
           </TouchableOpacity>
         ))}
       </ScrollView>
