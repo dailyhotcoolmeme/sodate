@@ -428,7 +428,15 @@ export default function BoardWriteScreen() {
         </View>
 
         <View>
-          <Text style={styles.label}>내용</Text>
+          {/* 안내문을 '내용' 라벨과 같은 줄 오른쪽에 둔다(2026-09-02 오너 지시).
+              예전엔 입력칸 아래에 가운데 정렬로 있었는데, 입력칸을 키운 뒤로는
+              스크롤해야 보였다. 한 줄에 들어가도록 글자를 줄이지 않고 폭만 맞춘다. */}
+          <View style={styles.labelRow}>
+            <Text style={[styles.label, styles.labelInRow]}>내용</Text>
+            <Text style={styles.notice} numberOfLines={1}>
+              욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
+            </Text>
+          </View>
           {richMode ? (
             // react-native-enriched-html(완전 네이티브 — 웹뷰 없음). 툴바는 키보드
             // 바로 위에 따로 고정한다(아래 KeyboardStickyView 참고, 오너 지시
@@ -469,10 +477,6 @@ export default function BoardWriteScreen() {
         {!isEdit && poll && (
           <PollEditor draft={poll} onChange={setPoll} onRemove={() => setPoll(null)} />
         )}
-
-        <Text style={styles.notice}>
-          욕설·비방, 광고·홍보, 연락처가 담긴 글은 등록되지 않습니다.
-        </Text>
 
         {!isEdit && agreedLoaded && !initiallyAgreed && (
           <View style={styles.agreeRow}>
@@ -823,7 +827,9 @@ function makeStyles(colors: AppColors) {
     // bottom:0 고정 + translateY 애니메이션으로 위치 이동(위 richToolbarAnimatedStyle 참고) —
     // 예전처럼 bottom 값 자체를 JS state 로 매 프레임 바꾸면 리렌더가 껴서 한 박자 늦는다.
     richToolbarFloat: { position: 'absolute', left: 0, right: 0, bottom: 0 },
-    notice: { fontSize: 11.5, color: colors.textTertiary, textAlign: 'center', lineHeight: 17 },
+    // flexShrink 로 좁은 화면에서 '내용' 라벨이 아니라 이쪽이 줄어들게 한다.
+    // 좁은 화면에서 '내용' 라벨이 아니라 이쪽이 줄어들게 flexShrink 를 준다.
+    notice: { flexShrink: 1, fontSize: 11, color: colors.textTertiary, textAlign: 'right' },
 
     agreeRow: {
       flexDirection: 'row', alignItems: 'flex-start', gap: 8,
