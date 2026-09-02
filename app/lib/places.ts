@@ -176,12 +176,14 @@ export interface PlaceReview {
   published_at: string | null
   author_name: string | null
   rating: number | null
+  /** 작성자 캐릭터 id(앱에서 쓴 후기만 있음, 2026-09-03). */
+  avatar_id?: string | null
 }
 
 export async function fetchPlaceReviews(placeId: string): Promise<PlaceReview[]> {
   const sb = supabase as unknown as { from: (t: string) => any }
   const { data } = await sb.from('place_reviews')
-    .select('id,source,content,source_url,thumbnail_url,published_at,author_name,rating')
+    .select('id,source,content,source_url,thumbnail_url,published_at,author_name,rating,avatar_id')
     .eq('place_id', placeId).eq('is_active', true)
     .order('published_at', { ascending: false, nullsFirst: false })
   return (data ?? []) as PlaceReview[]

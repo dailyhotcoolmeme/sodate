@@ -21,6 +21,16 @@ async function sha256(input: string): Promise<string> {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+/** 작성자 캐릭터 id — 앱 값을 그대로 믿지 않고 thumbs_01~24 만 통과시키고, 안 고른 기기는
+ *  소유권 해시로 하나 정해준다(게시판 함수와 같은 규칙, 2026-09-03). */
+function resolveAvatarId(raw: unknown, hash: string): string {
+  const s = typeof raw === 'string' ? raw : ''
+  if (/^thumbs_(0[1-9]|1[0-9]|2[0-4])$/.test(s)) return s
+  let n = 0
+  for (let i = 0; i < hash.length; i++) n = (n * 31 + hash.charCodeAt(i)) % 24
+  return `thumbs_${String(n + 1).padStart(2, '0')}`
+}
+
 const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json' } })
 
@@ -80,6 +90,7 @@ serve(async (req) => {
           event_id: eventId ?? null,
           event_title: eventTitle,
           owner_token: hash,
+          avatar_id: resolveAvatarId(body.avatarId, hash),
           is_active: true,
           published_at: new Date().toISOString(),
         })

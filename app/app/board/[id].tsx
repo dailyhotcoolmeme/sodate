@@ -21,6 +21,7 @@ import AuthorMenu, { AUTHOR_MENU_ENABLED, type AuthorMenuTarget } from '@/compon
 import PostHtmlView from '@/components/PostHtmlView'
 import PollView from '@/components/PollView'
 import PostVideo from '@/components/PostVideo'
+import AuthorAvatar from '@/components/AuthorAvatar'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
@@ -530,6 +531,9 @@ export default function BoardPostScreen() {
           {/* 수정·삭제는 닉네임·날짜와 같은 줄 오른쪽에 둔다(2026-07-31 오너 지시).
               글자 크기를 메타와 맞춰야 줄 높이가 흔들리지 않는다. */}
           <View style={styles.metaRow}>
+            {/* 작성자 캐릭터 — 닉네임 앞에 글자 크기만큼만(2026-09-03 오너 지시).
+                글 상세는 한 명뿐이라 움직이는 원본을 쓴다. */}
+            <AuthorAvatar avatarId={post.avatar_id} size={16} still={false} />
             {/* 닉네임이 길면 액션 버튼을 밀어내지 않고 이쪽이 줄어든다(조회수를 붙이면서
                 한 줄이 더 빠듯해졌다). */}
             <Text style={styles.meta} numberOfLines={1}>
@@ -1016,6 +1020,8 @@ function CommentRow({
         {/* 배지는 메타 텍스트와 같은 줄에 두되 별도 View 로 둔다 — Text 안에 배경을 넣으면
             iOS 에서 배경 높이가 줄 높이를 밀어 댓글 간격이 흔들린다. */}
         <View style={styles.commentMetaLeft}>
+          {/* 작성자 캐릭터(2026-09-03). 댓글은 한 화면에 여러 개라 정지컷. */}
+          <AuthorAvatar avatarId={c.avatar_id} size={15} />
           {byAuthor && (
             <View style={styles.authorBadge}>
               <Text style={styles.authorBadgeText}>작성자</Text>
@@ -1095,8 +1101,10 @@ function makeStyles(colors: AppColors) {
     title: { fontSize: 18, fontWeight: '800', lineHeight: 25, color: colors.textPrimary, letterSpacing: -0.3 },
     titleTag: { color: colors.primary },
     // flexShrink 가 없으면 긴 닉네임 + 조회수에 밀려 오른쪽 수정·삭제가 화면 밖으로 나간다.
-    meta: { flexShrink: 1, fontSize: 12, lineHeight: 17, color: colors.textTertiary },
-    metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+    // flex:1 — 캐릭터가 앞에 붙으면서 space-between 만으로는 셋이 벌어져 버린다. 닉네임 줄이
+    //           남는 폭을 다 먹고, 액션(수정·삭제)은 오른쪽 끝에 붙는다.
+    meta: { flex: 1, flexShrink: 1, fontSize: 12, lineHeight: 17, color: colors.textTertiary },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     metaActions: { flexDirection: 'row', gap: 12 },
     // 메타와 같은 크기·줄높이 — 다르면 줄 간격이 어긋난다
     metaAct: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },

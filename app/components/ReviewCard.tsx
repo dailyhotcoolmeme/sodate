@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
 import { openOutlink } from '@/lib/outlink'
+import AuthorAvatar from './AuthorAvatar'
 import { useColors } from '@/hooks/useColors'
 import type { ReviewRow } from '@/lib/supabase'
 
@@ -87,7 +88,8 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
       color: colors.textPrimary,
       lineHeight: 21,
     },
-    footer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+    footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+    authorWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
     // 모임명은 늘어나고 별점은 줄지 않게 — 모임명이 길면 모임명만 말줄임된다.
     eventRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     eventTitle: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '600', color: colors.textSecondary },
@@ -168,12 +170,18 @@ export default function ReviewCard({ review, showCompany = false, isMine = false
         )}
         <Text style={styles.content} numberOfLines={pressable ? 4 : undefined}>{cleanText(review.content ?? '')}</Text>
         <View style={styles.footer}>
-          {review.author_name && (
-            <Text style={styles.author} numberOfLines={1}>
-              {review.author_name}
-              {review.gender ? ` · ${GENDER_LABELS[review.gender]}` : ''}
-            </Text>
-          )}
+          <View style={styles.authorWrap}>
+            {/* 캐릭터는 **앱에서 직접 쓴 후기(source='user')에만** 붙인다(2026-09-03).
+                크롤링해 온 외부 후기(네이버 등)는 실제 다른 사람이 쓴 글이라, 우리 캐릭터를
+                붙이면 앱 사용자가 쓴 것처럼 보인다. */}
+            {review.source === 'user' && <AuthorAvatar avatarId={(review as any).avatar_id} size={15} />}
+            {review.author_name && (
+              <Text style={styles.author} numberOfLines={1}>
+                {review.author_name}
+                {review.gender ? ` · ${GENDER_LABELS[review.gender]}` : ''}
+              </Text>
+            )}
+          </View>
           {/* '게시일 확인 불가'는 날짜보다 길어서, 작성자명이 길 때 줄바꿈되지 않도록
               날짜는 줄이지 않고 작성자명 쪽을 줄인다. */}
           <Text style={styles.date} numberOfLines={1}>{formatDate(review.published_at)}</Text>

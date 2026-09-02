@@ -1,4 +1,5 @@
 import { supabase, type ReviewRow } from '@/lib/supabase'
+import { currentAvatarId } from '@/lib/avatars'
 import {
   getOrCreateToken,
   addMyReviewId,
@@ -82,6 +83,7 @@ export async function submitReview(
   const { data, error } = await supabase.functions.invoke('reviews', {
     body: {
       action: 'submit',
+      avatarId: currentAvatarId(),
       companyId: params.companyId,
       nickname: params.nickname,
       rating: params.rating,

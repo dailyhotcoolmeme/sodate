@@ -329,6 +329,7 @@ export interface Database {
       board_posts: {
         Row: {
           id: string
+          avatar_id: string | null
           nickname: string
           title: string
           content: string
@@ -367,6 +368,7 @@ export interface Database {
       board_comments: {
         Row: {
           id: string
+          avatar_id: string | null
           post_id: string
           parent_id: string | null
           nickname: string
@@ -406,6 +408,7 @@ export interface Database {
       reviews: {
         Row: {
           id: string
+          avatar_id: string | null
           company_id: string
           source: 'naver_blog' | 'instagram' | 'kakao' | 'manual' | 'user' | 'youtube'
           author_name: string | null
