@@ -20,8 +20,6 @@ import { SOCIALING_GROUPS } from '@/constants/socialingCategories'
 import { DAY_OPTIONS } from '@/constants/filters'
 import { useSocialingFilterStore, useSocialingFilterHydrated, socialingActiveFilterCount, type SocialingFilterState } from '@/stores/socialingFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
-import { saveScrollOffset } from '@/lib/scrollMemory'
-import { useScrollRestore } from '@/hooks/useScrollRestore'
 import { confirmFavorite } from '@/lib/confirmToggle'
 import AdListItem from '@/components/AdListItem'
 import { warmNativeAdPool, getSocialingFeedNativeAdUnitId } from '@/lib/ads'
@@ -84,12 +82,7 @@ export default function SocialingScreen() {
   // 스크롤하면 카테고리 칩 줄이 접힌다 — 소개팅과 동일(EXPAND_AT/COLLAPSE_AT 값까지 같게).
   const chipsAnim = useRef(new Animated.Value(1)).current
   const chipsExpandedRef = useRef(true)
-  // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
-  // 복원 로직은 hooks/useScrollRestore.ts 참고(세 번째 재설계 — 한 번만 판정하지 않고
-  // 콘텐츠가 자랄 때마다 계속 다시 맞춘다). 페이지네이션 목록이라 loadMore 를 넘긴다.
   const feedListRef = useRef<FlatList>(null)
-  const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
-    useScrollRestore('socialing-feed', feedListRef, { hasMore, loadMore })
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -98,9 +91,6 @@ export default function SocialingScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
-    // 복원이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이 자체적으로 흘리는
-    // y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로 덮어써버린다.
-    if (restoredScrollRef.current) saveScrollOffset('socialing-feed', y)
   }, [chipsAnim])
 
   const [refreshing, setRefreshing] = useState(false)
@@ -258,7 +248,6 @@ export default function SocialingScreen() {
       ) : (
         <FlatList
           ref={feedListRef}
-          style={{ opacity: listVisible ? 1 : 0 }}
           data={listData}
           keyExtractor={(item) => item.type === 'ad' ? item.key : item.event.id}
           ListHeaderComponent={<BannerCarousel menu="socialing" />}
@@ -271,10 +260,8 @@ export default function SocialingScreen() {
             )
           }}
           onScroll={onFeedScroll}
-          onScrollBeginDrag={onScrollBeginDrag}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 16 }}
-          onContentSizeChange={restoreOnContentSizeChange}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}

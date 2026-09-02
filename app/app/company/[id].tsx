@@ -18,6 +18,7 @@ import { useCompany } from '@/hooks/useCompany'
 import { openOutlink } from '@/lib/outlink'
 import { useColors } from '@/hooks/useColors'
 import PartnerBadge from '@/components/PartnerBadge'
+import SocialLinkRow from '@/components/SocialLinkRow'
 import { isPartnerCompany } from '@/lib/partner'
 import EventCard from '@/components/EventCard'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
@@ -216,6 +217,12 @@ export default function CompanyDetailScreen() {
             {isPartnerCompany(company) && <PartnerBadge size="md" />}
             <Text style={[styles.companyName, styles.nameText]}>{cleanText(company.name)}</Text>
           </View>
+          {/* 홈페이지·SNS — 등록된 것만 아이콘으로. 없으면 줄 자체가 안 생긴다.
+              instagram_url 은 옛 컬럼이라 socials 가 비어 있을 때만 쓴다(admin 값이 우선). */}
+          <SocialLinkRow
+            socials={(company as any).socials}
+            fallback={{ instagram: company.instagram_url }}
+          />
           {company.description && (
             <Text style={styles.companyDesc} numberOfLines={2}>
               {cleanText(company.description)}
@@ -229,22 +236,12 @@ export default function CompanyDetailScreen() {
         </View>
       </View>
 
-      {/* 액션 버튼들 */}
+      {/* 액션 — 앱 안 기능만 남긴다.
+          ⚠️ 예전엔 여기에 '홈페이지'·'인스타그램' 글자 버튼이 같이 있었다. 밖으로 나가는
+             링크와 앱 안 기능이 똑같이 생겨 구분이 안 됐고, '홈페이지'는 base_url 이
+             필수 컬럼이라 **링크가 없는 업체도 항상 떠서** 크롤 주소로 나갔다.
+             링크는 위 업체명 밑 아이콘 줄로 옮겼다(2026-09-02 오너 지시). */}
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.actionBtnOutline]}
-          onPress={() => openOutlink(company.base_url)}
-        >
-          <Text style={styles.actionBtnOutlineText}>홈페이지</Text>
-        </TouchableOpacity>
-        {company.instagram_url && (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnOutline]}
-            onPress={() => openOutlink(company.instagram_url!)}
-          >
-            <Text style={styles.actionBtnOutlineText}>인스타그램</Text>
-          </TouchableOpacity>
-        )}
         {/* 알림 설정 화면으로 보낸다. 예전에는 이 버튼이 기기에만 표시를 남기고 서버에는
             아무것도 보내지 않아, 'ON'으로 바뀌는 걸 보고 구독했다고 믿지만 푸시는 영영
             오지 않았다(2026-08-13 감사). 실제 구독은 alert_subscriptions 한 곳에서만 다룬다. */}

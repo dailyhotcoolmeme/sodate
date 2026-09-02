@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { NEW_TABS_ENABLED } from '@/constants/features'
-import { saveTabRoute, getTabRoute } from '@/lib/tabMemory'
 
 /**
  * 하단 5탭 내비게이션(2026-08-21) — 소개팅·소셜링·[홈]·혼술바·MY.
@@ -47,18 +46,16 @@ export default function BottomNav({ current, route }: { current: TabKey; route?:
   const styles = useMemo(() => makeStyles(colors), [colors])
   const myRoute = route ?? CANONICAL_ROUTE[current]
 
-  // 이 화면이 지금 자기 탭 구역에서 "마지막으로 보던 화면"이 된다 — 상세페이지도 포함.
-  // 나중에 다른 탭 갔다가 이 탭으로 돌아오면 목록이 아니라 여기로 돌아온다.
-  useEffect(() => {
-    if (NEW_TABS_ENABLED) saveTabRoute(current, myRoute)
-  }, [current, myRoute])
-
   // 플래그가 꺼져 있으면 렌더 자체를 안 한다 — 운영 앱에 영향 0.
   if (!NEW_TABS_ENABLED) return null
 
   const go = (key: TabKey, route: string, active: boolean) => {
     if (active) return
-    router.replace((getTabRoute(key) ?? route) as never)
+    // ⚠️ 예전엔 그 탭에서 '마지막으로 보던 화면'(상세페이지 포함)으로 돌아갔다.
+    //    상세를 보다 다른 탭 갔다 오면 상세가 그대로 나와서 편할 것 같았는데, 실제로는
+    //    탭을 눌러도 목록이 안 나와 "메뉴 안 이동까지 이상한 흐름"이 됐다
+    //    (2026-09-02 오너 지시로 제거). 탭은 언제나 그 탭의 첫 화면으로 간다.
+    router.replace(route as never)
   }
   const boardOn = current === 'board'
 

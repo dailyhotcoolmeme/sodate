@@ -18,8 +18,6 @@ import { getCachedLocation, setCachedLocation } from '@/lib/locationMemory'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { useHonsulFilterStore, useHonsulFilterHydrated } from '@/stores/honsulFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
-import { saveScrollOffset } from '@/lib/scrollMemory'
-import { useScrollRestore } from '@/hooks/useScrollRestore'
 import { confirmFavorite } from '@/lib/confirmToggle'
 import PlaceMap, { NAVER_MAP_AVAILABLE } from '@/components/PlaceMap'
 import PlaceMapCard from '@/components/PlaceMapCard'
@@ -317,12 +315,7 @@ export default function HonsulScreen() {
   // 스크롤하면 지역군 칩 줄이 접힌다 — 소개팅·소셜링과 동일 기준.
   const chipsAnim = useRef(new Animated.Value(1)).current
   const chipsExpandedRef = useRef(true)
-  // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
-  // 복원 로직은 hooks/useScrollRestore.ts 참고(세 번째 재설계 — 한 번만 판정하지 않고
-  // 콘텐츠가 자랄 때마다 계속 다시 맞춘다).
   const feedListRef = useRef<FlatList<HonsulRow>>(null)
-  const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
-    useScrollRestore('honsul-feed', feedListRef)
   const onFeedScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     const was = chipsExpandedRef.current
@@ -331,9 +324,6 @@ export default function HonsulScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
-    // 복원이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이 자체적으로 흘리는
-    // y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로 덮어써버린다.
-    if (restoredScrollRef.current) saveScrollOffset('honsul-feed', y)
   }, [chipsAnim])
 
   const openOnMap = (p: PlaceRow) => {
@@ -467,7 +457,6 @@ export default function HonsulScreen() {
           ) : (
             <FlatList
               ref={feedListRef}
-              style={{ opacity: listVisible ? 1 : 0 }}
               data={feedListData}
               keyExtractor={(item) => item.type === 'ad' ? item.key : item.place.id}
               ListHeaderComponent={<BannerCarousel menu="honsul" />}
@@ -481,12 +470,10 @@ export default function HonsulScreen() {
                 )
               }}
               onScroll={onFeedScroll}
-              onScrollBeginDrag={onScrollBeginDrag}
               scrollEventThrottle={16}
               contentContainerStyle={{ paddingTop: 6, paddingBottom: insets.bottom + 96 }}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
               showsVerticalScrollIndicator={false}
-              onContentSizeChange={restoreOnContentSizeChange}
             />
           )}
 
