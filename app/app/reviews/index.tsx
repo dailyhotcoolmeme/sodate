@@ -132,7 +132,7 @@ export default function ReviewsScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors])
 
   React.useEffect(() => {
-    track('screen_view', { properties: { screen: 'reviews' } })
+    track('screen_view', { properties: { screen_name: 'reviews' } })
   }, [])
 
   // 내가 작성한 후기 식별용(기기 로컬)

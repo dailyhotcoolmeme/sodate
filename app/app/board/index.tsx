@@ -18,6 +18,7 @@ import BoardBannerAd from '@/components/BoardBannerAd'
 import BannerCarousel from '@/components/BannerCarousel'
 import AuthorMenu, { AUTHOR_MENU_ENABLED, type AuthorMenuTarget } from '@/components/AuthorMenu'
 import AuthorAvatar from '@/components/AuthorAvatar'
+import { track } from '@/lib/analytics'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import {
@@ -112,6 +113,16 @@ export default function BoardListScreen() {
 
   const settings = useBoardSettings()
   const { posts, total, loading, error, pageCount, refetch } = useBoardList(page, search)
+  // 메뉴 계측(2026-09-03) — 이 화면에는 계측이 하나도 없어서 커뮤니티 사용 기록이 0건이었다.
+  useEffect(() => { track('menu_view', { menu: 'board' }) }, [])
+  // 검색은 결과가 온 뒤에 남긴다(바로 세면 이전 검색의 결과 수가 들어간다).
+  const searchLogged = useRef<string | null>(null)
+  useEffect(() => {
+    const q = search.trim()
+    if (!q || loading || searchLogged.current === q) return
+    searchLogged.current = q
+    track('search', { menu: 'board', properties: { term: q, result_count: total } })
+  }, [search, loading, total])
   // 읽은 글은 연하게(2026-08-13 오너 지시) — 기기에 저장된 목록, 상세 보고 돌아올
   // 때마다 최신화해야 하므로 아래 useFocusEffect에서 refetchAll과 같이 다시 불러온다.
   const [readIds, setReadIds] = useState<Set<string>>(new Set())
@@ -322,7 +333,7 @@ export default function BoardListScreen() {
           <View>
             {posts.map((p) => (
               <PostRow key={p.id} post={p} hot={hot} cold={cold} isRead={readIds.has(p.id)} styles={styles} colors={colors}
-                onPress={() => router.push(`/board/${p.id}`)}
+                onPress={() => { track('item_view', { menu: 'board', properties: { id: p.id, title: p.title } }); router.push(`/board/${p.id}`) }}
                 onLongPress={() => handleBlock(p)}
                 onAuthorPress={(x, y) => setAuthorMenu({ token: p.owner_token, nickname: p.nickname, x, y })} />
             ))}
@@ -353,7 +364,7 @@ export default function BoardListScreen() {
       >
         <TouchableOpacity
           style={styles.writeBtn}
-          onPress={() => router.push('/board/write')}
+          onPress={() => { track('write_start', { menu: 'board' }); router.push('/board/write') }}
           activeOpacity={0.85}
         >
           <Ionicons name="pencil" size={17} color="#fff" />

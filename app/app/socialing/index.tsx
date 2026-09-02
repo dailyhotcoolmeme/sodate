@@ -21,6 +21,7 @@ import { DAY_OPTIONS } from '@/constants/filters'
 import { useSocialingFilterStore, useSocialingFilterHydrated, socialingActiveFilterCount, type SocialingFilterState } from '@/stores/socialingFilterStore'
 import { addRecentSearch } from '@/lib/eventSearchHistory'
 import { confirmFavorite } from '@/lib/confirmToggle'
+import { track } from '@/lib/analytics'
 import AdListItem from '@/components/AdListItem'
 import { warmNativeAdPool, getSocialingFeedNativeAdUnitId } from '@/lib/ads'
 import type { EventWithCompany } from '@/lib/supabase'
@@ -100,7 +101,19 @@ export default function SocialingScreen() {
     setRefreshing(false)
   }, [refetch])
 
+  // 메뉴 계측(2026-09-03) — 이 화면에는 계측이 하나도 없어서 소셜링 사용 기록이 0건이었다.
+  useEffect(() => { track('menu_view', { menu: 'socialing' }) }, [])
+
+  // 결과 건수를 같이 남긴다 — 0건이면 "찾는 사람은 있는데 물건이 없다"는 뜻이다.
   const runSearch = (term: string) => { setSearch(term); addRecentSearch(term) }
+  // 검색 기록은 서버 응답이 온 뒤에 남긴다 — 바로 세면 이전 결과 수가 들어간다.
+  const searchLogged = useRef<string | null>(null)
+  useEffect(() => {
+    const q = search.trim()
+    if (!q || loading || searchLogged.current === q) return
+    searchLogged.current = q
+    track('search', { menu: 'socialing', properties: { term: q, result_count: events.length } })
+  }, [search, loading, events.length])
   const clearSearch = () => setSearch('')
 
   const isEmpty = !loading && events.length === 0
@@ -181,7 +194,7 @@ export default function SocialingScreen() {
             {hydrated && regionGroupChips.map((g) => {
               const active = g.ids.every((id) => regions.includes(id))
               return (
-                <Chip key={g.key} label={g.key} active={active} onPress={() => setRegionsBulk(g.ids, !active)} colors={colors} />
+                <Chip key={g.key} label={g.key} active={active} onPress={() => { track('filter_apply', { menu: 'socialing', properties: { kind: 'region_group', value: g.key, result_count: events.length } }); setRegionsBulk(g.ids, !active) }} colors={colors} />
               )
             })}
           </ScrollView>
@@ -216,7 +229,7 @@ export default function SocialingScreen() {
       <View style={styles.resultRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow} style={{ flex: 1 }}>
           {SORT_OPTIONS.map((opt) => (
-            <TouchableOpacity key={opt.id} style={[styles.sortChip, sortBy === opt.id && styles.sortChipActive]} onPress={() => setSortBy(opt.id)}>
+            <TouchableOpacity key={opt.id} style={[styles.sortChip, sortBy === opt.id && styles.sortChipActive]} onPress={() => { track('sort_change', { menu: 'socialing', properties: { sort_by: opt.id, result_count: events.length } }); setSortBy(opt.id) }}>
               <Text style={[styles.sortChipText, sortBy === opt.id && styles.sortChipTextActive]}>{opt.label}</Text>
             </TouchableOpacity>
           ))}
@@ -254,9 +267,9 @@ export default function SocialingScreen() {
           renderItem={({ item }) => {
             if (item.type === 'ad') return <AdListItem slot="socialing-feed" adUnitId={getSocialingFeedNativeAdUnitId()} variant={item.adIndex % 2 === 0 ? 'thumb' : 'wide'} />
             return viewMode === 'card' ? (
-              <SocialingCard event={item.event} isFavorite={favoriteIds.has(item.event.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.event.id), () => toggleFavorite(item.event.id))} />
+              <SocialingCard event={item.event} isFavorite={favoriteIds.has(item.event.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.event.id), () => { track(favoriteIds.has(item.event.id) ? 'event_favorite_remove' : 'event_favorite_add', { eventId: item.event.id, companyId: item.event.company_id ?? undefined, menu: 'socialing' }); toggleFavorite(item.event.id) })} />
             ) : (
-              <SocialingListItem event={item.event} isFavorite={favoriteIds.has(item.event.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.event.id), () => toggleFavorite(item.event.id))} />
+              <SocialingListItem event={item.event} isFavorite={favoriteIds.has(item.event.id)} onToggleFavorite={() => confirmFavorite(favoriteIds.has(item.event.id), () => { track(favoriteIds.has(item.event.id) ? 'event_favorite_remove' : 'event_favorite_add', { eventId: item.event.id, companyId: item.event.company_id ?? undefined, menu: 'socialing' }); toggleFavorite(item.event.id) })} />
             )
           }}
           onScroll={onFeedScroll}

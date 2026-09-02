@@ -349,6 +349,12 @@ export default function EventDetailScreen() {
   useEffect(() => {
     if (!event || !isPartner || partnerShownRef.current) return
     partnerShownRef.current = true
+    // 제휴 업체에 "모잇 할인 안내를 몇 명이 봤다"고 보여줄 숫자(2026-09-03)
+    track('partner_notice_view', {
+      companyId: event.company_id,
+      menu: event.event_type === 'socialing' ? 'socialing' : 'dating',
+      properties: { company: event.companies?.name ?? null },
+    })
     setPartnerNotice(true)
   }, [event, isPartner])
   // 상세설명 접기/펼치기 (기본 접힘) + 실제 콘텐츠 높이(더보기 노출 판단)
@@ -398,7 +404,12 @@ export default function EventDetailScreen() {
 
   useEffect(() => {
     if (event) {
-      track('event_view', { eventId: event.id, companyId: event.company_id })
+      // 메뉴를 같이 남긴다 — 일정이 지워지면 event_id 로 되짚을 수 없다(2026-09-03).
+      const menu = event.event_type === 'socialing' ? 'socialing' : 'dating'
+      track('event_view', { eventId: event.id, companyId: event.company_id, menu })
+      // 제목·업체명 사본 — 일정이 정리된 뒤에도 뭐가 인기였는지 알 수 있게.
+      track('item_view', { eventId: event.id, companyId: event.company_id, menu,
+        properties: { title: event.title, company: event.companies?.name ?? null } })
       // MY '최근 본 기록' 기록(2026-08-21, kind 세분화 2026-08-24) — 로컬 저장, 무해.
       addRecentView({
         kind: event.event_type === 'socialing' ? 'socialing' : 'dating',
@@ -439,7 +450,9 @@ export default function EventDetailScreen() {
     <TouchableOpacity
       style={[styles.ctaBtn, event.is_closed && styles.ctaBtnClosed]}
       onPress={() => {
-        track('event_apply_click', { eventId: event.id, companyId: event.company_id })
+        const menu = event.event_type === 'socialing' ? 'socialing' : 'dating'
+        track('event_apply_click', { eventId: event.id, companyId: event.company_id, menu })
+        track('outlink_click', { eventId: event.id, companyId: event.company_id, menu, properties: { kind: 'apply' } })
         openOutlink(event.source_url)
       }}
     >

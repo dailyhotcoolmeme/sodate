@@ -11,6 +11,7 @@ import LoadingOverlay from '@/components/LoadingOverlay'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { createPost, updatePost, getPostForEdit } from '@/lib/board'
+import { track } from '@/lib/analytics'
 import { useBoardTags } from '@/hooks/useBoard'
 import { useBoardEditor, BoardEditorInput, BoardImageChips, useBoardLinks, BoardLinkChips, LinkInputModal } from '@/components/BoardEditor'
 import BoardRichEditor, { type RichEditorHandle } from '@/components/BoardRichEditor'
@@ -318,6 +319,8 @@ export default function BoardWriteScreen() {
       ? await updatePost({ postId: id!, title: title.trim(), content: bodyContent, imageUrls: bodyImages, linkUrls: links, tagId })
       : await createPost({ nickname: nickname.trim(), title: title.trim(), content: bodyContent, imageUrls: bodyImages, linkUrls: links, videoUrls: videos, tagId })
     if ('error' in r) { setSaving(false); Alert.alert('알림', r.error); return }
+    // 글쓰기 시작(write_start) 대비 완료 비율 = '쓰다 그만둔 비율'(2026-09-03)
+    if (!isEdit) track('write_submit', { menu: 'board', properties: { has_image: bodyImages.length > 0, has_link: links.length > 0 } })
     // 신규글에 투표가 있으면 이어서 저장(항목 2개 이상 채워졌을 때만).
     if (!isEdit && poll && 'id' in r) {
       const opts = poll.options.map((o) => o.trim()).filter(Boolean)

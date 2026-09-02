@@ -4,6 +4,7 @@ import * as Device from 'expo-device'
 import Constants from 'expo-constants'
 import { Platform, AppState } from 'react-native'
 import { router } from 'expo-router'
+import { track } from '@/lib/analytics'
 import { supabase } from '@/lib/supabase'
 import { setCachedPushToken } from '@/lib/pushToken'
 import { useNotificationStore } from '@/stores/notificationStore'
@@ -38,6 +39,9 @@ export function usePushNotification() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data
+        // 알림 효과 측정(2026-09-03) — 푸시를 눌러 들어온 건수. 지금은 알림을 보내고도
+        // 그게 실제 유입으로 이어졌는지 볼 방법이 없다.
+        track('push_open', { properties: { has_event: !!data?.event_id } })
         // 알림을 눌러 진입 → 읽음 처리 + 종 배지 0
         useNotificationStore.getState().markReadOnServer()
         if (data?.event_id) {
@@ -84,6 +88,9 @@ export async function registerForPushNotifications(): Promise<string | null> {
   if (existingStatus !== 'granted') {
     const { status } = await Notifications.requestPermissionsAsync()
     finalStatus = status
+    // 물어본 결과를 남긴다(2026-09-03). 506대 중 116대만 허용 중인데, 언제 거절당하는지
+    // 알아야 물어보는 시점을 바꿔볼 수 있다.
+    track('push_permission', { properties: { granted: status === 'granted' } })
   }
 
   if (finalStatus !== 'granted') {

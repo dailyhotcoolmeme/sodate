@@ -22,6 +22,7 @@ import PostHtmlView from '@/components/PostHtmlView'
 import PollView from '@/components/PollView'
 import PostVideo from '@/components/PostVideo'
 import AuthorAvatar from '@/components/AuthorAvatar'
+import { track } from '@/lib/analytics'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import { useBoardPost } from '@/hooks/useBoard'
@@ -259,6 +260,7 @@ export default function BoardPostScreen() {
     const r = await vote(id, value)
     setVoting(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
+    track('post_vote', { menu: 'board', properties: { post_id: id, value } })
     refetch()
   }
 
@@ -273,6 +275,7 @@ export default function BoardPostScreen() {
     const r = await toggleScrap(id)
     setScrapping(false)
     if ('error' in r) { setScrapOn(prev); Alert.alert('알림', r.error); return }
+    track('post_scrap', { menu: 'board', properties: { post_id: id, on: r.scrapped } })
     setScrapOn(r.scrapped)
   }
   // 누르자마자 바로 적용하지 않고 팝업으로 한 번 확인받고 적용한다(2026-08-25 오너 지시).
@@ -341,6 +344,7 @@ export default function BoardPostScreen() {
         })
     setSending(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
+    if (!editing) track('comment_create', { menu: 'board', properties: { post_id: id, kind: 'comment' } })
     const wasEditing = !!editing
     setDraft(''); setEditing(null); setSecret(false)
     setComposing(false)   // 닉네임 칸은 등록 후 다시 접어 둔다(오너 지시)
@@ -403,6 +407,7 @@ export default function BoardPostScreen() {
     })
     setReplySending(false)
     if ('error' in r) { Alert.alert('알림', r.error); return }
+    track('comment_create', { menu: 'board', properties: { post_id: id, kind: 'reply' } })
     setReplyModal(null)
     setNickname(replyNickname.trim())   // 메인 입력줄에도 반영
     refetch()
