@@ -466,7 +466,8 @@ export default function BannerManager() {
           </button>
           <p className="mt-2 text-[11px] text-gray-400 leading-relaxed">
             규격 <b>1110 × 276 (4:1)</b> · 한 메뉴 최대 {MAX_PER_MENU}장 (현재 {list.length}장)<br />
-            ⚠️ 이미지에 둥근 모서리를 굽지 마세요 — 앱이 자르는 값과 어긋나 다크모드에서 네 귀퉁이에 흰 선이 남습니다.
+            ⚠️ 이미지에 둥근 모서리를 굽지 마세요 — 앱이 자르는 값과 어긋나 다크모드에서 네 귀퉁이에 흰 선이 남습니다.<br />
+            ⚠️ <b>오른쪽 아래 모서리는 비워 두세요</b> — 앱이 그 자리에 광고 표시(Ad)를 자동으로 얹습니다.
           </p>
         </div>
       )}
