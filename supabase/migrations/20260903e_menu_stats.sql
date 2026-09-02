@@ -16,7 +16,12 @@ security definer
 set search_path to 'public'
 as $$
 declare
-  v_since timestamptz := now() - make_interval(days => p_days);
+  -- p_days = 0 은 '오늘'이다. 지난 24시간이 아니라 **한국시간 자정부터** 지금까지 —
+  -- 오너가 보는 '오늘 하루'는 달력 하루이지 24시간 창이 아니다(2026-09-03).
+  v_since timestamptz := case
+    when p_days <= 0 then date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul'
+    else now() - make_interval(days => p_days)
+  end;
   v_behavior jsonb;
   v_content  jsonb;
 begin
