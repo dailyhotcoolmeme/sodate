@@ -1,5 +1,6 @@
 import { supabase, type BoardPostRow, type BoardCommentRow, type BoardSettingsRow, type BoardTagRow } from '@/lib/supabase'
 import { getOrCreateToken, setLastNickname } from '@/lib/reviewIdentity'
+import { normalizeEditorHtml } from '@/lib/richText'
 import {
   addMyPostId, removeMyPostId, addMyCommentId, removeMyCommentId, setMyVote,
   setScrapped,
@@ -69,7 +70,8 @@ export async function createPost(p: {
   /** 말머리 id. 안 고르면 undefined — 서버는 "선택 안 함"으로 처리한다. */
   tagId?: string | null
 }): Promise<{ id: string } | { error: string }> {
-  const r = await call({ action: 'createPost', ...p })
+  // 에디터가 한글을 숫자 코드로 내보내는 걸 여기서 되돌린다(lib/richText.ts 참고).
+  const r = await call({ action: 'createPost', ...p, content: normalizeEditorHtml(p.content) })
   if ('error' in r) return r
   // 닉네임은 후기와 같은 저장소를 쓴다 — 한 번 쓰면 다음부터 자동으로 채워진다.
   await setLastNickname(p.nickname)
@@ -104,7 +106,8 @@ export async function updatePost(p: {
   /** 'tagId' 키 자체를 안 보내면 말머리를 그대로 두고, null 을 보내면 없앤다. */
   tagId?: string | null
 }): Promise<{ ok: true } | { error: string }> {
-  const r = await call({ action: 'updatePost', ...p })
+  // 에디터가 한글을 숫자 코드로 내보내는 걸 여기서 되돌린다(lib/richText.ts 참고).
+  const r = await call({ action: 'updatePost', ...p, ...(p.content != null ? { content: normalizeEditorHtml(p.content) } : {}) })
   return 'error' in r ? r : { ok: true }
 }
 
