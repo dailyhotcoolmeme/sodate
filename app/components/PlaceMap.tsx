@@ -244,8 +244,12 @@ export default function PlaceMap({ focus, pins, activeId, zoom = 15, style, show
             onTap={async () => {
               if (!onTapPin) { p.onPress?.(); return }
               if (!resolveTapScreen) { onTapPin(p.id); return }
+              // ⚠️ 예전엔 coordinateToScreen(네이티브 왕복)을 **먼저 기다린 뒤** 카드를 띄웠다.
+              //    그 왕복만큼 카드가 늦게 떴다(2026-09-02 오너: "아직도 살짝 느리다").
+              //    카드를 먼저 띄우고(지연 0), 정확한 화면 좌표는 뒤따라 알려준다.
+              onTapPin(p.id)
               const pos = await ref.current?.coordinateToScreen?.({ latitude: p.lat, longitude: p.lng })
-              onTapPin(p.id, pos?.isValid ? { x: pos.screenX, y: pos.screenY } : undefined)
+              if (pos?.isValid) onTapPin(p.id, { x: pos.screenX, y: pos.screenY })
             }}
             width={size2}
             height={size2}

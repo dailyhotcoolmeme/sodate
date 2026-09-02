@@ -68,8 +68,11 @@ export default function PlaceDetailScreen() {
   // 고정이냐, 누른 점 바로 밑에 떠야지"). 좌표를 못 구하면(null) 카드는 예전처럼 좌하단 고정.
   const [previewAnchor, setPreviewAnchor] = useState<{ x: number; y: number } | null>(null)
   const onTapNearbyPin = useCallback((tappedId: string, screen?: { x: number; y: number }) => {
-    if (!place || tappedId === place.id) return
-    const p = nearby.find((n) => n.id === tappedId)
+    if (!place) return
+    // ⚠️ 예전엔 자기 자신(지금 보고 있는 매장) 마커를 누르면 그냥 return 이라 **아무 반응이
+    //    없었다**(2026-09-02 오너 지적). 주변 표시가 꺼져 있으면 지도에 마커가 그것 하나뿐이라
+    //    사실상 "지도 마커가 안 눌린다"였다. 이제 자기 자신도 카드를 띄운다.
+    const p = tappedId === place.id ? place : nearby.find((n) => n.id === tappedId)
     if (p) { setPreviewPlace(p); setPreviewAnchor(screen ?? null) }
   }, [place, nearby])
   const closePreview = useCallback(() => { setPreviewPlace(null); setPreviewAnchor(null) }, [])
@@ -202,7 +205,8 @@ export default function PlaceDetailScreen() {
                 place={previewPlace}
                 isFavorite={favoriteIds.has(previewPlace.id)}
                 onToggleFavorite={() => confirmFavorite(favoriteIds.has(previewPlace.id), () => toggle(previewPlace.id))}
-                onOpen={() => { const pid = previewPlace.id; closePreview(); router.push(`/place/${pid}`) }}
+                // 자기 자신 카드에서 누르면 같은 화면으로 또 밀어넣게 되므로 닫기만 한다.
+                onOpen={() => { const pid = previewPlace.id; closePreview(); if (pid !== place.id) router.push(`/place/${pid}`) }}
                 onClose={closePreview}
                 compact
                 anchor={previewAnchor}
