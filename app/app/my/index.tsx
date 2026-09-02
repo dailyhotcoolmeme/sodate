@@ -153,7 +153,8 @@ export default function MyScreen() {
             {avatar
               ? <Image source={avatar.source} style={styles.avatarPhoto} contentFit="cover" />
               : <Ionicons name="person" size={26} color="#fff" />}
-            <View style={styles.avatarEdit}><Ionicons name="camera" size={12} color="#fff" /></View>
+            {/* 사진을 찍는 게 아니라 준비된 캐릭터 중에서 고르는 것이라 카메라가 아니라 새로고침(2026-09-02 오너 지시) */}
+            <View style={styles.avatarEdit}><Ionicons name="refresh" size={12} color="#fff" /></View>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <TouchableOpacity style={styles.nickRow} activeOpacity={0.7} onPress={openProfileEdit}>
