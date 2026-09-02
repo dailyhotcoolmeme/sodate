@@ -120,7 +120,15 @@ export default function PlaceMap({ focus, pins, activeId, zoom = 15, style, show
   //    바뀔 때마다 이 계산(핀 수의 제곱 — 500개면 12만 5천 번)이 다시 돌았다.
   //    선택된 핀은 아래 렌더에서 따로 얹는다.
   const { groups, singles } = useMemo(() => {
-    if (!cluster || !size.width) return { groups: [] as { id: string; lat: number; lng: number; count: number }[], singles: pins }
+    const EMPTY_GROUPS: { id: string; lat: number; lng: number; count: number }[] = []
+    // 히어로(cluster=false)는 핀이 한두 개라 그대로 그린다.
+    if (!cluster) return { groups: EMPTY_GROUPS, singles: pins }
+    // ⚠️ 아직 onLayout 전이라 화면 크기를 모를 때 **핀 전체를 그리면 안 된다**. 예전엔
+    //    여기서 pins 를 통째로 돌려줘서, 지도 탭에 들어가는 첫 프레임에 500개 마커가
+    //    한꺼번에 네이티브 뷰로 만들어졌다가 레이아웃 직후 대부분 지워졌다 — 그래서
+    //    "지도 버튼을 눌러도 한 박자 쉬었다가 전환"됐다(2026-09-02 오너 지적).
+    //    크기를 알기 전에는 아무것도 안 그린다. 바로 다음 프레임에 정상적으로 채워진다.
+    if (!size.width) return { groups: EMPTY_GROUPS, singles: [] }
     const rest = pins
     const cx = worldX(camera.lng, camera.zoom)
     const cy = worldY(camera.lat, camera.zoom)
