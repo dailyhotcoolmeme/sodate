@@ -29,7 +29,14 @@ function stripTags(html: string): string {
     .replace(/<\/(p|div|h[1-6]|li|blockquote)>/gi, '\n')
     .replace(/<li[^>]*>/gi, '• ')
     .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    // ⚠️ 숫자 실체참조(&#47560; = '마')를 안 풀어서 한글이 코드로 남아 있었다
+    //    (2026-09-02 오너 제보 — iOS 라이브에서 글이 통째로 안 읽혔다).
+    //    에디터가 한글을 전부 이걸로 내보낸다 — lib/richText.ts 참고.
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_m, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&(?:apos|#39);/g, "'")
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
     .replace(/\n{3,}/g, '\n\n').trim()
 }
 
