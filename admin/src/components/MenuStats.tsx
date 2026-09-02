@@ -22,7 +22,9 @@ const MENUS = [
 ] as const
 type MenuKey = (typeof MENUS)[number]['key']
 
+// 0 = 오늘(한국시간 자정부터 지금까지). 지난 24시간이 아니라 달력 하루다.
 const RANGES = [
+  { days: 0, label: '오늘' },
   { days: 7, label: '7일' },
   { days: 30, label: '30일' },
   { days: 90, label: '90일' },
@@ -105,6 +107,7 @@ export default function MenuStats() {
   const isHonsul = menu === 'honsul'
   // 계측을 심은 날부터만 쌓인다 — 숫자가 0이면 고장이 아니라 아직 안 쌓인 것이다.
   const noBehavior = !b.menu_views && !b.item_views && !b.searches
+  const periodLabel = days === 0 ? '오늘' : `최근 ${days}일`
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -148,7 +151,7 @@ export default function MenuStats() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {isBoard ? (
                 <>
-                  <Num label="글" value={c.items} sub={`최근 ${days}일 +${(c.items_new ?? 0).toLocaleString()}`} />
+                  <Num label="글" value={c.items} sub={`${periodLabel} +${(c.items_new ?? 0).toLocaleString()}`} />
                   <Num label="댓글" value={c.comments} />
                   <Num label="글 조회 합계" value={c.views} />
                   <Num
@@ -159,17 +162,17 @@ export default function MenuStats() {
                 </>
               ) : isHonsul ? (
                 <>
-                  <Num label="매장" value={c.items} sub={`최근 ${days}일 +${(c.items_new ?? 0).toLocaleString()}`} />
+                  <Num label="매장" value={c.items} sub={`${periodLabel} +${(c.items_new ?? 0).toLocaleString()}`} />
                   <Num label="제휴 매장" value={c.partners} />
                   <Num label="모잇 후기" value={c.reviews} />
-                  <Num label="상세 열람" value={b.item_views} sub={`최근 ${days}일`} />
+                  <Num label="상세 열람" value={b.item_views} sub={periodLabel} />
                 </>
               ) : (
                 <>
-                  <Num label="일정" value={c.items} sub={`최근 ${days}일 +${(c.items_new ?? 0).toLocaleString()}`} />
+                  <Num label="일정" value={c.items} sub={`${periodLabel} +${(c.items_new ?? 0).toLocaleString()}`} />
                   <Num label="업체" value={c.companies} />
-                  <Num label="상세 열람" value={b.item_views} sub={`최근 ${days}일`} />
-                  <Num label="신청 클릭" value={b.outlinks} sub={`최근 ${days}일`} />
+                  <Num label="상세 열람" value={b.item_views} sub={periodLabel} />
+                  <Num label="신청 클릭" value={b.outlinks} sub={periodLabel} />
                 </>
               )}
             </div>
