@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated, Image, BackHandler, Alert } from 'react-native'
+import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated, BackHandler, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import TopBar from '@/components/TopBar'
@@ -109,23 +109,10 @@ export default function HonsulScreen() {
   useEffect(() => { load() }, [load])
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false) }, [load])
 
-  // ⚠️(2026-08-26) 지도 마커 사진(placeMarkerUrl — R2에 미리 만들어둔 원형 크롭 PNG,
-  // profile_image와 다른 별도 URL)은 지도 탭에 마커를 그릴 때가 돼서야 네트워크로 받아온다.
-  // "지도보기"로 처음 들어가면 그 순간 여러 마커가 동시에 이미지를 받아오는 동안, 마커
-  // 라이브러리(NaverMapMarkerOverlay)의 image prop 기본값이 {symbol:'green'}이라 아직 못
-  // 받은 마커는 그 초록 핀이 대신 보인다(오너 제보: "녹색 화살표로 나오는게 있는데...
-  // 업체 이미지(동그라미) 이걸로 나와야하는데" — 확대·축소하면 그새 다 받아져서 정상으로
-  // 보인다고 재확인함). 지도 탭에 들어가기 전, 피드 목록을 받아온 시점에 미리 이미지를
-  // 캐시에 받아두면(RN Image.prefetch — 안드로이드에선 이 마커 라이브러리도 같은 Fresco
-  // 이미지 파이프라인을 쓰므로 캐시가 공유돼 효과가 있다) 실제로 지도를 열 때는 이미
-  // 캐시에 있어 초록 핀이 거의 안 보이게 된다.
-  useEffect(() => {
-    if (all.length === 0) return
-    for (const p of all) {
-      const url = placeMarkerUrl(p)
-      if (url) Image.prefetch(url).catch(() => {})
-    }
-  }, [all])
+  // ⚠️(2026-09-02) 예전엔 목록을 받자마자 **499개 마커 이미지를 전부** Image.prefetch
+  //    했다. 마커 PNG 가 한 장 24.5KB 라 약 12MB 를, 지도 탭을 열지도 않았는데 받아서
+  //    목록 이미지·API 와 대역폭을 다퉜다. 지금은 PlaceMap 이 **실제로 그리는 마커만**
+  //    자기가 미리 받는다(클러스터로 묶인 것은 안 받는다) — components/PlaceMap.tsx 참고.
 
   // ⚠️(2026-08-26) 지도보기(tab='map')는 같은 화면 안의 로컬 state 전환이라 네비게이션
   // 스택에 안 쌓인다 — 이 화면(/honsul)이 탭 루트라 그 밑에 뒤로 갈 화면이 없어서,
@@ -303,14 +290,17 @@ export default function HonsulScreen() {
   // 카메라 이동이 "탭이 먹혔다"는 즉각적 피드백 역할을 해서 지연을 가려주고 있었다는 뜻.
   // pinned·pins 를 실제로 바뀔 때만(장소 목록·선택 매장) 재계산하도록 메모해 근본 원인을 없앤다.
   const pinnedMapPlaces = useMemo(() => list.filter((p) => p.lat != null && p.lng != null), [list])
+  // ⚠️ 선택 상태(focused)를 여기 넣지 않는다. 넣으면 마커를 탭할 때마다 500개 핀 객체가
+  //    새로 생기고, PlaceMap 의 클러스터 계산(핀 수의 제곱)이 통째로 다시 돌아 업체박스가
+  //    반박자 늦게 떴다(2026-08-25 지적 → 그때 pinnedMapPlaces 만 메모하고 focused 는
+  //    의존성에 남겨둬서 효과가 없었다). 선택은 activeId 로 따로 넘긴다.
   const mapPins = useMemo(() => pinnedMapPlaces.map((p) => ({
     id: p.id,
     lat: p.lat!,
     lng: p.lng!,
     name: p.name,
     markerUrl: placeMarkerUrl(p),
-    active: focused?.id === p.id,
-  })), [pinnedMapPlaces, focused])
+  })), [pinnedMapPlaces])
 
   // 스크롤하면 지역군 칩 줄이 접힌다 — 소개팅·소셜링과 동일 기준.
   const chipsAnim = useRef(new Animated.Value(1)).current
@@ -524,6 +514,7 @@ export default function HonsulScreen() {
                     // 들어올 때 복원용) — cameraTarget 은 안 건드려서 루프를 안 만든다.
                     onCameraIdle={setMapView}
                     pins={mapPins}
+                    activeId={focused?.id}
                   />
                   {focused && (
                     <PlaceMapCard

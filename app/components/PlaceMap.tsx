@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { TurboModuleRegistry, UIManager, View, Text, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native'
+import { TurboModuleRegistry, UIManager, View, Text, Image as RNImage, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native'
 
 /**
  * 혼술바 지도(네이버 지도). 히어로(단일 핀)·지도탭(다수 핀·클러스터) 공용.
@@ -65,6 +65,11 @@ export interface MapPin {
 interface Props {
   focus: { lat: number; lng: number }
   pins: MapPin[]
+  /** 지금 선택된 핀 id. **핀 배열에 active 를 박지 말고 이걸로 넘길 것**(2026-09-02).
+   *  배열에 넣으면 선택이 바뀔 때마다 500개 핀 객체가 새로 생성되고, 아래 클러스터
+   *  계산(핀 수의 제곱)이 통째로 다시 돈다 — 마커를 탭할 때마다 그게 일어나서
+   *  "업체박스가 반박자 늦게" 떴다. */
+  activeId?: string
   zoom?: number
   style?: StyleProp<ViewStyle>
   showLocationButton?: boolean
@@ -101,7 +106,7 @@ interface Props {
  *  쓰라고 나와 있다. */
 interface CameraState { lat: number; lng: number; zoom: number }
 
-export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false, resolveTapScreen = false, onCameraIdle }: Props) {
+export default function PlaceMap({ focus, pins, activeId, zoom = 15, style, showLocationButton = false, cluster = false, onTapPin, onTapBackground, hideBasePoi = false, compactPins = false, resolveTapScreen = false, onCameraIdle }: Props) {
   const ref = useRef<any>(null)
   const [camera, setCamera] = useState<CameraState>({ lat: focus.lat, lng: focus.lng, zoom })
   const [size, setSize] = useState({ width: 0, height: 0 })
@@ -111,9 +116,12 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
   }, [focus.lat, focus.lng, zoom])
 
   // 클러스터 그룹 계산 — 활성(주인공) 핀은 제외, 나머지를 화면 픽셀 거리로 묶는다.
+  // ⚠️ 의존성에 선택 상태를 넣지 않는다. 예전엔 active 핀을 여기서 걸러내느라 선택이
+  //    바뀔 때마다 이 계산(핀 수의 제곱 — 500개면 12만 5천 번)이 다시 돌았다.
+  //    선택된 핀은 아래 렌더에서 따로 얹는다.
   const { groups, singles } = useMemo(() => {
-    if (!cluster || !size.width) return { groups: [] as { id: string; lat: number; lng: number; count: number }[], singles: pins.filter((p) => !p.active) }
-    const rest = pins.filter((p) => !p.active)
+    if (!cluster || !size.width) return { groups: [] as { id: string; lat: number; lng: number; count: number }[], singles: pins }
+    const rest = pins
     const cx = worldX(camera.lng, camera.zoom)
     const cy = worldY(camera.lat, camera.zoom)
     const points = rest.map((p) => ({
@@ -147,10 +155,30 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
     return { groups: bigGroups, singles: singlePins }
   }, [cluster, pins, camera, size])
 
-  if (!NaverMapView) return null
+  // 선택 핀은 배열(active) 또는 activeId 어느 쪽으로 와도 받는다 — 히어로 지도는 아직
+  // 핀에 active:true 를 박아 넘긴다(핀이 한두 개라 재생성 비용이 없다).
+  const activePin = pins.find((p) => p.active || (activeId != null && p.id === activeId))
+  const individualPins = cluster
+    ? (activePin && !singles.some((p) => p.id === activePin.id) ? [activePin, ...singles] : singles)
+    : pins
+  const isActive = (p: MapPin) => p.active === true || (activeId != null && p.id === activeId)
+  // 실제로 그려질 마커 이미지만 미리 받는다. 예전엔 혼술바 목록을 받자마자 화면 밖
+  // 499개를 전부 Image.prefetch 했다 — 마커 PNG 가 한 장 24.5KB 라 **약 12MB** 를,
+  // 지도 탭을 열지도 않았는데 받고 있었다(2026-09-02 실측). 여기서 받으면 지금 화면에
+  // 개별로 뜨는 것만 받고, 클러스터로 묶인 것은 안 받는다. 이미 받은 건 다시 안 받는다.
+  const prefetchedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    for (const p of individualPins) {
+      const u = p.markerUrl
+      if (!u || prefetchedRef.current.has(u)) continue
+      prefetchedRef.current.add(u)
+      RNImage.prefetch(u).catch(() => {})
+    }
+  }, [individualPins])
 
-  const activePin = pins.find((p) => p.active)
-  const individualPins = cluster ? [...(activePin ? [activePin] : []), ...singles] : pins
+  // ⚠️ 조기 return 은 반드시 **모든 훅 뒤**에 둔다. 위로 올리면 아래 훅들이 조건부로
+  //    호출돼 렌더마다 훅 개수가 달라진다(React 규칙 위반 → 크래시).
+  if (!NaverMapView) return null
 
   return (
     <View style={style} onLayout={(e: LayoutChangeEvent) => setSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
@@ -190,7 +218,8 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
 
       {/* 개별 마커 — 히어로에선 전부, 지도탭에선 선택된 매장 + 3개 미만이라 안 뭉친 매장들. */}
       {individualPins.map((p) => {
-        const size2 = compactPins ? (p.active ? 24 : p.selected ? 20 : 12) : p.active ? 62 : 44
+        const act = isActive(p)
+        const size2 = compactPins ? (act ? 24 : p.selected ? 20 : 12) : act ? 62 : 44
         // ⚠️(2026-08-24) 기본 'pink'/'blue' 심벌은 둘 다 물방울(세로로 긴) 모양이라 정사각형
         // 크기로 찍으면 눌려서 "짜부된" 모양이 된다(오너 지적 — 처음엔 선택 마커만 고쳤다가
         // "주변 점은 짜부가 안되겠냐"고 또 지적받음). compactPins(히어로)에선 선택·주변 둘 다
@@ -205,8 +234,8 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
         const image = p.markerUrl
           ? { httpUri: p.markerUrl }
           : compactPins
-            ? (p.active ? require('../assets/map-dot.png') : require('../assets/map-dot-blue.png'))
-            : { symbol: p.active ? 'pink' : 'blue' }
+            ? (act ? require('../assets/map-dot.png') : require('../assets/map-dot-blue.png'))
+            : { symbol: act ? 'pink' : 'blue' }
         return (
           <NaverMapMarkerOverlay
             key={p.id}
@@ -220,9 +249,9 @@ export default function PlaceMap({ focus, pins, zoom = 15, style, showLocationBu
             }}
             width={size2}
             height={size2}
-            zIndex={p.active ? 100 : p.selected ? 50 : 0}
+            zIndex={act ? 100 : p.selected ? 50 : 0}
             caption={
-              !cluster && p.name && (!compactPins || p.active)
+              !cluster && p.name && (!compactPins || act)
                 ? { text: p.name, textSize: 12, haloColor: '#fff' }
                 : undefined
             }
