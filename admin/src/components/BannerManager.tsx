@@ -391,7 +391,8 @@ export default function BannerManager() {
               </div>
 
               {/* 링크 대상 — 앱 내부는 이름으로 고른다 */}
-              <div className="flex items-start gap-2 flex-wrap">
+              {/* 세로 가운데 정렬 — items-start 면 셀렉트 박스만 크고 옆 글자·버튼이 위로 붙는다(2026-09-02 오너 지적) */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <select
                   value={d.target_type}
                   onChange={(e) => setDraft(b.id, { target_type: e.target.value as TargetType, target_value: null })}
