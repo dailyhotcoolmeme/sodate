@@ -154,7 +154,7 @@ export default function MyScreen() {
               ? <Image source={avatar.source} style={styles.avatarPhoto} contentFit="cover" />
               : <Ionicons name="person" size={26} color="#fff" />}
             {/* 사진을 찍는 게 아니라 준비된 캐릭터 중에서 고르는 것이라 카메라가 아니라 새로고침(2026-09-02 오너 지시) */}
-            <View style={styles.avatarEdit}><Ionicons name="refresh" size={12} color="#fff" /></View>
+            <View style={styles.avatarEdit}><Ionicons name="refresh" size={11} color="#fff" /></View>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <TouchableOpacity style={styles.nickRow} activeOpacity={0.7} onPress={openProfileEdit}>
@@ -280,10 +280,12 @@ function makeStyles(colors: AppColors) {
     },
     avatarImg: { backgroundColor: 'transparent' },
     avatarPhoto: { width: 52, height: 52, borderRadius: 999 },
+    // ⚠️ 테두리(borderColor: colors.background)를 뺐다(2026-09-02 오너 지시).
+    //    흰선처럼 보이던 게 그것이고, 테두리 2 까지 치면 실제 지름이 24 라 아바타(52)
+    //    옆에서 커 보였다. 대신 지름을 20→17 로 줄여 경계가 없어도 답답하지 않게 한다.
     avatarEdit: {
-      position: 'absolute', right: -1, bottom: -1, width: 20, height: 20, borderRadius: 999,
+      position: 'absolute', right: -1, bottom: -1, width: 17, height: 17, borderRadius: 999,
       backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
-      borderWidth: 2, borderColor: colors.background,
     },
     nickRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
     nickname: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
