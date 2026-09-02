@@ -531,9 +531,8 @@ export default function BoardPostScreen() {
           {/* 수정·삭제는 닉네임·날짜와 같은 줄 오른쪽에 둔다(2026-07-31 오너 지시).
               글자 크기를 메타와 맞춰야 줄 높이가 흔들리지 않는다. */}
           <View style={styles.metaRow}>
-            {/* 작성자 캐릭터 — 닉네임 앞에 글자 크기만큼만(2026-09-03 오너 지시).
-                글 상세는 한 명뿐이라 움직이는 원본을 쓴다. */}
-            <AuthorAvatar avatarId={post.avatar_id} size={16} still={false} />
+            {/* 작성자 캐릭터 — 닉네임 앞에 글자 크기만큼만(2026-09-03 오너 지시) */}
+            <AuthorAvatar avatarId={post.avatar_id} size={16} />
             {/* 닉네임이 길면 액션 버튼을 밀어내지 않고 이쪽이 줄어든다(조회수를 붙이면서
                 한 줄이 더 빠듯해졌다). */}
             <Text style={styles.meta} numberOfLines={1}>
@@ -1020,7 +1019,7 @@ function CommentRow({
         {/* 배지는 메타 텍스트와 같은 줄에 두되 별도 View 로 둔다 — Text 안에 배경을 넣으면
             iOS 에서 배경 높이가 줄 높이를 밀어 댓글 간격이 흔들린다. */}
         <View style={styles.commentMetaLeft}>
-          {/* 작성자 캐릭터(2026-09-03). 댓글은 한 화면에 여러 개라 정지컷. */}
+          {/* 작성자 캐릭터(2026-09-03) */}
           <AuthorAvatar avatarId={c.avatar_id} size={15} />
           {byAuthor && (
             <View style={styles.authorBadge}>

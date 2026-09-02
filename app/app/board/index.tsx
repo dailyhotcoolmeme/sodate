@@ -427,7 +427,7 @@ function PostRow({
       </View>
       <View style={styles.rowMetaRow}>
         {/* 작성자 캐릭터 — 닉네임 앞에 글자 크기만큼만(2026-09-03 오너 지시). 예전엔 캐릭터를
-            기기에만 저장해 본인만 볼 수 있었다. 목록은 한 화면에 20~30개라 정지컷을 쓴다. */}
+            기기에만 저장해 본인만 볼 수 있었다. */}
         <AuthorAvatar avatarId={post.avatar_id} size={15} />
         <Text style={styles.rowMeta} numberOfLines={1}>
           {/* 닉네임만 눌러서 그 작성자의 글·댓글로 갈 수 있다(2026-08-19 오너 지시).
