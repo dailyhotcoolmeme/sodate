@@ -196,6 +196,21 @@ const NICK_MAX = 20
 const MAX_LINKS = 30
 // 사진 10장 + 움짤 여유분을 합친 서버 안전판(2026-08-13). lib/boardImage.ts의 MAX_IMAGES와 별개.
 const MAX_ATTACHED_IMAGES = 15
+
+/**
+ * 작성자 캐릭터 id(2026-09-03). 앱이 고른 값을 그대로 믿지 않고 thumbs_01~24 만 통과시킨다 —
+ * 이 값은 남에게 보이는 공개 컬럼이라 임의 문자열이 들어가면 안 된다.
+ * 아직 캐릭터를 안 고른 기기면 소유권 해시로 하나 정해준다. 그래야 옛 글 일괄 배정(마이그레이션
+ * 20260903)과 마찬가지로 **같은 사람은 늘 같은 캐릭터**가 되고, 캐릭터 없는 글이 안 생긴다.
+ */
+function resolveAvatarId(raw: unknown, hash: string): string {
+  const s = typeof raw === 'string' ? raw : ''
+  if (/^thumbs_(0[1-9]|1[0-9]|2[0-4])$/.test(s)) return s
+  let n = 0
+  for (let i = 0; i < hash.length; i++) n = (n * 31 + hash.charCodeAt(i)) % 24
+  return `thumbs_${String(n + 1).padStart(2, '0')}`
+}
+
 function youtubeId(raw: string): string | null {
   try {
     const u = new URL(raw)
@@ -335,6 +350,7 @@ serve(async (req) => {
       const videos: string[] = Array.isArray(body.videoUrls) ? body.videoUrls.slice(0, 3) : []
       const { data, error } = await supabase.from('board_posts').insert({
         nickname: nick, title, content, content_below: contentBelow || null, owner_token: hash,
+        avatar_id: resolveAvatarId(body.avatarId, hash),
         image_urls: images.length ? images : null,
         link_urls: linksResult.links.length ? linksResult.links : null,
         video_urls: videos.length ? videos : null,
@@ -515,6 +531,7 @@ serve(async (req) => {
       // 목록에서 '🔒 비밀 댓글' 로만 보이게 한다(마이그레이션 주석 참고).
       const { data, error } = await supabase.from('board_comments').insert({
         post_id: postId, parent_id: parentId, nickname: nick, owner_token: hash,
+        avatar_id: resolveAvatarId(body.avatarId, hash),
         content: isSecret ? '' : content,
         secret_content: isSecret ? content : null,
         is_secret: isSecret,

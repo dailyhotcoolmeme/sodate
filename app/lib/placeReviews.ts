@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { currentAvatarId } from '@/lib/avatars'
 import { getOrCreateToken, addMyReviewId, removeMyReviewId } from '@/lib/reviewIdentity'
 
 /**
@@ -12,6 +13,7 @@ export async function submitPlaceReview(p: { placeId: string; nickname: string; 
   const ownerToken = await getOrCreateToken()
   const { data, error } = await rpc('submit_place_review', {
     p_place_id: p.placeId, p_owner_token: ownerToken, p_nickname: p.nickname, p_rating: p.rating, p_content: p.content,
+    p_avatar_id: currentAvatarId(),
   })
   if (error) return { error: error.message || '후기를 저장하지 못했습니다.' }
   const review = Array.isArray(data) ? data[0] : data
@@ -48,10 +50,10 @@ export async function fetchMyPlaceReviews(myReviewIds: string[]): Promise<any[]>
   if (!myReviewIds.length) return []
   const sb = supabase as unknown as { from: (t: string) => any }
   const { data } = await sb.from('place_reviews')
-    .select('id,place_id,content,rating,author_name,created_at,published_at,places(name)')
+    .select('id,place_id,content,rating,author_name,avatar_id,created_at,published_at,places(name)')
     .in('id', myReviewIds).eq('source', 'user').eq('is_active', true)
   return ((data ?? []) as any[]).map((r) => ({
-    id: r.id, content: r.content, rating: r.rating, author_name: r.author_name, gender: null,
+    id: r.id, content: r.content, rating: r.rating, author_name: r.author_name, avatar_id: r.avatar_id, gender: null,
     created_at: r.created_at, published_at: r.published_at, source: 'user', company_id: '',
     companies: { name: r.places?.name ?? '혼술바', slug: '' },
     _isPlace: true, _placeId: r.place_id,

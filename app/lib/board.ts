@@ -1,5 +1,6 @@
 import { supabase, type BoardPostRow, type BoardCommentRow, type BoardSettingsRow, type BoardTagRow } from '@/lib/supabase'
 import { getOrCreateToken, setLastNickname } from '@/lib/reviewIdentity'
+import { currentAvatarId } from '@/lib/avatars'
 import { normalizeEditorHtml } from '@/lib/richText'
 import {
   addMyPostId, removeMyPostId, addMyCommentId, removeMyCommentId, setMyVote,
@@ -71,7 +72,7 @@ export async function createPost(p: {
   tagId?: string | null
 }): Promise<{ id: string } | { error: string }> {
   // 에디터가 한글을 숫자 코드로 내보내는 걸 여기서 되돌린다(lib/richText.ts 참고).
-  const r = await call({ action: 'createPost', ...p, content: normalizeEditorHtml(p.content) })
+  const r = await call({ action: 'createPost', ...p, avatarId: currentAvatarId(), content: normalizeEditorHtml(p.content) })
   if ('error' in r) return r
   // 닉네임은 후기와 같은 저장소를 쓴다 — 한 번 쓰면 다음부터 자동으로 채워진다.
   await setLastNickname(p.nickname)
@@ -127,7 +128,7 @@ export async function createComment(p: {
   /** 비밀 댓글 — 글쓴이·본인·(대댓글이면) 원 댓글 작성자만 볼 수 있다 */
   isSecret?: boolean
 }): Promise<{ id: string } | { error: string }> {
-  const r = await call({ action: 'createComment', ...p })
+  const r = await call({ action: 'createComment', ...p, avatarId: currentAvatarId() })
   if ('error' in r) return r
   await setLastNickname(p.nickname)
   if (r.comment?.id) await addMyCommentId(r.comment.id)

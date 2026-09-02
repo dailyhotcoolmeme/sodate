@@ -17,6 +17,7 @@ import LoadingOverlay from '@/components/LoadingOverlay'
 import BoardBannerAd from '@/components/BoardBannerAd'
 import BannerCarousel from '@/components/BannerCarousel'
 import AuthorMenu, { AUTHOR_MENU_ENABLED, type AuthorMenuTarget } from '@/components/AuthorMenu'
+import AuthorAvatar from '@/components/AuthorAvatar'
 import { useColors } from '@/hooks/useColors'
 import type { AppColors } from '@/constants/colors'
 import {
@@ -425,6 +426,9 @@ function PostRow({
         )}
       </View>
       <View style={styles.rowMetaRow}>
+        {/* 작성자 캐릭터 — 닉네임 앞에 글자 크기만큼만(2026-09-03 오너 지시). 예전엔 캐릭터를
+            기기에만 저장해 본인만 볼 수 있었다. 목록은 한 화면에 20~30개라 정지컷을 쓴다. */}
+        <AuthorAvatar avatarId={post.avatar_id} size={15} />
         <Text style={styles.rowMeta} numberOfLines={1}>
           {/* 닉네임만 눌러서 그 작성자의 글·댓글로 갈 수 있다(2026-08-19 오너 지시).
               중첩 Text 의 onPress 는 글자 영역에서만 잡히므로, 나머지를 누르면
@@ -697,7 +701,8 @@ function makeStyles(colors: AppColors) {
     rowIcon: { flexShrink: 0 },
     rowCount: { flexShrink: 0, fontSize: 13, fontWeight: '700', color: colors.primary },
     rowMeta: { fontSize: 11.5, color: colors.textTertiary },
-    rowMetaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5 },
+    // gap 4 — 캐릭터와 닉네임은 붙어 보여야 한 사람으로 읽힌다.
+    rowMetaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 },
     rowVoteItem: { flexDirection: 'row', alignItems: 'center', gap: 2 },
 
     pager: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 18 },
