@@ -48,8 +48,6 @@ import { track } from '@/lib/analytics'
 import { warmNativeAdPool, getFeedNativeAdUnitId } from '@/lib/ads'
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/eventSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
-import { saveScrollOffset } from '@/lib/scrollMemory'
-import { useScrollRestore } from '@/hooks/useScrollRestore'
 import { confirmFavorite } from '@/lib/confirmToggle'
 
 type SortOption = { id: FilterState['sortBy']; label: string }
@@ -564,11 +562,6 @@ export default function HomeScreen() {
   // 안 바뀌게 한다(펼치려면 8px 아래로, 접으려면 60px 넘게 — 확실히 한쪽으로 넘어가야 함).
   const EXPAND_AT = 8
   const COLLAPSE_AT = 60
-  // 피드 스크롤 위치 기억 — 다른 탭 갔다가 돌아와도 보던 자리 그대로(2026-08-25 오너 지시).
-  // 복원 로직은 hooks/useScrollRestore.ts 참고(세 번째 재설계 — 한 번만 판정하지 않고
-  // 콘텐츠가 자랄 때마다 계속 다시 맞춘다). 페이지네이션 목록이라 loadMore 를 넘긴다.
-  const { restoredRef: restoredScrollRef, listVisible, onScrollBeginDrag, onContentSizeChange: restoreOnContentSizeChange } =
-    useScrollRestore('dating-feed', flatListRef, { hasMore, loadMore })
   const onScroll = useCallback((e: any) => {
     const y = e.nativeEvent.contentOffset.y
     setShowFab(y > 300)
@@ -579,9 +572,6 @@ export default function HomeScreen() {
       chipsExpandedRef.current = expand
       Animated.timing(chipsAnim, { toValue: expand ? 1 : 0, duration: 200, useNativeDriver: false }).start()
     }
-    // 복원이 아직 안 끝났으면 저장하지 않는다 — 마운트 직후 시스템이 자체적으로 흘리는
-    // y=0 스크롤 이벤트가 먼저 도착하면 방금 복원하려던 값을 0으로 덮어써버린다.
-    if (restoredScrollRef.current) saveScrollOffset('dating-feed', y)
   }, [chipsAnim])
 
   const handleToggleFavorite = useCallback((eventId: string, companyId: string | undefined, isCurrent: boolean) => {
@@ -852,14 +842,12 @@ export default function HomeScreen() {
           <AppSpinner />
         </View>
       ) : (
-        <View style={{ flex: 1, opacity: listVisible ? 1 : 0 }}>
+        <View style={{ flex: 1 }}>
         <FlatList
           ref={flatListRef}
           onScroll={onScroll}
-          onScrollBeginDrag={onScrollBeginDrag}
           onContentSizeChange={(w, h) => {
             if (Platform.OS === 'android') setAndroidContentHeight(h)
-            restoreOnContentSizeChange(w, h)
           }}
           onLayout={(e) => { if (Platform.OS === 'android') setAndroidListHeight(e.nativeEvent.layout.height) }}
           scrollEventThrottle={100}

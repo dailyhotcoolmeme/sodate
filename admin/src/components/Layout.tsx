@@ -17,7 +17,7 @@ const NAV = [
   { to: '/places', label: '혼술바', icon: Wine },
   { to: '/place-reviews', label: '혼술바 후기', icon: Star },
   { to: '/companies', label: '업체 관리', icon: Building2 },
-  { to: '/partners', label: '제휴 관리', icon: Handshake },
+  { to: '/partners', label: '모잇 Pick!', icon: Handshake },
   { to: '/reviews', label: '소개팅 후기', icon: MessageSquareWarning },
   { to: '/board', label: '게시판 관리', icon: MessagesSquare },
   { to: '/trends', label: '커뮤니티 인기글', icon: Flame },

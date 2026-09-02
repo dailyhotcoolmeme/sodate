@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { AlertTriangle, Search, Handshake } from 'lucide-react'
+import { AlertTriangle, Search, Handshake, Link as LinkIcon } from 'lucide-react'
 import BannerManager from '../components/BannerManager'
 
 /**
@@ -26,6 +26,7 @@ interface Company {
   slug: string
   plan: string
   partner_benefit: string | null
+  socials: Record<string, string> | null
   app_visible: boolean
 }
 
@@ -38,6 +39,7 @@ interface Place {
   plan_starts_at: string | null
   plan_ends_at: string | null
   partner_benefit: string | null
+  socials: Record<string, string> | null
 }
 
 const TABS = [
@@ -124,6 +126,76 @@ function BadgePreview() {
   )
 }
 
+const SOCIAL_FIELDS: { key: string; label: string; ph: string }[] = [
+  { key: 'homepage',  label: '홈페이지',    ph: 'https://…' },
+  { key: 'instagram', label: '인스타그램',  ph: 'https://instagram.com/…' },
+  { key: 'youtube',   label: '유튜브',      ph: 'https://youtube.com/@…' },
+  { key: 'blog',      label: '블로그',      ph: 'https://blog.naver.com/…' },
+  { key: 'facebook',  label: '페이스북',    ph: 'https://facebook.com/…' },
+  { key: 'threads',   label: '스레드',      ph: 'https://threads.net/@…' },
+  { key: 'tiktok',    label: '틱톡',        ph: 'https://tiktok.com/@…' },
+  { key: 'x',         label: 'X',           ph: 'https://x.com/…' },
+  { key: 'kakao',     label: '카카오채널',  ph: 'https://pf.kakao.com/…' },
+]
+
+/**
+ * 홈페이지·SNS 주소 편집(2026-09-02 오너 지시).
+ * 여기 채운 것만 앱의 업체명 밑에 **아이콘으로** 뜬다 — 안 채우면 아이콘이 안 생긴다.
+ * 접어 두는 이유: 9칸을 늘 펼쳐 두면 카드가 화면을 다 먹는다. 채운 개수를 접힌 줄에 보여준다.
+ */
+function SocialEditor({
+  value, onSave,
+}: {
+  value: Record<string, string> | null
+  onSave: (v: Record<string, string>) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<Record<string, string>>(value ?? {})
+  useEffect(() => { setDraft(value ?? {}) }, [value])
+  const filled = Object.values(value ?? {}).filter((v) => (v ?? '').trim()).length
+  const dirty = JSON.stringify(draft) !== JSON.stringify(value ?? {})
+  return (
+    <div className="border-t border-gray-100 pt-2">
+      <button onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
+        <LinkIcon size={14} />
+        <span className="font-semibold">홈페이지·SNS</span>
+        <span className="text-xs text-gray-400">{filled > 0 ? `${filled}개 등록됨` : '없음'}</span>
+        <span className="text-xs text-gray-400">{open ? '접기' : '펼치기'}</span>
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1.5">
+          {SOCIAL_FIELDS.map((f) => (
+            <div key={f.key} className="flex items-center gap-2">
+              <label className="w-20 shrink-0 text-xs text-gray-500">{f.label}</label>
+              <input
+                value={draft[f.key] ?? ''}
+                onChange={(e) => setDraft((p) => ({ ...p, [f.key]: e.target.value }))}
+                placeholder={f.ph}
+                className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1 text-sm"
+              />
+            </div>
+          ))}
+          <div className="flex justify-end pt-1">
+            <button
+              onClick={() => {
+                // 빈 칸은 아예 저장하지 않는다 — 빈 문자열이 남으면 앱에서 "등록됨"으로 세어진다.
+                const clean: Record<string, string> = {}
+                for (const [k, v] of Object.entries(draft)) if ((v ?? '').trim()) clean[k] = v.trim()
+                onSave(clean)
+              }}
+              disabled={!dirty}
+              className="rounded-lg px-4 py-1.5 text-sm font-bold text-white bg-pink-500 hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400"
+            >
+              {dirty ? '저장' : '저장됨'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Partners() {
   const [tab, setTab] = useState<TabKey>('company')
   const [companies, setCompanies] = useState<Company[]>([])
@@ -141,7 +213,7 @@ export default function Partners() {
       for (let from = 0; ; from += PAGE) {
         const res = await supabase
           .from('places')
-          .select('id,name,region,category,plan,plan_starts_at,plan_ends_at,partner_benefit')
+          .select('id,name,region,category,plan,plan_starts_at,plan_ends_at,partner_benefit,socials')
           .eq('service', 'honsul')
           .eq('is_active', true)
           .order('name')
@@ -150,7 +222,7 @@ export default function Partners() {
         rows.push(...((res.data as any) ?? []))
         if (!res.data || res.data.length < PAGE) break
       }
-      const co = await supabase.from('companies').select('id,name,slug,plan,partner_benefit,app_visible').order('name')
+      const co = await supabase.from('companies').select('id,name,slug,plan,partner_benefit,socials,app_visible').order('name')
       if (co.error) setErr(co.error.message)
       setCompanies((co.data as any) ?? [])
       setPlaces(rows)
@@ -191,7 +263,7 @@ export default function Partners() {
   return (
     <div className="p-4 md:p-8 space-y-4">
       <div className="flex items-baseline gap-2 flex-wrap">
-        <h1 className="text-xl font-bold text-gray-900">제휴 관리</h1>
+        <h1 className="text-xl font-bold text-gray-900">모잇 Pick!</h1>
         {tab !== 'banner' && (
           <span className="text-sm text-gray-400">
             업체 {partnerCompanies.length}곳 · 혼술바 {partnerPlaces.length}곳
@@ -263,11 +335,17 @@ export default function Partners() {
               />
               </div>
               {c.plan === 'partner' && (
-                <BenefitInput
-                  value={c.partner_benefit}
-                  placeholder="예: 5,000원 할인 (비우면 팝업에 혜택 줄 없음)"
-                  onSave={(v) => patchCompany(c.id, { partner_benefit: v }, { partner_benefit: c.partner_benefit })}
-                />
+                <>
+                  <BenefitInput
+                    value={c.partner_benefit}
+                    placeholder="예: 5,000원 할인 (비우면 팝업에 혜택 줄 없음)"
+                    onSave={(v) => patchCompany(c.id, { partner_benefit: v }, { partner_benefit: c.partner_benefit })}
+                  />
+                  <SocialEditor
+                    value={c.socials}
+                    onSave={(v) => patchCompany(c.id, { socials: v }, { socials: c.socials })}
+                  />
+                </>
               )}
             </div>
           ))}
@@ -336,6 +414,10 @@ export default function Partners() {
                       value={p.partner_benefit}
                       placeholder="예: 칵테일 1잔 서비스 (비우면 팝업에 혜택 줄 없음)"
                       onSave={(v) => patchPlace(p.id, { partner_benefit: v }, { partner_benefit: p.partner_benefit })}
+                    />
+                    <SocialEditor
+                      value={p.socials}
+                      onSave={(v) => patchPlace(p.id, { socials: v }, { socials: p.socials })}
                     />
                   </div>
                 ))}

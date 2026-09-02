@@ -88,3 +88,15 @@ select 'board',
        0,
        'Tools Here 자사 홍보(앱 코드에서 이관)'
 where not exists (select 1 from public.banners where menu = 'board');
+
+-- ── 업체 표시용 링크(2026-09-02 오너 지시) ──────────────────────────────────
+-- 업체 화면에 홈페이지·인스타를 "회색 테두리 글자 버튼"으로 나열하던 것을 업체명 밑
+-- 아이콘 줄로 바꾸면서, 넣을 수 있는 링크 종류를 늘렸다. 혼술바(places.socials)와
+-- 같은 모양으로 맞춘다 — 같은 것을 두 가지 구조로 두지 않는다.
+--
+-- 기존 base_url·instagram_url 은 크롤러가 크롤 대상 주소로 쓰므로 남겨 두고, 화면
+-- 표시는 socials 만 본다. base_url 은 필수 컬럼이라 값이 항상 있어서, 그걸 그대로
+-- '홈페이지' 버튼에 걸면 링크가 없는 업체도 버튼이 뜨고 눌리면 엉뚱한 데로 갔다.
+alter table public.companies add column if not exists socials jsonb not null default '{}'::jsonb;
+comment on column public.companies.socials is
+  '표시용 링크 {homepage, instagram, facebook, tiktok, youtube, x, threads, naverblog, kakao}. 비면 아이콘을 안 그린다.';
