@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { getMyPostIds, getMyCommentIds, getMyVotes, getBlockedAuthors, getSeenCommentIds } from '@/lib/boardIdentity'
 import { fetchSecretComments } from '@/lib/board'
@@ -19,6 +20,51 @@ import type { BoardPost, BoardComment, BoardSettings, BoardTag } from '@/lib/boa
  */
 
 export const PAGE_SIZE = 20
+
+// 목록에 실제로 그리는 컬럼만 받는다. 예전엔 본문(content)까지 다 받아왔는데 목록에서는
+// 본문을 한 글자도 안 쓴다(2026-09-03).
+const LIST_COLUMNS =
+  'id,nickname,avatar_id,title,image_urls,link_urls,tag_id,board_tags(label),' +
+  'upvotes,downvotes,comment_count,owner_token,is_notice,created_at'
+
+/**
+ * 첫 화면을 흰 채로 두지 않기 위한 두 가지 장치 — 2026-09-03 오너 지시
+ * ("커뮤니티 흰 화면에서 스피너가 꽤 걸리는데 개선 어렵나").
+ *
+ * 실측(2026-09-03): 앱을 켜고 **첫 번째** 서버 조회가 2,540ms, 두 번째부터는 500~645ms,
+ * 연결이 살아 있으면 300ms. 즉 기다림의 대부분이 글을 받는 시간이 아니라 **서버와 처음
+ * 연결을 맺는 시간**이다. 서버를 빠르게 해도 이건 안 줄어든다. 그래서 두 갈래로 푼다.
+ *
+ *  1) 지난번 목록을 기기에 저장해 뒀다가 **즉시** 그린다 → 흰 화면 자체가 없어진다.
+ *  2) 화면이 마운트되기 전에 조회를 **미리 시작**한다(prefetchBoardList) → 화면이 뜰 때
+ *     이미 응답이 와 있거나, 최소한 연결은 맺혀 있다.
+ */
+const CACHE_KEY = 'sodate-board-list-v1'
+/** 미리 받아둔 응답을 이만큼까지는 그대로 쓴다. 넘으면 버리고 새로 받는다. */
+const PREFETCH_TTL_MS = 15_000
+
+type ListResult = { data: unknown; count: number | null; error: unknown }
+let prefetched: { at: number; promise: Promise<ListResult> } | null = null
+
+function firstPageQuery() {
+  return supabase
+    .from('board_posts')
+    .select(LIST_COLUMNS, { count: 'exact' })
+    .eq('is_active', true)
+    .order('is_notice', { ascending: false })
+    .order('created_at', { ascending: false })
+    .range(0, PAGE_SIZE - 1)
+    .then((r) => ({ data: r.data, count: r.count, error: r.error })) as Promise<ListResult>
+}
+
+/**
+ * 목록 1페이지를 미리 받아둔다. 앱 시작 직후(_layout)에서 부른다 — 커뮤니티 화면이
+ * 그려지기를 기다리지 않고 바로 던져야 첫 왕복 시간을 화면 준비 시간과 겹칠 수 있다.
+ * 실패해도 조용히 무시한다. 화면이 어차피 다시 조회한다.
+ */
+export function prefetchBoardList() {
+  prefetched = { at: Date.now(), promise: firstPageQuery().catch(() => ({ data: null, count: null, error: true })) }
+}
 
 /** 목록·상세에서 조인해 온 말머리. 비활성화된 말머리도 과거 글에서는 그대로 보인다
  *  (조인 자체에는 is_active 조건을 안 건다 — useBoardTags 와의 차이). */
@@ -59,16 +105,80 @@ export function useBoardList(page: number, search = '') {
   // (컬럼 rename 사고 2연타로 실제 겪음) 아무도 못 알아챘다. supabase-js는 DB 에러여도
   // reject가 아니라 {data:null,error} 로 resolve하므로 성공 콜백 안에서 error를 봐야 한다.
   const [error, setError] = useState(false)
+  // 저장해 둔 목록으로 먼저 그린 상태인지. 서버 응답이 오면 덮어쓴다.
+  const servedFromCache = useRef(false)
+  // setState 는 비동기라 콜백 안에서 loading 을 바로 못 읽는다 → ref 로 따로 들고 있는다.
+  const loadingRef = useRef(true)
+
+  const isFirstPage = page === 0 && !search.trim()
+
+  useEffect(() => { loadingRef.current = loading }, [loading])
+
+  // ── 1) 저장해 둔 목록을 즉시 그린다 ─────────────────────────────────────
+  // 서버 왕복(콜드 2.5초)을 기다리는 동안 흰 화면을 보여주지 않기 위한 것이다. 화면에
+  // 보이는 건 지난번에 본 목록이고, 아래 조회가 끝나면 조용히 갈아끼운다.
+  useEffect(() => {
+    if (!isFirstPage) return
+    let alive = true
+    AsyncStorage.getItem(CACHE_KEY).then((raw) => {
+      if (!alive || !raw) return
+      try {
+        const c = JSON.parse(raw) as { posts: BoardPostWithTag[]; total: number }
+        // 서버 응답이 이미 왔으면 옛 목록으로 되돌리지 않는다.
+        if (!alive || !c?.posts?.length || !loadingRef.current) return
+        servedFromCache.current = true
+        setPosts(c.posts)
+        setTotal(c.total ?? c.posts.length)
+        setLoading(false)
+      } catch {
+        // 저장값이 깨졌으면 그냥 무시하고 서버 응답을 기다린다
+      }
+    })
+    return () => { alive = false }
+  }, [isFirstPage])
 
   const load = useCallback(() => {
-    setLoading(true)
+    // 저장해 둔 목록을 이미 그렸다면 스피너로 되돌리지 않는다 — 화면이 깜빡인다.
+    if (!servedFromCache.current) setLoading(true)
+    loadingRef.current = true
+
+    const finish = ({ data, count, error: err }: ListResult) => {
+      if (err) {
+        // 저장해 둔 목록이라도 보이고 있으면 오류 화면으로 갈아치우지 않는다.
+        if (!servedFromCache.current) setError(true)
+        setLoading(false)
+        loadingRef.current = false
+        return
+      }
+      getBlockedAuthors().then((blocked) => {
+        const blockedKeys = new Set(blocked.map((b) => b.key))
+        const rows = (data as unknown as BoardPostWithTag[]) ?? []
+        const visible = blockedKeys.size ? rows.filter((p) => !blockedKeys.has(p.owner_token)) : rows
+        setPosts(visible)
+        setTotal(count ?? 0)
+        setError(false)
+        setLoading(false)
+        loadingRef.current = false
+        servedFromCache.current = false
+        // 다음 실행 때 즉시 그릴 수 있게 1페이지만 저장해 둔다(차단 반영된 목록으로).
+        if (isFirstPage) {
+          AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ posts: visible, total: count ?? 0 })).catch(() => {})
+        }
+      })
+    }
+
+    // ── 2) 앱 시작 때 미리 던져둔 응답이 있으면 그걸 쓴다 ────────────────
+    if (isFirstPage && prefetched && Date.now() - prefetched.at < PREFETCH_TTL_MS) {
+      const p = prefetched.promise
+      prefetched = null   // 한 번만 쓴다. 새로고침은 진짜로 다시 받아야 한다.
+      p.then(finish, () => finish({ data: null, count: null, error: true }))
+      return
+    }
+
     const from = page * PAGE_SIZE
     let q = supabase
       .from('board_posts')
-      .select(
-        'id,nickname,avatar_id,title,content,image_urls,link_urls,tag_id,board_tags(label),upvotes,downvotes,comment_count,content_hidden,owner_token,is_notice,created_at',
-        { count: 'exact' }
-      )
+      .select(LIST_COLUMNS, { count: 'exact' })
       .eq('is_active', true)
 
     const term = search.trim()
@@ -85,21 +195,11 @@ export function useBoardList(page: number, search = '') {
     q.order('is_notice', { ascending: false })
       .order('created_at', { ascending: false })
       .range(from, from + PAGE_SIZE - 1)
-      .then(async ({ data, count, error: err }) => {
-        if (err) {
-          setError(true)
-          setLoading(false)
-          return
-        }
-        const blocked = await getBlockedAuthors()
-        const blockedKeys = new Set(blocked.map((b) => b.key))
-        const rows = (data as unknown as BoardPostWithTag[]) ?? []
-        setPosts(blockedKeys.size ? rows.filter((p) => !blockedKeys.has(p.owner_token)) : rows)
-        setTotal(count ?? 0)
-        setError(false)
-        setLoading(false)
-      }, () => { setError(true); setLoading(false) })
-  }, [page, search])
+      .then(
+        (r) => finish({ data: r.data, count: r.count, error: r.error }),
+        () => finish({ data: null, count: null, error: true }),
+      )
+  }, [page, search, isFirstPage])
 
   useEffect(() => { load() }, [load])
 

@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Notifications from 'expo-notifications'
 import { runPostOnboardingSetup } from '@/lib/initAds'
 import { useThemeStore } from '@/stores/themeStore'
+import { prefetchBoardList } from '@/hooks/useBoard'
 import { useStartupStore } from '@/stores/startupStore'
 import { usePushNotification } from '@/hooks/usePushNotification'
 import { isSupabaseConfigured } from '@/lib/supabase'
@@ -35,6 +36,15 @@ export default function RootLayout() {
     let alive = true
     async function checkOnboarding() {
       try {
+        // 커뮤니티 목록을 미리 던져둔다(2026-09-03). 앱을 켜고 **첫** 서버 조회가 콜드에서
+        // 2.5초라, 화면이 그려진 뒤에 요청하면 그 시간을 통째로 기다리게 된다. 여기서
+        // 먼저 던져 두면 화면 준비 시간과 겹쳐서 흘러간다. 온보딩으로 갈 경우엔 버려지지만
+        // 요청 하나 값이라 손해가 없다.
+        prefetchBoardList()
+        // 커뮤니티 목록을 미리 던져둔다(2026-09-03). 앱을 켜고 **첫** 서버 조회가 콜드에서
+        // 2.5초라, 화면이 그려진 뒤에 요청하면 그 시간을 통째로 기다리게 된다. 여기서
+        // 먼저 던져 두면 화면 준비 시간과 겹쳐서 흘러간다. 온보딩 화면으로 갈 경우엔
+        // 버려지지만 요청 하나 값이라 손해가 없다.
         // ⚠️ 예전엔 온보딩 여부를 읽고 **그다음에** 알림 응답을 조회했다. 둘 다 네이티브
         //    왕복이라 시간이 더해졌고, 그 합만큼 첫 화면이 늦게 떴다(둘은 서로 의존하지
         //    않는다). 2026-09-02: 동시에 던지고 둘 다 오면 진행한다.
