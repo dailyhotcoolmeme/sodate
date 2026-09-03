@@ -12,7 +12,7 @@ import TopBar from '@/components/TopBar'
 import SwipeSegment from '@/components/SwipeSegment'
 import BottomNav from '@/components/BottomNav'
 import { NEW_TABS_ENABLED } from '@/constants/features'
-import AppSpinner from '@/components/AppSpinner'
+import BoardListSkeleton from '@/components/BoardListSkeleton'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import BoardBannerAd from '@/components/BoardBannerAd'
 import BannerCarousel from '@/components/BannerCarousel'
@@ -285,7 +285,9 @@ export default function BoardListScreen() {
 
 
       {loading && posts.length === 0 ? (
-        <View style={styles.center}><AppSpinner /></View>
+        // 빈 흰 화면 + 스피너 대신 목록 뼈대를 보여준다(2026-09-03). 두 번째 실행부터는
+        // 저장해 둔 목록이 바로 뜨므로 여기까지 오지 않는다.
+        <BoardListSkeleton />
       ) : error ? (
         // ⚠️(2026-08-13) 조회가 실패해도 예전엔 posts=[] 그대로라 "아직 글이 없어요"로
         // 보였다 — 진짜 빈 상태와 구분이 안 돼 게시판이 통째로 고장나도 티가 안 났다
