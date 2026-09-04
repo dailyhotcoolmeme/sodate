@@ -22,6 +22,18 @@ jobs:
     runs-on: ubuntu-22.04
     # ⚠️(2026-07-25) 후기수집 분리 후에도 실측 29분46초로 30분 한도를 간신히 통과 —
     # 여유 없이 안전마진 0에 가까워 조금만 느려져도 다시 타임아웃 재발. 45분으로 확대.
+    #
+    # ⚠️(2026-09-04) 그 45분마저 못 지켰다. 업체가 17곳으로 늘고 문토(모임 1,400여개,
+    #    실측 34분)·프립(810건, 10분)이 앞에서 시간을 다 써버려 **뒤 순서 13곳은 차례가
+    #    오기 전에 잘렸다.** 최근 200회 실행이 전부 타임아웃 취소였고 성공이 한 번도 없다.
+    #    로꼬가 8/31 이후 안 돌아 오류 제목·빈 사진이 앱에 그대로 남은 원인이 이것이다.
+    #    → 무거운 둘을 떼어 **그룹별로 동시에** 돌린다. 총 작업량은 같고 벽시계만 준다
+    #      (문토 34분 + 프립 10분 + 나머지 15곳 ≈ 15분 → 셋 동시 = 약 34분).
+    #    새 스크래퍼는 crawler/main.py 의 GROUPS 에 안 적으면 자동으로 rest 로 간다.
+    strategy:
+      fail-fast: false      # 한 그룹이 죽어도 나머지 그룹은 끝까지 돈다
+      matrix:
+        group: [munto, frip, rest]
     timeout-minutes: 45
 
     steps:
@@ -77,7 +89,53 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
           cd crawler
-          python main.py
+          python main.py --group=${{ matrix.group }}
+
+      # 그룹이 시간 초과로 잘리면 GH 는 '취소'로 남긴다. failure() 는 취소를 안 잡아
+      # 알림이 한 번도 안 나갔다(2026-09-04). cancelled() 를 같이 본다.
+      - name: Notify on failure
+        if: failure() || cancelled()
+        run: |
+          echo "::error::크롤 그룹 '${{ matrix.group }}' 실패/시간초과 — Supabase crawl_logs 및 Actions 로그 확인"
+
+  # 크롤 3그룹이 모두 끝난 뒤 한 번만 도는 뒷정리(검증·푸시 발송·마감알림).
+  post:
+    needs: crawl
+    if: always()          # 한 그룹이 잘려도 나머지 결과에 대한 알림은 나가야 한다
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('crawler/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('crawler/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install dependencies
+        run: |
+          cd crawler
+          pip install -r requirements.txt
+          # 가격 정확도 점검이 실제 업체 페이지를 다시 열어 대조한다 — 브라우저 필요.
+          playwright install chromium --with-deps
 
       - name: QA — 크롤링 결과 검증
         env:
@@ -185,7 +243,10 @@ jobs:
             sleep 2
           done
 
+      # 크롤 그룹 중 하나라도 실패·시간초과면 여기서도 표시한다(post 는 always() 라
+      # 그냥 두면 초록으로 끝나 사고가 안 보인다 — 2026-09-04 무증상 200회 재발 방지).
       - name: Notify on failure
-        if: failure()
+        if: failure() || cancelled() || needs.crawl.result != 'success'
         run: |
-          echo "::error::크롤링 실패 — Supabase crawl_logs 및 GitHub Actions 로그를 확인하세요."
+          echo "::error::크롤링 실패 — 크롤 결과: ${{ needs.crawl.result }}. Supabase crawl_logs 및 GitHub Actions 로그를 확인하세요."
+          exit 1

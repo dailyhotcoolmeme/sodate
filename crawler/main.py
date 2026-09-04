@@ -67,17 +67,48 @@ SCRAPERS = [
 # 나이/가격을 upsert에서 걸러내 기존 값을 지우지 않으므로 되돌림 걱정 없이 재활성화.
 DISCOVER_MANAGED: set[str] = set()
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 실행 그룹 — 한 줄로 다 돌리면 45분 한도를 못 지킨다(2026-09-04).
+#
+# 업체가 3곳일 때 짠 순차 실행을 17곳이 될 때까지 그대로 뒀다. 문토(1,400여 모임)가
+# 34분, 프립(810건)이 10분을 쓰면서 그 뒤 순서 13곳은 시간이 없어 아예 못 돌았다.
+# 최근 200회 실행이 전부 45분 타임아웃으로 취소됐고 성공이 한 번도 없었다.
+# 로꼬가 8/31 이후 갱신이 끊겨 오류 제목·빈 사진이 앱에 그대로 남았던 게 이것 때문이다.
+#
+# 그래서 워크플로우에서 그룹별로 **동시에** 돌린다. 총 작업량은 같고 벽시계 시간만 준다.
+# 새 스크래퍼를 SCRAPERS 에 추가하면 자동으로 'rest' 에 들어간다 — 굶는 업체가
+# 다시 생기지 않게 하려면 여기 어느 그룹에도 안 적는 것이 정상이다.
+GROUPS: dict[str, set[str]] = {
+    'munto': {'munto'},
+    'frip': {'frip'},
+}
+_GROUPED = {slug for slugs in GROUPS.values() for slug in slugs}
 
-def run_all() -> int:
-    """모든 스크래퍼 순차 실행. 전체 실패(성공 0개)일 때만 exit code 1 반환"""
+
+def _in_group(slug: str, group: str) -> bool:
+    """group='all'이면 전부. 'rest'는 GROUPS 어디에도 없는 업체."""
+    if group == 'all':
+        return True
+    if group == 'rest':
+        return slug not in _GROUPED
+    return slug in GROUPS.get(group, set())
+
+
+def run_all(group: str = 'all') -> int:
+    """스크래퍼 순차 실행. 전체 실패(성공 0개)일 때만 exit code 1 반환"""
     results = []
     disabled = get_disabled_slugs()
+    if group != 'all':
+        logger.info(f"실행 그룹: {group}")
     for ScraperClass in SCRAPERS:
         try:
             scraper = ScraperClass()
         except Exception as e:
             logger.error(f"[{ScraperClass.__name__}] 초기화 실패 (Secrets 미설정 등): {e}")
             results.append({'company': ScraperClass.__name__, 'status': 'failed', 'error': str(e)})
+            continue
+        # 이번 실행 그룹이 아닌 업체는 스킵(다른 잡이 같은 시각에 맡아 돈다)
+        if not _in_group(scraper.company_slug, group):
             continue
         # 크롤링 금지(휴면·수동전용) 업체는 스킵
         if scraper.company_slug in disabled:
@@ -106,6 +137,11 @@ def run_all() -> int:
             + (f" / 오류: {r.get('error', '')}" if r['status'] == 'failed' else '')
         )
 
+    if not results:
+        # 그룹의 업체가 전부 crawl_enabled=false 인 경우 — 실패가 아니다.
+        logger.info(f"실행 대상 업체가 없다(그룹 {group}) — 정상 종료")
+        return 0
+
     if success == 0:
         # 단 한 곳도 성공 못했을 때만 전체 실패 처리 (Secrets 미설정, 네트워크 불가 등)
         logger.error(f"전체 크롤링 실패 — 성공 0건. Secrets 및 네트워크 상태를 확인하세요.")
@@ -119,5 +155,27 @@ def run_all() -> int:
 
 
 if __name__ == '__main__':
-    exit_code = run_all()
-    sys.exit(exit_code)
+    # 인자 없으면 전부(수동 실행·기존 호출부 호환). --group munto|frip|rest|all
+    # ⚠️ 여기서 인자를 놓치면 조용히 '전체 실행'으로 떨어진다 — 세 그룹이 저마다 17곳을
+    #    다 도는 꼴이 되니(중복 크롤·전송량 낭비) 공백 형태도 반드시 잡는다.
+    args = sys.argv[1:]
+    grp = 'all'
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a.startswith('--group='):
+            grp = a.split('=', 1)[1]
+        elif a == '--group':
+            if i + 1 >= len(args):
+                logger.error('--group 뒤에 그룹 이름이 없다')
+                sys.exit(2)
+            grp = args[i + 1]
+            i += 1
+        else:
+            logger.error(f'모르는 인자: {a}')
+            sys.exit(2)
+        i += 1
+    if grp not in ('all', 'rest', *GROUPS):
+        logger.error(f"모르는 그룹: {grp} (가능: all, rest, {', '.join(GROUPS)})")
+        sys.exit(2)
+    sys.exit(run_all(grp))

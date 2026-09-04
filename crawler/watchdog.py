@@ -523,11 +523,77 @@ def check_empty_crawls(sb) -> list[dict]:
     #    그대로 노출됐다. '조용히 낡아가는' 것을 잡자고 만든 점검이 정작 가장 시끄러운
     #    실패를 놓치고 있었다.
     issues += check_failing_crawls(sb, comps)
+    issues += check_silent_crawls(sb, comps)
     return issues
 
 
 # 며칠씩 이어지는 실패만 오너에게 알린다. 한 번 튄 건 다음 회차에 대개 복구된다.
 FAIL_STREAK_HOURS = 24
+
+# 정기 크롤은 하루 두 번(08시·20시 KST)이다. 이 시간이 넘도록 **기록 자체가 없으면**
+# 그 업체는 아예 안 돌고 있는 것이다.
+SILENT_HOURS = 30
+
+
+def check_silent_crawls(sb, comps: dict) -> list[dict]:
+    """크롤 기록이 아예 안 남는 업체를 잡는다.
+
+    ⚠️ 2026-09-04 사고: 위 두 점검은 **기록이 남았을 때** 그 status 를 본다. 그런데
+       워크플로우가 45분 타임아웃으로 '취소'되면 아직 차례가 오지 않은 업체는 성공도
+       실패도 아닌 **무기록**이라, 마지막 성공 기록만 옛날 것으로 남고 두 점검 다
+       그냥 넘어간다(check_failing_crawls 는 '최신 기록이 성공이면 continue' 한다).
+       그 상태로 최근 200회 실행이 전부 취소됐는데 알림이 한 번도 안 나갔고,
+       로꼬 등 13개 업체가 3~6일씩 갱신 없이 노출됐다. 오너가 앱에서 이상한 사진을
+       발견해 알았다. 그래서 status 를 보지 않고 **마지막 기록 시각**만 본다.
+    """
+    issues: list[dict] = []
+    since = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
+    try:
+        # 지금 크롤 대상인 업체만 본다(휴면 업체는 안 도는 게 정상).
+        active = {
+            c['id'] for c in
+            (sb.table('companies').select('id,crawl_enabled').execute().data or [])
+            if c.get('crawl_enabled') is not False
+        }
+        logs = (
+            sb.table('crawl_logs')
+            .select('company_id,executed_at')
+            .gte('executed_at', since)
+            .order('executed_at', desc=True)
+            .limit(2000)
+            .execute()
+        ).data or []
+    except Exception as e:
+        return [{'level': 'WARN', 'msg': f'무기록 크롤 점검 실패({str(e)[:60]})'}]
+
+    last: dict = {}
+    for lg in logs:
+        last.setdefault(lg['company_id'], lg['executed_at'])
+
+    now = datetime.now(timezone.utc)
+    for cid in active:
+        name = comps.get(cid, cid)
+        seen = last.get(cid)
+        if seen is None:
+            # 14일 내내 기록이 없다 — 방금 등록한 업체일 수도 있으니 표현을 그대로 둔다.
+            detail, persisted = '최근 14일 동안 크롤 기록이 아예 없음', 14.0
+        else:
+            gap = now - datetime.fromisoformat(seen.replace('Z', '+00:00'))
+            hours = int(gap.total_seconds() // 3600)
+            if hours < SILENT_HOURS:
+                continue
+            detail = f'마지막 크롤이 {hours // 24}일 {hours % 24}시간 전'
+            persisted = hours / 24
+        issues.append({
+            'level': 'ERROR',
+            'action': 'owner',
+            'company': name,
+            'persisted_days': persisted,
+            'msg': f'{name}: 크롤이 아예 안 돌고 있음 — {detail}. '
+                   f'성공도 실패도 기록이 없습니다(워크플로우가 시간 초과로 잘려 차례가 '
+                   f'안 온 경우). 그동안 이 업체 일정은 갱신 없이 그대로 노출됩니다',
+        })
+    return issues
 
 
 def check_failing_crawls(sb, comps: dict) -> list[dict]:
@@ -762,7 +828,7 @@ def run() -> int:
     print('[3/6] price_detail 정합성 점검...')
     consistency_issues = _tag(check_field_consistency(sb), OPS_KIND)
 
-    print('[4/6] 빈 크롤(0건인데 success)·연속 실패 점검...')
+    print('[4/6] 빈 크롤(0건인데 success)·연속 실패·무기록 점검...')
     empty_issues = _tag(check_empty_crawls(sb), URGENT_KIND)
 
     print('[5/6] 데이터 드리프트(건수 급락·마감률·가격 결측) 점검...')
