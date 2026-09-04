@@ -73,8 +73,15 @@ def _nonimweb_scrapers():
     from scrapers.munto import MuntoScraper
     from scrapers.secretsalon import SecretSalonScraper
     from scrapers.modparty import ModpartyScraper
+    from scrapers.trevari import TrevariScraper
+    from scrapers.donghaeng import DonghaengScraper
     return {'frip': FripScraper, 'talkblossom': TalkblossomScraper, 'yeongyul': YeongyulScraper,
-            'munto': MuntoScraper, 'secretsalon': SecretSalonScraper, 'modparty': ModpartyScraper}
+            'munto': MuntoScraper, 'secretsalon': SecretSalonScraper, 'modparty': ModpartyScraper,
+            # 2026-09-04: 소셜링 전용 업체(트레바리·동행클럽)가 마감임박 경량 갱신에서
+            # 빠져 있어 하루 2번(정기크롤)만 갱신됐다 — 오너 지적으로 추가.
+            # 둘 다 실측 20초 안팎(트레바리 18초·동행클럽 6초)이라 15분 주기에 무리 없다.
+            # source_url이 #evt= 형식이 아니라 by_url(전체 URL) 매칭으로 잡힌다(괜찮소와 동일 방식).
+            'trevari': TrevariScraper, 'donghaeng': DonghaengScraper}
 
 
 _EVT_RE = re.compile(r'#evt=(\d{12})')
