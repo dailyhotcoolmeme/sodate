@@ -30,11 +30,24 @@ jobs:
     #    → 무거운 둘을 떼어 **그룹별로 동시에** 돌린다. 총 작업량은 같고 벽시계만 준다
     #      (문토 34분 + 프립 10분 + 나머지 15곳 ≈ 15분 → 셋 동시 = 약 34분).
     #    새 스크래퍼는 crawler/main.py 의 GROUPS 에 안 적으면 자동으로 rest 로 간다.
+    #
+    # ⚠️(2026-09-04, 나눈 직후 실측) 나누고 나서도 문토 그룹만 또 45분에 잘렸다.
+    #    실측 — 프립 10분 / 나머지 15곳 23분 / 문토는 수집만 32분(모임 1,596건, 카테고리
+    #    12개를 상세 API로 하나씩 조회) + 저장·썸네일 재호스팅이 12분 넘게 더 걸려 초과.
+    #    이 저장소는 public 이라 Actions 실행 시간이 무료·무제한이다. 그래서 문토만
+    #    한도를 크게 준다(그룹별 한도 = matrix.timeout). 문토가 더 느려지면 이제
+    #    watchdog 의 check_silent_crawls 가 30시간 무기록으로 잡아 알린다.
     strategy:
       fail-fast: false      # 한 그룹이 죽어도 나머지 그룹은 끝까지 돈다
       matrix:
-        group: [munto, frip, rest]
-    timeout-minutes: 45
+        include:
+          - group: munto
+            timeout: 120
+          - group: frip
+            timeout: 45
+          - group: rest
+            timeout: 45
+    timeout-minutes: ${{ matrix.timeout }}
 
     steps:
       - name: Checkout
@@ -103,7 +116,8 @@ jobs:
     needs: crawl
     if: always()          # 한 그룹이 잘려도 나머지 결과에 대한 알림은 나가야 한다
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    # 실측 20분(설치 4분 + QA·가격점검 + 푸시 큐 소진)으로 한도에 딱 붙었다 → 여유를 준다.
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
