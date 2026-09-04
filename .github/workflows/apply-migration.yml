@@ -22,7 +22,7 @@ jobs:
           SQL=$(cat "supabase/migrations/${{ github.event.inputs.file }}")
           jq -n --arg q "$SQL" '{query: $q}' > /tmp/body.json
           code=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
-            -X POST "https://api.supabase.com/v1/projects/xgcldcnqfqcugkcifyae/database/query" \
+            -X POST "https://api.supabase.com/v1/projects/kmakdtcavtheaqobktlj/database/query" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
             -d @/tmp/body.json)
