@@ -20,11 +20,26 @@ from utils.diff import changed_fields
 # 앱에 "[모드파티] Error 403 (Forbidden)" 이라는 모임 2건이 노출됐다.
 # 업체마다 다른 CDN/서버 오류 페이지를 다 알 수 없으니 공통 지점에서 걸러낸다.
 # 정상 제목의 '403호' 같은 표기를 잡지 않도록, 숫자 단독은 오류 문구와 함께 있을 때만 본다.
+# 2026-09-04: 영어·숫자 오류만 잡고 **한국어 오류 문구를 안 잡아** 또 뚫렸다.
+# 아임웹이 상세를 못 열 때 og:title 이 "접속할 수 없어요" 인데, 그게 그대로 모임명이 되어
+# "[로꼬] 접속할 수 없어요" 8건이 앱에 노출됐다(오너 제보). 같은 자리에서 세 번째 사고다.
 _ERROR_TITLE_RE = re.compile(
     r'(error\s*\d{3}'
     r'|\b(?:40[0-9]|41[0-9]|429|50[0-9])\b\s*(?:error|forbidden|not\s*found)'
     r'|forbidden|not\s+found|bad\s*gateway|service\s*unavailable'
-    r'|gateway\s*time\s*-?\s*out|access\s*denied|접근\s*거부|잘못된\s*요청)',
+    r'|gateway\s*time\s*-?\s*out|access\s*denied|access\s*restricted'
+    r'|접근\s*거부|잘못된\s*요청'
+    # 한국어 오류 페이지 문구
+    r'|접속할\s*수\s*없'
+    r'|페이지를?\s*찾을\s*수\s*없'
+    r'|찾을\s*수\s*없는\s*페이지'
+    r'|존재하지\s*않는\s*(?:페이지|상품|게시)'
+    r'|삭제된\s*(?:페이지|상품|게시)'
+    r'|일시적으로\s*(?:이용|접속)'
+    r'|서비스\s*점검'
+    r'|권한이\s*없'
+    r'|오류가\s*발생'
+    r'|잠시\s*후\s*다시)',
     re.IGNORECASE,
 )
 
