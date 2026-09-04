@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 from utils.r2_client import upload_bytes
 
-PROJECT = 'xgcldcnqfqcugkcifyae'
-PAT = open(os.path.expanduser('~/.config/sodate/supabase-pat')).read().strip()
-SB = 'https://xgcldcnqfqcugkcifyae.supabase.co/storage/v1/object/public/'
+PROJECT = 'kmakdtcavtheaqobktlj'
+PAT = open(os.path.expanduser('~/.config/sodate/supabase-pat-moit')).read().strip()
+SB = 'https://kmakdtcavtheaqobktlj.supabase.co/storage/v1/object/public/'
 UA = 'Mozilla/5.0'
 
 
