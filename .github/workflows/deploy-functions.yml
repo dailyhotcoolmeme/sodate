@@ -22,7 +22,7 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          supabase functions deploy match-subscriptions --project-ref xgcldcnqfqcugkcifyae
-          supabase functions deploy process-push-queue --project-ref xgcldcnqfqcugkcifyae
-          supabase functions deploy register-push-token --project-ref xgcldcnqfqcugkcifyae
-          supabase functions deploy save-alert-subscription --project-ref xgcldcnqfqcugkcifyae
+          supabase functions deploy match-subscriptions --project-ref kmakdtcavtheaqobktlj
+          supabase functions deploy process-push-queue --project-ref kmakdtcavtheaqobktlj
+          supabase functions deploy register-push-token --project-ref kmakdtcavtheaqobktlj
+          supabase functions deploy save-alert-subscription --project-ref kmakdtcavtheaqobktlj

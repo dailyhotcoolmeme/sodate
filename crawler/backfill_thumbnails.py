@@ -18,6 +18,10 @@ from utils.logger import get_logger
 from utils.supabase_client import get_supabase
 from utils.thumbnail import optimize_thumbnails
 
+# 쓰기 응답으로 고친 행을 되돌려받지 않는다 — 우리는 안 쓰는데 전송량만 나간다.
+from postgrest.types import ReturnMethod as _RM
+MINIMAL = _RM.minimal
+
 logger = get_logger('backfill-thumbs')
 
 
@@ -60,7 +64,7 @@ def main() -> int:
         if args.dry_run:
             continue
         try:
-            sb.table('events').update({'thumbnail_urls': after}).eq('id', r['id']).execute()
+            sb.table('events').update({'thumbnail_urls': after}, returning=MINIMAL).eq('id', r['id']).execute()
         except Exception as e:
             logger.warning(f"{r['id']} 저장 실패: {e}")
             failed += 1

@@ -8,6 +8,10 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 from utils.supabase_client import get_supabase
 from utils.hashtags import derive_socialing_hashtags
 
+# 쓰기 응답으로 고친 행을 되돌려받지 않는다 — 우리는 안 쓰는데 전송량만 나간다.
+from postgrest.types import ReturnMethod as _RM
+MINIMAL = _RM.minimal
+
 c = get_supabase()
 rows = c.table('events').select('id,title,socialing_category').eq('event_type', 'socialing').execute().data
 print(f"소셜링 이벤트 {len(rows)}건 백필 시작")
@@ -18,6 +22,6 @@ for r in rows:
     if not tags:
         empty += 1
         continue
-    c.table('events').update({'hashtags': tags, 'hashtags_search': ' '.join(tags)}).eq('id', r['id']).execute()
+    c.table('events').update({'hashtags': tags, 'hashtags_search': ' '.join(tags)}, returning=MINIMAL).eq('id', r['id']).execute()
     updated += 1
 print(f"완료 — 태그 부여 {updated}건, 태그 없음 {empty}건")
