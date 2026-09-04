@@ -15,8 +15,8 @@ load_dotenv()
 from PIL import Image
 from utils.r2_client import upload_bytes, object_exists, PUBLIC_MEDIA_BASE
 
-PROJECT = 'xgcldcnqfqcugkcifyae'
-PAT = open(os.path.expanduser('~/.config/sodate/supabase-pat')).read().strip()
+PROJECT = 'kmakdtcavtheaqobktlj'
+PAT = open(os.path.expanduser('~/.config/sodate/supabase-pat-moit')).read().strip()
 UA_API = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36'
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 IG_APP_ID = '936619743392459'

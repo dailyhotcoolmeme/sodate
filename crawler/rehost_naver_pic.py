@@ -8,8 +8,8 @@ load_dotenv()
 from PIL import Image, ImageFilter
 from utils.r2_client import upload_bytes, object_exists, PUBLIC_MEDIA_BASE
 
-PROJECT = 'xgcldcnqfqcugkcifyae'
-PAT = open(os.path.expanduser('~/.config/sodate/supabase-pat')).read().strip()
+PROJECT = 'kmakdtcavtheaqobktlj'
+PAT = open(os.path.expanduser('~/.config/sodate/supabase-pat-moit')).read().strip()
 UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36'
 
 

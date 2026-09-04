@@ -6,7 +6,7 @@
 - 키워드=매장명. 결과 중 매장 핵심명이 실제로 언급된 것만 저장(일반명 오매칭 방지).
 - 블로그(naver_blog)/유튜브(youtube) 각각 소스별. 인스타는 IP차단 이슈로 제외.
 
-⚠️ 예전엔 Supabase Management API(개인 PAT, ~/.config/sodate/supabase-pat)로 SQL 을
+⚠️ 예전엔 Supabase Management API(개인 PAT, ~/.config/sodate/supabase-pat-moit)로 SQL 을
    직접 날렸다. 그 PAT 가 개발자 노트북에만 있어서 이 스크립트는 어떤 워크플로우에도
    등록할 수 없었고, 결국 수동 실행만 되다가 방치됐다(2026-09-01 점검에서 발견 —
    혼술바 데이터가 9일째 그대로였다). 지금은 크롤러 공용 자격증명
