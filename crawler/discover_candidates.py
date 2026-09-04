@@ -26,6 +26,10 @@ sb = create_client(ENV['SUPABASE_URL'], ENV['SUPABASE_SERVICE_ROLE_KEY'])
 
 from utils.hashtags import derive_hashtags
 
+# 쓰기 응답으로 고친 행을 되돌려받지 않는다 — 우리는 안 쓰는데 전송량만 나간다.
+from postgrest.types import ReturnMethod as _RM
+MINIMAL = _RM.minimal
+
 KST = timezone(timedelta(hours=9))
 NOW = datetime.now(KST)
 HORIZON = NOW + timedelta(days=60)  # 오늘+2개월
@@ -366,7 +370,7 @@ def discover_emotional_orange(slug, list_urls, page):
 
             if su in existing:
                 try:
-                    sb.table('events').update(fields).eq('id', existing[su]).execute()
+                    sb.table('events').update(fields, returning=MINIMAL).eq('id', existing[su]).execute()
                     updated += 1
                 except Exception as e:
                     print(f'이벤트 갱신 실패(스킵): {str(e)[:120]}')
@@ -404,7 +408,7 @@ def discover_emotional_orange(slug, list_urls, page):
                 'age_female': '나이 무관',
                 'age_range_min': age_min,
                 'age_range_max': age_max,
-            }).eq('id', existing_key[key]).execute()
+            }, returning=MINIMAL).eq('id', existing_key[key]).execute()
             updated += 1
 
     if inserts:
@@ -539,7 +543,7 @@ def discover_loco(slug, list_urls, page):
                 sb.table('events').update(
                     {'price_male': pm, 'price_female': pf,
                      'event_date': dt.isoformat(), 'title': title, **age_fields}
-                ).eq('id', dbmap[key]).execute()
+                , returning=MINIMAL).eq('id', dbmap[key]).execute()
                 updated += 1
             else:
                 # DB에 없던 날짜 → 신규 생성(오너 확인: 사이트 12개 전부 나와야 함)
@@ -681,7 +685,7 @@ def discover_lovecasting(slug='lovecasting'):
         if img:
             fields['thumbnail_urls'] = [img]
         try:
-            sb.table('events').update(fields).eq('id', dbmap[pth]).execute()
+            sb.table('events').update(fields, returning=MINIMAL).eq('id', dbmap[pth]).execute()
             updated += 1
         except Exception as e:
             print(f'이벤트 갱신 실패(스킵): {str(e)[:120]}')
@@ -1069,7 +1073,7 @@ def discover_platform_enriched(slug, ScraperClass):
         }
         if su in existing:
             try:
-                sb.table('events').update(fields).eq('id', existing[su]).execute()
+                sb.table('events').update(fields, returning=MINIMAL).eq('id', existing[su]).execute()
                 updated += 1
             except Exception as e:
                 print(f'이벤트 갱신 실패(스킵): {str(e)[:120]}')

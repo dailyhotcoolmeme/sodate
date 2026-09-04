@@ -19,6 +19,10 @@ from utils.supabase_client import get_supabase
 from utils.diff import changed_fields
 from utils.imweb_options import gender_soldout_by_label, gender_soldout_yeonin, gender_soldout_loco
 
+# 쓰기 응답으로 고친 행을 되돌려받지 않는다 — 우리는 안 쓰는데 전송량만 나간다.
+from postgrest.types import ReturnMethod as _RM
+MINIMAL = _RM.minimal
+
 
 def _eo_norm(res: dict) -> dict:
     """감정오렌지 라벨('7월 10일 … 저녁 8시') → {(mo,d,hour): gd}"""
@@ -134,7 +138,7 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
         if not upd:
             continue
         try:
-            sb.table('events').update(upd).eq('id', eid).execute()
+            sb.table('events').update(upd, returning=MINIMAL).eq('id', eid).execute()
             updated += 1
         except Exception as e:
             # 이 행 하나 실패로 나머지 업체 전체가 못 도는 것 방지 — 로그만 남기고 계속.
@@ -153,7 +157,7 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
         if dbevs and len(matched_ids) >= len(dbevs) * 0.5:
             for e in unmatched:
                 try:
-                    sb.table('events').update({'is_closed': True}).eq('id', e['id']).execute()
+                    sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', e['id']).execute()
                 except Exception as ex:
                     print(f'  마감 처리 실패(스킵): {e["id"]} - {str(ex)[:100]}')
             print(f'  이번 조회에서 안 잡힘 → 마감 처리 {len(unmatched)}건')
@@ -250,7 +254,7 @@ def _refresh_frip_soon(sb, cid, days: int) -> int:
                 if not upd:
                     continue
                 try:
-                    sb.table('events').update(upd).eq('id', eid).execute()
+                    sb.table('events').update(upd, returning=MINIMAL).eq('id', eid).execute()
                     updated += 1
                 except Exception as ex:
                     print(f'  [frip] 갱신 실패(스킵) {eid}: {str(ex)[:80]}')
@@ -272,11 +276,13 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
     horizon = (now + timedelta(days=days)).isoformat()
     rows = (
         sb.table('events')
-        .select('id,source_url')
+        .select('id,source_url,seats_left_male,seats_left_female,is_closed,participant_stats')
         .eq('company_id', cid).eq('is_active', True)
         .gte('event_date', now.isoformat()).lte('event_date', horizon)
         .execute()
     ).data or []
+    # 현재값을 같이 들고 있어야 '바뀐 것만 쓰기'를 할 수 있다(2026-09-04).
+    cur_by_id = {e['id']: e for e in rows}
     targets = []
     for e in rows:
         m = re.search(r'socialing\?id=(\d+)', e['source_url'] or '')
@@ -302,7 +308,7 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
                 continue
             if resp.status_code == 404:
                 try:
-                    sb.table('events').update({'is_closed': True}).eq('id', eid).execute()
+                    sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', eid).execute()
                     closed_missing += 1
                 except Exception as ex:
                     print(f'  [munto] 마감 처리 실패(스킵) {eid}: {str(ex)[:80]}')
@@ -341,11 +347,18 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
                 sf = 0
             if not closed and sm is not None and sf is not None and sm <= 0 and sf <= 0:
                 closed = True
+            # ⚠️(2026-09-04) 여기만 changed_fields 를 안 거치고 무조건 썼다. 8/21 에 다른
+            #    경로는 전부 '바뀐 것만 쓰기'로 바꿨는데 이 블록만 빠져서, 15분마다 임박
+            #    일정을 값이 그대로여도 다시 썼다(시간당 449건, events 누적 수정 90만 건).
+            #    쓰기마다 서버가 고친 행을 통째로 돌려보내 전송량 한도까지 태웠다.
+            upd = changed_fields(cur_by_id.get(eid, {}), {
+                'seats_left_male': sm, 'seats_left_female': sf,
+                'is_closed': closed, 'participant_stats': stats,
+            })
+            if not upd:
+                continue
             try:
-                sb.table('events').update({
-                    'seats_left_male': sm, 'seats_left_female': sf,
-                    'is_closed': closed, 'participant_stats': stats,
-                }).eq('id', eid).execute()
+                sb.table('events').update(upd, returning=MINIMAL).eq('id', eid).execute()
                 updated += 1
             except Exception as ex:
                 print(f'  [munto] 갱신 실패(스킵) {eid}: {str(ex)[:80]}')
@@ -444,7 +457,7 @@ def refresh(slugs=None, days=None, part='all'):
                         for e in evs:
                             if not e.get('is_closed'):
                                 try:
-                                    sb.table('events').update({'is_closed': True}).eq('id', e['id']).execute()
+                                    sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', e['id']).execute()
                                     updated += 1
                                 except Exception as ex:
                                     print(f'[{slug}] idx={idx} 마감처리 실패(스킵): {str(ex)[:100]}')
@@ -489,7 +502,7 @@ def refresh(slugs=None, days=None, part='all'):
                     upd = changed_fields(e, upd)
                     if upd:
                         try:
-                            sb.table('events').update(upd).eq('id', e['id']).execute()
+                            sb.table('events').update(upd, returning=MINIMAL).eq('id', e['id']).execute()
                             updated += 1
                         except Exception as ex:
                             # 이 이벤트 하나 실패로 나머지 idx·업체 전체가 못 도는 것 방지
