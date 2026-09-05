@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { accountApi } from '../lib/api'
 import type { Me } from '../lib/auth'
 import { SUPPORT_EMAIL } from '../lib/support'
+import { INPUT, LABEL, HINT, BTN_PRIMARY, BTN_QUIET, PANEL, H1, SUBTITLE } from '../lib/ui'
 
 const PASSWORD_ERRORS: Record<string, string> = {
   current_password_incorrect: '지금 쓰고 계신 비밀번호가 맞지 않습니다.',
@@ -13,12 +14,6 @@ const EMAIL_ERRORS: Record<string, string> = {
   invalid_email: '이메일 주소 형식이 아닙니다. 다시 확인해주세요.',
   email_taken: '다른 곳에서 이미 쓰고 있는 주소입니다. 다른 주소를 적어주세요.',
 }
-
-const INPUT =
-  'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent'
-const CARD = 'bg-white rounded-2xl border border-gray-200 p-5'
-const SUBMIT =
-  'w-full bg-pink-500 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-pink-600 transition-colors disabled:opacity-60'
 
 /** 로그인 아이디(이메일) 변경. 담당자가 바뀌었을 때 업체가 직접 넘길 수 있게 한다. */
 function EmailSection({ me }: { me: Me }) {
@@ -50,14 +45,18 @@ function EmailSection({ me }: { me: Me }) {
   }
 
   return (
-    <div className={CARD}>
-      <h2 className="text-sm font-bold text-gray-900 mb-3">로그인 아이디</h2>
+    <div className={`${PANEL} p-6`}>
+      <h2 className="text-base font-bold text-ink mb-4">로그인 아이디</h2>
 
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-        <p className="text-xs text-gray-500 mb-1">지금 쓰고 계신 아이디</p>
-        <p className="text-sm font-semibold text-gray-900 break-all">{current || '-'}</p>
+      <div className="rounded-2xl border border-line bg-surface-lowest p-4">
+        <p className="text-xs text-ink-faint mb-1">지금 쓰고 계신 아이디</p>
+        <p className="text-sm font-semibold text-ink break-all">{current || '-'}</p>
       </div>
-      {ok && <p className="text-sm text-green-600 mt-3">아이디를 바꿨습니다. 다음 로그인부터 새 주소를 쓰시면 됩니다.</p>}
+      {ok && (
+        <p className="text-sm text-accent mt-3">
+          아이디를 바꿨습니다. 다음 로그인부터 새 주소를 쓰시면 됩니다.
+        </p>
+      )}
 
       {!open ? (
         <>
@@ -66,18 +65,16 @@ function EmailSection({ me }: { me: Me }) {
               setOpen(true)
               setOk(false)
             }}
-            className="mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"
+            className={`${BTN_QUIET} mt-5`}
           >
             아이디 바꾸기
           </button>
-          <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-            담당자가 바뀌셨다면 여기서 새 담당자 이메일로 바꾸시면 됩니다.
-          </p>
+          <p className={HINT}>담당자가 바뀌셨다면 여기서 새 담당자 이메일로 바꾸시면 됩니다.</p>
         </>
       ) : (
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-5 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">새 이메일 주소</label>
+            <label className={LABEL}>새 이메일 주소</label>
             <input
               type="email"
               value={newEmail}
@@ -86,10 +83,10 @@ function EmailSection({ me }: { me: Me }) {
               placeholder="example@company.com"
               autoComplete="email"
             />
-            <p className="text-xs text-gray-400 mt-1">앞으로 이 주소로 로그인하시게 됩니다.</p>
+            <p className={HINT}>앞으로 이 주소로 로그인하시게 됩니다.</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">지금 쓰는 비밀번호</label>
+            <label className={LABEL}>지금 쓰는 비밀번호</label>
             <input
               type="password"
               value={password}
@@ -97,11 +94,11 @@ function EmailSection({ me }: { me: Me }) {
               className={INPUT}
               autoComplete="current-password"
             />
-            <p className="text-xs text-gray-400 mt-1">본인이 맞는지 확인하기 위해 한 번 더 여쭤봅니다.</p>
+            <p className={HINT}>본인이 맞는지 확인하기 위해 한 번 더 여쭤봅니다.</p>
           </div>
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex gap-3">
-            <button type="submit" disabled={submitting} className={`${SUBMIT} flex-1`}>
+            <button type="submit" disabled={submitting} className={`${BTN_PRIMARY} flex-1`}>
               {submitting ? '바꾸는 중...' : '아이디 바꾸기'}
             </button>
             <button
@@ -112,7 +109,7 @@ function EmailSection({ me }: { me: Me }) {
                 setNewEmail('')
                 setPassword('')
               }}
-              className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+              className={BTN_QUIET}
             >
               취소
             </button>
@@ -135,14 +132,8 @@ function PasswordSection() {
     e.preventDefault()
     setError('')
     setOk(false)
-    if (next.length < 8) {
-      setError('새 비밀번호는 8자 이상으로 정해주세요.')
-      return
-    }
-    if (next !== confirm) {
-      setError('두 칸에 적으신 새 비밀번호가 서로 다릅니다. 다시 확인해주세요.')
-      return
-    }
+    if (next.length < 8) return setError('새 비밀번호는 8자 이상으로 정해주세요.')
+    if (next !== confirm) return setError('두 칸에 적으신 새 비밀번호가 서로 다릅니다. 다시 확인해주세요.')
     setSubmitting(true)
     try {
       await accountApi.changePassword(current, next)
@@ -158,10 +149,10 @@ function PasswordSection() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className={`${CARD} space-y-4`}>
-      <h2 className="text-sm font-bold text-gray-900">비밀번호 변경</h2>
+    <form onSubmit={handleSubmit} className={`${PANEL} p-6 space-y-5`}>
+      <h2 className="text-base font-bold text-ink">비밀번호 변경</h2>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">지금 쓰는 비밀번호</label>
+        <label className={LABEL}>지금 쓰는 비밀번호</label>
         <input
           type="password"
           value={current}
@@ -171,7 +162,7 @@ function PasswordSection() {
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">새 비밀번호</label>
+        <label className={LABEL}>새 비밀번호</label>
         <input
           type="password"
           value={next}
@@ -179,10 +170,10 @@ function PasswordSection() {
           autoComplete="new-password"
           className={INPUT}
         />
-        <p className="text-xs text-gray-400 mt-1">8자 이상으로 정해주세요.</p>
+        <p className={HINT}>8자 이상으로 정해주세요.</p>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">새 비밀번호 한 번 더</label>
+        <label className={LABEL}>새 비밀번호 한 번 더</label>
         <input
           type="password"
           value={confirm}
@@ -190,11 +181,15 @@ function PasswordSection() {
           autoComplete="new-password"
           className={INPUT}
         />
-        <p className="text-xs text-gray-400 mt-1">잘못 입력하는 걸 막기 위해 같은 비밀번호를 한 번 더 적어주세요.</p>
+        <p className={HINT}>잘못 입력하는 걸 막기 위해 같은 비밀번호를 한 번 더 적어주세요.</p>
       </div>
-      {error && <p className="text-sm text-red-500">{error}</p>}
-      {ok && <p className="text-sm text-green-600">비밀번호를 바꿨습니다. 다음 로그인부터 새 비밀번호를 쓰시면 됩니다.</p>}
-      <button type="submit" disabled={submitting} className={SUBMIT}>
+      {error && <p className="text-sm text-danger">{error}</p>}
+      {ok && (
+        <p className="text-sm text-accent">
+          비밀번호를 바꿨습니다. 다음 로그인부터 새 비밀번호를 쓰시면 됩니다.
+        </p>
+      )}
+      <button type="submit" disabled={submitting} className={`${BTN_PRIMARY} w-full`}>
         {submitting ? '바꾸는 중...' : '비밀번호 바꾸기'}
       </button>
     </form>
@@ -205,18 +200,16 @@ export default function Account({ me }: { me: Me }) {
   return (
     <div className="max-w-md space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 mb-1">계정 설정</h1>
-        <p className="text-sm text-gray-500 leading-relaxed">
-          로그인에 쓰는 아이디와 비밀번호를 여기서 바꾸실 수 있습니다.
-        </p>
+        <h1 className={H1}>계정 설정</h1>
+        <p className={`${SUBTITLE} mt-2`}>로그인에 쓰는 아이디와 비밀번호를 여기서 바꾸실 수 있습니다.</p>
       </div>
 
       <EmailSection me={me} />
       <PasswordSection />
 
-      <p className="text-xs text-gray-400 leading-relaxed">
+      <p className="text-xs text-ink-faint leading-relaxed">
         비밀번호를 잊으셨을 땐 모잇 담당자{' '}
-        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-pink-600 font-medium">
+        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-primary font-medium">
           {SUPPORT_EMAIL}
         </a>
         로 연락 주세요. 초대 메일을 다시 보내드립니다.

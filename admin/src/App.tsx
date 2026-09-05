@@ -11,6 +11,7 @@ import Places from './pages/Places'
 import PlaceReviews from './pages/PlaceReviews'
 import Companies from './pages/Companies'
 import Partners from './pages/Partners'
+import PartnerPage from './pages/PartnerPage'
 import Reviews from './pages/Reviews'
 import Board from './pages/Board'
 import CrawlLogs from './pages/CrawlLogs'
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/place-reviews" element={guard(authed, <PlaceReviews />)} />
         <Route path="/companies" element={guard(authed, <Companies />)} />
         <Route path="/partners" element={guard(authed, <Partners />)} />
+        <Route path="/partner-page" element={guard(authed, <PartnerPage />)} />
         <Route path="/reviews" element={guard(authed, <Reviews />)} />
         <Route path="/board" element={guard(authed, <Board />)} />
         <Route path="/crawl-logs" element={guard(authed, <CrawlLogs />)} />
