@@ -179,6 +179,14 @@ OPS_DIGEST_MAX_LINES = 12
 ESCALATE_AFTER_DAYS = 3
 ESCALATED_SILENCE_HOURS = 1
 
+# ⚠️(2026-09-05) '며칠째' 계산이 first_seen_at을 지문이 안 바뀌는 한 영원히 안 지웠다.
+# check_data_drift의 건수 급락처럼 숫자를 지운 지문("최근 크롤 #건 — 평소 #건의 #%로
+# 급락")은 오늘 하루 반짝 딸꾹질과 19일 전 있었던 딸꾹질이 같은 지문으로 묶여, 그 사이
+# 수십 번 정상으로 돌아왔어도 "19일째 방치"로 표시됐다(오너 지적: 로꼬가 바로 다음
+# 회차에 정상 복귀했는데 방치 19일로 옴). 이 지문이 한동안(아래 시간) 안 보이다가
+# 다시 나타나면 옛 first_seen_at을 이어받지 않고 새 문제로 본다.
+STREAK_RESET_AFTER_HOURS = 24
+
 
 def _tag(issues: list[dict], kind: str) -> list[dict]:
     """점검 결과에 긴급/운영 꼬리표를 단다. 점검 함수가 직접 지정한 건 건드리지 않는다
@@ -219,20 +227,34 @@ def load_alert_state(sb, fingerprints: list[str]) -> dict:
         return {}
 
 
+def _is_stale_streak(prev: dict | None, now: datetime) -> bool:
+    """이 지문을 마지막으로 본 지 STREAK_RESET_AFTER_HOURS 넘게 지났으면, 지금 다시
+    나타난 건 이어지던 문제가 아니라 새로 생긴 문제로 본다."""
+    if not prev or not prev.get('last_seen_at'):
+        return False
+    try:
+        last = datetime.fromisoformat(prev['last_seen_at'].replace('Z', '+00:00'))
+    except Exception:
+        return False
+    return (now - last).total_seconds() / 3600 > STREAK_RESET_AFTER_HOURS
+
+
 def record_alert(sb, fp: str, prev: dict | None, sent: bool, note: str = '') -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    stale = _is_stale_streak(prev, now_dt)
     row = {
         'fingerprint': fp,
         'last_seen_at': now,
-        'seen_count': (prev.get('seen_count', 0) if prev else 0) + 1,
+        'seen_count': (0 if stale else (prev.get('seen_count', 0) if prev else 0)) + 1,
     }
     if note:
         row['note'] = note[:300]
     if sent:
         row['last_sent_at'] = now
-    elif prev and prev.get('last_sent_at'):
+    elif prev and prev.get('last_sent_at') and not stale:
         row['last_sent_at'] = prev['last_sent_at']
-    if not prev:
+    if not prev or stale:
         row['first_seen_at'] = now
     try:
         sb.table('watchdog_alerts').upsert(row, on_conflict='fingerprint').execute()
@@ -254,7 +276,9 @@ def _persisted_days(issue: dict, prev: dict | None, now: datetime) -> float:
     own = issue.get('persisted_days')
     if own is not None:
         return float(own)
-    if not prev or not prev.get('first_seen_at'):
+    # 오래(STREAK_RESET_AFTER_HOURS) 안 보이다 다시 나타난 지문은 이어지던 문제가
+    # 아니라 새 문제다 — record_alert 이 저장할 first_seen_at 과 같은 기준으로 판단한다.
+    if not prev or not prev.get('first_seen_at') or _is_stale_streak(prev, now):
         return 0.0
     try:
         first = datetime.fromisoformat(prev['first_seen_at'].replace('Z', '+00:00'))
