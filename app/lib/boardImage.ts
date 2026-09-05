@@ -32,7 +32,9 @@ function loadNative() {
 // 오너 결정(2026-08-13): 상세 화면에서 사진을 한꺼번에 다 열지 않고 스크롤에 맞춰
 // 순차로 불러오게 바꿨으니(board/[id].tsx의 LazyPostImage), 갯수를 5→10으로 늘려도
 // 화면 진입 즉시 10장이 한꺼번에 로드되지 않는다.
-export const MAX_IMAGES = 10
+// 2026-09-05 오너 지시로 10→20 재확대. 위와 같은 이유(순차 로드)로 한꺼번에
+// 20장이 로드되지 않아 화면 진입 성능에 영향 없음.
+export const MAX_IMAGES = 20
 export const GIF_MAX_BYTES = 5 * 1024 * 1024
 
 /**
