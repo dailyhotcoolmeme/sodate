@@ -21,6 +21,10 @@ export function resolveDescImages(ev: any): string[] {
   // 업체 단위 노출 스위치가 꺼져 있으면 등록돼 있어도 안 내보낸다
   if (ev?.companies?.detail_images_visible === false) return []
 
+  // 0) 업체가 제휴 포털에서 직접 올린 일정은 그 업체가 올린 이미지를 그대로 쓴다.
+  //    크롤 일정과는 아예 다른 행이라(is_partner_direct) 유형 매칭이 끼어들 여지가 없다.
+  if (ev?.is_partner_direct && ev?.detail_images?.length) return ev.detail_images
+
   // 1) 수동 지정 우선
   if (ev?.image_type?.images?.length) return ev.image_type.images
 

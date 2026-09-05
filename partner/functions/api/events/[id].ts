@@ -20,12 +20,15 @@ interface PatchBody {
   title?: string
   description?: string | null
   thumbnail_urls?: string[]
+  detail_images?: string[]
   event_date?: string
   location_region?: string
   price_male?: number | null
   price_female?: number | null
   capacity_male?: number | null
   capacity_female?: number | null
+  seats_left_male?: number | null
+  seats_left_female?: number | null
   hashtags?: string[]
   is_active?: boolean
 }
@@ -49,6 +52,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   if (typeof body.title === 'string') patch.title = body.title.trim()
   if ('description' in body) patch.description = body.description ?? null
   if (Array.isArray(body.thumbnail_urls)) patch.thumbnail_urls = body.thumbnail_urls
+  if (Array.isArray(body.detail_images)) patch.detail_images = body.detail_images
   if (typeof body.event_date === 'string') {
     if (Number.isNaN(new Date(body.event_date).getTime())) {
       return json({ error: 'invalid_event_date' }, 400)
@@ -60,6 +64,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   if ('price_female' in body) patch.price_female = body.price_female ?? null
   if ('capacity_male' in body) patch.capacity_male = body.capacity_male ?? null
   if ('capacity_female' in body) patch.capacity_female = body.capacity_female ?? null
+  if ('seats_left_male' in body) patch.seats_left_male = body.seats_left_male ?? null
+  if ('seats_left_female' in body) patch.seats_left_female = body.seats_left_female ?? null
   if (Array.isArray(body.hashtags)) patch.hashtags = body.hashtags
   if (typeof body.is_active === 'boolean') patch.is_active = body.is_active
 

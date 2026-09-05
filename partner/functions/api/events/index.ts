@@ -10,8 +10,8 @@ interface Env extends DbEnv {
 }
 
 const SELECT_FIELDS =
-  'id,title,description,thumbnail_urls,event_date,location_region,price_male,price_female,' +
-  'capacity_male,capacity_female,hashtags,is_active,created_at'
+  'id,title,description,thumbnail_urls,detail_images,event_date,location_region,price_male,price_female,' +
+  'capacity_male,capacity_female,seats_left_male,seats_left_female,hashtags,is_active,created_at'
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const session = await verifySession(env.SESSION_SECRET, getCookie(request, COOKIE))
@@ -33,12 +33,15 @@ interface CreateBody {
   title?: string
   description?: string
   thumbnail_urls?: string[]
+  detail_images?: string[]
   event_date?: string
   location_region?: string
   price_male?: number | null
   price_female?: number | null
   capacity_male?: number | null
   capacity_female?: number | null
+  seats_left_male?: number | null
+  seats_left_female?: number | null
   hashtags?: string[]
 }
 
@@ -67,12 +70,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     title,
     description: body.description ?? null,
     thumbnail_urls: Array.isArray(body.thumbnail_urls) ? body.thumbnail_urls : [],
+    detail_images: Array.isArray(body.detail_images) ? body.detail_images : [],
     event_date: eventDate,
     location_region: region,
     price_male: body.price_male ?? null,
     price_female: body.price_female ?? null,
     capacity_male: body.capacity_male ?? null,
     capacity_female: body.capacity_female ?? null,
+    seats_left_male: body.seats_left_male ?? null,
+    seats_left_female: body.seats_left_female ?? null,
     hashtags: Array.isArray(body.hashtags) ? body.hashtags : [],
     // 아래 넷은 시스템이 정한다 — 클라이언트가 흉내 낼 수 없게 여기서만 세팅.
     source_url: `partner://${session.companyId}/${crypto.randomUUID()}`,

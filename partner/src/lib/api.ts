@@ -3,12 +3,15 @@ export interface PartnerEvent {
   title: string
   description: string | null
   thumbnail_urls: string[]
+  detail_images: string[]
   event_date: string
   location_region: string
   price_male: number | null
   price_female: number | null
   capacity_male: number | null
   capacity_female: number | null
+  seats_left_male: number | null
+  seats_left_female: number | null
   hashtags: string[]
   is_active: boolean
   created_at: string

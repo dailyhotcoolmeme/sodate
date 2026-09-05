@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { eventsApi, type PartnerEvent, type EventInput } from '../lib/api'
 import { uploadImage, deleteImage } from '../lib/upload'
-import { CardPreview, DetailPreview, type PreviewData } from '../components/EventPreview'
+import { CardPreview, FeedPreview, DetailPreview, type PreviewData } from '../components/EventPreview'
 import { INPUT, LABEL, HINT, BTN_PRIMARY, BTN_QUIET, PANEL, H1, SUBTITLE } from '../lib/ui'
 
 const EMPTY: EventInput = {
   title: '',
   description: '',
   thumbnail_urls: [],
+  detail_images: [],
   event_date: '',
   location_region: '',
   price_male: null,
   price_female: null,
   capacity_male: null,
   capacity_female: null,
+  seats_left_male: null,
+  seats_left_female: null,
   hashtags: [],
 }
 
@@ -38,11 +41,13 @@ export default function Events() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
-  const [previewTab, setPreviewTab] = useState<'card' | 'detail'>('card')
+  const [previewTab, setPreviewTab] = useState<'card' | 'feed' | 'detail'>('card')
   // 저장한 뒤 "앱에 언제 올라가는지"를 알려주는 안내. 그동안 저장하면 폼만 닫혀서
   // 업체 입장에선 진짜 올라간 건지 확인할 방법이 없었다.
   const [justSaved, setJustSaved] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const detailInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingDetail, setUploadingDetail] = useState(false)
 
   const load = () => eventsApi.list().then(setEvents).catch(() => setEvents([]))
   useEffect(() => {
@@ -88,6 +93,38 @@ export default function Events() {
     deleteImage(url).catch(() => {})
   }
 
+  // 상세페이지용 이미지. 앱에서는 올린 순서대로 위아래로 붙여 한 장처럼 보인다.
+  const handleDetailPick = async (files: FileList | null) => {
+    if (!files || !files.length) return
+    setUploadingDetail(true)
+    setError('')
+    try {
+      const urls: string[] = []
+      for (const file of Array.from(files)) urls.push(await uploadImage(file))
+      setForm((f) => ({ ...f, detail_images: [...f.detail_images, ...urls] }))
+    } catch {
+      setError('상세 이미지 업로드에 실패했습니다.')
+    } finally {
+      setUploadingDetail(false)
+      if (detailInputRef.current) detailInputRef.current.value = ''
+    }
+  }
+
+  const moveDetailImage = (from: number, to: number) => {
+    setForm((f) => {
+      if (to < 0 || to >= f.detail_images.length) return f
+      const next = [...f.detail_images]
+      const [x] = next.splice(from, 1)
+      next.splice(to, 0, x)
+      return { ...f, detail_images: next }
+    })
+  }
+
+  const removeDetailImage = async (url: string) => {
+    setForm((f) => ({ ...f, detail_images: f.detail_images.filter((u) => u !== url) }))
+    deleteImage(url).catch(() => {})
+  }
+
   const handleSave = async () => {
     if (!form.title.trim()) return setError('모임 제목을 적어주세요. 앱 목록에 그대로 보이는 이름입니다.')
     if (!form.event_date) return setError('모임 날짜와 시작 시간을 골라주세요.')
@@ -127,10 +164,13 @@ export default function Events() {
     title: form.title,
     description: form.description ?? '',
     imageUrl: form.thumbnail_urls[0] ?? null,
+    detailImages: form.detail_images,
     eventDate: form.event_date ? new Date(form.event_date).toISOString() : '',
     region: form.location_region,
     priceMale: form.price_male == null ? '' : String(form.price_male),
     priceFemale: form.price_female == null ? '' : String(form.price_female),
+    seatsLeftMale: form.seats_left_male == null ? '' : String(form.seats_left_male),
+    seatsLeftFemale: form.seats_left_female == null ? '' : String(form.seats_left_female),
     hashtags: hashtagsText.split(',').map((t) => t.trim()).filter(Boolean),
   }
 
@@ -318,6 +358,88 @@ export default function Events() {
             </div>
 
             <div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={LABEL}>남성 잔여석 (명)</label>
+                  <input
+                    type="number"
+                    value={form.seats_left_male ?? ''}
+                    onChange={(e) => setForm({ ...form, seats_left_male: numberField(e.target.value) })}
+                    className={INPUT}
+                    placeholder="예: 2"
+                  />
+                </div>
+                <div>
+                  <label className={LABEL}>여성 잔여석 (명)</label>
+                  <input
+                    type="number"
+                    value={form.seats_left_female ?? ''}
+                    onChange={(e) => setForm({ ...form, seats_left_female: numberField(e.target.value) })}
+                    className={INPUT}
+                    placeholder="예: 0"
+                  />
+                </div>
+              </div>
+              <p className={HINT}>
+                <b className="text-ink-muted">0을 넣으시면 앱에서 그 성별이 '마감'으로 표시됩니다.</b> 자리가 남아
+                있으면 남은 수를 적어주시고, 관리하지 않으실 거면 비워두셔도 됩니다.
+              </p>
+            </div>
+
+            <div>
+              <label className={LABEL}>상세페이지 이미지</label>
+              <p className="text-xs text-ink-faint mb-2.5 leading-relaxed">
+                일정을 눌렀을 때 아래쪽에 크게 보이는 안내 이미지입니다. 올리신 순서대로 위에서 아래로
+                이어 붙여 한 장처럼 보입니다.
+              </p>
+              <div className="space-y-2">
+                {form.detail_images.map((url, i) => (
+                  <div key={url} className="flex items-center gap-3 rounded-xl border border-line p-2">
+                    <img src={url} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+                    <span className="text-xs text-ink-faint flex-1">{i + 1}번째</span>
+                    <button
+                      onClick={() => moveDetailImage(i, i - 1)}
+                      disabled={i === 0}
+                      aria-label="위로"
+                      className="px-2 py-1 rounded-lg text-xs text-ink-muted hover:bg-surface-high disabled:opacity-30"
+                    >
+                      위로
+                    </button>
+                    <button
+                      onClick={() => moveDetailImage(i, i + 1)}
+                      disabled={i === form.detail_images.length - 1}
+                      aria-label="아래로"
+                      className="px-2 py-1 rounded-lg text-xs text-ink-muted hover:bg-surface-high disabled:opacity-30"
+                    >
+                      아래로
+                    </button>
+                    <button
+                      onClick={() => removeDetailImage(url)}
+                      className="px-2 py-1 rounded-lg text-xs text-danger hover:bg-surface-high"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => detailInputRef.current?.click()}
+                disabled={uploadingDetail}
+                className={`${BTN_QUIET} mt-3 py-2.5 text-xs`}
+              >
+                {uploadingDetail ? '올리는 중...' : '+ 상세 이미지 올리기'}
+              </button>
+              <input
+                ref={detailInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => handleDetailPick(e.target.files)}
+              />
+            </div>
+
+            <div>
               <label className={LABEL}>해시태그</label>
               <input
                 value={hashtagsText}
@@ -343,35 +465,40 @@ export default function Events() {
           {/* 오른쪽: 실시간 미리보기. 실제 앱은 흰 바탕이라 미리보기도 흰 바탕 그대로 두고,
               폰 틀 안에 넣어 «앱 화면»임을 분명히 한다(오너 확정). */}
           <div>
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => setPreviewTab('card')}
-                className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-colors ${
-                  previewTab === 'card' ? 'bg-primary text-on-primary' : 'bg-surface-high text-ink-muted'
-                }`}
-              >
-                목록에서 보이는 모습
-              </button>
-              <button
-                onClick={() => setPreviewTab('detail')}
-                className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-colors ${
-                  previewTab === 'detail' ? 'bg-primary text-on-primary' : 'bg-surface-high text-ink-muted'
-                }`}
-              >
-                눌렀을 때 보이는 모습
-              </button>
+            {/* 앱 목록에는 카드형·피드형 두 가지가 있고 이용자가 직접 고른다. 어느 쪽으로
+                보든 괜찮은지 업체가 확인할 수 있게 둘 다 보여준다(오너 지시). */}
+            <div className="tab-scroll flex gap-2 mb-4">
+              {(
+                [
+                  { key: 'card', label: '카드형' },
+                  { key: 'feed', label: '피드형' },
+                  { key: 'detail', label: '상세 화면' },
+                ] as const
+              ).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setPreviewTab(key)}
+                  className={`shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold transition-colors ${
+                    previewTab === key ? 'bg-primary text-on-primary' : 'bg-surface-high text-ink-muted'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <div className="max-w-sm mx-auto">
               <div className="rounded-[2rem] border-4 border-surface-highest bg-surface-highest p-1.5 shadow-2xl">
                 <div className="rounded-[1.6rem] overflow-hidden bg-white">
-                  {previewTab === 'card' ? (
-                    <CardPreview data={previewData} />
-                  ) : (
-                    <DetailPreview data={previewData} />
-                  )}
+                  {previewTab === 'card' && <CardPreview data={previewData} />}
+                  {previewTab === 'feed' && <FeedPreview data={previewData} />}
+                  {previewTab === 'detail' && <DetailPreview data={previewData} />}
                 </div>
               </div>
-              <p className="text-xs text-ink-faint text-center mt-3">실제 모잇 앱에 보이는 모습입니다.</p>
+              <p className="text-xs text-ink-faint text-center mt-3">
+                {previewTab === 'detail'
+                  ? '일정을 눌렀을 때 보이는 화면입니다.'
+                  : '앱 목록에서 이용자가 고르는 두 가지 보기 중 하나입니다.'}
+              </p>
             </div>
           </div>
         </div>

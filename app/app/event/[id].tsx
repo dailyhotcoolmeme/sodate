@@ -655,6 +655,16 @@ export default function EventDetailScreen() {
           </View>
         )}
 
+        {/* 업체가 제휴 포털에서 직접 올린 일정의 소개글. 크롤 일정의 설명은 계속 안 보여준다
+            (원문 복제가 되므로) — 업체가 자기 일정에 직접 쓴 글만 그대로 싣는다. */}
+        {!isSocialing && event.is_partner_direct && !!event.description && (
+          <View style={styles.descSection}>
+            {renderCta()}
+            <Text style={styles.sectionLabel}>모임 소개</Text>
+            <Text style={styles.socDescText}>{event.description}</Text>
+          </View>
+        )}
+
         {/* 상세 설명 — 업체/일정별로 등록된 이미지 유형으로만 표시. 이미지 없으면 섹션 숨김(크롤 텍스트는 미노출) */}
         {!isSocialing && event.descImages && event.descImages.length > 0 && (
           <View style={styles.descSection}>

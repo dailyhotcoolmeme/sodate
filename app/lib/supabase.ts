@@ -46,4 +46,10 @@ export type EventWithCompany = EventRow & {
   companies: CompanyRow | null
   /** 상세 설명 이미지(해석된 결과). 있으면 이미지로 표시, 없으면 설명 섹션 숨김 */
   descImages?: string[]
+  // 아래 둘은 실제 events 컬럼인데 database.types.ts(자동 생성본)가 아직 옛날 거라 빠져 있다.
+  // 타입을 다시 뽑기 전까지 여기서 보완한다.
+  /** 업체가 제휴 포털에서 직접 등록한 일정인지. 크롤 일정과 표시 규칙이 다르다. */
+  is_partner_direct?: boolean | null
+  /** 업체가 포털에서 직접 올린 상세페이지 이미지. */
+  detail_images?: string[] | null
 }
