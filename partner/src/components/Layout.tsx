@@ -12,14 +12,12 @@ const MAIN_NAV = [
 // 자주 안 쓰는 것은 햄버거 안으로. 톱바가 두 줄로 늘어나는 걸 막는다.
 const MENU_NAV = [{ to: '/account', label: '계정 설정' }]
 
-function MenuIcon({ open }: { open: boolean }) {
+// 열려 있어도 X로 바꾸지 않는다(오너 지시) — 버튼 모양이 그대로라야 같은 자리를
+// 다시 눌러 닫는다는 게 헷갈리지 않는다.
+function MenuIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      {open ? (
-        <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      ) : (
-        <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      )}
+      <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   )
 }
@@ -79,7 +77,7 @@ export default function Layout({ children, me }: { children: React.ReactNode; me
     <div className="min-h-dvh bg-bg">
       <div className="hero-glow" />
 
-      <header className="relative z-10 border-b border-surface-highest bg-surface-lowest">
+      <header className="relative z-30 border-b border-surface-highest bg-surface-lowest">
         <div className="max-w-5xl mx-auto flex items-stretch h-16 px-3">
           <div className="flex items-center gap-2.5 pr-4 shrink-0">
             <CompanyMark me={me} />
@@ -116,7 +114,7 @@ export default function Layout({ children, me }: { children: React.ReactNode; me
               aria-expanded={open}
               className="w-11 h-11 flex items-center justify-center rounded-xl text-ink-muted hover:bg-surface-high transition-colors"
             >
-              <MenuIcon open={open} />
+              <MenuIcon />
             </button>
 
             {open && (
