@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { AlertTriangle, Search, Handshake, Link as LinkIcon } from 'lucide-react'
+import { AlertTriangle, Search, Handshake, Link as LinkIcon, Plus } from 'lucide-react'
 import BannerManager from '../components/BannerManager'
 
 /**
@@ -103,7 +103,7 @@ function BenefitInput({
   useEffect(() => { setDraft(value ?? '') }, [value])
   return (
     <div className="flex items-center gap-2">
-      <label className="text-xs text-gray-500 shrink-0">혜택</label>
+      <label className="text-xs text-gray-500 shrink-0">앱에 띄울 혜택 문구</label>
       <input
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -127,7 +127,7 @@ function BadgePreview() {
   )
 }
 
-/** 무료/유료 등급 — 유료만 파트너 포털에서 배너 광고 메뉴가 보인다(2026-09-05 확정). */
+/** 무료/유료 — 유료 제휴처만 제휴 포털에서 배너 광고 메뉴가 보인다(2026-09-05 확정). */
 function TierSelect({ value, onChange }: { value: string | null; onChange: (v: string) => void }) {
   return (
     <select
@@ -152,9 +152,9 @@ interface PartnerAccountStatus {
  * 제휴 포털 초대 위젯(2026-09-05 신설).
  *
  * 아직 초대 안 한 업체 → 이메일 입력 + "초대 보내기".
- * 이미 초대했지만 비번 미설정 → "초대됨 · 가입 대기" + 재초대.
- * 가입 완료(active) → "가입 완료" + 정지 버튼.
- * 정지(disabled) → "정지됨" + 재개 버튼.
+ * 이미 초대했지만 비번 미설정 → "초대됨 · 가입 대기" + 초대 메일 다시 보내기.
+ * 쓰는 중(active) → "가입 완료" + 정지 버튼.
+ * 정지(disabled) → "로그인 막음" + 재개 버튼.
  */
 function PartnerInvite({ companyId }: { companyId: string }) {
   const [status, setStatus] = useState<PartnerAccountStatus | null | undefined>(undefined)
@@ -187,12 +187,12 @@ function PartnerInvite({ companyId }: { companyId: string }) {
       })
       const data = await res.json()
       if (!res.ok) {
-        setMsg(`발송 실패: ${data.error ?? '알 수 없는 오류'}`)
+        setMsg(`메일을 못 보냈습니다: ${data.error ?? '알 수 없는 오류'}`)
       } else if (data.mailSent) {
-        setMsg('초대 메일을 보냈습니다')
+        setMsg('초대 메일을 보냈습니다. 그쪽에서 비밀번호를 정하면 바로 쓸 수 있습니다.')
         await load()
       } else {
-        setMsg(`메일 발송은 실패했지만 계정은 준비됐습니다. 링크를 직접 전달하세요: ${data.inviteUrl}`)
+        setMsg(`메일만 못 나갔고 계정은 만들어졌습니다. 아래 주소를 그쪽에 직접 전달해주세요: ${data.inviteUrl}`)
         await load()
       }
     } finally {
@@ -217,18 +217,20 @@ function PartnerInvite({ companyId }: { companyId: string }) {
     }
   }
 
-  if (status === undefined) return <p className="text-xs text-gray-400">포털 계정 확인 중…</p>
+  if (status === undefined) return <p className="text-xs text-gray-400">제휴 포털 계정 확인 중…</p>
 
   return (
     <div className="border-t border-gray-100 pt-2">
-      <p className="text-xs font-semibold text-gray-600 mb-1.5">제휴 포털 계정</p>
+      <p className="text-xs font-semibold text-gray-600 mb-1.5">
+        제휴 포털 로그인 계정
+      </p>
       {!status ? (
         <div className="flex items-center gap-2">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="담당자 이메일"
+            placeholder="이 제휴처 담당자 이메일"
             className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1 text-sm"
           />
           <button
@@ -236,7 +238,7 @@ function PartnerInvite({ companyId }: { companyId: string }) {
             disabled={busy || !email.trim()}
             className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-pink-500 hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400"
           >
-            초대 보내기
+            초대 메일 보내기
           </button>
         </div>
       ) : (
@@ -244,7 +246,7 @@ function PartnerInvite({ companyId }: { companyId: string }) {
           <span className="text-xs text-gray-600">{status.email}</span>
           {status.pending ? (
             <span className="text-[11px] font-semibold text-amber-600 border border-amber-200 bg-amber-50 rounded px-1.5 py-0.5">
-              가입 대기 중
+              메일 보냄 · 비밀번호 설정 전
             </span>
           ) : status.status === 'active' ? (
             <span className="text-[11px] font-semibold text-green-600 border border-green-200 bg-green-50 rounded px-1.5 py-0.5">
@@ -264,12 +266,139 @@ function PartnerInvite({ companyId }: { companyId: string }) {
           </button>
           {!status.pending && (
             <button onClick={toggleStatus} disabled={busy} className="text-xs font-semibold text-gray-500 hover:underline">
-              {status.status === 'active' ? '정지' : '재개'}
+              {status.status === 'active' ? '로그인 막기' : '다시 열어주기'}
             </button>
           )}
         </div>
       )}
       {msg && <p className="text-[11px] text-gray-500 mt-1 break-all">{msg}</p>}
+    </div>
+  )
+}
+
+/**
+ * 목록에 «없는» 제휴처를 새로 만들며 바로 초대한다.
+ *
+ * 왜 필요한가(2026-09-05 오너 지적): 문토·프립 같은 모임 플랫폼은 업체 목록에서 한 줄이
+ * 플랫폼 전체다. 그 안에서 모임을 여는 개별 호스트는 목록에 아예 없어서 초대를 걸 대상이
+ * 없었다. 여기서 호스트마다 새 줄을 만들어 초대한다.
+ * 크롤링은 안 붙으므로 문토·프립 쪽 수집 데이터는 그대로 남는다.
+ */
+function NewPartnerInvite({ onCreated }: { onCreated: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [tier, setTier] = useState('free')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  const submit = async () => {
+    setBusy(true)
+    setErr('')
+    setMsg('')
+    try {
+      const res = await fetch('/api/partner-company', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), tier }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setErr(
+          data.error === 'name_taken'
+            ? '같은 이름이 목록에 이미 있습니다. 그 줄에서 초대해주세요.'
+            : data.error === 'invalid_email'
+              ? '이메일 주소를 다시 확인해주세요.'
+              : data.error === 'missing_name'
+                ? '제휴처 이름을 적어주세요.'
+                : '만들지 못했습니다. 잠시 후 다시 시도해주세요.',
+        )
+        return
+      }
+      setMsg(
+        data.mailSent
+          ? `'${name.trim()}' 을(를) 만들고 초대 메일을 보냈습니다.`
+          : `'${name.trim()}' 은(는) 만들어졌지만 메일이 안 나갔습니다. 아래 줄에서 다시 초대해주세요.`,
+      )
+      setName('')
+      setEmail('')
+      setOpen(false)
+      onCreated()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="space-y-1.5">
+        <button
+          onClick={() => {
+            setOpen(true)
+            setMsg('')
+          }}
+          className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-bold text-white bg-pink-500 hover:bg-pink-600"
+        >
+          <Plus size={15} />
+          목록에 없는 제휴처 초대하기
+        </button>
+        <p className="text-xs text-gray-400">
+          문토·프립처럼 여러 호스트가 모여 있는 곳에서 «한 호스트»만 제휴할 때 씁니다. 새 줄이 하나
+          생기고, 문토·프립 쪽 수집 일정은 그대로 둡니다.
+        </p>
+        {msg && <p className="text-xs text-green-600">{msg}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white border border-pink-200 rounded-xl px-4 py-3.5 space-y-3">
+      <p className="text-sm font-bold text-gray-900">목록에 없는 제휴처 초대하기</p>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">제휴처 이름</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="예: 밀크티타카 (앱에 그대로 보이는 이름)"
+          className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm"
+        />
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">담당자 이메일</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="host@example.com"
+          className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm"
+        />
+        <p className="text-xs text-gray-400 mt-1">이 주소로 초대 메일이 나가고, 이게 로그인 아이디가 됩니다.</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-gray-500 shrink-0">제휴 종류</label>
+        <TierSelect value={tier} onChange={setTier} />
+      </div>
+      {err && <p className="text-xs text-red-500">{err}</p>}
+      <div className="flex gap-2">
+        <button
+          onClick={submit}
+          disabled={busy || !name.trim() || !email.trim()}
+          className="rounded-lg px-3.5 py-2 text-sm font-bold text-white bg-pink-500 hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400"
+        >
+          {busy ? '만드는 중…' : '만들고 초대 메일 보내기'}
+        </button>
+        <button
+          onClick={() => {
+            setOpen(false)
+            setErr('')
+          }}
+          className="rounded-lg px-3.5 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-50"
+        >
+          취소
+        </button>
+      </div>
     </div>
   )
 }
@@ -352,6 +481,16 @@ export default function Partners() {
   const [err, setErr] = useState<string | null>(null)
   const [q, setQ] = useState('')
 
+  // 새 제휴처를 만든 뒤 목록을 다시 읽는 데도 쓰므로 밖에 둔다.
+  const reloadCompanies = useCallback(async () => {
+    const co = await supabase
+      .from('companies')
+      .select('id,name,slug,plan,partner_tier,partner_benefit,socials,app_visible')
+      .order('name')
+    if (co.error) setErr(co.error.message)
+    else setCompanies((co.data as any) ?? [])
+  }, [])
+
   useEffect(() => {
     async function load() {
       // PostgREST 는 한 번에 1000행까지만 준다. 혼술바가 500곳이라 아직 여유가 있지만
@@ -414,15 +553,16 @@ export default function Partners() {
         <h1 className="text-xl font-bold text-gray-900">모잇 Pick!</h1>
         {tab !== 'banner' && (
           <span className="text-sm text-gray-400">
-            업체 {partnerCompanies.length}곳 · 혼술바 {partnerPlaces.length}곳
+            제휴 중인 업체 {partnerCompanies.length}곳 · 혼술바 {partnerPlaces.length}곳
           </span>
         )}
       </div>
 
       {tab !== 'banner' && (
       <p className="text-sm text-gray-500">
-        켜면 앱의 일정 제목·매장명 앞에 <BadgePreview /> 딱지가 붙고,
-        상세 화면에 들어올 때 혜택 안내 팝업이 뜹니다. 혜택 칸을 비우면 팝업에서 혜택 줄만 빠집니다.
+        스위치를 켜면 그 업체가 «제휴처»가 됩니다. 앱에서 일정 제목·매장명 앞에 <BadgePreview /> 딱지가
+        붙고, 이용자가 상세 화면에 들어올 때 혜택 안내 팝업이 뜹니다. 혜택 문구를 비워두면 팝업에서 그
+        줄만 빠집니다. 제휴처로 켜야 아래에 제휴 포털 초대 칸이 나옵니다.
       </p>
       )}
 
@@ -456,8 +596,9 @@ export default function Partners() {
       {/* ── 소개팅·소셜링 업체 — 17곳뿐이라 전부 보여준다 ── */}
       {!loading && tab === 'company' && (
         <div className="space-y-2">
-          <p className="text-xs text-gray-400">
-            제휴 기간은 두지 않습니다 — 일정은 날짜가 지나면 피드에서 저절로 사라집니다.
+          <NewPartnerInvite onCreated={reloadCompanies} />
+          <p className="text-xs text-gray-400 pt-2">
+            제휴 기간은 따로 두지 않습니다 — 일정은 날짜가 지나면 앱에서 저절로 사라집니다.
           </p>
           {companies.map((c) => (
             <div key={c.id} className="bg-white border border-gray-200 rounded-xl px-4 py-3 space-y-2">
@@ -485,12 +626,12 @@ export default function Partners() {
               {c.plan === 'partner' && (
                 <>
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-gray-500 shrink-0">등급</label>
+                    <label className="text-xs text-gray-500 shrink-0">제휴 종류</label>
                     <TierSelect
                       value={c.partner_tier}
                       onChange={(v) => patchCompany(c.id, { partner_tier: v }, { partner_tier: c.partner_tier })}
                     />
-                    <span className="text-[11px] text-gray-400">유료만 파트너 포털에 배너 광고 메뉴가 보입니다</span>
+                    <span className="text-[11px] text-gray-400">유료로 두면 제휴 포털에 &apos;배너 광고&apos; 메뉴가 하나 더 생깁니다</span>
                   </div>
                   <BenefitInput
                     value={c.partner_benefit}
