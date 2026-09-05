@@ -6,7 +6,10 @@
 // 저장 형식: "pbkdf2$반복횟수$salt(b64url)$hash(b64url)" — 반복 횟수를 같이 저장해
 // 나중에 정책을 올려도(느려져도) 옛 해시를 그대로 검증할 수 있다.
 
-const ITERATIONS = 210_000 // OWASP 2023 권장 최소치 이상
+// Cloudflare Workers 런타임의 PBKDF2 상한이 100,000회다(그 이상은 NotSupportedError로
+// 즉시 예외 — 실제 배포 후에야 드러났다). OWASP 2023 권장 최소치(210,000)를 못 채우니
+// 상한선 안에서 최대치를 쓴다.
+const ITERATIONS = 100_000
 const ALGORITHM = 'pbkdf2'
 const HASH_BITS = 256
 
