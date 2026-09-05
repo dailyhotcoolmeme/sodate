@@ -674,6 +674,9 @@ def check_failing_crawls(sb, comps: dict) -> list[dict]:
 # 업체별 "정상 범위" 판정에 쓰는 기준. 표본이 적으면 노이즈가 커서 최소 건수를 둔다.
 DRIFT_MIN_EVENTS = 5          # 이보다 적은 업체는 비율 판정을 건너뜀
 DRIFT_DROP_RATIO = 0.6        # 최근 크롤 건수가 평소의 60% 미만이면 급락으로 본다
+# 한 번 적게 긁히는 건 흔하다. 연속으로 이만큼 낮아야 «진짜 문제»로 본다.
+# 크롤이 1~2시간마다 도니 3회면 대략 반나절 — 진짜 고장은 이 안에 반드시 걸린다.
+DRIFT_LOW_RUNS = 3
 DRIFT_CLOSED_RATIO = 0.9      # 앞으로 일정의 90% 이상이 마감이면 오표시 의심
 
 
@@ -707,27 +710,64 @@ def check_data_drift(sb) -> list[dict]:
         return [{'level': 'WARN', 'msg': f'데이터 드리프트 점검 실패({str(e)[:60]})'}]
 
     # 1) 건수 급락 — 최근 성공 크롤 vs 그 이전 성공 크롤들의 중앙값
+    #
+    # ⚠️(2026-09-05) 예전엔 «가장 최근 1회»만 보고 알렸다. 그런데 업체에 따라 한 번씩
+    #    적게 긁히는 일이 흔하다(에모셔널오렌지 실측: 299·294·273·213·180·175·173·144가
+    #    번갈아 나온다). 그래서 멀쩡한데도 급락 알림이 떴고, 게다가 지문이 «숫자를 뺀
+    #    문구»라 173건이든 144건이든 모두 같은 지문 → 몇 시간마다 다시 뜨니
+    #    STREAK_RESET_AFTER_HOURS(24h)에 걸리지 않아 '11일째 방치'가 됐다.
+    #    → (1) 최근 성공 크롤이 «연속으로» 기준 미만일 때만 알린다.
+    #      (2) 며칠째인지는 알림 이력이 아니라 그 연속 구간의 실제 시각으로 계산한다.
     by_comp: dict = {}
     for lg in logs:
         if lg.get('status') == 'success':
-            by_comp.setdefault(lg['company_id'], []).append(lg.get('events_found') or 0)
-    for cid, counts in by_comp.items():
-        if len(counts) < 4:
+            by_comp.setdefault(lg['company_id'], []).append(lg)
+    for cid, ok_logs in by_comp.items():
+        if len(ok_logs) < 4:
             continue
-        latest, past = counts[0], sorted(counts[1:11])
+        counts = [(lg.get('events_found') or 0) for lg in ok_logs]
+        past = sorted(counts[1:11])
         if not past:
             continue
         median = past[len(past) // 2]
-        if median >= DRIFT_MIN_EVENTS and latest < median * DRIFT_DROP_RATIO:
-            # 건수 급락은 '일정이 지금 썩고 있다'는 신호라 긴급으로 못박는다(같은 함수의
-            # 마감률·가격 결측은 표시 품질 문제라 운영 과제로 남긴다).
-            issues.append({
-                'level': 'ERROR',
-                'kind': URGENT_KIND,
-                'company': comps.get(cid, cid),
-                'msg': f'{comps.get(cid, cid)}: 최근 크롤 {latest}건 — 평소 {median}건의 '
-                       f'{latest * 100 // max(median, 1)}%로 급락(사이트 변경·부분 파싱 실패 의심)',
-            })
+        if median < DRIFT_MIN_EVENTS:
+            continue
+        floor = median * DRIFT_DROP_RATIO
+
+        # 앞에서부터 «연속으로» 기준 미만인 구간의 길이
+        low_run = 0
+        for c in counts:
+            if c < floor:
+                low_run += 1
+            else:
+                break
+        if low_run < DRIFT_LOW_RUNS:
+            continue
+
+        # 며칠째인지 = 연속 구간의 «가장 오래된» 크롤부터 지금까지. 알림 이력을 안 쓴다.
+        persisted = 0.0
+        try:
+            oldest = ok_logs[low_run - 1]['executed_at']
+            persisted = max(
+                0.0,
+                (datetime.now(timezone.utc)
+                 - datetime.fromisoformat(oldest.replace('Z', '+00:00'))).total_seconds() / 86400,
+            )
+        except Exception:
+            pass
+
+        latest = counts[0]
+        # 건수 급락은 '일정이 지금 썩고 있다'는 신호라 긴급으로 못박는다(같은 함수의
+        # 마감률·가격 결측은 표시 품질 문제라 운영 과제로 남긴다).
+        issues.append({
+            'level': 'ERROR',
+            'kind': URGENT_KIND,
+            'company': comps.get(cid, cid),
+            'persisted_days': persisted,
+            'msg': f'{comps.get(cid, cid)}: 최근 크롤 {low_run}회 연속 적게 들어옴 '
+                   f'(마지막 {latest}건 — 평소 {median}건의 {latest * 100 // max(median, 1)}%). '
+                   f'사이트 변경·부분 파싱 실패 의심',
+        })
 
     # 2)(3) 현재 데이터 기준 비율 이상
     agg: dict = {}
