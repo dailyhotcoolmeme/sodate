@@ -46,6 +46,22 @@ export const discountApi = {
     call<{ ok: true; benefit: string }>('/api/discount', { method: 'PUT', body: JSON.stringify({ benefit }) }),
 }
 
+export interface BannerRow {
+  id: string
+  image_url: string
+  is_active: boolean
+  updated_at: string
+}
+
+export const bannerApi = {
+  get: () => call<{ banner: BannerRow | null }>('/api/banner').then((r) => r.banner),
+  set: (imageUrl: string) =>
+    call<{ banner: BannerRow }>('/api/banner', {
+      method: 'PUT',
+      body: JSON.stringify({ image_url: imageUrl }),
+    }).then((r) => r.banner),
+}
+
 export const accountApi = {
   changePassword: (currentPassword: string, newPassword: string) =>
     call<{ ok: true }>('/api/change-password', {
