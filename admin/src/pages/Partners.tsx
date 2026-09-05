@@ -25,6 +25,7 @@ interface Company {
   name: string
   slug: string
   plan: string
+  partner_tier: string | null
   partner_benefit: string | null
   socials: Record<string, string> | null
   app_visible: boolean
@@ -126,6 +127,153 @@ function BadgePreview() {
   )
 }
 
+/** 무료/유료 등급 — 유료만 파트너 포털에서 배너 광고 메뉴가 보인다(2026-09-05 확정). */
+function TierSelect({ value, onChange }: { value: string | null; onChange: (v: string) => void }) {
+  return (
+    <select
+      value={value ?? 'free'}
+      onChange={(e) => onChange(e.target.value)}
+      className="border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold text-gray-700"
+    >
+      <option value="free">무료 제휴</option>
+      <option value="paid">유료 제휴</option>
+    </select>
+  )
+}
+
+interface PartnerAccountStatus {
+  email: string
+  status: 'active' | 'disabled'
+  pending: boolean
+  lastLoginAt: string | null
+}
+
+/**
+ * 제휴 포털 초대 위젯(2026-09-05 신설).
+ *
+ * 아직 초대 안 한 업체 → 이메일 입력 + "초대 보내기".
+ * 이미 초대했지만 비번 미설정 → "초대됨 · 가입 대기" + 재초대.
+ * 가입 완료(active) → "가입 완료" + 정지 버튼.
+ * 정지(disabled) → "정지됨" + 재개 버튼.
+ */
+function PartnerInvite({ companyId }: { companyId: string }) {
+  const [status, setStatus] = useState<PartnerAccountStatus | null | undefined>(undefined)
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const load = () =>
+    fetch(`/api/partner-status?companyId=${companyId}`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => setStatus(d.account ?? null))
+      .catch(() => setStatus(null))
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId])
+
+  const sendInvite = async () => {
+    const target = status?.email || email.trim()
+    if (!target) return
+    setBusy(true)
+    setMsg('')
+    try {
+      const res = await fetch('/api/partner-invite', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, email: target }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setMsg(`발송 실패: ${data.error ?? '알 수 없는 오류'}`)
+      } else if (data.mailSent) {
+        setMsg('초대 메일을 보냈습니다')
+        await load()
+      } else {
+        setMsg(`메일 발송은 실패했지만 계정은 준비됐습니다. 링크를 직접 전달하세요: ${data.inviteUrl}`)
+        await load()
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toggleStatus = async () => {
+    if (!status) return
+    const next = status.status === 'active' ? 'disabled' : 'active'
+    setBusy(true)
+    try {
+      await fetch('/api/partner-status', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, status: next }),
+      })
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (status === undefined) return <p className="text-xs text-gray-400">포털 계정 확인 중…</p>
+
+  return (
+    <div className="border-t border-gray-100 pt-2">
+      <p className="text-xs font-semibold text-gray-600 mb-1.5">제휴 포털 계정</p>
+      {!status ? (
+        <div className="flex items-center gap-2">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="담당자 이메일"
+            className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1 text-sm"
+          />
+          <button
+            onClick={sendInvite}
+            disabled={busy || !email.trim()}
+            className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-pink-500 hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400"
+          >
+            초대 보내기
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-600">{status.email}</span>
+          {status.pending ? (
+            <span className="text-[11px] font-semibold text-amber-600 border border-amber-200 bg-amber-50 rounded px-1.5 py-0.5">
+              가입 대기 중
+            </span>
+          ) : status.status === 'active' ? (
+            <span className="text-[11px] font-semibold text-green-600 border border-green-200 bg-green-50 rounded px-1.5 py-0.5">
+              가입 완료
+            </span>
+          ) : (
+            <span className="text-[11px] font-semibold text-gray-500 border border-gray-200 bg-gray-50 rounded px-1.5 py-0.5">
+              정지됨
+            </span>
+          )}
+          <button
+            onClick={sendInvite}
+            disabled={busy}
+            className="text-xs font-semibold text-pink-600 hover:underline"
+          >
+            재초대
+          </button>
+          {!status.pending && (
+            <button onClick={toggleStatus} disabled={busy} className="text-xs font-semibold text-gray-500 hover:underline">
+              {status.status === 'active' ? '정지' : '재개'}
+            </button>
+          )}
+        </div>
+      )}
+      {msg && <p className="text-[11px] text-gray-500 mt-1 break-all">{msg}</p>}
+    </div>
+  )
+}
+
 const SOCIAL_FIELDS: { key: string; label: string; ph: string }[] = [
   { key: 'homepage',  label: '홈페이지',    ph: 'https://…' },
   { key: 'instagram', label: '인스타그램',  ph: 'https://instagram.com/…' },
@@ -222,7 +370,7 @@ export default function Partners() {
         rows.push(...((res.data as any) ?? []))
         if (!res.data || res.data.length < PAGE) break
       }
-      const co = await supabase.from('companies').select('id,name,slug,plan,partner_benefit,socials,app_visible').order('name')
+      const co = await supabase.from('companies').select('id,name,slug,plan,partner_tier,partner_benefit,socials,app_visible').order('name')
       if (co.error) setErr(co.error.message)
       setCompanies((co.data as any) ?? [])
       setPlaces(rows)
@@ -336,6 +484,14 @@ export default function Partners() {
               </div>
               {c.plan === 'partner' && (
                 <>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-500 shrink-0">등급</label>
+                    <TierSelect
+                      value={c.partner_tier}
+                      onChange={(v) => patchCompany(c.id, { partner_tier: v }, { partner_tier: c.partner_tier })}
+                    />
+                    <span className="text-[11px] text-gray-400">유료만 파트너 포털에 배너 광고 메뉴가 보입니다</span>
+                  </div>
                   <BenefitInput
                     value={c.partner_benefit}
                     placeholder="예: 5,000원 할인 (비우면 팝업에 혜택 줄 없음)"
@@ -345,6 +501,7 @@ export default function Partners() {
                     value={c.socials}
                     onSave={(v) => patchCompany(c.id, { socials: v }, { socials: c.socials })}
                   />
+                  <PartnerInvite companyId={c.id} />
                 </>
               )}
             </div>

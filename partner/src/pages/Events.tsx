@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { eventsApi, type PartnerEvent, type EventInput } from '../lib/api'
+import { uploadImage, deleteImage } from '../lib/upload'
+import { CardPreview, DetailPreview, type PreviewData } from '../components/EventPreview'
 
 const EMPTY: EventInput = {
   title: '',
@@ -29,6 +31,9 @@ export default function Events() {
   const [hashtagsText, setHashtagsText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [previewTab, setPreviewTab] = useState<'card' | 'detail'>('card')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = () => eventsApi.list().then(setEvents).catch(() => setEvents([]))
   useEffect(() => {
@@ -39,6 +44,7 @@ export default function Events() {
     setForm(EMPTY)
     setHashtagsText('')
     setError('')
+    setPreviewTab('card')
     setEditingId('new')
   }
 
@@ -46,7 +52,31 @@ export default function Events() {
     setForm({ ...ev, event_date: toDatetimeLocal(ev.event_date) })
     setHashtagsText(ev.hashtags.join(', '))
     setError('')
+    setPreviewTab('card')
     setEditingId(ev.id)
+  }
+
+  const handleFilePick = async (files: FileList | null) => {
+    if (!files || !files.length) return
+    setUploading(true)
+    setError('')
+    try {
+      const urls: string[] = []
+      for (const file of Array.from(files)) {
+        urls.push(await uploadImage(file))
+      }
+      setForm((f) => ({ ...f, thumbnail_urls: [...f.thumbnail_urls, ...urls] }))
+    } catch {
+      setError('사진 업로드에 실패했습니다')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const removeImage = async (url: string) => {
+    setForm((f) => ({ ...f, thumbnail_urls: f.thumbnail_urls.filter((u) => u !== url) }))
+    deleteImage(url).catch(() => {})
   }
 
   const handleSave = async () => {
@@ -88,8 +118,22 @@ export default function Events() {
 
   const numberField = (v: string): number | null => (v.trim() === '' ? null : Number(v))
 
+  const previewData: PreviewData = {
+    title: form.title,
+    description: form.description ?? '',
+    imageUrl: form.thumbnail_urls[0] ?? null,
+    eventDate: form.event_date ? new Date(form.event_date).toISOString() : '',
+    region: form.location_region,
+    priceMale: form.price_male == null ? '' : String(form.price_male),
+    priceFemale: form.price_female == null ? '' : String(form.price_female),
+    hashtags: hashtagsText
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean),
+  }
+
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900 mb-1">일정 관리</h1>
@@ -108,124 +152,180 @@ export default function Events() {
       </div>
 
       {editingId !== null && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6 space-y-4">
-          <h2 className="text-sm font-bold text-gray-900">
-            {editingId === 'new' ? '새 일정 등록' : '일정 수정'}
-          </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* 왼쪽: 입력 폼 */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+            <h2 className="text-sm font-bold text-gray-900">
+              {editingId === 'new' ? '새 일정 등록' : '일정 수정'}
+            </h2>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">사진</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {form.thumbnail_urls.map((url) => (
+                  <div key={url} className="relative">
+                    <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
+                    <button
+                      onClick={() => removeImage(url)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-800 text-white text-xs flex items-center justify-center"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 text-xs flex items-center justify-center hover:border-pink-400 hover:text-pink-500 disabled:opacity-50"
+                >
+                  {uploading ? '올리는 중' : '+ 추가'}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFilePick(e.target.files)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">모임 제목</label>
+              <input
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                placeholder="예: 강남 로테이션 소개팅"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">세부 설명</label>
+              <textarea
+                value={form.description ?? ''}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">날짜·시간</label>
+                <input
+                  type="datetime-local"
+                  value={form.event_date}
+                  onChange={(e) => setForm({ ...form, event_date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">지역</label>
+                <input
+                  value={form.location_region}
+                  onChange={(e) => setForm({ ...form, location_region: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  placeholder="예: 강남"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">남성 참가비(원)</label>
+                <input
+                  type="number"
+                  value={form.price_male ?? ''}
+                  onChange={(e) => setForm({ ...form, price_male: numberField(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">여성 참가비(원)</label>
+                <input
+                  type="number"
+                  value={form.price_female ?? ''}
+                  onChange={(e) => setForm({ ...form, price_female: numberField(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">남성 정원</label>
+                <input
+                  type="number"
+                  value={form.capacity_male ?? ''}
+                  onChange={(e) => setForm({ ...form, capacity_male: numberField(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">여성 정원</label>
+                <input
+                  type="number"
+                  value={form.capacity_female ?? ''}
+                  onChange={(e) => setForm({ ...form, capacity_female: numberField(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">해시태그 (쉼표로 구분)</label>
+              <input
+                value={hashtagsText}
+                onChange={(e) => setHashtagsText(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                placeholder="예: 20대, 직장인, 강남"
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-500">{error}</p>}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-semibold hover:bg-pink-600 disabled:opacity-60"
+              >
+                {saving ? '저장 중...' : '저장'}
+              </button>
+              <button
+                onClick={() => setEditingId(null)}
+                className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+
+          {/* 오른쪽: 실시간 미리보기 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">모임 제목</label>
-            <input
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              placeholder="예: 강남 로테이션 소개팅"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">세부 설명</label>
-            <textarea
-              value={form.description ?? ''}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">날짜·시간</label>
-              <input
-                type="datetime-local"
-                value={form.event_date}
-                onChange={(e) => setForm({ ...form, event_date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setPreviewTab('card')}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                  previewTab === 'card' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                카드로 보기
+              </button>
+              <button
+                onClick={() => setPreviewTab('detail')}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                  previewTab === 'detail' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                상세로 보기
+              </button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">지역</label>
-              <input
-                value={form.location_region}
-                onChange={(e) => setForm({ ...form, location_region: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                placeholder="예: 강남"
-              />
+            <div className="sticky top-4 max-w-sm mx-auto">
+              {previewTab === 'card' ? <CardPreview data={previewData} /> : <DetailPreview data={previewData} />}
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">남성 참가비(원)</label>
-              <input
-                type="number"
-                value={form.price_male ?? ''}
-                onChange={(e) => setForm({ ...form, price_male: numberField(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">여성 참가비(원)</label>
-              <input
-                type="number"
-                value={form.price_female ?? ''}
-                onChange={(e) => setForm({ ...form, price_female: numberField(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">남성 정원</label>
-              <input
-                type="number"
-                value={form.capacity_male ?? ''}
-                onChange={(e) => setForm({ ...form, capacity_male: numberField(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">여성 정원</label>
-              <input
-                type="number"
-                value={form.capacity_female ?? ''}
-                onChange={(e) => setForm({ ...form, capacity_female: numberField(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">해시태그 (쉼표로 구분)</label>
-            <input
-              value={hashtagsText}
-              onChange={(e) => setHashtagsText(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              placeholder="예: 20대, 직장인, 강남"
-            />
-          </div>
-
-          <p className="text-xs text-gray-400">
-            사진 첨부·실시간 미리보기는 다음 업데이트에서 추가됩니다.
-          </p>
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
-
-          <div className="flex gap-3">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-4 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-semibold hover:bg-pink-600 disabled:opacity-60"
-            >
-              {saving ? '저장 중...' : '저장'}
-            </button>
-            <button
-              onClick={() => setEditingId(null)}
-              className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50"
-            >
-              취소
-            </button>
           </div>
         </div>
       )}
@@ -240,11 +340,16 @@ export default function Events() {
             key={ev.id}
             className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between gap-4"
           >
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">{ev.title}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {new Date(ev.event_date).toLocaleString('ko-KR')} · {ev.location_region}
-              </p>
+            <div className="min-w-0 flex items-center gap-3">
+              {ev.thumbnail_urls[0] && (
+                <img src={ev.thumbnail_urls[0]} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">{ev.title}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {new Date(ev.event_date).toLocaleString('ko-KR')} · {ev.location_region}
+                </p>
+              </div>
             </div>
             <div className="flex gap-2 shrink-0">
               <button
