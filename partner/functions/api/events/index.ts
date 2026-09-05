@@ -11,7 +11,8 @@ interface Env extends DbEnv {
 
 const SELECT_FIELDS =
   'id,title,description,thumbnail_urls,detail_images,event_date,location_region,price_male,price_female,' +
-  'capacity_male,capacity_female,seats_left_male,seats_left_female,hashtags,is_active,created_at'
+  'capacity_male,capacity_female,seats_left_male,seats_left_female,' +
+  'partner_price_male,partner_price_female,hashtags,is_active,created_at'
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const session = await verifySession(env.SESSION_SECRET, getCookie(request, COOKIE))
@@ -38,6 +39,8 @@ interface CreateBody {
   location_region?: string
   price_male?: number | null
   price_female?: number | null
+  partner_price_male?: number | null
+  partner_price_female?: number | null
   capacity_male?: number | null
   capacity_female?: number | null
   seats_left_male?: number | null
@@ -75,6 +78,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     location_region: region,
     price_male: body.price_male ?? null,
     price_female: body.price_female ?? null,
+    partner_price_male: body.partner_price_male ?? null,
+    partner_price_female: body.partner_price_female ?? null,
     capacity_male: body.capacity_male ?? null,
     capacity_female: body.capacity_female ?? null,
     seats_left_male: body.seats_left_male ?? null,

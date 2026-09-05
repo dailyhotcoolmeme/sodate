@@ -179,6 +179,24 @@ export default function EventDetailScreen() {
       color: colors.textPrimary,
       fontWeight: '500',
     },
+    // 모잇 할인가를 보여줄 때 가격 바로 아래 붙는 안내. PartnerNotice 팝업과 같은
+    // 색·문구를 써서 "저 팝업에서 본 그 얘기"라는 게 바로 연결되게 한다.
+    partnerPriceNote: {
+      marginTop: 10,
+      paddingVertical: 11,
+      paddingHorizontal: 13,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+      backgroundColor: `${colors.primary}1A`,
+    },
+    partnerPriceNoteText: {
+      fontSize: 13,
+      lineHeight: 20,
+      color: colors.textSecondary,
+      fontWeight: '600',
+    },
+    partnerPriceNoteEm: { color: colors.primary, fontWeight: '800' },
     hashtagRow: { marginTop: -14, marginBottom: 8 }, // 해시태그→정보박스 간격 축소
     hashtagRowWithTheme: { marginTop: 0 },
     themeRow: {
@@ -600,13 +618,25 @@ export default function EventDetailScreen() {
                 {hasM && (
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: '#3B82F6', fontWeight: '700' }]}>남성</Text>
-                    <View style={styles.infoValue}><PriceTierValue detail={detail?.male} price={event.price_male} age={event.age_male} soldout={soldM} /></View>
+                    <View style={styles.infoValue}><PriceTierValue detail={detail?.male} price={event.price_male} partnerPrice={event.partner_price_male} age={event.age_male} soldout={soldM} /></View>
                   </View>
                 )}
                 {hasF && (
                   <View style={styles.infoRow}>
                     <Text style={[styles.infoLabel, { color: colors.primary, fontWeight: '700' }]}>여성</Text>
-                    <View style={styles.infoValue}><PriceTierValue detail={detail?.female} price={event.price_female} age={event.age_female} soldout={soldF} /></View>
+                    <View style={styles.infoValue}><PriceTierValue detail={detail?.female} price={event.price_female} partnerPrice={event.partner_price_female} age={event.age_female} soldout={soldF} /></View>
+                  </View>
+                )}
+                {/* 할인가를 보여줄 땐 «무엇을 해야 그 가격을 받는지»를 바로 아래 붙인다
+                    (2026-09-05 오너 지시). 안 그러면 그냥 싼 값으로만 보이고 우리를
+                    거쳐 신청할 이유가 사라진다. */}
+                {((event.partner_price_male != null && !soldM) ||
+                  (event.partner_price_female != null && !soldF)) && (
+                  <View style={styles.partnerPriceNote}>
+                    <Text style={styles.partnerPriceNoteText}>
+                      신청하실 때 <Text style={styles.partnerPriceNoteEm}>&quot;모잇 통해서 신청&quot;</Text>
+                      이라고 알려주셔야 이 가격으로 받으실 수 있어요
+                    </Text>
                   </View>
                 )}
               </>

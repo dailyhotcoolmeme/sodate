@@ -261,13 +261,13 @@ export default function EventCard({ event, isFavorite = false, onToggleFavorite 
               {hasM && (
                 <View style={styles.genderRow}>
                   <Text style={[styles.genderTag, styles.genderMale]}>남성</Text>
-                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.male} price={event.price_male} age={event.age_male} soldout={soldM} compact /></View>
+                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.male} price={event.price_male} partnerPrice={event.partner_price_male} age={event.age_male} soldout={soldM} compact /></View>
                 </View>
               )}
               {hasF && (
                 <View style={styles.genderRow}>
                   <Text style={[styles.genderTag, styles.genderFemale]}>여성</Text>
-                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.female} price={event.price_female} age={event.age_female} soldout={soldF} compact /></View>
+                  <View style={styles.genderInfo}><PriceTierValue detail={event.price_detail?.female} price={event.price_female} partnerPrice={event.partner_price_female} age={event.age_female} soldout={soldF} compact /></View>
                 </View>
               )}
             </View>

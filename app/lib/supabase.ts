@@ -52,4 +52,7 @@ export type EventWithCompany = EventRow & {
   is_partner_direct?: boolean | null
   /** 업체가 포털에서 직접 올린 상세페이지 이미지. */
   detail_images?: string[] | null
+  /** 모잇을 통해 신청할 때만 받는 가격. 있으면 정가에 줄을 긋고 이 값을 보여준다. */
+  partner_price_male?: number | null
+  partner_price_female?: number | null
 }

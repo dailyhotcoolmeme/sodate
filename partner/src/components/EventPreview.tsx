@@ -26,6 +26,8 @@ export interface PreviewData {
   region: string
   priceMale: string
   priceFemale: string
+  partnerPriceMale: string
+  partnerPriceFemale: string
   seatsLeftMale: string
   seatsLeftFemale: string
   hashtags: string[]
@@ -53,17 +55,39 @@ function isSoldOut(seats: string): boolean {
   return !Number.isNaN(n) && n <= 0
 }
 
-/** 앱의 PriceTierValue 와 같은 표시 — 마감이면 취소선 + (마감). */
-function PriceValue({ price, sold, small }: { price: string | null; sold: boolean; small?: boolean }) {
+/** 앱의 PriceTierValue 와 같은 표시 — 마감이면 취소선 + (마감),
+    모잇 할인가가 있으면 정가에 줄을 긋고 할인가를 분홍으로. */
+function PriceValue({
+  price,
+  discount,
+  sold,
+  small,
+}: {
+  price: string | null
+  discount?: string | null
+  sold: boolean
+  small?: boolean
+}) {
   const size = small ? 12.5 : 13
   if (!price) {
     return sold ? <span style={{ fontSize: size, color: COLORS.textTertiary }}>마감</span> : null
   }
   if (sold) {
+    // 마감이면 할인가는 의미가 없다 — 앱과 같이 마감 표시가 이긴다.
     return (
       <span style={{ fontSize: size, color: COLORS.textTertiary, textDecoration: 'line-through' }}>
         {price} (마감)
       </span>
+    )
+  }
+  if (discount) {
+    return (
+      <>
+        <span style={{ fontSize: size - 1, color: COLORS.textTertiary, textDecoration: 'line-through' }}>
+          {price}
+        </span>
+        <span style={{ fontSize: size, fontWeight: 700, color: COLORS.primary, marginLeft: 5 }}>{discount}</span>
+      </>
     )
   }
   return <span style={{ fontSize: size, fontWeight: 700, color: COLORS.primary }}>{price}</span>
@@ -72,11 +96,13 @@ function PriceValue({ price, sold, small }: { price: string | null; sold: boolea
 function GenderRow({
   label,
   price,
+  discount,
   sold,
   small,
 }: {
   label: string
   price: string | null
+  discount?: string | null
   sold: boolean
   small?: boolean
 }) {
@@ -93,7 +119,7 @@ function GenderRow({
       >
         {label}
       </span>
-      <PriceValue price={price} sold={sold} small={small} />
+      <PriceValue price={price} discount={discount} sold={sold} small={small} />
     </div>
   )
 }
@@ -200,8 +226,8 @@ export function CardPreview({ data }: { data: PreviewData }) {
             {formatDate(data.eventDate)} · {data.region || '지역 미정'}
           </p>
           <div style={{ marginTop: 6 }}>
-            <GenderRow label="남성" price={won(data.priceMale)} sold={soldM} />
-            <GenderRow label="여성" price={won(data.priceFemale)} sold={soldF} />
+            <GenderRow label="남성" price={won(data.priceMale)} discount={won(data.partnerPriceMale)} sold={soldM} />
+            <GenderRow label="여성" price={won(data.priceFemale)} discount={won(data.partnerPriceFemale)} sold={soldF} />
           </div>
           <div
             style={{
@@ -265,8 +291,8 @@ export function FeedPreview({ data }: { data: PreviewData }) {
             {formatDate(data.eventDate)} · {data.region || '지역 미정'}
           </p>
           <div style={{ marginTop: 4 }}>
-            <GenderRow label="남성" price={won(data.priceMale)} sold={soldM} small />
-            <GenderRow label="여성" price={won(data.priceFemale)} sold={soldF} small />
+            <GenderRow label="남성" price={won(data.priceMale)} discount={won(data.partnerPriceMale)} sold={soldM} small />
+            <GenderRow label="여성" price={won(data.priceFemale)} discount={won(data.partnerPriceFemale)} sold={soldF} small />
           </div>
         </div>
       </div>
@@ -280,6 +306,10 @@ export function DetailPreview({ data }: { data: PreviewData }) {
   const soldF = isSoldOut(data.seatsLeftFemale)
   const male = won(data.priceMale)
   const female = won(data.priceFemale)
+  const discM = won(data.partnerPriceMale)
+  const discF = won(data.partnerPriceFemale)
+  // 마감된 성별의 할인가는 앱에서도 안 보이므로 안내 줄 조건에서 빼야 한다.
+  const showNotice = (!!discM && !soldM) || (!!discF && !soldF)
   return (
     <div style={{ background: COLORS.background, fontFamily: 'system-ui, sans-serif' }}>
       <ImageBox url={data.imageUrl} aspect="4/3" />
@@ -310,7 +340,7 @@ export function DetailPreview({ data }: { data: PreviewData }) {
               <p style={{ margin: 0, fontSize: 12, color: COLORS.textSecondary }}>남성</p>
               <div style={{ marginTop: 2 }}>
                 {male || soldM ? (
-                  <PriceValue price={male} sold={soldM} />
+                  <PriceValue price={male} discount={discM} sold={soldM} />
                 ) : (
                   <span style={{ fontSize: 13, color: COLORS.textTertiary }}>미정</span>
                 )}
@@ -320,13 +350,31 @@ export function DetailPreview({ data }: { data: PreviewData }) {
               <p style={{ margin: 0, fontSize: 12, color: COLORS.textSecondary }}>여성</p>
               <div style={{ marginTop: 2 }}>
                 {female || soldF ? (
-                  <PriceValue price={female} sold={soldF} />
+                  <PriceValue price={female} discount={discF} sold={soldF} />
                 ) : (
                   <span style={{ fontSize: 13, color: COLORS.textTertiary }}>미정</span>
                 )}
               </div>
             </div>
           </div>
+
+          {/* 할인가를 보여줄 땐 «무엇을 해야 그 가격을 받는지»를 같이 알려준다(오너 지시). */}
+          {showNotice && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: '11px 13px',
+                borderRadius: 10,
+                border: `1.5px solid ${COLORS.primary}`,
+                background: 'rgba(255,107,157,0.10)',
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: COLORS.textSecondary, fontWeight: 600 }}>
+                신청하실 때 <span style={{ color: COLORS.primary, fontWeight: 800 }}>&quot;모잇 통해서 신청&quot;</span>
+                이라고 알려주셔야 이 가격으로 받으실 수 있어요
+              </p>
+            </div>
+          )}
         </div>
 
         {data.description && (

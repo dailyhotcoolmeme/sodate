@@ -13,6 +13,8 @@ const EMPTY: EventInput = {
   location_region: '',
   price_male: null,
   price_female: null,
+  partner_price_male: null,
+  partner_price_female: null,
   capacity_male: null,
   capacity_female: null,
   seats_left_male: null,
@@ -169,6 +171,8 @@ export default function Events() {
     region: form.location_region,
     priceMale: form.price_male == null ? '' : String(form.price_male),
     priceFemale: form.price_female == null ? '' : String(form.price_female),
+    partnerPriceMale: form.partner_price_male == null ? '' : String(form.partner_price_male),
+    partnerPriceFemale: form.partner_price_female == null ? '' : String(form.partner_price_female),
     seatsLeftMale: form.seats_left_male == null ? '' : String(form.seats_left_male),
     seatsLeftFemale: form.seats_left_female == null ? '' : String(form.seats_left_female),
     hashtags: hashtagsText.split(',').map((t) => t.trim()).filter(Boolean),
@@ -329,6 +333,36 @@ export default function Events() {
                 </div>
               </div>
               <p className={HINT}>비워두시면 앱에 참가비가 표시되지 않습니다.</p>
+            </div>
+
+            <div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={LABEL}>남성 모잇 할인가 (원)</label>
+                  <input
+                    type="number"
+                    value={form.partner_price_male ?? ''}
+                    onChange={(e) => setForm({ ...form, partner_price_male: numberField(e.target.value) })}
+                    className={INPUT}
+                    placeholder="예: 25000"
+                  />
+                </div>
+                <div>
+                  <label className={LABEL}>여성 모잇 할인가 (원)</label>
+                  <input
+                    type="number"
+                    value={form.partner_price_female ?? ''}
+                    onChange={(e) => setForm({ ...form, partner_price_female: numberField(e.target.value) })}
+                    className={INPUT}
+                    placeholder="예: 20000"
+                  />
+                </div>
+              </div>
+              <p className={HINT}>
+                <b className="text-ink-muted">모잇을 보고 신청한 분에게만 받으실 금액입니다.</b> 적으시면 앱에서
+                위 참가비에 줄이 그어지고 이 금액이 분홍색으로 보입니다. 그리고 신청할 때 &quot;모잇 통해서
+                신청&quot;이라고 말하라는 안내가 같이 나갑니다. 할인을 안 하실 거면 비워두세요.
+              </p>
             </div>
 
             <div>

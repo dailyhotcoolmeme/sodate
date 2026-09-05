@@ -24,7 +24,8 @@ const EMPTY_ARR: string[] = []
 // 별도로 전체 컬럼을 다시 가져오니 여기서 빠진 필드가 있어도 상세 화면엔 영향 없다.
 const FEED_COLUMNS =
   'id, company_id, title, thumbnail_urls, event_date, location_region, ' +
-  'price_male, price_female, price_detail, age_male, age_female, theme, hashtags, ' +
+  'price_male, price_female, partner_price_male, partner_price_female, ' +
+  'price_detail, age_male, age_female, theme, hashtags, ' +
   'is_closed, seats_left_male, seats_left_female, source_url, event_type, socialing_category, ' +
   // 소셜링 참여현황(성비 or 총정원)은 participant_stats 로 그린다 — 소셜링 카드 전용.
   'participant_stats, companies!inner(id, name, slug, plan)'

@@ -25,6 +25,8 @@ interface PatchBody {
   location_region?: string
   price_male?: number | null
   price_female?: number | null
+  partner_price_male?: number | null
+  partner_price_female?: number | null
   capacity_male?: number | null
   capacity_female?: number | null
   seats_left_male?: number | null
@@ -62,6 +64,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   if (typeof body.location_region === 'string') patch.location_region = body.location_region.trim()
   if ('price_male' in body) patch.price_male = body.price_male ?? null
   if ('price_female' in body) patch.price_female = body.price_female ?? null
+  if ('partner_price_male' in body) patch.partner_price_male = body.partner_price_male ?? null
+  if ('partner_price_female' in body) patch.partner_price_female = body.partner_price_female ?? null
   if ('capacity_male' in body) patch.capacity_male = body.capacity_male ?? null
   if ('capacity_female' in body) patch.capacity_female = body.capacity_female ?? null
   if ('seats_left_male' in body) patch.seats_left_male = body.seats_left_male ?? null

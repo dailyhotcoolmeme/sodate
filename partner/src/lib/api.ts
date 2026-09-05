@@ -8,6 +8,8 @@ export interface PartnerEvent {
   location_region: string
   price_male: number | null
   price_female: number | null
+  partner_price_male: number | null
+  partner_price_female: number | null
   capacity_male: number | null
   capacity_female: number | null
   seats_left_male: number | null
