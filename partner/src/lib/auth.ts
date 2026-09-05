@@ -5,7 +5,30 @@ export interface Me {
   authenticated: boolean
   companyId?: string
   companyName?: string
+  /** 업체 로고. 17곳 중 1곳만 있어서, 없으면 화면에서 이름 첫 글자로 대신한다. */
+  logoUrl?: string | null
+  /** 로그인 아이디. 계정 설정 화면에서 지금 쓰는 아이디를 보여주는 데 쓴다. */
+  email?: string
   tier?: 'free' | 'paid'
+}
+
+export interface InviteInfo {
+  companyName: string
+  email: string
+}
+
+/** 초대 링크의 토큰으로 "어느 업체 / 어떤 아이디"인지 미리 확인한다. */
+export async function fetchInviteInfo(
+  token: string,
+): Promise<{ ok: true; info: InviteInfo } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`/api/invite-info?token=${encodeURIComponent(token)}`)
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) return { ok: true, info: data as InviteInfo }
+    return { ok: false, error: data.error ?? 'unknown_error' }
+  } catch {
+    return { ok: false, error: 'network_error' }
+  }
 }
 
 export async function login(email: string, password: string): Promise<{ ok: true } | { ok: false; error: string }> {

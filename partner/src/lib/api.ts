@@ -68,4 +68,9 @@ export const accountApi = {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+  changeEmail: (password: string, newEmail: string) =>
+    call<{ ok: true; email: string }>('/api/change-email', {
+      method: 'POST',
+      body: JSON.stringify({ password, newEmail }),
+    }).then((r) => r.email),
 }

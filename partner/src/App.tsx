@@ -21,7 +21,7 @@ export default function App() {
 
   if (me === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">
+      <div className="min-h-dvh flex items-center justify-center text-sm text-gray-400">
         불러오는 중...
       </div>
     )
@@ -45,7 +45,7 @@ export default function App() {
         <Route path="/events" element={guard(<Events />)} />
         <Route path="/discount" element={guard(<Discount />)} />
         <Route path="/banner" element={guard(me.tier === 'paid' ? <Banner /> : <Navigate to="/" replace />)} />
-        <Route path="/account" element={guard(<Account />)} />
+        <Route path="/account" element={guard(<Account me={me} />)} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -16,6 +16,11 @@ const EMPTY: EventInput = {
   hashtags: [],
 }
 
+/** 저장을 누른 뒤에야 "빠졌다"고 알려주지 않도록, 미리 표시해 둔다. */
+function RequiredMark() {
+  return <span className="text-pink-600 text-xs font-medium align-middle">필수</span>
+}
+
 function toDatetimeLocal(iso: string): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -33,6 +38,9 @@ export default function Events() {
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [previewTab, setPreviewTab] = useState<'card' | 'detail'>('card')
+  // 저장한 뒤 "앱에 언제 올라가는지"를 알려주는 안내. 그동안 저장하면 폼만 닫혀서
+  // 업체 입장에선 진짜 올라간 건지 확인할 방법이 없었다.
+  const [justSaved, setJustSaved] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = () => eventsApi.list().then(setEvents).catch(() => setEvents([]))
@@ -44,6 +52,7 @@ export default function Events() {
     setForm(EMPTY)
     setHashtagsText('')
     setError('')
+    setJustSaved('')
     setPreviewTab('card')
     setEditingId('new')
   }
@@ -52,6 +61,7 @@ export default function Events() {
     setForm({ ...ev, event_date: toDatetimeLocal(ev.event_date) })
     setHashtagsText(ev.hashtags.join(', '))
     setError('')
+    setJustSaved('')
     setPreviewTab('card')
     setEditingId(ev.id)
   }
@@ -80,9 +90,9 @@ export default function Events() {
   }
 
   const handleSave = async () => {
-    if (!form.title.trim()) return setError('모임 제목을 입력해주세요')
-    if (!form.event_date) return setError('날짜·시간을 입력해주세요')
-    if (!form.location_region.trim()) return setError('지역을 입력해주세요')
+    if (!form.title.trim()) return setError('모임 제목을 적어주세요. 앱 목록에 그대로 보이는 이름입니다.')
+    if (!form.event_date) return setError('모임 날짜와 시작 시간을 골라주세요.')
+    if (!form.location_region.trim()) return setError('지역을 적어주세요. 이용자가 지역으로 찾습니다.')
 
     const payload: EventInput = {
       ...form,
@@ -102,17 +112,19 @@ export default function Events() {
         await eventsApi.update(editingId, payload)
       }
       setEditingId(null)
+      setJustSaved(editingId === 'new' ? '등록' : '수정')
       load()
     } catch {
-      setError('저장에 실패했습니다. 잠시 후 다시 시도해주세요')
+      setError('저장에 실패했습니다. 잠시 후 다시 시도해주세요.')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('이 일정을 삭제할까요?')) return
-    await eventsApi.remove(id)
+  const handleDelete = async (ev: PartnerEvent) => {
+    if (!confirm(`'${ev.title}' 일정을 삭제할까요?\n삭제하면 앱에서도 바로 사라지고, 되돌릴 수 없습니다.`)) return
+    await eventsApi.remove(ev.id)
+    setJustSaved('')
     load()
   }
 
@@ -137,30 +149,49 @@ export default function Events() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900 mb-1">일정 관리</h1>
-          <p className="text-sm text-gray-500">
-            직접 등록한 일정에는 앱에서 <b className="text-pink-600">모잇 Pick</b> 배지가 붙습니다.
+          <p className="text-sm text-gray-500 leading-relaxed">
+            여기서 등록하신 일정은 저장하는 즉시 모잇 앱에 올라갑니다. 직접 올리신 일정에는{' '}
+            <b className="text-pink-600">모잇 Pick</b> 표시가 붙어 이용자 눈에 더 띕니다.
           </p>
         </div>
         {editingId === null && (
           <button
             onClick={startCreate}
-            className="px-4 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-semibold hover:bg-pink-600"
+            className="shrink-0 px-4 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-semibold hover:bg-pink-600"
           >
             + 새 일정 등록
           </button>
         )}
       </div>
 
+      {justSaved && editingId === null && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-6">
+          <p className="text-sm text-green-800">
+            {justSaved}됐습니다. 모잇 앱에 바로 올라갔습니다.
+          </p>
+        </div>
+      )}
+
       {editingId !== null && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* 왼쪽: 입력 폼 */}
           <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-            <h2 className="text-sm font-bold text-gray-900">
-              {editingId === 'new' ? '새 일정 등록' : '일정 수정'}
-            </h2>
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">
+                {editingId === 'new' ? '새 일정 등록' : '일정 수정'}
+              </h2>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                적으시는 대로 오른쪽 미리보기가 바뀝니다. 실제 앱에 보이는 모습 그대로예요.
+                <br />
+                <span className="text-pink-600 font-medium">필수</span> 표시가 있는 칸만 채우시면 저장할 수 있습니다.
+              </p>
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">사진</label>
+              <p className="text-xs text-gray-400 mb-2">
+                첫 번째 사진이 앱 목록에 보이는 대표 사진입니다. 여러 장 올리셔도 됩니다.
+              </p>
               <div className="flex flex-wrap gap-2 mb-2">
                 {form.thumbnail_urls.map((url) => (
                   <div key={url} className="relative">
@@ -192,13 +223,16 @@ export default function Events() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">모임 제목</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                모임 제목 <RequiredMark />
+              </label>
               <input
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 placeholder="예: 강남 로테이션 소개팅"
               />
+              <p className="text-xs text-gray-400 mt-1">앱 목록에 그대로 보이는 이름입니다.</p>
             </div>
 
             <div>
@@ -208,12 +242,20 @@ export default function Events() {
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={4}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+                placeholder={
+                  '어떤 모임인지, 어떻게 진행되는지 적어주세요.\n예) 3:3 로테이션으로 진행되며, 음료 1잔이 포함됩니다. 편한 복장으로 오세요.'
+                }
               />
+              <p className="text-xs text-gray-400 mt-1">
+                이용자가 신청을 결정할 때 가장 많이 읽는 곳입니다. 진행 방식·준비물·주의사항을 적어주세요.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">날짜·시간</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  날짜·시작 시간 <RequiredMark />
+                </label>
                 <input
                   type="datetime-local"
                   value={form.event_date}
@@ -222,66 +264,82 @@ export default function Events() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">지역</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  지역 <RequiredMark />
+                </label>
                 <input
                   value={form.location_region}
                   onChange={(e) => setForm({ ...form, location_region: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   placeholder="예: 강남"
                 />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">남성 참가비(원)</label>
-                <input
-                  type="number"
-                  value={form.price_male ?? ''}
-                  onChange={(e) => setForm({ ...form, price_male: numberField(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">여성 참가비(원)</label>
-                <input
-                  type="number"
-                  value={form.price_female ?? ''}
-                  onChange={(e) => setForm({ ...form, price_female: numberField(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">남성 정원</label>
-                <input
-                  type="number"
-                  value={form.capacity_male ?? ''}
-                  onChange={(e) => setForm({ ...form, capacity_male: numberField(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">여성 정원</label>
-                <input
-                  type="number"
-                  value={form.capacity_female ?? ''}
-                  onChange={(e) => setForm({ ...form, capacity_female: numberField(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
+                <p className="text-xs text-gray-400 mt-1">이용자가 지역으로 찾습니다.</p>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">해시태그 (쉼표로 구분)</label>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">남성 참가비 (원)</label>
+                  <input
+                    type="number"
+                    value={form.price_male ?? ''}
+                    onChange={(e) => setForm({ ...form, price_male: numberField(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="예: 30000"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">여성 참가비 (원)</label>
+                  <input
+                    type="number"
+                    value={form.price_female ?? ''}
+                    onChange={(e) => setForm({ ...form, price_female: numberField(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="예: 25000"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">비워두시면 앱에 참가비가 표시되지 않습니다.</p>
+            </div>
+
+            <div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">남성 정원 (명)</label>
+                  <input
+                    type="number"
+                    value={form.capacity_male ?? ''}
+                    onChange={(e) => setForm({ ...form, capacity_male: numberField(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="예: 4"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">여성 정원 (명)</label>
+                  <input
+                    type="number"
+                    value={form.capacity_female ?? ''}
+                    onChange={(e) => setForm({ ...form, capacity_female: numberField(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="예: 4"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">비워두시면 앱에 정원이 표시되지 않습니다.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">해시태그</label>
               <input
                 value={hashtagsText}
                 onChange={(e) => setHashtagsText(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 placeholder="예: 20대, 직장인, 강남"
               />
+              <p className="text-xs text-gray-400 mt-1">
+                쉼표(,)로 나눠서 적어주세요. 이용자가 검색으로 찾을 때 쓰입니다.
+              </p>
             </div>
 
             {error && <p className="text-sm text-red-500">{error}</p>}
@@ -292,7 +350,7 @@ export default function Events() {
                 disabled={saving}
                 className="px-4 py-2.5 rounded-xl bg-pink-500 text-white text-sm font-semibold hover:bg-pink-600 disabled:opacity-60"
               >
-                {saving ? '저장 중...' : '저장'}
+                {saving ? '저장 중...' : editingId === 'new' ? '등록하고 앱에 올리기' : '수정 내용 저장'}
               </button>
               <button
                 onClick={() => setEditingId(null)}
@@ -312,7 +370,7 @@ export default function Events() {
                   previewTab === 'card' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600'
                 }`}
               >
-                카드로 보기
+                목록에서 보이는 모습
               </button>
               <button
                 onClick={() => setPreviewTab('detail')}
@@ -320,7 +378,7 @@ export default function Events() {
                   previewTab === 'detail' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600'
                 }`}
               >
-                상세로 보기
+                눌렀을 때 보이는 모습
               </button>
             </div>
             <div className="sticky top-4 max-w-sm mx-auto">
@@ -332,8 +390,16 @@ export default function Events() {
 
       <div className="space-y-3">
         {events === null && <p className="text-sm text-gray-400">불러오는 중...</p>}
-        {events?.length === 0 && (
-          <p className="text-sm text-gray-400">아직 등록한 일정이 없습니다.</p>
+        {events?.length === 0 && editingId === null && (
+          <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-8 text-center">
+            <p className="text-sm font-semibold text-gray-700 mb-1">아직 등록하신 일정이 없습니다</p>
+            <p className="text-sm text-gray-400 leading-relaxed">
+              위 '새 일정 등록' 버튼을 눌러 첫 모임을 올려보세요.
+            </p>
+          </div>
+        )}
+        {events !== null && events.length > 0 && (
+          <p className="text-xs text-gray-400 pt-2">앱에 올라가 있는 일정 {events.length}건</p>
         )}
         {events?.map((ev) => (
           <div
@@ -359,7 +425,7 @@ export default function Events() {
                 수정
               </button>
               <button
-                onClick={() => handleDelete(ev.id)}
+                onClick={() => handleDelete(ev)}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100"
               >
                 삭제

@@ -27,23 +27,28 @@ export default function Discount() {
 
   return (
     <div className="max-w-xl">
-      <h1 className="text-xl font-bold text-gray-900 mb-1">제휴 할인 관리</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        모잇을 통해 신청·방문한 이용자에게 드리는 혜택을 적어주세요. 앱 상세 화면에 그대로 노출됩니다.
+      <h1 className="text-xl font-bold text-gray-900 mb-1">할인 혜택 관리</h1>
+      <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+        모잇을 보고 찾아온 이용자에게 드리는 혜택을 적어주세요. 적으신 문구가 앱 상세 화면에 그대로 보입니다.
       </p>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <label className="block text-sm font-medium text-gray-700 mb-2">할인 문구</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">혜택 문구</label>
+        <p className="text-xs text-gray-400 mb-2">
+          이용자가 읽는 문장 그대로 적어주세요. 조건이 있다면 같이 적어주시는 게 좋습니다.
+        </p>
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
           disabled={!loaded}
           rows={3}
           maxLength={200}
-          placeholder="예: 5,000원 할인 / 웰컴 드링크 1잔 서비스"
+          placeholder="예: 모잇 보고 오셨다고 말씀해주시면 5,000원 할인해드립니다"
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none"
         />
-        <p className="text-xs text-gray-400 mt-1">{value.length}/200 · 비워두면 앱에서 혜택 줄이 안 보입니다</p>
+        <p className="text-xs text-gray-400 mt-1">
+          {value.length}/200자 · 비워두시면 앱에 혜택이 표시되지 않습니다.
+        </p>
         <div className="flex items-center gap-3 mt-4">
           <button
             onClick={handleSave}
@@ -52,7 +57,7 @@ export default function Discount() {
           >
             {saving ? '저장 중...' : '저장'}
           </button>
-          {saved && <span className="text-sm text-green-600">저장됐습니다</span>}
+          {saved && <span className="text-sm text-green-600">저장됐습니다. 앱에 바로 반영됐습니다.</span>}
         </div>
       </div>
     </div>

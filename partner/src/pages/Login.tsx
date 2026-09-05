@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { login } from '../lib/auth'
 
+import { SUPPORT_EMAIL } from '../lib/support'
+
 const ERROR_MESSAGES: Record<string, string> = {
-  invalid_credentials: '이메일 또는 비밀번호가 올바르지 않습니다',
-  account_disabled: '제휴가 종료되어 로그인할 수 없습니다. 문의는 admin@ourmine.co.kr',
-  too_many_attempts: '너무 여러 번 실패했습니다. 잠시 후 다시 시도해주세요',
-  network_error: '연결에 실패했습니다. 잠시 후 다시 시도해주세요',
+  invalid_credentials: '이메일 또는 비밀번호가 맞지 않습니다. 다시 확인해주세요.',
+  account_disabled: `지금은 로그인할 수 없는 계정입니다. ${SUPPORT_EMAIL} 로 문의해주세요.`,
+  too_many_attempts: '여러 번 틀리셔서 잠시 잠겼습니다. 5분 뒤에 다시 시도해주세요.',
+  network_error: '연결에 실패했습니다. 인터넷 상태를 확인하고 다시 시도해주세요.',
 }
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
@@ -29,11 +31,13 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="min-h-dvh bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 w-full max-w-sm">
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-lg font-bold text-gray-900">모잇 제휴 센터</h1>
-          <p className="text-xs text-gray-400 mt-1">제휴 업체 전용 관리 화면</p>
+          <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">
+            모잇에 올릴 모임 일정과 할인 혜택을 직접 등록·관리하는 곳입니다.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -44,9 +48,10 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-              placeholder="담당자 이메일"
+              placeholder="example@company.com"
               autoComplete="username"
             />
+            <p className="text-xs text-gray-400 mt-1">모잇에서 보내드린 초대 메일을 받으신 주소예요.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
@@ -68,9 +73,17 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             {submitting ? '확인 중...' : '로그인'}
           </button>
         </form>
-        <p className="text-xs text-gray-400 mt-6 text-center">
-          비밀번호를 잊으셨나요? 담당자에게 재초대를 요청해주세요.
-        </p>
+        <div className="mt-6 pt-5 border-t border-gray-100">
+          <p className="text-xs text-gray-500 leading-relaxed">
+            <b className="text-gray-700">비밀번호를 잊으셨나요?</b>
+            <br />
+            모잇 담당자{' '}
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="text-pink-600 font-medium">
+              {SUPPORT_EMAIL}
+            </a>
+            로 연락 주시면 초대 메일을 다시 보내드립니다. 새 메일의 링크에서 비밀번호를 다시 정하시면 됩니다.
+          </p>
+        </div>
       </div>
     </div>
   )

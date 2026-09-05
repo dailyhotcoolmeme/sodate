@@ -32,8 +32,10 @@ export default function Banner() {
   return (
     <div className="max-w-xl">
       <h1 className="text-xl font-bold text-gray-900 mb-1">배너 광고</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        유료 제휴 업체 전용 메뉴입니다. 이미지를 올리면 오너 검수 후 커뮤니티 화면 상단에 노출됩니다.
+      <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+        앱 커뮤니티 화면 위쪽에 걸리는 배너입니다. 이미지를 올리시면 모잇에서 확인한 뒤 노출해드립니다.
+        <br />
+        가로로 긴 이미지(가로:세로 = 4:1)가 가장 잘 맞습니다.
       </p>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
@@ -45,11 +47,12 @@ export default function Banner() {
               <div className="mb-4">
                 <img src={banner.image_url} alt="배너 미리보기" className="w-full rounded-xl border border-gray-200" />
                 <p className="text-xs mt-2">
-                  상태:{' '}
                   {banner.is_active ? (
-                    <span className="text-green-600 font-semibold">노출 중</span>
+                    <span className="text-green-600 font-semibold">지금 앱에 노출되고 있습니다</span>
                   ) : (
-                    <span className="text-amber-600 font-semibold">오너 검수 대기 중</span>
+                    <span className="text-amber-600 font-semibold">
+                      모잇에서 확인 중입니다 — 확인이 끝나면 앱에 올라갑니다
+                    </span>
                   )}
                 </p>
               </div>
@@ -69,8 +72,8 @@ export default function Banner() {
               onChange={(e) => handlePick(e.target.files)}
             />
             {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
-            <p className="text-xs text-gray-400 mt-3">
-              이미지를 새로 올리면 다시 검수 대기 상태가 됩니다.
+            <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+              이미지를 새로 올리시면 모잇에서 한 번 더 확인한 뒤 노출됩니다. 그동안은 이전 배너가 내려갑니다.
             </p>
           </>
         )}
