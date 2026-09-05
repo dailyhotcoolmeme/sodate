@@ -131,7 +131,11 @@ class LovecastingScraper(BaseScraper):
                 )
                 page = context.new_page()
                 page.goto(category_url, timeout=20000)
-                page.wait_for_load_state('networkidle', timeout=10000)
+                # networkidle 을 못 기다려도 크롤을 죽이지 않는다(2026-09-05).
+                try:
+                    page.wait_for_load_state('networkidle', timeout=10000)
+                except Exception:
+                    self.logger.info('러브캐스팅 로딩이 느려 기다리지 않고 진행')
                 import time as _time
                 _time.sleep(2)
 
@@ -525,7 +529,11 @@ class LovecastingScraper(BaseScraper):
                 )
                 page = context.new_page()
                 page.goto(category_url, timeout=15000)
-                page.wait_for_load_state('networkidle', timeout=10000)
+                # networkidle 을 못 기다려도 크롤을 죽이지 않는다(2026-09-05).
+                try:
+                    page.wait_for_load_state('networkidle', timeout=10000)
+                except Exception:
+                    self.logger.info('러브캐스팅 로딩이 느려 기다리지 않고 진행')
                 soup = BeautifulSoup(page.content(), 'html.parser')
                 links = self._extract_links_from_soup(soup)
                 browser.close()

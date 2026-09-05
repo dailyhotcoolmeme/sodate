@@ -74,7 +74,11 @@ class YeongyulScraper(BaseScraper):
 
                 # 목록 페이지
                 page.goto(self.LIST_URL, timeout=20000)
-                page.wait_for_load_state('networkidle', timeout=10000)
+                # networkidle 을 못 기다려도 크롤을 죽이지 않는다(2026-09-05).
+                try:
+                    page.wait_for_load_state('networkidle', timeout=10000)
+                except Exception:
+                    self.logger.info('연결 목록 페이지 로딩이 느려 기다리지 않고 진행')
                 time.sleep(2)
 
                 # 이벤트 링크 수집
@@ -142,7 +146,11 @@ class YeongyulScraper(BaseScraper):
                 for url in event_links:
                     try:
                         page.goto(url, timeout=15000)
-                        page.wait_for_load_state('networkidle', timeout=8000)
+                        # 못 기다렸다고 이 일정을 버리지 않는다(2026-09-05).
+                        try:
+                            page.wait_for_load_state('networkidle', timeout=8000)
+                        except Exception:
+                            self.logger.debug('연결 상세 로딩이 느려 기다리지 않고 진행')
                         time.sleep(1)
 
                         soup = BeautifulSoup(page.content(), 'html.parser')

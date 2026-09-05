@@ -86,18 +86,40 @@ class LovecommunityLoco(BaseScraper):
                 page = context.new_page()
 
                 # 1. /party 페이지에서 상품 idx 목록 수집
+                # ⚠️(2026-09-05) 여기서 networkidle 을 못 기다리면 예외가 바깥 try 로 튀어
+                #    크롤이 통째로 죽고 0건이 된다(에모셔널오렌지에서 실제로 그랬다).
+                #    networkidle 은 «네트워크가 조용해졌나»일 뿐 화면이 비었다는 뜻이 아니다.
                 page.goto(self.SHOP_LIST_URL, timeout=20000)
-                page.wait_for_load_state('networkidle', timeout=10000)
+                try:
+                    page.wait_for_load_state('networkidle', timeout=10000)
+                except Exception:
+                    self.logger.info('Loco 목록 페이지 로딩이 느려 기다리지 않고 진행')
                 time.sleep(2)
 
                 idxs = self._collect_product_idxs(page)
                 self.logger.info(f'Loco 상품 {len(idxs)}개 발견')
 
                 # 2. 각 상품 페이지 파싱 (/party/?idx=N 형식 사용)
+                # ⚠️(2026-09-05) 상품 하나가 실패하면 조용히 빠져서 건수가 17건 → 7건으로
+                #    널뛰었다(워치독이 이걸 '급락'으로 잡아 오탐 메일을 보냈다). 한 번은 다시
+                #    해보고, 그래도 안 되면 몇 개를 놓쳤는지 로그에 남긴다.
+                skipped: list[str] = []
                 for idx in idxs:
                     product_url = f'{self.BASE_URL}/party/?idx={idx}'
                     try:
-                        page.goto(product_url, timeout=20000)
+                        last_err = None
+                        for attempt in (1, 2):
+                            try:
+                                page.goto(product_url, timeout=20000)
+                                last_err = None
+                                break
+                            except Exception as e:
+                                last_err = e
+                                if attempt == 1:
+                                    self.logger.warning(f'Loco idx={idx} 열기 실패 — 다시 시도: {e}')
+                                    time.sleep(2)
+                        if last_err is not None:
+                            raise last_err
                         # ⚠️ networkidle 타임아웃으로 상품을 통째로 버리지 않는다. 광고·채팅
                         #    위젯이 계속 물려 있어 idx=4는 로컬에서도 매번 10초를 넘기는데,
                         #    예외가 그대로 올라가 그 상품 파싱 자체가 스킵되고 있었다.
@@ -146,7 +168,14 @@ class LovecommunityLoco(BaseScraper):
                         events.extend(new_events)
                         self.logger.info(f'Loco idx={idx}: {len(new_events)}개 이벤트 파싱')
                     except Exception as e:
+                        skipped.append(str(idx))
                         self.logger.warning(f'Loco 상품 idx={idx} 파싱 실패: {e}')
+
+                if skipped:
+                    self.logger.warning(
+                        f'Loco 상품 {len(idxs)}개 중 {len(skipped)}개 못 가져옴 '
+                        f'(idx={",".join(skipped)}) — 이만큼 일정이 빠집니다'
+                    )
 
                 browser.close()
         except Exception as e:
