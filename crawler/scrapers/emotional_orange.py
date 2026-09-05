@@ -163,8 +163,16 @@ class EmotionalOrangeScraper(BaseScraper):
                 page = context.new_page()
 
                 # 1. /date 페이지에서 상품 목록 수집
+                #
+                # ⚠️(2026-09-05) 여기서 networkidle 을 못 기다리면 예외가 바깥 try 로 튀어
+                #    크롤이 통째로 죽고 0건으로 끝났다(crawl_logs 의 'failed 0건 / 15~24초'
+                #    기록들이 전부 이것이다). networkidle 은 «네트워크가 조용해졌나»일 뿐
+                #    화면이 비었다는 뜻이 아니다 — 못 기다려도 그냥 진행한다.
                 page.goto(self.DATE_PAGE_URL, timeout=20000)
-                page.wait_for_load_state('networkidle', timeout=10000)
+                try:
+                    page.wait_for_load_state('networkidle', timeout=10000)
+                except Exception:
+                    self.logger.info('감정오렌지 목록 페이지 로딩이 느려 기다리지 않고 진행')
                 time.sleep(2)
 
                 products = self._collect_products(page)
@@ -174,10 +182,41 @@ class EmotionalOrangeScraper(BaseScraper):
                 blog_cache: dict[str, dict[str, dict]] = {}
 
                 # 2. 각 상품 페이지에서 날짜 + 블로그 링크 추출
+                #
+                # ⚠️(2026-09-05) 여기서 상품 하나가 통째로 버려지고 있었다.
+                #    상품마다 담긴 일정 수가 1건에서 33건까지 제각각이라, 큰 상품 하나만
+                #    놓쳐도 33건이 사라진다. 서너 개 놓치면 299건이 144~180건이 된다
+                #    (실측: idx=63 이 networkidle 8초를 못 넘겨 27개만 처리 → 271건).
+                #    워치독이 이걸 '급락'으로 잡아 오탐 메일을 계속 보냈다.
+                #    → networkidle 은 «네트워크가 조용해졌나»일 뿐 화면이 없다는 뜻이 아니다.
+                #      못 기다렸다고 상품을 버리지 않는다. 그리고 한 번은 다시 해본다.
+                skipped: list[str] = []
                 for idx, data in products.items():
                     try:
-                        page.goto(data['url'], timeout=15000)
-                        page.wait_for_load_state('networkidle', timeout=8000)
+                        last_err: Exception | None = None
+                        for attempt in (1, 2):
+                            try:
+                                page.goto(data['url'], timeout=15000)
+                                last_err = None
+                                break
+                            except Exception as e:
+                                last_err = e
+                                if attempt == 1:
+                                    self.logger.warning(
+                                        f'감정오렌지 상품 idx={idx} 열기 실패 — 다시 시도: {e}'
+                                    )
+                                    time.sleep(2)
+                        if last_err is not None:
+                            raise last_err
+
+                        # 여기서 시간이 넘어도 그냥 진행한다. 지금까지 그려진 것만으로도
+                        # 대부분 파싱된다 — 통째로 버리는 것보다 언제나 낫다.
+                        try:
+                            page.wait_for_load_state('networkidle', timeout=8000)
+                        except Exception:
+                            self.logger.info(
+                                f'감정오렌지 상품 idx={idx} 로딩이 느려 기다리지 않고 진행'
+                            )
                         time.sleep(1.5)
 
                         soup = BeautifulSoup(page.content(), 'html.parser')
@@ -209,7 +248,16 @@ class EmotionalOrangeScraper(BaseScraper):
                         new_events = self._parse_product_page(page, soup, idx, data)
                         events.extend(new_events)
                     except Exception as e:
+                        skipped.append(idx)
                         self.logger.warning(f'감정오렌지 상품 idx={idx} 파싱 실패: {e}')
+
+                # 몇 개를 못 가져왔는지 반드시 남긴다 — 예전엔 조용히 빠져서, 건수가 줄어도
+                # 사이트가 바뀐 건지 몇 개 놓친 건지 로그로 구분할 수가 없었다.
+                if skipped:
+                    self.logger.warning(
+                        f'감정오렌지 상품 {len(products)}개 중 {len(skipped)}개 못 가져옴 '
+                        f'(idx={",".join(skipped)}) — 이만큼 일정이 빠집니다'
+                    )
 
                 browser.close()
         except Exception as e:
