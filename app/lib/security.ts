@@ -27,6 +27,9 @@ const ALLOWED_OUTLINK_DOMAINS = [
   // 인스타 전용 업체(자체 사이트 없음, 2026-08-11) — 신청 링크가 구글폼인 유니브리지소셜용
   'docs.google.com',
   'forms.gle',
+  // 우리 소개 사이트 — MY의 '제휴문의'가 moitbiz.com/partner 로 나간다(2026-09-06).
+  // 여기 없으면 openOutlink 가 막아서 눌러도 조용히 안 열린다.
+  'moitbiz.com',
 ]
 
 export function isAllowedOutlink(url: string): boolean {

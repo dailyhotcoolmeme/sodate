@@ -13,6 +13,10 @@ import { useProfileStore } from '@/stores/profileStore'
 import { useFavoriteEvents } from '@/hooks/useFavorites'
 import { usePlaceFavorites } from '@/stores/placeFavoriteStore'
 import { useMyPosts, useMyComments } from '@/hooks/useBoard'
+import { openOutlink } from '@/lib/outlink'
+
+/** 업체용 제휴 안내 페이지. 문구는 admin '제휴 소개 페이지'에서 고친다. */
+const PARTNER_PAGE_URL = 'https://moitbiz.com/partner'
 import { ensureNickname, setLastNickname, generateNickname, getMyReviewIds } from '@/lib/reviewIdentity'
 import { getScrappedIds, getBlockedAuthors } from '@/lib/boardIdentity'
 import { useAvatarStore } from '@/stores/avatarStore'
@@ -190,7 +194,9 @@ export default function MyScreen() {
         <Row colors={colors} icon="shield-checkmark-outline" label="개인정보처리방침" onPress={() => router.push('/privacy')} />
         <Row colors={colors} icon="document-text-outline" label="이용약관" onPress={() => router.push('/terms')} />
         {/* 예전엔 빈 메일이 바로 열렸다 — 안내 화면을 먼저 보여준다(2026-09-01 오너 지시). */}
-        <Row colors={colors} icon="mail-outline" label="제휴문의" onPress={() => router.push('/partner')} />
+        {/* 제휴 문의는 앱 안 화면이 아니라 소개 사이트로 보낸다(2026-09-06 오너 지시).
+            그쪽이 제휴 등급·혜택·FAQ가 모두 있는 정본이고, admin에서 문구를 바로 고칠 수 있다. */}
+        <Row colors={colors} icon="storefront-outline" label="제휴문의" onPress={() => openOutlink(PARTNER_PAGE_URL)} />
         <Row colors={colors} icon="cube-outline" label="버전" right={APP_VERSION} />
       </ScrollView>
       <BottomNav current="my" />
