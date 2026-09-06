@@ -4,13 +4,16 @@
 //    계속 같아서, 백그라운드에 며칠 떠 있으면 체류시간이 7.8일로 나온다(실측).
 //    그래서 DB 함수 admin_visitor_stats 가 «같은 기기 기록이 30분 넘게 끊기면 다른 방문»
 //    으로 다시 나눈다(구글 애널리틱스와 같은 기준). 지난 기록에도 그대로 적용된다.
-import { useCallback, useEffect, useState } from 'react'
+//
+// 기간은 화면(Analytics.tsx)이 하나로 들고 있고 여기는 받아서 쓴다 — 예전에는 이 칸이
+// 기간을 따로 들고 있어서, 화면 위쪽 버튼과 서로 다른 기간을 보여주고 있었다(오너 지적).
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 
-type Bucket = 'day' | 'week' | 'month'
+export type Bucket = 'day' | 'week' | 'month'
 
 interface Row {
   bucket_start: string
@@ -19,29 +22,6 @@ interface Row {
   visits: number
   avg_seconds: number | null
   median_seconds: number | null
-}
-
-const BUCKETS: { key: Bucket; label: string }[] = [
-  { key: 'day', label: '일별' },
-  { key: 'week', label: '주별' },
-  { key: 'month', label: '월별' },
-]
-
-const PRESETS: { label: string; days: number }[] = [
-  { label: '최근 7일', days: 7 },
-  { label: '최근 30일', days: 30 },
-  { label: '최근 90일', days: 90 },
-  { label: '전체', days: 3650 },
-]
-
-/** yyyy-mm-dd (한국 날짜 기준) */
-function ymd(d: Date): string {
-  const kst = new Date(d.getTime() + 9 * 3600_000)
-  return kst.toISOString().slice(0, 10)
-}
-
-function daysAgo(n: number): string {
-  return ymd(new Date(Date.now() - n * 86400_000))
 }
 
 /** 초 → '3분 20초'. 화면 어디서나 같은 모양으로 쓴다. */
@@ -63,56 +43,48 @@ function Card({ label, value, hint }: { label: string; value: string; hint?: str
   )
 }
 
-export default function VisitorStats() {
-  const [bucket, setBucket] = useState<Bucket>('day')
-  const [from, setFrom] = useState(daysAgo(29))
-  const [to, setTo] = useState(daysAgo(0))
+export default function VisitorStats({
+  from,
+  to,
+  bucket,
+}: {
+  from: string
+  to: string
+  bucket: Bucket
+}) {
   const [rows, setRows] = useState<Row[] | null>(null)
+  const [total, setTotal] = useState<Row | null | undefined>(undefined)
   const [err, setErr] = useState('')
 
-  const load = useCallback(async () => {
-    setErr('')
-    setRows(null)
-    // 끝날은 그날 하루를 통째로 포함해야 하므로 다음 날 0시 직전까지 본다.
-    const { data, error } = await supabase.rpc('admin_visitor_stats', {
-      p_from: `${from}T00:00:00+09:00`,
-      p_to: `${to}T23:59:59.999+09:00`,
-      p_bucket: bucket,
-      p_gap_min: 30,
-    })
-    if (error) {
-      setErr(error.message)
-      setRows([])
-      return
-    }
-    setRows((data as Row[]) ?? [])
-  }, [from, to, bucket])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
-  // ⚠️ 방문자 수는 칸끼리 더하면 안 된다 — 같은 사람이 여러 날 오면 중복된다.
-  //    그래서 «구간 전체»는 DB 함수의 'all' 모드로 한 줄만 따로 받는다.
-  const [total, setTotal] = useState<Row | null | undefined>(undefined)
   useEffect(() => {
     let alive = true
+    setErr('')
+    setRows(null)
     setTotal(undefined)
-    supabase
-      .rpc('admin_visitor_stats', {
-        p_from: `${from}T00:00:00+09:00`,
-        p_to: `${to}T23:59:59.999+09:00`,
-        p_bucket: 'all',
-        p_gap_min: 30,
-      })
-      .then(({ data }) => {
-        if (!alive) return
-        setTotal(((data as Row[]) ?? [])[0] ?? null)
-      })
+    // 끝날은 그날 하루를 통째로 포함해야 하므로 그날 23:59:59.999 까지 본다.
+    const args = { p_from: `${from}T00:00:00+09:00`, p_to: `${to}T23:59:59.999+09:00`, p_gap_min: 30 }
+
+    supabase.rpc('admin_visitor_stats', { ...args, p_bucket: bucket }).then(({ data, error }) => {
+      if (!alive) return
+      if (error) {
+        setErr(error.message)
+        setRows([])
+        return
+      }
+      setRows((data as Row[]) ?? [])
+    })
+
+    // ⚠️ 방문자 수는 칸끼리 더하면 안 된다 — 같은 사람이 여러 날 오면 중복된다.
+    //    그래서 «구간 전체»는 함수의 'all' 모드로 한 줄만 따로 받는다.
+    supabase.rpc('admin_visitor_stats', { ...args, p_bucket: 'all' }).then(({ data }) => {
+      if (!alive) return
+      setTotal(((data as Row[]) ?? [])[0] ?? null)
+    })
+
     return () => {
       alive = false
     }
-  }, [from, to])
+  }, [from, to, bucket])
 
   const chartData = (rows ?? []).map((r) => ({
     날짜: r.bucket_start.slice(5),
@@ -121,62 +93,12 @@ export default function VisitorStats() {
   }))
 
   return (
-    <section className="bg-white border border-gray-200 rounded-2xl p-4 md:p-5 mb-5">
-      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1">
+    <section className="bg-white border border-gray-200 rounded-2xl p-4 md:p-5">
+      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-4">
         <h2 className="text-base font-bold text-gray-900">방문자</h2>
         <p className="text-xs text-gray-400">
           같은 기기의 기록이 30분 넘게 끊기면 다른 방문으로 봅니다
         </p>
-      </div>
-
-      {/* 기간 고르기 */}
-      <div className="flex flex-wrap items-center gap-2 mt-3 mb-4">
-        {PRESETS.map((p) => {
-          const on = from === daysAgo(p.days - 1) && to === daysAgo(0)
-          return (
-            <button
-              key={p.label}
-              onClick={() => {
-                setFrom(daysAgo(p.days - 1))
-                setTo(daysAgo(0))
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                on ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {p.label}
-            </button>
-          )
-        })}
-        <span className="text-gray-300">|</span>
-        <input
-          type="date"
-          value={from}
-          max={to}
-          onChange={(e) => setFrom(e.target.value)}
-          className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
-        />
-        <span className="text-xs text-gray-400">~</span>
-        <input
-          type="date"
-          value={to}
-          min={from}
-          max={daysAgo(0)}
-          onChange={(e) => setTo(e.target.value)}
-          className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs"
-        />
-        <span className="text-gray-300">|</span>
-        {BUCKETS.map((b) => (
-          <button
-            key={b.key}
-            onClick={() => setBucket(b.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-              bucket === b.key ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {b.label}
-          </button>
-        ))}
       </div>
 
       {err && <p className="text-sm text-red-500 mb-3">불러오지 못했습니다: {err}</p>}

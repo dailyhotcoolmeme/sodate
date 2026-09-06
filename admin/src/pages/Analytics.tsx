@@ -1,17 +1,34 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import VisitorStats from '../components/VisitorStats'
+import VisitorStats, { type Bucket } from '../components/VisitorStats'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts'
 
+// 화면 전체가 이 기간 하나를 따른다(2026-09-06). 예전에는 여기와 방문자 칸이
+// 기간을 따로 들고 있어서 같은 화면에서 서로 다른 기간을 보여줬다(오너 지적).
 const PERIOD_OPTIONS = [
   { label: '오늘', days: 1 },
-  { label: '7일', days: 7 },
-  { label: '30일', days: 30 },
+  { label: '최근 7일', days: 7 },
+  { label: '최근 30일', days: 30 },
+  { label: '최근 90일', days: 90 },
   { label: '전체', days: 3650 },
 ]
+
+const BUCKETS: { key: Bucket; label: string }[] = [
+  { key: 'day', label: '일별' },
+  { key: 'week', label: '주별' },
+  { key: 'month', label: '월별' },
+]
+
+/** yyyy-mm-dd (한국 날짜 기준) */
+function ymd(d: Date): string {
+  return new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10)
+}
+function daysAgo(n: number): string {
+  return ymd(new Date(Date.now() - n * 86400_000))
+}
 
 const COLORS = ['#ec4899', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 
@@ -60,14 +77,17 @@ const SORT_LABELS: Record<string, string> = {
 const sortLabel = (key: string) => SORT_LABELS[key] ?? key
 
 export default function Analytics() {
-  const [period, setPeriod] = useState(30)
+  const [from, setFrom] = useState(daysAgo(29))
+  const [to, setTo] = useState(daysAgo(0))
+  const [bucket, setBucket] = useState<Bucket>('day')
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'overview' | 'company' | 'behavior'>('overview')
 
   useEffect(() => {
     load()
-  }, [period])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from, to])
 
   /**
    * 집계는 DB에서 한다(admin_analytics RPC).
@@ -79,7 +99,12 @@ export default function Analytics() {
    */
   async function load() {
     setLoading(true)
-    const { data: agg, error } = await supabase.rpc('admin_analytics', { p_days: period })
+    // 기간을 시작·끝으로 넘긴다 — 예전 admin_analytics(p_days) 는 늘 '오늘까지'라
+    // 날짜를 직접 고를 수가 없었다. 같은 본문의 admin_analytics_range 로 바꿨다.
+    const { data: agg, error } = await supabase.rpc('admin_analytics_range', {
+      p_from: `${from}T00:00:00+09:00`,
+      p_to: `${to}T23:59:59.999+09:00`,
+    })
     if (error || !agg) { setData(null); setLoading(false); return }
 
     const counts: Record<string, number> = agg.counts ?? {}
@@ -109,26 +134,63 @@ export default function Analytics() {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      {/* 헤더 + 기간 선택 */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900">데이터 분석</h1>
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-          {PERIOD_OPTIONS.map((opt) => (
+      <h1 className="text-xl font-bold text-gray-900">데이터 분석</h1>
+
+      {/* 기간 고르개 — 이 화면 전체가 여기를 따른다 */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {PERIOD_OPTIONS.map((opt) => {
+            const on = from === daysAgo(opt.days - 1) && to === daysAgo(0)
+            return (
+              <button
+                key={opt.days}
+                onClick={() => {
+                  setFrom(daysAgo(opt.days - 1))
+                  setTo(daysAgo(0))
+                }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                  on ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+          <span className="text-gray-300">|</span>
+          <input
+            type="date"
+            value={from}
+            max={to}
+            onChange={(e) => setFrom(e.target.value)}
+            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+          />
+          <span className="text-sm text-gray-400">~</span>
+          <input
+            type="date"
+            value={to}
+            min={from}
+            max={daysAgo(0)}
+            onChange={(e) => setTo(e.target.value)}
+            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          {BUCKETS.map((b) => (
             <button
-              key={opt.days}
-              onClick={() => setPeriod(opt.days)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                period === opt.days ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              key={b.key}
+              onClick={() => setBucket(b.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                bucket === b.key ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {opt.label}
+              {b.label}
             </button>
           ))}
+          <span className="text-xs text-gray-400">아래 방문자 표를 이 단위로 묶습니다</span>
         </div>
       </div>
 
-      {/* 방문자 — 기간을 따로 고르므로 위 기간 버튼과 상관없이 독립으로 움직인다 */}
-      <VisitorStats />
+      <VisitorStats from={from} to={to} bucket={bucket} />
 
       {/* 탭 */}
       <div className="flex gap-1 border-b border-gray-200">
