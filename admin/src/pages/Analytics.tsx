@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import VisitorStats from '../components/VisitorStats'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -125,6 +126,9 @@ export default function Analytics() {
           ))}
         </div>
       </div>
+
+      {/* 방문자 — 기간을 따로 고르므로 위 기간 버튼과 상관없이 독립으로 움직인다 */}
+      <VisitorStats />
 
       {/* 탭 */}
       <div className="flex gap-1 border-b border-gray-200">
