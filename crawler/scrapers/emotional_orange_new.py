@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any, Optional
 
@@ -100,15 +101,59 @@ def fetch_sessions(meetup_id: str) -> tuple[dict, list[dict]]:
         return prog, [s for s in (sessions or []) if isinstance(s, dict)]
 
 
-def age_text(sess: dict) -> Optional[str]:
-    """앱에 보여줄 나이 표기. 업체가 준 라벨이 있으면 그대로 쓰고, 없으면 출생연도로 만든다.
+def age_range(sess: dict) -> tuple[Optional[int], Optional[int]]:
+    """이 일정의 나이 조건을 만나이 (아래, 위) 로 돌려준다. 없으면 (None, None).
 
-    ⚠️ 출생연도(년생)는 앱에 절대 안 쓴다(오너 규칙) — 만나이로 바꿔서 범위로 적는다.
+    사이트가 두 가지 방식으로 준다:
+      · BIRTH_YEAR — 출생연도 범위(예 1998~2003년생)
+      · FULL_AGE   — ageMin/ageMax 가 비어 있고 «글자»에만 있다(예 '남성 만 35세 이상')
+
+    ⚠️ 출생연도(년생)는 앱에 절대 안 쓴다(오너 규칙). 만나이로 바꿔서 넘긴다.
+       만나이 = 올해 - 출생연도. (올해-출생연도+1 은 세는나이라 한 살 많다 — 실제로
+       그렇게 냈다가 오너 검수표와 한 살씩 어긋났다, 2026-09-07)
+       검산: 새 사이트 '나이A = 2003~1998년생' → 23~28. 오너 검수표 A:(23,28) 과 같다.
+              '나이D = 1994~1989년생' → 32~37. 검수표 D:(32,37) 과 같다.
     """
-    lo, hi = _num(sess.get('birthYearMin')), _num(sess.get('birthYearMax'))
-    if lo and hi:
+    lo_y, hi_y = _num(sess.get('birthYearMin')), _num(sess.get('birthYearMax'))
+    if lo_y and hi_y:
         year = datetime.now().year
-        a1, a2 = year - hi + 1, year - lo + 1      # 만나이 근사
+        a1, a2 = year - hi_y, year - lo_y          # 만나이
         if 15 <= a1 <= 80 and 15 <= a2 <= 80:
-            return f'{min(a1, a2)}~{max(a1, a2)}'
+            return (min(a1, a2), max(a1, a2))
+
+    # 숫자로 주는 경우(있으면 그대로)
+    lo, hi = _num(sess.get('ageMin')), _num(sess.get('ageMax'))
+    if lo or hi:
+        return (lo, hi)
+
+    # 글자에만 있는 경우 — '만 35세 이상' / '만 37세 이하' / '만 30~35세'
+    label = sess.get('ageLabel')
+    if isinstance(label, str):
+        m = re.search(r'만\s*(\d{2})\s*~\s*(\d{2})\s*세', label)
+        if m:
+            return (int(m.group(1)), int(m.group(2)))
+        m = re.search(r'만\s*(\d{2})\s*세\s*이상', label)
+        if m:
+            return (int(m.group(1)), None)
+        m = re.search(r'만\s*(\d{2})\s*세\s*이하', label)
+        if m:
+            return (None, int(m.group(1)))
+    return (None, None)
+
+
+def age_text(sess: dict) -> Optional[str]:
+    """앱에 보여줄 나이 표기. 옛 스크래퍼(_eo_age_disp)와 같은 모양으로 맞춘다."""
+    lo, hi = age_range(sess)
+    if lo is not None and hi is not None:
+        return f'{lo}~{hi}'
+    if hi is not None:
+        return f'~{hi}'
+    if lo is not None:
+        return f'{lo}~'
     return None
+
+
+def age_applies_to(sess: dict) -> str:
+    """이 나이 조건이 누구에게 걸리는지: 'M' 남성 / 'F' 여성 / 'ALL' 둘 다."""
+    g = str(sess.get('ageGender') or 'M').upper()
+    return g if g in ('M', 'F', 'ALL') else 'M'

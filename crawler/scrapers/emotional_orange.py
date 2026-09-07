@@ -171,7 +171,9 @@ class EmotionalOrangeScraper(BaseScraper):
         뒤에 `.data` 를 붙이면 화면이 쓰는 자료를 그대로 준다 — 성별 가격·정원·잔여석·
         나이가 전부 숫자로 들어 있어, HTML에서 글자로 뽑아내던 옛 방식보다 정확하다.
         """
-        from scrapers.emotional_orange_new import fetch_meetups, fetch_sessions, age_text, _num
+        from scrapers.emotional_orange_new import (
+            fetch_meetups, fetch_sessions, age_text, age_range, age_applies_to, _num,
+        )
 
         events: list[EventModel] = []
         meetups = fetch_meetups()
@@ -218,7 +220,15 @@ class EmotionalOrangeScraper(BaseScraper):
                     f'{self.NEW_SITE}/meetups/{mid}'
                     f'#evt={event_date.strftime("%Y%m%d%H%M")}'
                 )
+                # 나이는 «누구에게 걸리는지»까지 보고 넣는다. 대부분 남성 기준이지만
+                # 사이트가 ALL/F 로 주는 것도 있어서 그대로 따른다.
                 age = age_text(sess)
+                lo, hi = age_range(sess)
+                who = age_applies_to(sess)
+                # 2026-07-25 오너 확인: 여성은 전 라인 공통 '제한 없음'.
+                # 다만 사이트가 여성·공통 조건을 준 건은 그 값을 쓴다.
+                age_m = age if who in ('M', 'ALL') else None
+                age_f = age if who in ('F', 'ALL') else '제한 없음'
                 try:
                     events.append(EventModel(
                         title=sanitize_text(f'[에모셔널오렌지] {title_line}', 80),
@@ -233,9 +243,10 @@ class EmotionalOrangeScraper(BaseScraper):
                         source_url=source_url,
                         thumbnail_urls=[image] if isinstance(image, str) and image.startswith('http') else [],
                         is_closed=closed,
-                        age_male=age,
-                        # 2026-07-25 오너 확인: 여성 연령 제한 없음(전 라인 공통 정책)
-                        age_female='제한 없음',
+                        age_male=age_m,
+                        age_female=age_f,
+                        age_range_min=lo,
+                        age_range_max=hi,
                         format=fmt if isinstance(fmt, str) else None,
                     ))
                 except Exception as e:
