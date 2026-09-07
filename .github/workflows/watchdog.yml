@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  contents: read   # checkout 단계에서 저장소를 읽는 데 필요
   actions: write   # 하트비트 갭 발견 시 workflow_dispatch로 자가복구 재발화하는 데 필요
 
 jobs:
