@@ -142,14 +142,20 @@ def age_range(sess: dict) -> tuple[Optional[int], Optional[int]]:
 
 
 def age_text(sess: dict) -> Optional[str]:
-    """앱에 보여줄 나이 표기. 옛 스크래퍼(_eo_age_disp)와 같은 모양으로 맞춘다."""
+    """앱에 보여줄 나이 표기.
+
+    ⚠️ 한쪽만 있는 경우를 '35~' '~37' 로 내면 안 된다. 앱은 'NN' 또는 'NN~NN' 일 때만
+       뒤에 '세' 를 붙이고(23~28 → '23~28세'), 그 밖에는 받은 글자를 그대로 그린다.
+       그래서 '35~' 가 화면에 '35~' 로 그대로 나왔다(2026-09-07 오너 지적).
+       한쪽만 있을 땐 사람이 읽는 말로 만들어 보낸다.
+    """
     lo, hi = age_range(sess)
     if lo is not None and hi is not None:
-        return f'{lo}~{hi}'
+        return f'{lo}~{hi}'          # 앱이 '세' 를 붙여 '23~28세' 로 그린다
     if hi is not None:
-        return f'~{hi}'
+        return f'{hi}세 이하'
     if lo is not None:
-        return f'{lo}~'
+        return f'{lo}세 이상'
     return None
 
 
