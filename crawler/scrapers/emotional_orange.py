@@ -45,8 +45,19 @@ def _title_place(title_line: Optional[str]) -> Optional[str]:
 
 
 class EmotionalOrangeScraper(BaseScraper):
-    BASE_URL = 'https://emotional0ranges.com'
-    DATE_PAGE_URL = 'https://emotional0ranges.com/date'
+    # ⚠️(2026-09-07) 업체가 사이트를 새로 만들면서 emotional0ranges.com 이 통째로 바뀌었다.
+    #    · /date  → 새 화면 /meetups 로 넘어가는데 거기엔 각 모임으로 가는 링크가 아직 없다
+    #    · /shop_view/?idx=N → 404
+    #    그래서 09-06 08:02 부터 크롤이 «수집 0건»으로 매번 실패했고, 앱에 저장돼 있던
+    #    일정 273건의 신청 링크도 전부 404가 됐다(이용자가 실제로 404를 보고 있었다).
+    #
+    #    옛 화면은 imweb 주소로 그대로 살아 있다(목록 28개·상세 200 정상). 지금은 각 모임의
+    #    주소가 있는 곳이 여기뿐이라 이쪽을 본다. 기존 273건의 source_url 도 같이 옮겼다
+    #    (안 옮기면 전부 새 일정으로 잡혀 중복이 쌓인다).
+    #
+    #    ※ 업체가 이전을 끝내면 이 주소도 사라진다. 그때는 새 /meetups 구조로 다시 짜야 한다.
+    BASE_URL = 'https://emotional0ranges1.imweb.me'
+    DATE_PAGE_URL = 'https://emotional0ranges1.imweb.me/date'
 
     # 예약위젯(load_option.cm)에서 성별 가격·매진을 정확히 추출 → DB 기록
     WRITES_PRICE = True
