@@ -158,7 +158,106 @@ class EmotionalOrangeScraper(BaseScraper):
     # 공개 진입점
     # ------------------------------------------------------------------ #
 
+    # ------------------------------------------------------------------ #
+    # 새 사이트(2026-09 개편) — 기본 경로
+    # ------------------------------------------------------------------ #
+
+    NEW_SITE = 'https://emotional0ranges.com'
+
+    def _scrape_new_site(self) -> list[EventModel]:
+        """새 사이트에서 수집. 브라우저 없이 자료만 받아 오므로 몇 초면 끝난다.
+
+        업체가 2026-09 에 imweb 쇼핑몰에서 자체 사이트로 갈아탔다. 새 사이트는 화면 주소
+        뒤에 `.data` 를 붙이면 화면이 쓰는 자료를 그대로 준다 — 성별 가격·정원·잔여석·
+        나이가 전부 숫자로 들어 있어, HTML에서 글자로 뽑아내던 옛 방식보다 정확하다.
+        """
+        from scrapers.emotional_orange_new import fetch_meetups, fetch_sessions, age_text, _num
+
+        events: list[EventModel] = []
+        meetups = fetch_meetups()
+        if not meetups:
+            return []
+        self.logger.info(f'감정오렌지(새 사이트) 모임 {len(meetups)}개 발견')
+
+        skipped: list[str] = []
+        for m in meetups:
+            mid = str(m.get('id'))
+            try:
+                prog, sessions = fetch_sessions(mid)
+            except Exception as e:
+                skipped.append(mid[:8])
+                self.logger.warning(f'감정오렌지(새) 모임 {mid[:8]} 읽기 실패: {e}')
+                continue
+            if not sessions:
+                continue
+
+            title_line = str(prog.get('title') or m.get('title') or '').strip()
+            region = str(prog.get('region') or '').strip() or '서울'
+            image = prog.get('imageUrl') or m.get('imageUrl')
+            fmt = prog.get('format')
+
+            for sess in sessions:
+                starts = sess.get('startsAt')
+                if not isinstance(starts, str):
+                    continue
+                try:
+                    event_date = datetime.fromisoformat(starts).replace(tzinfo=None)
+                except Exception:
+                    continue
+
+                gp = sess.get('genderPrices') if isinstance(sess.get('genderPrices'), dict) else {}
+                price_m, price_f = _num(gp.get('male')), _num(gp.get('female'))
+                rem_m, rem_f = _num(sess.get('remainingMale')), _num(sess.get('remainingFemale'))
+                # 업체가 '마감'이라고 알려주면 그대로 따른다. 잔여석 0 도 마감으로 본다.
+                closed = bool(sess.get('purchaseClosed')) or str(sess.get('status')) == 'CLOSED'
+                if rem_m == 0 and rem_f == 0:
+                    closed = True
+
+                # 일정 하나를 가리키는 주소. 새 사이트에서 실제로 열리는 주소여야 한다.
+                source_url = (
+                    f'{self.NEW_SITE}/meetups/{mid}'
+                    f'#evt={event_date.strftime("%Y%m%d%H%M")}'
+                )
+                age = age_text(sess)
+                try:
+                    events.append(EventModel(
+                        title=sanitize_text(f'[에모셔널오렌지] {title_line}', 80),
+                        event_date=event_date,
+                        location_region=region,
+                        price_male=price_m,
+                        price_female=price_f,
+                        capacity_male=_num(sess.get('capacityMale')),
+                        capacity_female=_num(sess.get('capacityFemale')),
+                        seats_left_male=rem_m,
+                        seats_left_female=rem_f,
+                        source_url=source_url,
+                        thumbnail_urls=[image] if isinstance(image, str) and image.startswith('http') else [],
+                        is_closed=closed,
+                        age_male=age,
+                        # 2026-07-25 오너 확인: 여성 연령 제한 없음(전 라인 공통 정책)
+                        age_female='제한 없음',
+                        format=fmt if isinstance(fmt, str) else None,
+                    ))
+                except Exception as e:
+                    self.logger.warning(f'감정오렌지(새) 일정 만들기 실패: {e}')
+
+        if skipped:
+            self.logger.warning(
+                f'감정오렌지(새) 모임 {len(meetups)}개 중 {len(skipped)}개 못 가져옴 — 이만큼 일정이 빠집니다'
+            )
+        self.logger.info(f'감정오렌지(새 사이트) 일정 {len(events)}건')
+        return events
+
     def scrape(self) -> list[EventModel]:
+        # 새 사이트를 먼저 본다. 업체가 옛 imweb 을 닫아도 여기서 그대로 나온다.
+        try:
+            fresh = self._scrape_new_site()
+            if fresh:
+                return self._finalize(fresh)
+            self.logger.warning('감정오렌지 새 사이트에서 0건 — 옛 imweb 으로 넘어간다')
+        except Exception as e:
+            self.logger.warning(f'감정오렌지 새 사이트 수집 실패({e}) — 옛 imweb 으로 넘어간다')
+
         events: list[EventModel] = []
         try:
             with sync_playwright() as p:
@@ -274,6 +373,10 @@ class EmotionalOrangeScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f'감정오렌지 크롤링 실패: {e}')
 
+        return self._finalize(events)
+
+    def _finalize(self, events: list[EventModel]) -> list[EventModel]:
+        """중복 제거 + 한 달 넘는 일정 제외. 새 사이트·옛 imweb 두 경로가 같이 쓴다."""
         seen: set[str] = set()
         unique = [
             ev for ev in events
