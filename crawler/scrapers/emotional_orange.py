@@ -29,12 +29,14 @@ SEAT_WORDS = {'한자리': 1, '두자리': 2, '세자리': 3, '네자리': 4, '�
 def _eo_age_disp(mn: Optional[int], mx: Optional[int]) -> Optional[str]:
     """age_range → 앱 나이 표시 문자열(만나이). 감정오렌지 그룹연령(A~G)은 남성 전용 기준
     (여성은 전 라인 공통 '제한 없음' — 이 함수는 age_male 표시에만 쓴다, 2026-07-25 확정)."""
+    # ⚠️(2026-09-07) 한쪽 경계만 있을 때 '35~' '~37' 로 내면 앱에 그대로 나온다
+    #    (앱은 'NN'/'NN~NN' 일 때만 '세' 를 붙인다). 사람이 읽는 말로 보낸다.
     if mn is not None and mx is not None:
         return f'{mn}~{mx}'
     if mx is not None:
-        return f'~{mx}'
+        return f'{mx}세 이하'
     if mn is not None:
-        return f'{mn}~'
+        return f'{mn}세 이상'
     return None
 
 

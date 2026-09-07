@@ -314,13 +314,17 @@ def _build_participant_stats(
 
 
 def _munto_age_disp(mn: Optional[int], mx: Optional[int]) -> Optional[str]:
-    """age_range → 앱 성별 나이 표시 문자열(만나이)."""
+    """age_range → 앱 성별 나이 표시 문자열(만나이).
+
+    ⚠️(2026-09-07) 한쪽 경계만 있을 때 '35~' '~37' 로 내면 앱에 그대로 나온다
+       (앱은 'NN'/'NN~NN' 일 때만 뒤에 '세' 를 붙인다). 사람이 읽는 말로 보낸다.
+    """
     if mn is not None and mx is not None:
         return f'{mn}~{mx}'
     if mx is not None:
-        return f'~{mx}'
+        return f'{mx}세 이하'
     if mn is not None:
-        return f'{mn}~'
+        return f'{mn}세 이상'
     return None
 
 
@@ -484,8 +488,12 @@ def _munto_resolve_ages(name: str, introduce: str, cur_year: int) -> tuple:
             female = male
 
     def disp(st):
+        # ⚠️(2026-09-07) 한쪽 경계만 있을 때 '38세~' '~38세' 로 내면 앱에 그대로 그렇게
+        #    나온다. 앱은 'NN' 또는 'NN~NN' 일 때만 뒤에 '세' 를 붙이고, 그 밖에는 받은
+        #    글자를 그대로 그리기 때문이다(오너 지적: '35~ 이건 뭐냐?').
+        #    사람이 읽는 말로 만들어 보낸다.
         k, lo, hi = st
-        return {'range': f'{lo}~{hi}', 'lower': f'{lo}세~', 'upper': f'~{hi}세',
+        return {'range': f'{lo}~{hi}', 'lower': f'{lo}세 이상', 'upper': f'{hi}세 이하',
                 'unlimited': '제한 없음'}.get(k)
 
     def bounds(st):
