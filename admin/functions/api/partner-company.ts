@@ -93,3 +93,60 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     )
   }
 }
+
+/**
+ * 업체 줄 삭제 (2026-09-08 오너 요청).
+ *
+ * ⚠️ companies 를 지우면 그 업체의 **일정·후기·크롤기록·상세이미지유형·포털계정이
+ *    전부 같이 지워진다**(전부 ON DELETE CASCADE). 되돌릴 수 없다.
+ *    그래서 «업체명을 정확히 타이핑»해야만 지워지게 했다. 잘못 눌러서 문토(일정 1,600건)
+ *    같은 걸 날리는 사고를 막기 위한 유일한 장치다.
+ *
+ *  DELETE ?companyId=…&confirmName=<업체명>
+ */
+export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
+  if (!(await verifySession(env.SESSION_SECRET, getCookie(request, COOKIE)))) {
+    return json({ error: 'unauthorized' }, 401)
+  }
+  const url = new URL(request.url)
+  const companyId = url.searchParams.get('companyId') ?? ''
+  const confirmName = (url.searchParams.get('confirmName') ?? '').trim()
+  if (!companyId) return json({ error: 'missing_company_id' }, 400)
+
+  const rows = await sb(env, `companies?select=id,name&id=eq.${companyId}&limit=1`)
+  const company = rows?.[0]
+  if (!company) return json({ error: 'not_found' }, 404)
+
+  // 이름을 정확히 적었을 때만 지운다.
+  if (confirmName !== String(company.name).trim()) {
+    return json({ error: 'name_mismatch', expected: company.name }, 400)
+  }
+
+  // 무엇이 같이 지워지는지 세어서 돌려준다 — 지운 뒤 화면에 사실대로 보여주기 위해.
+  const count = async (table: string) => {
+    const r = await fetch(
+      `${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/${table}?select=id&company_id=eq.${companyId}&limit=1`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          Prefer: 'count=exact',
+        },
+      },
+    )
+    const range = r.headers.get('content-range') || ''
+    return Number(range.split('/')[1] || 0)
+  }
+  const removed = {
+    events: await count('events'),
+    reviews: await count('reviews'),
+    accounts: await count('partner_accounts'),
+  }
+
+  try {
+    await sb(env, `companies?id=eq.${companyId}`, { method: 'DELETE' })
+  } catch (e) {
+    return json({ error: 'delete_failed', detail: String(e).slice(0, 200) }, 500)
+  }
+  return json({ ok: true, name: company.name, removed })
+}

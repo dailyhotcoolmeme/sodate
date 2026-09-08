@@ -400,6 +400,84 @@ function PartnerInvite({ companyId }: { companyId: string }) {
 }
 
 /**
+ * 업체 줄 삭제 (2026-09-08 오너 요청).
+ *
+ * ⚠️ 업체를 지우면 그 업체의 일정·후기·크롤기록·포털계정이 «전부 같이» 지워진다.
+ *    되돌릴 수 없다. 그래서 업체명을 정확히 타이핑해야만 버튼이 눌린다 —
+ *    잘못 눌러 문토(일정 1,600건) 같은 걸 날리는 걸 막는 유일한 장치다.
+ */
+function DeleteCompany({ company, onDeleted }: { company: Company; onDeleted: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const submit = async () => {
+    setBusy(true)
+    setErr('')
+    try {
+      const res = await fetch(
+        `/api/partner-company?companyId=${company.id}&confirmName=${encodeURIComponent(typed.trim())}`,
+        { method: 'DELETE', credentials: 'include' },
+      )
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setErr(d.error === 'name_mismatch' ? '업체명이 다릅니다. 그대로 정확히 적어주세요.' : '지우지 못했습니다.')
+        return
+      }
+      onDeleted()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => {
+          setOpen(true)
+          setTyped('')
+          setErr('')
+        }}
+        className="text-xs font-semibold text-red-500 hover:underline"
+      >
+        이 업체 줄 삭제
+      </button>
+    )
+  }
+
+  return (
+    <div className="border border-red-200 bg-red-50 rounded-xl p-3 space-y-2">
+      <p className="text-xs text-red-700 leading-relaxed">
+        <b>‘{company.name}’ 을 지우면 이 업체의 일정·후기·크롤 기록·포털 계정이 전부 같이 지워집니다.
+        되돌릴 수 없습니다.</b>
+        <br />
+        정말 지우시려면 아래에 <b>{company.name}</b> 을 그대로 적어주세요.
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          placeholder={company.name}
+          className="flex-1 min-w-0 border border-red-200 rounded-lg px-2 py-1 text-sm"
+        />
+        <button
+          onClick={submit}
+          disabled={busy || typed.trim() !== company.name.trim()}
+          className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-red-500 hover:bg-red-600 disabled:bg-gray-200 disabled:text-gray-400"
+        >
+          {busy ? '지우는 중…' : '영구 삭제'}
+        </button>
+        <button onClick={() => setOpen(false)} className="text-xs font-semibold text-gray-500 hover:underline">
+          취소
+        </button>
+      </div>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+/**
  * 목록에 «없는» 제휴처를 새로 만들며 바로 초대한다.
  *
  * 왜 필요한가(2026-09-05 오너 지적): 문토·프립 같은 모임 플랫폼은 업체 목록에서 한 줄이
@@ -602,6 +680,7 @@ export default function Partners() {
   const [places, setPlaces] = useState<Place[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [q, setQ] = useState('')
 
   // 새 제휴처를 만든 뒤 목록을 다시 읽는 데도 쓰므로 밖에 둔다.
@@ -689,6 +768,13 @@ export default function Partners() {
       </p>
       )}
 
+      {notice && (
+        <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+          <p className="text-sm text-green-800 flex-1">{notice}</p>
+          <button onClick={() => setNotice(null)} className="text-xs text-green-500 hover:text-green-700">닫기</button>
+        </div>
+      )}
+
       {err && (
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
           <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
@@ -766,6 +852,15 @@ export default function Partners() {
                     onSave={(v) => patchCompany(c.id, { socials: v }, { socials: c.socials })}
                   />
                   <PartnerInvite companyId={c.id} />
+                  <div className="pt-1">
+                    <DeleteCompany
+                      company={c}
+                      onDeleted={() => {
+                        setNotice(`‘${c.name}’ 을 지웠습니다.`)
+                        reloadCompanies()
+                      }}
+                    />
+                  </div>
                 </>
               )}
             </div>
