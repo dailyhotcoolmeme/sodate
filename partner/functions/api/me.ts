@@ -1,5 +1,5 @@
 import { verifySession, getCookie, COOKIE, json } from '../_lib/session'
-import { db, type DbEnv } from '../_lib/db'
+import { currentAccountFilter, db, type DbEnv } from '../_lib/db'
 
 interface Env extends DbEnv {
   SESSION_SECRET: string
@@ -33,12 +33,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // 뭔지"를 보여줘야 하는데, 그동안 화면 어디에도 안 나와서 업체가 알 수 없었다.
   let email = ''
   try {
-    const accounts = await db.select<{ email: string }>(
-      env,
-      'partner_accounts',
-      `select=email&company_id=eq.${session.companyId}&limit=1`,
-    )
-    email = accounts[0]?.email ?? ''
+    const filter = await currentAccountFilter(env, session)
+    if (filter) {
+      const accounts = await db.select<{ email: string }>(env, 'partner_accounts', `select=email&${filter}`)
+      email = accounts[0]?.email ?? ''
+    }
   } catch {
     // 이메일 표시는 부가 정보다 — 못 읽어도 로그인 상태 자체는 유지한다.
   }

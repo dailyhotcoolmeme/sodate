@@ -78,6 +78,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     last_login_at: new Date().toISOString(),
   }).catch(() => {})
 
-  const token = await signSession(env.SESSION_SECRET, account.company_id)
+  const token = await signSession(env.SESSION_SECRET, account.company_id, undefined, account.id)
   return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(token) })
 }

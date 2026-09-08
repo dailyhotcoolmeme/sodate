@@ -56,12 +56,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       password_hash: passwordHash,
       invite_token: null,
       invite_expires_at: null,
-      status: 'active',
+      // ⚠️ status 를 여기서 'active' 로 되돌리지 않는다. 오너가 «로그인 막기» 해둔 계정이
+      //    초대 링크만 누르면 다시 열려버렸다(2026-09-08 실측). 여는 건 오너만 한다.
     })
   } catch {
     return json({ error: 'server_error' }, 500)
   }
 
-  const session = await signSession(env.SESSION_SECRET, invite.company_id)
+  const session = await signSession(env.SESSION_SECRET, invite.company_id, undefined, invite.id)
   return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(session) })
 }

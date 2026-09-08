@@ -1,6 +1,6 @@
 import { verifySession, getCookie, COOKIE, json } from '../_lib/session'
 import { verifyPassword, hashPassword } from '../_lib/password'
-import { db, type DbEnv } from '../_lib/db'
+import { currentAccountFilter, db, type DbEnv } from '../_lib/db'
 
 interface Env extends DbEnv {
   SESSION_SECRET: string
@@ -24,10 +24,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'password_too_short', min: MIN_PASSWORD_LEN }, 400)
   }
 
+  const filter = await currentAccountFilter(env, session, '&status=eq.active')
+  if (!filter) return json({ error: 'unauthorized' }, 401)
   const rows = await db.select<{ id: string; password_hash: string }>(
     env,
     'partner_accounts',
-    `select=id,password_hash&company_id=eq.${session.companyId}&status=eq.active&limit=1`,
+    `select=id,password_hash&${filter}`,
   )
   const account = rows[0]
   if (!account) return json({ error: 'unauthorized' }, 401)

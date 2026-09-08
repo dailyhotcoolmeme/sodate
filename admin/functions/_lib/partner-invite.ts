@@ -45,11 +45,18 @@ export async function issueInvite(
   const token = crypto.randomUUID() + crypto.randomUUID()
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 86400_000).toISOString()
 
-  const existing = await sb(env, `partner_accounts?select=id&company_id=eq.${companyId}&limit=1`)
-  if (existing?.[0]) {
-    await sb(env, `partner_accounts?id=eq.${existing[0].id}`, {
+  // ⚠️(2026-09-08) 예전엔 «그 업체의 아무 계정»을 찾아 덮어썼다. 그래서 같은 업체에
+  //    두 번째 담당자를 초대하면 첫 번째 담당자의 이메일이 바뀌어 로그인이 끊겼다.
+  //    이제 «같은 이메일»이 있을 때만 재초대로 보고, 아니면 새 담당자로 추가한다.
+  const same = await sb(
+    env,
+    `partner_accounts?select=id&company_id=eq.${companyId}&email=eq.${encodeURIComponent(email)}&limit=1`,
+  )
+  if (same?.[0]) {
+    // 재초대 — 토큰만 새로 발급한다(비밀번호는 건드리지 않는다).
+    await sb(env, `partner_accounts?id=eq.${same[0].id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ email, invite_token: token, invite_expires_at: expiresAt }),
+      body: JSON.stringify({ invite_token: token, invite_expires_at: expiresAt }),
     })
   } else {
     await sb(env, 'partner_accounts', {

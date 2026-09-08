@@ -53,3 +53,26 @@ export const db = {
   delete: (env: DbEnv, table: string, query: string): Promise<null> =>
     request(env, `${table}?${query}`, { method: 'DELETE' }) as Promise<null>,
 }
+
+/**
+ * 지금 로그인한 «사람» 을 찾는 조건.
+ *
+ * ⚠️ 회사만으로 찾으면 안 된다. 한 업체에 담당자가 여러 명일 수 있어서(2026-09-08)
+ *    남의 계정이 잡힌다 — 계정 설정에 남의 이메일이 보이고 비밀번호도 남의 게 바뀐다.
+ *    세션에 accountId 가 있으면 그걸로 콕 집는다. 예전에 발급된 세션에는 없을 수 있어
+ *    그때만 회사로 찾되, 그 업체 계정이 «하나뿐일 때만» 인정한다.
+ */
+export async function currentAccountFilter(
+  env: DbEnv,
+  session: { companyId: string; accountId?: string },
+  extra = '',
+): Promise<string | null> {
+  if (session.accountId) return `id=eq.${session.accountId}${extra}`
+  const rows = await db.select<{ id: string }>(
+    env,
+    'partner_accounts',
+    `select=id&company_id=eq.${session.companyId}&limit=2`,
+  )
+  if (rows.length !== 1) return null   // 여러 명이면 누구인지 알 수 없다 → 다시 로그인
+  return `id=eq.${rows[0].id}${extra}`
+}

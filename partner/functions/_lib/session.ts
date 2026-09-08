@@ -38,6 +38,12 @@ async function hmacKey(secret: string): Promise<CryptoKey> {
 
 export interface SessionPayload {
   companyId: string
+  /**
+   * 로그인한 «사람». 한 업체에 담당자가 여러 명일 수 있어서(2026-09-08) 회사만으로는
+   * 누구인지 알 수 없다. 이게 없으면 계정 설정에서 남의 이메일이 보이고 남의 비밀번호가
+   * 바뀐다. 예전에 발급된 세션에는 없을 수 있어 선택값으로 둔다.
+   */
+  accountId?: string
   exp: number
 }
 
@@ -45,9 +51,10 @@ export async function signSession(
   secret: string,
   companyId: string,
   ttlSec = TTL_SEC,
+  accountId?: string,
 ): Promise<string> {
   const exp = Math.floor(Date.now() / 1000) + ttlSec
-  const payload = b64url(ENC.encode(JSON.stringify({ companyId, exp })))
+  const payload = b64url(ENC.encode(JSON.stringify({ companyId, accountId, exp })))
   const key = await hmacKey(secret)
   const sig = await crypto.subtle.sign('HMAC', key, ENC.encode(payload))
   return `${payload}.${b64url(sig)}`

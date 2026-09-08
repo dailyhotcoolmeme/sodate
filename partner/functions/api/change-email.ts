@@ -5,7 +5,7 @@
 // 사이에 아이디가 바뀌어 계정을 통째로 뺏기는 일을 막기 위함이다.
 import { verifySession, getCookie, COOKIE, json } from '../_lib/session'
 import { verifyPassword } from '../_lib/password'
-import { db, DbError, type DbEnv } from '../_lib/db'
+import { currentAccountFilter, db, DbError, type DbEnv } from '../_lib/db'
 
 interface Env extends DbEnv {
   SESSION_SECRET: string
@@ -28,10 +28,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const newEmail = String(body.newEmail ?? '').trim().toLowerCase()
   if (!EMAIL_RE.test(newEmail)) return json({ error: 'invalid_email' }, 400)
 
+  const filter = await currentAccountFilter(env, session, '&status=eq.active')
+  if (!filter) return json({ error: 'unauthorized' }, 401)
   const rows = await db.select<{ id: string; email: string; password_hash: string }>(
     env,
     'partner_accounts',
-    `select=id,email,password_hash&company_id=eq.${session.companyId}&status=eq.active&limit=1`,
+    `select=id,email,password_hash&${filter}`,
   )
   const account = rows[0]
   if (!account) return json({ error: 'unauthorized' }, 401)

@@ -141,43 +141,61 @@ function TierSelect({ value, onChange }: { value: string | null; onChange: (v: s
   )
 }
 
-interface PartnerAccountStatus {
+interface PartnerAccount {
+  id: string
   email: string
   status: 'active' | 'disabled'
   pending: boolean
   lastLoginAt: string | null
 }
 
+/** 계정 하나가 지금 어떤 상태인지 한눈에. */
+function StatusChip({ a }: { a: PartnerAccount }) {
+  const [cls, text] = a.pending
+    ? ['text-amber-600 border-amber-200 bg-amber-50', '메일 보냄 · 비밀번호 설정 전']
+    : a.status === 'active'
+      ? ['text-green-600 border-green-200 bg-green-50', '쓰는 중']
+      : ['text-gray-500 border-gray-200 bg-gray-50', '로그인 막음']
+  return (
+    <span className={`shrink-0 text-[11px] font-semibold border rounded px-1.5 py-0.5 ${cls}`}>
+      {text}
+    </span>
+  )
+}
+
 /**
- * 제휴 포털 초대 위젯(2026-09-05 신설).
+ * 제휴 포털 로그인 계정 관리.
  *
- * 아직 초대 안 한 업체 → 이메일 입력 + "초대 보내기".
- * 이미 초대했지만 비번 미설정 → "초대됨 · 가입 대기" + 초대 메일 다시 보내기.
- * 쓰는 중(active) → "가입 완료" + 정지 버튼.
- * 정지(disabled) → "로그인 막음" + 재개 버튼.
+ * ⚠️(2026-09-08) 예전엔 «업체당 한 명»을 전제로 만들어서, 두 번째 담당자를 초대하면
+ *    첫 번째 담당자의 이메일이 덮어써져 로그인이 끊겼다(오너 지적). 이제 여러 명을
+ *    목록으로 두고, 각자 이메일 수정·삭제가 된다.
  */
 function PartnerInvite({ companyId }: { companyId: string }) {
-  const [status, setStatus] = useState<PartnerAccountStatus | null | undefined>(undefined)
+  const [accounts, setAccounts] = useState<PartnerAccount[] | undefined>(undefined)
   const [email, setEmail] = useState('')
+  const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editEmail, setEditEmail] = useState('')
 
   const load = () =>
     fetch(`/api/partner-status?companyId=${companyId}`, { credentials: 'include' })
       .then((r) => r.json())
-      .then((d) => setStatus(d.account ?? null))
-      .catch(() => setStatus(null))
+      .then((d) => setAccounts(d.accounts ?? []))
+      .catch(() => setAccounts([]))
 
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId])
 
-  const sendInvite = async () => {
-    const target = status?.email || email.trim()
+  const sendInvite = async (target: string) => {
     if (!target) return
     setBusy(true)
     setMsg('')
+    setErr('')
     try {
       const res = await fetch('/api/partner-invite', {
         method: 'POST',
@@ -187,12 +205,16 @@ function PartnerInvite({ companyId }: { companyId: string }) {
       })
       const data = await res.json()
       if (!res.ok) {
-        setMsg(`메일을 못 보냈습니다: ${data.error ?? '알 수 없는 오류'}`)
+        setErr(`메일을 못 보냈습니다: ${data.error ?? '알 수 없는 오류'}`)
       } else if (data.mailSent) {
         setMsg('초대 메일을 보냈습니다. 그쪽에서 비밀번호를 정하면 바로 쓸 수 있습니다.')
+        setEmail('')
+        setAdding(false)
         await load()
       } else {
-        setMsg(`메일만 못 나갔고 계정은 만들어졌습니다. 아래 주소를 그쪽에 직접 전달해주세요: ${data.inviteUrl}`)
+        setMsg(`메일만 못 나갔고 계정은 만들어졌습니다. 아래 주소를 직접 전달해주세요: ${data.inviteUrl}`)
+        setEmail('')
+        setAdding(false)
         await load()
       }
     } finally {
@@ -200,78 +222,179 @@ function PartnerInvite({ companyId }: { companyId: string }) {
     }
   }
 
-  const toggleStatus = async () => {
-    if (!status) return
-    const next = status.status === 'active' ? 'disabled' : 'active'
+  const patch = async (accountId: string, body: Record<string, unknown>) => {
     setBusy(true)
+    setErr('')
+    setMsg('')
     try {
-      await fetch('/api/partner-status', {
+      const res = await fetch('/api/partner-status', {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId, status: next }),
+        body: JSON.stringify({ accountId, ...body }),
       })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setErr(
+          d.error === 'email_taken'
+            ? '다른 곳에서 이미 쓰고 있는 주소입니다.'
+            : d.error === 'invalid_email'
+              ? '이메일 주소를 다시 확인해주세요.'
+              : '바꾸지 못했습니다.',
+        )
+        return false
+      }
+      await load()
+      return true
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (a: PartnerAccount) => {
+    if (
+      !confirm(
+        `'${a.email}' 계정을 지울까요?\n` +
+          '이 사람은 더 이상 제휴 포털에 로그인할 수 없습니다. 되돌릴 수 없습니다.\n' +
+          '(이 업체가 등록한 일정은 지워지지 않습니다)',
+      )
+    )
+      return
+    setBusy(true)
+    setErr('')
+    setMsg('')
+    try {
+      const res = await fetch(`/api/partner-status?accountId=${a.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        setErr('지우지 못했습니다.')
+        return
+      }
+      setMsg(`'${a.email}' 계정을 지웠습니다.`)
       await load()
     } finally {
       setBusy(false)
     }
   }
 
-  if (status === undefined) return <p className="text-xs text-gray-400">제휴 포털 계정 확인 중…</p>
+  if (accounts === undefined)
+    return <p className="text-xs text-gray-400">제휴 포털 계정 확인 중…</p>
+
+  const linkBtn = 'text-xs font-semibold hover:underline disabled:opacity-40'
 
   return (
     <div className="border-t border-gray-100 pt-2">
       <p className="text-xs font-semibold text-gray-600 mb-1.5">
         제휴 포털 로그인 계정
+        {accounts.length > 1 && <span className="text-gray-400 font-normal"> · {accounts.length}명</span>}
       </p>
-      {!status ? (
-        <div className="flex items-center gap-2">
+
+      {accounts.length === 0 && !adding && (
+        <p className="text-xs text-gray-400 mb-2">아직 초대하지 않았습니다.</p>
+      )}
+
+      <div className="space-y-1.5">
+        {accounts.map((a) => (
+          <div key={a.id} className="flex items-center gap-2 flex-wrap">
+            {editId === a.id ? (
+              <>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1 text-sm"
+                />
+                <button
+                  onClick={async () => {
+                    if (await patch(a.id, { email: editEmail.trim() })) setEditId(null)
+                  }}
+                  disabled={busy || !editEmail.trim()}
+                  className={`${linkBtn} text-pink-600`}
+                >
+                  저장
+                </button>
+                <button onClick={() => setEditId(null)} className={`${linkBtn} text-gray-400`}>
+                  취소
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="text-xs text-gray-700 break-all">{a.email}</span>
+                <StatusChip a={a} />
+                <button
+                  onClick={() => {
+                    setEditId(a.id)
+                    setEditEmail(a.email)
+                  }}
+                  disabled={busy}
+                  className={`${linkBtn} text-gray-500`}
+                >
+                  이메일 수정
+                </button>
+                <button onClick={() => sendInvite(a.email)} disabled={busy} className={`${linkBtn} text-pink-600`}>
+                  초대 메일 다시 보내기
+                </button>
+                {!a.pending && (
+                  <button
+                    onClick={() => patch(a.id, { status: a.status === 'active' ? 'disabled' : 'active' })}
+                    disabled={busy}
+                    className={`${linkBtn} text-gray-500`}
+                  >
+                    {a.status === 'active' ? '로그인 막기' : '다시 열어주기'}
+                  </button>
+                )}
+                <button onClick={() => remove(a)} disabled={busy} className={`${linkBtn} text-red-500`}>
+                  삭제
+                </button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {adding ? (
+        <div className="flex items-center gap-2 mt-2">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="이 제휴처 담당자 이메일"
+            placeholder="추가할 담당자 이메일"
             className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1 text-sm"
           />
           <button
-            onClick={sendInvite}
+            onClick={() => sendInvite(email.trim())}
             disabled={busy || !email.trim()}
             className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-white bg-pink-500 hover:bg-pink-600 disabled:bg-gray-200 disabled:text-gray-400"
           >
             초대 메일 보내기
           </button>
+          <button onClick={() => setAdding(false)} className={`${linkBtn} text-gray-400`}>
+            취소
+          </button>
         </div>
       ) : (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-600">{status.email}</span>
-          {status.pending ? (
-            <span className="text-[11px] font-semibold text-amber-600 border border-amber-200 bg-amber-50 rounded px-1.5 py-0.5">
-              메일 보냄 · 비밀번호 설정 전
-            </span>
-          ) : status.status === 'active' ? (
-            <span className="text-[11px] font-semibold text-green-600 border border-green-200 bg-green-50 rounded px-1.5 py-0.5">
-              가입 완료
-            </span>
-          ) : (
-            <span className="text-[11px] font-semibold text-gray-500 border border-gray-200 bg-gray-50 rounded px-1.5 py-0.5">
-              정지됨
-            </span>
-          )}
-          <button
-            onClick={sendInvite}
-            disabled={busy}
-            className="text-xs font-semibold text-pink-600 hover:underline"
-          >
-            재초대
-          </button>
-          {!status.pending && (
-            <button onClick={toggleStatus} disabled={busy} className="text-xs font-semibold text-gray-500 hover:underline">
-              {status.status === 'active' ? '로그인 막기' : '다시 열어주기'}
-            </button>
-          )}
-        </div>
+        <button
+          onClick={() => {
+            setAdding(true)
+            setMsg('')
+            setErr('')
+          }}
+          className="mt-2 flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200"
+        >
+          <Plus size={13} />
+          {accounts.length ? '담당자 추가' : '담당자 초대하기'}
+        </button>
+      )}
+
+      {accounts.length > 1 && (
+        <p className="text-[11px] text-gray-400 mt-1.5">
+          여러 명이 같은 업체 자료를 함께 봅니다. 각자 자기 이메일·비밀번호로 로그인합니다.
+        </p>
       )}
       {msg && <p className="text-[11px] text-gray-500 mt-1 break-all">{msg}</p>}
+      {err && <p className="text-[11px] text-red-500 mt-1">{err}</p>}
     </div>
   )
 }
