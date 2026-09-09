@@ -81,6 +81,41 @@ class BaseScraper(ABC):
         self.company_id: Optional[str] = None
         self.company_name: Optional[str] = None
 
+    def is_gone(self, source_url: str) -> Optional[bool]:
+        """이 일정이 업체 사이트에서 «정말로» 사라졌는지 확인한다.
+
+        True  = 확실히 사라짐(지워도 된다)
+        False = 아직 살아있음(지우면 안 된다)
+        None  = 확인 불가(보수적으로 보존한다)
+
+        기본 구현은 확인하지 않는다(=None). 상세 주소 하나로 생사를 확인할 수 있는
+        스크래퍼만 재정의한다. 재정의하면 삭제 전에 «한 건씩» 확인한다.
+        """
+        return None
+
+    def _select_all(self, columns: str, **filters) -> list[dict]:
+        """events 를 «전부» 읽는다.
+
+        ⚠️ 2026-09-10 사고. Supabase(PostgREST)는 한 번에 최대 1000행만 돌려준다.
+        그동안 이 제한 없이 select 하던 곳이 두 군데 있었는데, 문토처럼 1000건이
+        넘는 업체에서 나머지가 통째로 빠졌다. 그 결과
+          · 사라진 모임이 삭제 검사에서 제외돼 앱에 계속 남았고(실측 6.7%)
+          · 기존 값을 못 읽어 «안 바뀐 행»까지 매번 다시 써서 전송량을 낭비했다
+        그래서 1000행씩 끝까지 이어 읽는다.
+        """
+        PAGE = 1000
+        rows: list[dict] = []
+        start = 0
+        while True:
+            q = self.supabase.table('events').select(columns)
+            for col, val in filters.items():
+                q = q.eq(col, val)
+            chunk = q.range(start, start + PAGE - 1).execute().data or []
+            rows.extend(chunk)
+            if len(chunk) < PAGE:
+                return rows
+            start += PAGE
+
     def get_company_id(self) -> str:
         if self.company_id:
             return self.company_id
@@ -143,14 +178,8 @@ class BaseScraper(ABC):
         # 관리자 검증완료(verified) 이벤트는 크롤러가 절대 건드리지 않는다 → 입력한 가격·연령 영구 보존.
         verified_urls: set = set()
         try:
-            vres = (
-                self.supabase.table('events')
-                .select('source_url')
-                .eq('company_id', company_id)
-                .eq('verified', True)
-                .execute()
-            )
-            for row in (vres.data or []):
+            vrows = self._select_all('source_url', company_id=company_id, verified=True)
+            for row in vrows:
                 if row.get('source_url'):
                     verified_urls.add(row['source_url'])
         except Exception as e:
@@ -161,14 +190,8 @@ class BaseScraper(ABC):
         # 대신 값이 그대로인 이벤트는 write 자체를 건너뛴다. docs/disk-io-fix-design.md
         cur_by_url: dict = {}
         try:
-            cres = (
-                self.supabase.table('events')
-                .select('*')
-                .eq('company_id', company_id)
-                .eq('is_active', True)
-                .execute()
-            )
-            for row in (cres.data or []):
+            crows = self._select_all('*', company_id=company_id, is_active=True)
+            for row in crows:
                 if row.get('source_url'):
                     cur_by_url[row['source_url']] = row
         except Exception as e:
@@ -422,15 +445,29 @@ class BaseScraper(ABC):
         deleted = 0
         if self.DELETE_STALE and current_urls:
             try:
-                existing = (
-                    self.supabase.table('events')
-                    .select('id,source_url')
-                    .eq('company_id', company_id)
-                    .eq('verified', False)
-                    .execute()
-                )
-                rows = existing.data or []
-                stale_ids = [r['id'] for r in rows if r['source_url'] not in current_urls]
+                rows = self._select_all('id,source_url', company_id=company_id, verified=False)
+                stale = [r for r in rows if r['source_url'] not in current_urls]
+
+                # ⚠️ 2026-09-10 실측. «목록에 없다 = 없어졌다» 가 아니다. 문토 목록 API 는
+                #    살아있는 모임도 일부만 돌려준다 — 삭제 후보 40건을 하나씩 열어보니
+                #    10건(25%)이 멀쩡히 열렸다. 그대로 지우면 산 일정을 지운다.
+                #    그래서 is_gone() 을 구현한 스크래퍼는 «진짜 사라졌다»고 확인된 것만 지운다.
+                if type(self).is_gone is not BaseScraper.is_gone:
+                    confirmed, kept = [], 0
+                    for r in stale:
+                        verdict = self.is_gone(r['source_url'])
+                        if verdict is True:
+                            confirmed.append(r)
+                        else:
+                            kept += 1          # False(살아있음) 또는 None(확인 불가) → 보존
+                    if kept:
+                        self.logger.info(
+                            f"[{self.company_slug}] 삭제 후보 {len(stale)}건 중 {kept}건은 "
+                            f"확인 결과 살아있거나 확인 불가 → 보존"
+                        )
+                    stale = confirmed
+
+                stale_ids = [r['id'] for r in stale]
 
                 # ⚠️ 부분 실패 방어. 사이트가 잠깐 죽거나 상품 목록을 절반만 긁어온 크롤에서
                 #    그대로 지우면 멀쩡한 일정이 통째로 날아간다. 이번 크롤이 기존 대비

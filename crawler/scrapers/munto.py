@@ -526,6 +526,29 @@ class MuntoScraper(BaseScraper):
     def __init__(self):
         super().__init__('munto')
 
+    def is_gone(self, source_url: str) -> Optional[bool]:
+        """문토 상세 API 로 생사를 직접 확인한다.
+
+        ⚠️ 2026-09-10. 목록 API 는 살아있는 모임도 일부만 돌려준다(삭제 후보 40건 중
+        10건이 멀쩡히 열렸다). 그래서 «목록에 없다»만 믿고 지우면 산 일정을 지운다.
+        404 = 정말 사라짐. 200 = 살아있음. 그 밖(429·5xx·네트워크 오류) = 확인 불가 → 보존.
+        """
+        m = re.search(r'id=(\d+)', source_url or '')
+        if not m:
+            return None
+        try:
+            r = httpx.get(
+                f'{MUNTO_API_BASE}/socialing/{m.group(1)}',
+                headers=API_HEADERS, timeout=15,
+            )
+        except Exception:
+            return None
+        if r.status_code == 200:
+            return False
+        if r.status_code in (404, 410):
+            return True
+        return None
+
     def _fetch_list(self, client, category_id: int, min_expected: int) -> list:
         """카테고리 목록 조회. ⚠️ 문토 API가 간헐적으로 빈 목록(0개)이나 극소수만 돌려준다
         (2026-07-31: 최근 6회 중 1회 0개, 1회 8개). 그대로 두면 그 회차 갱신이 통째로
