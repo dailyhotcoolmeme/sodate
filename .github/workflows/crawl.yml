@@ -81,7 +81,14 @@ jobs:
           playwright install chromium --with-deps
           # 파이낸스라운지(노션 페이지)는 번들 Chromium을 "호환 안 되는 브라우저"로 막아
           # 실제 Chrome(channel='chrome')이 필요하다 — scrapers/finance_lounge.py 참고.
-          playwright install chrome --with-deps
+          #
+          # ⚠️ 2026-09-10. 이 한 줄 때문에 «전체 크롤»이 통째로 죽었다. 구글 apt 저장소가
+          #    깨진 파일 목록을 돌려주면(Hash Sum mismatch) 설치가 100번 코드로 죽고,
+          #    준비 단계 실패라 크롤이 시작조차 못 한다. 실제로 4회 연속 실패했다.
+          #    진짜 Chrome 이 필요한 업체는 파이낸스라운지 하나(일정 6건)뿐이므로,
+          #    설치가 실패해도 나머지 17곳 크롤은 그대로 진행시킨다(오너 결정).
+          playwright install chrome --with-deps || \
+            echo "::warning::진짜 Chrome 설치 실패(구글 저장소 문제) — 파이낸스라운지만 영향, 나머지는 계속 진행"
 
       - name: Run crawlers
         env:

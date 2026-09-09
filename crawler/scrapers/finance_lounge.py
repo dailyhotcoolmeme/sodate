@@ -171,7 +171,17 @@ class FinanceLoungeScraper(BaseScraper):
         번들 Chromium은 노션이 "호환 안 되는 브라우저" 오류 페이지로 막는다."""
         try:
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True, channel='chrome', args=['--no-sandbox'])
+                # ⚠️ 2026-09-10. 구글 apt 저장소 장애로 진짜 Chrome 설치가 실패할 수 있다.
+                #    그때 여기서 그냥 죽으면 «왜 안 되는지» 로그만 봐서는 알기 어려우므로,
+                #    사유를 분명히 남기고 조용히 0건으로 끝낸다(다른 업체 크롤은 계속된다).
+                try:
+                    browser = p.chromium.launch(headless=True, channel='chrome', args=['--no-sandbox'])
+                except Exception as e:
+                    self.logger.warning(
+                        '파이낸스라운지 건너뜀 — 진짜 Chrome 이 설치돼 있지 않다. '
+                        f'노션이 번들 Chromium 을 막아서 대체 불가. ({str(e)[:80]})'
+                    )
+                    return []
                 context = browser.new_context(locale='ko-KR', viewport={'width': 1280, 'height': 900})
                 page = context.new_page()
                 page.goto(NOTION_URL, timeout=30000, wait_until='domcontentloaded')
