@@ -93,7 +93,7 @@ class BaseScraper(ABC):
         """
         return None
 
-    def _select_all(self, columns: str, **filters) -> list[dict]:
+    def _select_all(self, columns: str, gte: Optional[tuple] = None, **filters) -> list[dict]:
         """events 를 «전부» 읽는다.
 
         ⚠️ 2026-09-10 사고. Supabase(PostgREST)는 한 번에 최대 1000행만 돌려준다.
@@ -110,6 +110,8 @@ class BaseScraper(ABC):
             q = self.supabase.table('events').select(columns)
             for col, val in filters.items():
                 q = q.eq(col, val)
+            if gte:
+                q = q.gte(gte[0], gte[1])
             chunk = q.range(start, start + PAGE - 1).execute().data or []
             rows.extend(chunk)
             if len(chunk) < PAGE:

@@ -8,6 +8,7 @@ event_type='socialing'. socialing_category = salonCategory(일과 커리어/라�
 성비 필드(femaleCapacity/maleCapacity)가 스키마에 있으나 대개 null → 있으면만 채운다.
 정원은 성별 없는 총원(maxCapacity/attendeeCount) → participant_stats 에 담는다.
 """
+import re
 import time
 from datetime import datetime, timezone, timedelta
 
@@ -171,10 +172,25 @@ class DonghaengScraper(BaseScraper):
             cur_parts.append(f'[{t}]\n{b}' if t and b else (t or b))
         description = format_donghaeng_desc('\n\n'.join(cur_parts)) if cur_parts else None
 
+        # 나이는 제목 괄호 안에만 있다 — 예: "… (25-35세)", "… (27~37세 / 시즌 6)".
+        # 전용 필드가 없어서 그동안 전부 비어 있었다(2026-09-10 전수 조사에서 발견,
+        # 앞으로 일정 165건 중 15건이 제목에 나이를 달고 있었다).
+        # ⚠️ 상세 페이지 아래쪽 «다른 모임 추천»에도 나이가 찍히므로 본문은 쓰지 않는다.
+        age_min = age_max = None
+        am = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*세', m.get('title', '') or '')
+        if am:
+            a, b = int(am.group(1)), int(am.group(2))
+            if a > b:
+                a, b = b, a
+            if 15 <= a <= 80 and 15 <= b <= 80:
+                age_min, age_max = a, b
+
         events.append(EventModel(
             external_id=f'donghaeng_{mid}',
             title=title,
             description=description,
+            age_range_min=age_min,
+            age_range_max=age_max,
             thumbnail_urls=[thumb] if thumb else [],
             event_date=event_date,
             location_region=region,

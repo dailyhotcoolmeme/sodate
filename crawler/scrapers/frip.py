@@ -336,13 +336,8 @@ class FripScraper(BaseScraper):
         try:
             company_id = self.get_company_id()
             now = datetime.now(timezone.utc).isoformat()
-            rows = (
-                self.supabase.table('events')
-                .select('source_url')
-                .eq('company_id', company_id)
-                .gte('event_date', now)
-                .execute()
-            ).data or []
+            # ⚠️ 한 번에 1000행 제한이 있어 _select_all 로 끝까지 이어 읽는다(2026-09-10).
+            rows = self._select_all('source_url', gte=('event_date', now), company_id=company_id)
             ids = set()
             for r in rows:
                 m = re.search(r'/products/(\d+)', r.get('source_url') or '')
