@@ -61,6 +61,11 @@ jobs:
         run: |
           cd crawler
           pip install -r requirements.txt
+          # ⚠️ 2026-09-10. 구글 크롬 apt 저장소가 깨진 파일 목록을 돌려주면
+          #    (dl.google.com ... Hash Sum mismatch) --with-deps 안의 apt-get update 가
+          #    통째로 실패해 «준비 단계»에서 크롤이 죽는다. 실제로 세 워크플로가 동시에
+          #    죽었다. 크로미움은 구글 저장소가 필요 없으므로 그 목록만 치우고 설치한다.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           playwright install chromium --with-deps
 
       - name: Refresh soldout/price

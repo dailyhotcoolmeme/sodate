@@ -53,6 +53,9 @@ jobs:
         run: |
           cd crawler
           pip install -r requirements.txt
+          # 구글 크롬 apt 저장소가 깨져 있으면 --with-deps 가 통째로 실패한다
+          # (2026-09-10 사고). 크로미움엔 그 저장소가 필요 없으니 목록만 치운다.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           playwright install chromium --with-deps
 
       - name: Run review crawlers
