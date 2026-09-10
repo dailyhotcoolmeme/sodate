@@ -34,6 +34,25 @@ MIN_COMPLETION_RATE = 0.6  # 이 미만이면 ERROR(표본 3건 이상일 때만
 MIN_SAMPLE_FOR_RATE_CHECK = 3
 
 
+def select_all(query_builder_factory) -> list[dict]:
+    """events 를 «전부» 읽는다.
+
+    ⚠️ 2026-09-10. Supabase(PostgREST)는 한 번에 최대 1000행만 돌려준다.
+    이 파일의 점검들이 제한 없이 select 하고 있어서, 1000건이 넘는 업체(문토)는
+    «114/1000건» 처럼 분모가 1000 에서 잘린 채 메일로 나갔다. 실제로는 1700건이 넘는다.
+    factory 는 매번 «새 쿼리»를 만들어야 한다(빌더는 재사용하면 조건이 누적된다).
+    """
+    PAGE = 1000
+    rows: list[dict] = []
+    start = 0
+    while True:
+        chunk = query_builder_factory().range(start, start + PAGE - 1).execute().data or []
+        rows.extend(chunk)
+        if len(chunk) < PAGE:
+            return rows
+        start += PAGE
+
+
 def check_completeness(sb) -> list[dict]:
     """업체별 '가격+나이 둘 다 채워짐' 완성도 점검(admin 완료조건과 동일 기준).
     이번 사고(WRITES_PRICE 누락·age_male 미생성·정규식 불일치 6건)가 전부 이
@@ -49,8 +68,10 @@ def check_completeness(sb) -> list[dict]:
         if not c.get('crawl_enabled', True):
             continue
         slug = c['slug']
-        ev = sb.table('events').select('price_male,price_female,age_male,age_female').eq('company_id', c['id'])\
-            .eq('is_active', True).gte('event_date', now.isoformat()).execute().data
+        ev = select_all(lambda: sb.table('events')
+                        .select('price_male,price_female,age_male,age_female')
+                        .eq('company_id', c['id']).eq('is_active', True)
+                        .gte('event_date', now.isoformat()))
         total = len(ev)
         if total == 0:
             issues.append({'level': 'ERROR', 'company': slug,
@@ -74,9 +95,10 @@ def check_field_consistency(sb) -> list[dict]:
     이번 사고를 정확히 잡아내는 체크 — price_detail이 조용히 죽는 걸 막는다."""
     issues = []
     now = datetime.now(timezone.utc)
-    ev = sb.table('events').select(
-        'id,source_url,price_male,price_female,price_detail,companies(slug)'
-    ).eq('is_active', True).gte('event_date', now.isoformat()).not_.is_('price_detail', 'null').execute().data
+    ev = select_all(lambda: sb.table('events')
+                    .select('id,source_url,price_male,price_female,price_detail,companies(slug)')
+                    .eq('is_active', True).gte('event_date', now.isoformat())
+                    .not_.is_('price_detail', 'null'))
     for e in ev:
         d = e['price_detail'] or {}
         slug = (e.get('companies') or {}).get('slug', '?')
@@ -161,8 +183,10 @@ def check_nonimweb_live(sb) -> list[dict]:
         if not cid_row:
             continue
         cid = cid_row[0]['id']
-        dbevs = sb.table('events').select('id,source_url,price_male,price_female').eq('company_id', cid)\
-            .eq('is_active', True).gte('event_date', (now + timedelta(minutes=20)).isoformat()).execute().data
+        dbevs = select_all(lambda: sb.table('events')
+                           .select('id,source_url,price_male,price_female')
+                           .eq('company_id', cid).eq('is_active', True)
+                           .gte('event_date', (now + timedelta(minutes=20)).isoformat()))
         by_url = {e['source_url']: e for e in dbevs}
         try:
             evs = ScraperClass().scrape()

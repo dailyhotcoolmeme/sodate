@@ -176,7 +176,13 @@ class DonghaengScraper(BaseScraper):
         # 전용 필드가 없어서 그동안 전부 비어 있었다(2026-09-10 전수 조사에서 발견,
         # 앞으로 일정 165건 중 15건이 제목에 나이를 달고 있었다).
         # ⚠️ 상세 페이지 아래쪽 «다른 모임 추천»에도 나이가 찍히므로 본문은 쓰지 않는다.
+        # ⚠️ 나이는 «두 군데» 다 넣어야 한다(2026-09-10 실측).
+        #    · age_range_min/max → 앱의 «나이 필터»가 보는 칸
+        #    · age_male/age_female → 앱 카드·상세에 «글자로 찍히는» 칸
+        #    하나만 넣으면 필터엔 걸리는데 화면엔 안 보이거나 그 반대가 된다.
+        #    표기 형식은 문토와 같게 'NN~NN'(앱이 뒤에 '세'를 붙인다).
         age_min = age_max = None
+        age_disp = None
         am = re.search(r'(\d{2})\s*[-~]\s*(\d{2})\s*세', m.get('title', '') or '')
         if am:
             a, b = int(am.group(1)), int(am.group(2))
@@ -184,6 +190,7 @@ class DonghaengScraper(BaseScraper):
                 a, b = b, a
             if 15 <= a <= 80 and 15 <= b <= 80:
                 age_min, age_max = a, b
+                age_disp = f'{a}~{b}'
 
         events.append(EventModel(
             external_id=f'donghaeng_{mid}',
@@ -191,6 +198,8 @@ class DonghaengScraper(BaseScraper):
             description=description,
             age_range_min=age_min,
             age_range_max=age_max,
+            age_male=age_disp,
+            age_female=age_disp,
             thumbnail_urls=[thumb] if thumb else [],
             event_date=event_date,
             location_region=region,

@@ -696,8 +696,11 @@ def check_data_drift(sb) -> list[dict]:
     try:
         comps = {c['id']: c['name'] for c in sb.table('companies').select('id,name').execute().data}
         now_iso = datetime.now(timezone.utc).isoformat()
+        # ⚠️ 2026-09-10. 예전엔 4000건에서 멈췄다. 지금 앞으로 일정이 3500건이라
+        #    곧 상한에 닿는데, 넘으면 «조용히 잘린 채» 드리프트를 판정하게 된다.
+        #    끝까지 읽되, 폭주 방지용 안전 상한만 크게 둔다.
         rows = []
-        for off in range(0, 4000, 1000):
+        for off in range(0, 100000, 1000):
             d = (sb.table('events')
                  .select('company_id,is_closed,price_male,price_female,seats_left_male,seats_left_female')
                  .gte('event_date', now_iso).range(off, off + 999).execute()).data or []
