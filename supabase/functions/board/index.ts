@@ -346,6 +346,26 @@ serve(async (req) => {
       if (bad) return json({ error: bad }, 400)
       const tagResult = await resolveTagId(body.tagId)
       if ('error' in tagResult) return json({ error: tagResult.error }, 400)
+
+      // ⚠️ 2026-09-12. 앱이 «보내다 실패»했을 때 한 번 자동으로 다시 보낸다.
+      //    그런데 첫 요청이 실제로는 서버에 닿아 글이 만들어졌을 수도 있다(응답만 못 받은 경우).
+      //    그대로 두면 같은 글이 두 번 올라가거나, 아래 쿨다운에 걸려 «잠시 후에 다시
+      //    올려주세요»라는 엉뚱한 안내를 본다. 같은 사람이 같은 제목·본문을 2분 안에
+      //    다시 보내면 «이미 올라간 그 글»을 그대로 돌려준다(새로 만들지 않는다).
+      {
+        const since = new Date(Date.now() - 120_000).toISOString()
+        const { data: dup } = await supabase
+          .from('board_posts')
+          .select('id')
+          .eq('owner_token', hash)
+          .eq('title', title)
+          .eq('content', content)
+          .gte('created_at', since)
+          .limit(1)
+          .maybeSingle()
+        if (dup?.id) return json({ post: dup })
+      }
+
       if (await tooSoon('board_posts', cfg?.post_cooldown_seconds ?? 30))
         return json({ error: '잠시 후에 다시 올려주세요.' }, 429)
 
@@ -526,6 +546,23 @@ serve(async (req) => {
       if (badNick) return json({ error: badNick }, 400)
       const bad = moderate(content, isSecret)
       if (bad) return json({ error: bad }, 400)
+      // 글과 같은 이유로 «다시 보내기»가 댓글을 두 번 달지 않게 한다(2026-09-12, 위 주석 참고).
+      {
+        const since = new Date(Date.now() - 120_000).toISOString()
+        let q = supabase
+          .from('board_comments')
+          .select('id')
+          .eq('owner_token', hash)
+          .eq('post_id', postId)
+          .eq('is_secret', isSecret)
+          .eq(isSecret ? 'secret_content' : 'content', content)
+          .gte('created_at', since)
+          .limit(1)
+        q = parentId ? q.eq('parent_id', parentId) : q.is('parent_id', null)
+        const { data: dup } = await q.maybeSingle()
+        if (dup?.id) return json({ comment: dup })
+      }
+
       if (await tooSoon('board_comments', cfg?.comment_cooldown_seconds ?? 10))
         return json({ error: '잠시 후에 다시 남겨주세요.' }, 429)
 

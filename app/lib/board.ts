@@ -46,14 +46,40 @@ async function extractError(error: any, data: any): Promise<string | null> {
   return null
 }
 
+/** 서버까지 닿지도 못한 «보내기 실패»인가(응답 자체가 없는 경우). */
+function isNetworkFailure(error: any): boolean {
+  if (!error) return false
+  // 응답이 있으면 context 가 실려 온다 → 서버가 답한 것이므로 다시 보내지 않는다.
+  if (error.context) return false
+  const m = String(error.name ?? '') + ' ' + String(error.message ?? '')
+  return /FunctionsFetchError|Failed to send a request|Network request failed|aborted|timeout/i.test(m)
+}
+
 async function call(body: Record<string, unknown>): Promise<any | { error: string }> {
   const ownerToken = await getOrCreateToken()
-  const { data, error } = await supabase.functions.invoke('board', {
-    body: { ...body, ownerToken },
-  })
-  const msg = await extractError(error, data)
-  if (msg) return { error: msg }
-  return data ?? {}
+
+  // ⚠️ 2026-09-12. 실제로 몇 분 동안 요청이 서버에 아예 닿지 않는 일이 있었다
+  //    (같은 폰이 14:16 실패 → 14:38 성공). 그때 앱이 영어 원문을 그대로 띄워서
+  //    사용자는 무슨 말인지 알 수 없었다. 이제 한 번 조용히 다시 보내고,
+  //    그래도 안 되면 사람 말로 안내한다.
+  //    ⚠️ 다시 보내기가 글·댓글을 두 번 올리지 않게, 서버(createPost/createComment)가
+  //       «2분 안의 같은 내용»은 이미 올라간 것을 그대로 돌려준다.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase.functions.invoke('board', {
+      body: { ...body, ownerToken },
+    })
+    if (isNetworkFailure(error) && attempt === 0) {
+      await new Promise((r) => setTimeout(r, 1200))
+      continue
+    }
+    if (isNetworkFailure(error)) {
+      return { error: '연결이 잠시 불안정합니다. 잠시 후 다시 시도해주세요.' }
+    }
+    const msg = await extractError(error, data)
+    if (msg) return { error: msg }
+    return data ?? {}
+  }
+  return { error: '연결이 잠시 불안정합니다. 잠시 후 다시 시도해주세요.' }
 }
 
 // ── 글 ──
