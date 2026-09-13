@@ -72,7 +72,10 @@ class YeongyulScraper(BaseScraper):
                 )
                 page = context.new_page()
 
-                # 목록 페이지
+                # ⚠️ 2026-09-14. 목록에 «페이지 넘김»이 생겼다(?PB_...=2, =3).
+                #    1쪽만 읽고 있어서 26건 중 4건만 가져오고 있었다 — 워치독이
+                #    «3회 연속 적게 들어옴»으로 잡아낸 원인이 이것이다.
+                #    쪽 번호 파라미터 이름은 사이트가 바꿀 수 있으니 목록에서 직접 읽어낸다.
                 page.goto(self.LIST_URL, timeout=20000)
                 # networkidle 을 못 기다려도 크롤을 죽이지 않는다(2026-09-05).
                 try:
@@ -81,11 +84,41 @@ class YeongyulScraper(BaseScraper):
                     self.logger.info('연결 목록 페이지 로딩이 느려 기다리지 않고 진행')
                 time.sleep(2)
 
-                # 이벤트 링크 수집
-                raw_links = page.eval_on_selector_all(
-                    'a[href*="ab-"]',
-                    'els => [...new Set(els.map(e => e.href))].filter(h => /ab-\\d{4,}-\\d{3,}/.test(h))'
-                )
+                # 쪽 넘김 주소 모으기(1쪽은 현재 페이지). 순서·중복 정리.
+                page_urls: list[str] = [self.LIST_URL]
+                try:
+                    pager = page.eval_on_selector_all(
+                        'a[href]',
+                        "els => [...new Set(els.map(e => e.href))]"
+                        ".filter(h => /[?&]PB_\\d+=\\d+/.test(h))"
+                    )
+                    for h in sorted(set(pager)):
+                        if h not in page_urls:
+                            page_urls.append(h)
+                except Exception as e:
+                    self.logger.warning(f'괜찮소 쪽 목록 조회 실패(1쪽만 진행): {str(e)[:60]}')
+                if len(page_urls) > 1:
+                    self.logger.info(f'괜찮소 목록 {len(page_urls)}쪽')
+
+                # 이벤트 링크 수집 — 모든 쪽을 합친다.
+                raw_links: list[str] = []
+                for i, u in enumerate(page_urls[:12]):   # 안전 상한
+                    if i:   # 1쪽은 이미 열려 있다
+                        try:
+                            page.goto(u, timeout=20000)
+                            try:
+                                page.wait_for_load_state('networkidle', timeout=8000)
+                            except Exception:
+                                pass
+                            time.sleep(1.5)
+                        except Exception as e:
+                            self.logger.warning(f'괜찮소 {i+1}쪽 열기 실패(건너뜀): {str(e)[:60]}')
+                            continue
+                    found = page.eval_on_selector_all(
+                        'a[href*="ab-"]',
+                        'els => [...new Set(els.map(e => e.href))].filter(h => /ab-\\d{4,}-\\d{3,}/.test(h))'
+                    )
+                    raw_links.extend(found)
                 # canonical URL로 정규화 후 set으로 중복 제거 (쿼리스트링/모바일 변형 href 통합)
                 event_links: list[str] = []
                 seen_links: set[str] = set()
