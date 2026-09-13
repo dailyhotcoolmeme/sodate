@@ -13,27 +13,41 @@ logger = logging.getLogger('supabase')
 #    깃허브가 그때마다 실패 메일을 보내 오너가 계속 받았다.
 #    자료가 잘못될 일은 없고 그저 잠깐 못 받은 것이므로, 여기서 몇 번 다시 시도한다.
 #    이 파일의 get_supabase() 를 크롤러 전체가 쓰므로 한 곳만 고치면 전부 적용된다.
-_RETRY_ON = (
-    'gateway timeout',
-    'service unavailable',
-    'bad gateway',
-    'timed out',
-    'timeout',
-    'connection reset',
-    'connection aborted',
-    'temporarily unavailable',
-    'server disconnected',
-    'remote end closed',
-)
 _MAX_TRIES = 4
 _BACKOFF = (1, 3, 7)   # 초. 마지막 시도 뒤에는 안 기다린다.
 
+# ⚠️ «다시 시도할 오류»를 나열하는 방식은 새 오류가 나올 때마다 또 뚫린다.
+#    실제로 'Gateway Timeout' 만 넣었다가 <ConnectionTerminated ...> 에 그대로 죽었다.
+#    그래서 반대로 «다시 시도해도 소용없는 것»만 골라내고 나머지는 전부 다시 시도한다.
+#    소용없는 것 = 요청 자체가 틀린 경우. PostgREST 는 그럴 때 code 를 준다
+#    (PGRST### / 42### / 23### …). 그런 응답은 즉시 실패시켜 진짜 버그를 숨기지 않는다.
+_PERMANENT_HINTS = (
+    'permission denied',
+    'violates',              # 제약 위반
+    'duplicate key',
+    'invalid input syntax',
+    'does not exist',
+    'could not find',
+)
+
 
 def _is_transient(err: Exception) -> bool:
-    """«잠깐 못 받은 것»인가. 자료가 틀렸다는 오류(권한·문법 등)는 다시 시도해도 소용없다."""
-    msg = str(getattr(err, 'message', '') or '') + ' ' + str(err)
-    low = msg.lower()
-    return any(k in low for k in _RETRY_ON)
+    """«잠깐 못 받은 것»인가. 요청 자체가 틀린 오류는 다시 시도해도 소용없다."""
+    # PostgREST 가 code 를 준다 = 서버가 요청을 «이해하고» 거절한 것 → 영구 오류.
+    code = None
+    if isinstance(getattr(err, 'json', None), dict):
+        code = err.json.get('code')
+    for attr in ('code',):
+        code = code or getattr(err, attr, None)
+    if isinstance(err, dict):
+        code = code or err.get('code')
+    if code:
+        return False
+
+    low = (str(getattr(err, 'message', '') or '') + ' ' + str(err)).lower()
+    if any(k in low for k in _PERMANENT_HINTS):
+        return False
+    return True
 
 
 def _wrap_execute(cls) -> None:
