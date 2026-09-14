@@ -17,8 +17,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useColors } from '@/hooks/useColors'
 import { useThemeStore } from '@/stores/themeStore'
 import * as Updates from 'expo-updates'
+import Constants from 'expo-constants'
 
-const APP_VERSION = '1.0.0'
+// ⚠️ 손으로 적어두면 어긋난다 — 실제로 1.2.0 을 내고도 이 화면엔 1.0.0 으로 남아 있었다
+// (2026-09-14 발견). MY 화면과 같이 app.json 의 version 을 그대로 읽는다.
+const APP_VERSION = Constants.expoConfig?.version ?? '-'
 // 2026-08-07: iOS build 8이 OTA 업데이트를 아예 못 받는 문제(채널 헤더 누락) 진단용.
 // 이 줄 자체가 화면에 안 뜬다면 그 사실 자체가 "이 기기가 OTA를 못 받는다"는 증거다.
 const updateInfo = `${Updates.channel ?? '없음(채널 미설정)'} · ${Updates.isEmbeddedLaunch ? '내장번들' : (Updates.updateId ?? '').slice(0, 8)}`

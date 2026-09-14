@@ -23,6 +23,7 @@ import { useAvatarStore } from '@/stores/avatarStore'
 import { getAvatar, randomAvatarId } from '@/lib/avatars'
 import AvatarPicker from '@/components/AvatarPicker'
 import Constants from 'expo-constants'
+import * as Updates from 'expo-updates'
 
 /**
  * MY 탭 — 개인 활동·설정을 한곳에 모은 화면(2026-08-21, 후배 검토 통과).
@@ -38,19 +39,44 @@ import Constants from 'expo-constants'
 // app.json 의 version 을 그대로 읽어 다시는 어긋나지 않게 한다.
 const APP_VERSION = Constants.expoConfig?.version ?? '-'
 
+/**
+ * 버전 줄을 «길게 누르면» 지금 앱이 실제로 쓰고 있는 번들 정보를 보여준다(오너 전용 확인).
+ * 사용자에게는 평소 안 보인다 — 그냥 버전 숫자만 보인다.
+ *
+ * 「고친 게 왜 안 보이지」를 따질 때 이 값이 결정적이다. 배포한 업데이트 번호와
+ * 여기 뜨는 번호가 같으면 그 폰은 최신을 쓰고 있는 것이다.
+ */
+function updateDiagText(): string {
+  if (Updates.isEmbeddedLaunch) {
+    return '앱에 처음부터 들어있던 화면입니다.\n(아직 업데이트를 한 번도 안 받음)'
+  }
+  const id = (Updates.updateId ?? '').slice(0, 8) || '알 수 없음'
+  const at = Updates.createdAt
+    ? new Date(Updates.createdAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+    : '알 수 없음'
+  return `업데이트 번호: ${id}\n받은 시각: ${at}`
+}
+
 function Row({
-  icon, label, right, badge, onPress, colors,
+  icon, label, right, badge, onPress, onLongPress, colors,
 }: {
   icon: keyof typeof Ionicons.glyphMap
   label: string
   right?: string
   badge?: string
   onPress?: () => void
+  onLongPress?: () => void
   colors: AppColors
 }) {
   const styles = useMemo(() => makeStyles(colors), [colors])
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} disabled={!onPress} activeOpacity={onPress ? 0.7 : 1}>
+    <TouchableOpacity
+      style={styles.row}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      disabled={!onPress && !onLongPress}
+      activeOpacity={onPress ? 0.7 : 1}
+    >
       <Ionicons name={icon} size={20} color={colors.textTertiary} style={styles.rowIcon} />
       <Text style={styles.rowLabel}>{label}</Text>
       {badge && <View style={styles.badge}><Text style={styles.badgeText}>{badge}</Text></View>}
@@ -197,7 +223,14 @@ export default function MyScreen() {
         {/* 제휴 문의는 앱 안 화면이 아니라 소개 사이트로 보낸다(2026-09-06 오너 지시).
             그쪽이 제휴 등급·혜택·FAQ가 모두 있는 정본이고, admin에서 문구를 바로 고칠 수 있다. */}
         <Row colors={colors} icon="storefront-outline" label="제휴문의" onPress={() => openOutlink(PARTNER_PAGE_URL)} />
-        <Row colors={colors} icon="cube-outline" label="버전" right={APP_VERSION} />
+        {/* 길게 누르면 지금 쓰고 있는 번들 정보가 뜬다(오너 확인용). 평소엔 안 보인다. */}
+        <Row
+          colors={colors}
+          icon="cube-outline"
+          label="버전"
+          right={APP_VERSION}
+          onLongPress={() => Alert.alert('업데이트 정보', updateDiagText())}
+        />
       </ScrollView>
       <BottomNav current="my" />
 
