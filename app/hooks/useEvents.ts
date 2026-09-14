@@ -36,6 +36,44 @@ const FEED_COLUMNS =
 const CACHE_KEY = 'sodate-events-cache-v1'
 const CACHE_MAX_AGE_MS = 10 * 60 * 1000 // 10분 — 가격 변동·마감 등 실시간성 때문에 그 이상은 안 믿는다
 
+/**
+ * 목록 조회 — 한 번 실패했다고 바로 포기하지 않는다.
+ *
+ * ⚠️ 2026-09-14. 소개팅·소셜링 목록에 「불러오지 못했어요」가 떴다. 서버는 멀쩡했다
+ *    (그 시각 같은 필터로 직접 조회 0.07~0.19초, 3회 모두 정상). 원인은 앱이 조회
+ *    한 번 실패하면 «그대로 끝»이었다는 것 — 재시도가 없어서, 지하철·엘리베이터처럼
+ *    아주 잠깐 끊기는 순간이 그대로 빈 화면이 됐다.
+ *
+ * 서버가 «이해하고 거절한 응답»(권한·문법 오류 등 PostgREST code 가 있는 것)은
+ * 다시 해도 소용없으므로 즉시 넘긴다. 못 받은 경우만 다시 시도한다.
+ */
+const RETRY_DELAYS_MS = [400, 1200]
+
+function isPermanentError(err: unknown): boolean {
+  const e = err as { code?: string } | null
+  return !!(e && typeof e.code === 'string' && e.code.length > 0)
+}
+
+async function fetchWithRetry<T extends { error: unknown }>(run: () => PromiseLike<T>): Promise<T> {
+  let last: T | undefined
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    let res: T
+    try {
+      res = await run()
+    } catch (e) {
+      // 요청 자체가 못 나간 경우(네트워크 끊김·타임아웃)도 같은 규칙으로 다룬다.
+      if (attempt === RETRY_DELAYS_MS.length) throw e
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]))
+      continue
+    }
+    if (!res.error) return res
+    if (isPermanentError(res.error) || attempt === RETRY_DELAYS_MS.length) return res
+    last = res
+    await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]))
+  }
+  return last as T
+}
+
 // 소셜링 확장(2026-08-21): dating/socialing 이 같은 AsyncStorage 키를 쓰면 탭을 오갈 때
 // 서로의 첫 페이지 캐시를 덮어쓴다. eventType 별로 저장 슬롯을 나눈다.
 function cacheStoreKey(eventType: string) {
@@ -273,7 +311,7 @@ export function useEvents(
    */
   const fetchFilteredPages = useCallback(async (page: number) => {
     const from = page * PAGE_SIZE
-    const { data, error: err } = await buildQuery(from, from + PAGE_SIZE - 1)
+    const { data, error: err } = await fetchWithRetry(() => buildQuery(from, from + PAGE_SIZE - 1))
     if (err) throw err
     const rows = (data ?? []) as EventWithCompany[]
     // exhausted 는 반드시 걸러내기 전 개수로 판단한다 — 걸러진 뒤 개수로 판단하면
@@ -298,7 +336,18 @@ export function useEvents(
       setHasMore(!exhausted)
       writeEventsCache(cacheSlot, cacheKey, rows)
     } catch (e: unknown) {
-      if (!opts?.silent) setError(e instanceof Error ? e.message : '알 수 없는 오류')
+      if (!opts?.silent) {
+        // ⚠️ 2026-09-14. 예전엔 곧바로 오류 화면으로 덮었다. 그런데 같은 필터로 마지막에
+        //    본 목록이 기기에 남아 있는 경우가 많다. 빈 화면보다 «조금 지난 목록»이 낫다.
+        //    (캐시는 10분까지만 믿는다 — 그보다 오래된 건 readEventsCache 가 안 준다.)
+        const cached = await readEventsCache(cacheSlot, cacheKey)
+        if (cached && cached.length) {
+          setEvents(cached)
+          setHasMore(false)
+        } else {
+          setError('연결이 잠시 불안정합니다. 잠시 후 다시 시도해주세요.')
+        }
+      }
     } finally {
       setLoading(false)
     }

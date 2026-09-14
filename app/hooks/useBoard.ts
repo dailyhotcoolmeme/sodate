@@ -46,6 +46,42 @@ const PREFETCH_TTL_MS = 15_000
 type ListResult = { data: unknown; count: number | null; error: unknown }
 let prefetched: { at: number; promise: Promise<ListResult> } | null = null
 
+/**
+ * 한 번 실패했다고 바로 포기하지 않는다.
+ *
+ * ⚠️ 2026-09-14. 홈(커뮤니티)에 「불러오지 못했어요」가 반복해서 떴다. 서버는 멀쩡했다
+ *    — 그 시각 같은 조회를 직접 해보니 0.07~0.19초로 3회 모두 정상이었다.
+ *    원인은 앱이 조회 한 번 실패하면 «그대로 끝»이었다는 것이다. 재시도가 없어서
+ *    지하철·엘리베이터처럼 아주 잠깐 끊기는 순간이 그대로 빈 화면이 됐다.
+ *
+ * 서버가 «이해하고 거절한 응답»(권한·문법 오류 등 code 가 붙은 것)은 다시 해도
+ * 소용없으므로 즉시 넘긴다. 못 받은 경우만 다시 시도한다.
+ */
+const RETRY_DELAYS_MS = [400, 1200]
+
+function isPermanentError(err: unknown): boolean {
+  const e = err as { code?: string } | null
+  return !!(e && typeof e === 'object' && typeof e.code === 'string' && e.code.length > 0)
+}
+
+async function withRetry(run: () => PromiseLike<ListResult>): Promise<ListResult> {
+  let last: ListResult = { data: null, count: null, error: true }
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const res = await run()
+      if (!res.error) return res
+      if (isPermanentError(res.error)) return res
+      last = res
+    } catch {
+      last = { data: null, count: null, error: true }
+    }
+    if (attempt < RETRY_DELAYS_MS.length) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]))
+    }
+  }
+  return last
+}
+
 function firstPageQuery() {
   return supabase
     .from('board_posts')
@@ -63,7 +99,7 @@ function firstPageQuery() {
  * 실패해도 조용히 무시한다. 화면이 어차피 다시 조회한다.
  */
 export function prefetchBoardList() {
-  prefetched = { at: Date.now(), promise: firstPageQuery().catch(() => ({ data: null, count: null, error: true })) }
+  prefetched = { at: Date.now(), promise: withRetry(firstPageQuery).catch(() => ({ data: null, count: null, error: true })) }
 }
 
 /** 목록·상세에서 조인해 온 말머리. 비활성화된 말머리도 과거 글에서는 그대로 보인다
@@ -192,13 +228,13 @@ export function useBoardList(page: number, search = '') {
     // 공지를 맨 위에 고정한다(2026-09-01 오너 지시). 여러 개면 전부 위에 최신순으로.
     // ⚠️ 정렬 키로 올리는 방식이라 공지는 1페이지 상단에만 모인다 — 2페이지부터는 안 보인다.
     //    공지가 페이지마다 반복되지 않아야 하므로 이게 맞다.
-    q.order('is_notice', { ascending: false })
-      .order('created_at', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1)
-      .then(
-        (r) => finish({ data: r.data, count: r.count, error: r.error }),
-        () => finish({ data: null, count: null, error: true }),
-      )
+    const runPage = () =>
+      q.order('is_notice', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1)
+        .then((r) => ({ data: r.data, count: r.count, error: r.error })) as Promise<ListResult>
+
+    withRetry(runPage).then(finish, () => finish({ data: null, count: null, error: true }))
   }, [page, search, isFirstPage])
 
   useEffect(() => { load() }, [load])
