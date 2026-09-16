@@ -476,7 +476,10 @@ class BaseScraper(ABC):
                 #    너무 적게 가져왔으면 삭제를 건너뛴다(다음 정상 크롤에서 정리됨).
                 #    '빈 배열이면 스킵'만으로는 9개 중 3개만 긁힌 경우를 못 막는다.
                 keep = len(rows) - len(stale_ids)          # 이번에도 확인된 기존 이벤트
-                if rows and keep < len(rows) * 0.5:
+                # 정확히 절반만 남은 경우도 부분 수집으로 본다. 로꼬처럼 두 상품이
+                # 같은 횟수의 일정을 가질 때 한 상품을 놓치면 6/12가 되어, '< 50%'
+                # 조건으로는 살아 있는 다른 상품 일정을 지워 버린다.
+                if rows and keep <= len(rows) * 0.5:
                     self.logger.warning(
                         f"[{self.company_slug}] 스테일 정리 건너뜀 — 기존 {len(rows)}건 중 "
                         f"{keep}건만 재확인됨(부분 실패 의심). 삭제 후보 {len(stale_ids)}건 보존"
