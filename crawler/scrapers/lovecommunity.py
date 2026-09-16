@@ -74,6 +74,7 @@ class LovecommunityLoco(BaseScraper):
 
     def scrape(self) -> list[EventModel]:
         events: list[EventModel] = []
+        now = datetime.now()
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
@@ -104,6 +105,7 @@ class LovecommunityLoco(BaseScraper):
                 #    널뛰었다(워치독이 이걸 '급락'으로 잡아 오탐 메일을 보냈다). 한 번은 다시
                 #    해보고, 그래도 안 되면 몇 개를 놓쳤는지 로그에 남긴다.
                 skipped: list[str] = []
+                missing_schedule_details: list[tuple[str, list[tuple[int, int]]]] = []
                 for idx in idxs:
                     product_url = f'{self.BASE_URL}/party/?idx={idx}'
                     try:
@@ -165,6 +167,31 @@ class LovecommunityLoco(BaseScraper):
 
                         soup = BeautifulSoup(page.content(), 'html.parser')
                         new_events = self._parse_product_page(soup, idx, widget)
+
+                        # 예약 위젯에는 앞으로 열릴 날짜가 있는데, 상세 본문에는 날짜·시간
+                        # 명단이 없으면 정확한 시작 시각을 알 수 없다. 이 경우 19:00처럼
+                        # 추정해 저장하면 앱에 틀린 일정이 나가므로, 부분 결과를 성공으로
+                        # 저장하지 않고 기존 일정 보존 + 워치독 실패 알림으로 넘긴다.
+                        future_widget_dates: list[tuple[int, int]] = []
+                        for month, day in (widget or {}):
+                            try:
+                                candidate = datetime(now.year, month, day)
+                                if candidate.date() < now.date():
+                                    candidate = datetime(now.year + 1, month, day)
+                                if 0 <= (candidate.date() - now.date()).days <= 31:
+                                    future_widget_dates.append((month, day))
+                            except ValueError:
+                                continue
+                        parsed_dates = {
+                            (event.event_date.month, event.event_date.day)
+                            for event in new_events
+                        }
+                        missing_dates = [
+                            date for date in future_widget_dates if date not in parsed_dates
+                        ]
+                        if missing_dates:
+                            missing_schedule_details.append((str(idx), missing_dates))
+
                         events.extend(new_events)
                         self.logger.info(f'Loco idx={idx}: {len(new_events)}개 이벤트 파싱')
                     except Exception as e:
@@ -176,6 +203,17 @@ class LovecommunityLoco(BaseScraper):
                         f'Loco 상품 {len(idxs)}개 중 {len(skipped)}개 못 가져옴 '
                         f'(idx={",".join(skipped)}) — 이만큼 일정이 빠집니다'
                     )
+
+                if missing_schedule_details:
+                    details = ', '.join(
+                        f'idx={idx}({"/".join(f"{month:02d}-{day:02d}" for month, day in dates)})'
+                        for idx, dates in missing_schedule_details
+                    )
+                    self.logger.error(
+                        'Loco 예약 위젯에는 미래 일정이 있지만 상세 본문에 정확한 날짜·시간 '
+                        f'정보가 없음: {details} — 추정 저장하지 않고 이번 수집을 실패 처리'
+                    )
+                    events = []
 
                 browser.close()
         except Exception as e:
