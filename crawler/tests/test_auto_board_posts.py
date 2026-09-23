@@ -35,11 +35,22 @@ def test_valid_rejects_foreign_artifacts_and_unknown_jamo():
     assert _valid(Draft('제목', '이거 ㄱㅊ? ㅋㅋ', '연애'), seen)
 
 
+def test_valid_rejects_unapproved_emoticons_and_time_weather_context():
+    seen: set[str] = set()
+    assert not _valid(Draft('제목', '이거 괜찮음 :)', '연애'), seen)
+    assert not _valid(Draft('제목', '이거 어떻게 하지 ㅠ', '연애'), seen)
+    assert not _valid(Draft('밤공기 좋네', '산책하니까 날씨 좋음', '일상'), seen)
+    assert not _valid(Draft('점심 추천', '오늘 뭐먹지?', '일상'), seen)
+    assert not _valid(Draft('제목', '너무 웃김 ㅋㅋㅋㅋ', '일상'), seen)
+    assert _valid(Draft('간식 추천', '간단하게 먹을만한거 추천좀 ㅋㅋ', '일상'), seen)
+
+
 def test_valid_rejects_embedded_tag_and_fake_companion_details():
     seen: set[str] = set()
     assert not _valid(Draft('로소 후기', '[리얼후기] 어제 다녀왔음', '소개팅', 'review'), seen)
     assert not _valid(Draft('같이 갈 사람', '30대 남성인데 홍대 갈 사람', '일상', 'companion'), seen)
-    assert _valid(Draft('혼자 갔다온 후기', '처음 가봤는데 생각보다 괜찮았음 ㅋㅋ 초반만 넘기니 대화도 재밌고 가길 잘한듯', '소개팅', 'review'), seen)
+    assert _valid(Draft('로소 혼자 갔다온 후기', '로소 처음 가봤는데 생각보다 괜찮았음 ㅋㅋ 초반만 넘기니 대화도 재밌고 가길 잘한듯', '소개팅', 'review'), seen)
+    assert not _valid(Draft('전시 혼자 갔다온 후기', '전시 처음 가봤는데 생각보다 괜찮았음 ㅋㅋ 작품도 재밌고 가길 잘한듯', '일상', 'review'), seen)
     assert not _valid(Draft('동행 구합니다', '같이 갈 사람 구해요', '일상', 'companion'), seen)
     assert not _valid(Draft('평일 데이트 힘든가요?', '다들 어떠?', '소개팅', 'question'), seen)
     assert not _valid(Draft('장거리 첫 만남', '만나러 가는데 실제로는 어떨지 모르겠음 연락은 재밌게 했는데 긴장된다', '썸연애', 'review'), seen)

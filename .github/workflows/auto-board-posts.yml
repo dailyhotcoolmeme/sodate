@@ -8,7 +8,7 @@ on:
       target:
         description: 'admin 대기함에 유지할 미게시 초안 수'
         required: false
-        default: '60'
+        default: '90'
 
 concurrency:
   group: auto-board-posts
@@ -37,4 +37,4 @@ jobs:
           CF_WORKERS_AI_TOKEN: ${{ secrets.CF_WORKERS_AI_TOKEN }}
         run: |
           cd crawler
-          python auto_board_posts.py --fill-to "${{ github.event.inputs.target || '60' }}"
+          python auto_board_posts.py --fill-to "${{ github.event.inputs.target || '90' }}"

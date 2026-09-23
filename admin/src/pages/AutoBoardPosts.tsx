@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Plus, RefreshCw, Save, Send, Trash2, XCircle } from 'lucide-react'
+import { Clock3, Loader2, PauseCircle, PlayCircle, Plus, RefreshCw, Save, Send, ShieldAlert, Trash2, XCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 type Status = 'draft' | 'ready' | 'scheduled' | 'published' | 'rejected' | 'failed'
@@ -19,11 +19,20 @@ interface AutoPost {
   published_post_id: string | null
   generation_model: string | null
   generation_notes: string | null
+  auto_publish_block_reason: string | null
   created_at: string
   updated_at: string
 }
 
 interface BoardTag { id: string; label: string }
+interface AutoPostSettings {
+  id: boolean
+  auto_publish_enabled: boolean
+  posts_per_hour_min: number
+  posts_per_hour_max: number
+  generation_batch_size: number
+  updated_at: string
+}
 
 type Filter = 'all' | Status
 
@@ -42,6 +51,7 @@ const randomAvatarId = () => `thumbs_${String(1 + Math.floor(Math.random() * 24)
 export default function AutoBoardPosts() {
   const [posts, setPosts] = useState<AutoPost[]>([])
   const [tags, setTags] = useState<BoardTag[]>([])
+  const [settings, setSettings] = useState<AutoPostSettings | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
@@ -51,13 +61,15 @@ export default function AutoBoardPosts() {
 
   async function load() {
     setLoading(true)
-    const [p, t] = await Promise.all([
+    const [p, t, s] = await Promise.all([
       supabase.from('auto_board_posts').select('*').order('created_at', { ascending: false }).limit(500),
       supabase.from('board_tags').select('id,label').order('sort_order', { ascending: true }),
+      supabase.from('auto_board_post_settings').select('*').eq('id', true).single(),
     ])
     if (p.error) setMsg(`불러오기 실패: ${p.error.message}`)
     setPosts((p.data as AutoPost[]) ?? [])
     setTags((t.data as BoardTag[]) ?? [])
+    setSettings((s.data as AutoPostSettings | null) ?? null)
     setLoading(false)
   }
 
@@ -98,7 +110,7 @@ export default function AutoBoardPosts() {
     if (nickname.length < 2 || !title || !content) { alert('닉네임·제목·내용을 확인하세요.'); return }
     setBusy('수정 내용을 저장하는 중입니다')
     const patch = { nickname, title, content, tag_id: post.tag_id || null, updated_at: new Date().toISOString() }
-    const { error } = await supabase.from('auto_board_posts').update(patch).eq('id', post.id)
+    const { data, error } = await supabase.from('auto_board_posts').update(patch).eq('id', post.id).select('*').single()
     let publicError: string | null = null
     if (!error && post.published_post_id) {
       const r = await supabase.from('board_posts').update({
@@ -108,7 +120,7 @@ export default function AutoBoardPosts() {
     }
     setBusy(null)
     if (error || publicError) { alert(`저장 실패: ${error?.message ?? publicError}`); return }
-    patchLocal(post.id, patch)
+    patchLocal(post.id, data as AutoPost)
     setMsg(post.published_post_id ? '앱에 게시된 글까지 수정했습니다.' : '수정 내용을 저장했습니다.')
   }
 
@@ -120,6 +132,47 @@ export default function AutoBoardPosts() {
     if (error) { alert(`게시 실패: ${error.message}`); return }
     patchLocal(post.id, { status: 'published', published_post_id: String(data), updated_at: new Date().toISOString() })
     setMsg('앱 커뮤니티에 게시했습니다.')
+  }
+
+  async function setAutoPublish(enabled: boolean) {
+    const question = enabled
+      ? '자동 게시를 켤까요? 예약된 글이 게시 시각부터 앱에 공개됩니다.'
+      : '자동 게시를 일시정지할까요? 예약은 보존되고 공개만 멈춥니다.'
+    if (!window.confirm(question)) return
+    setBusy(enabled ? '자동 게시를 켜는 중입니다' : '자동 게시를 일시정지하는 중입니다')
+    const updatedAt = new Date().toISOString()
+    const { data, error } = await supabase.from('auto_board_post_settings')
+      .update({ auto_publish_enabled: enabled, updated_at: updatedAt })
+      .eq('id', true)
+      .select('*')
+      .single()
+    setBusy(null)
+    if (error) { alert(`설정 변경 실패: ${error.message}`); return }
+    setSettings(data as AutoPostSettings)
+    setMsg(enabled ? '자동 게시를 켰습니다.' : '자동 게시를 일시정지했습니다.')
+  }
+
+  async function setReady(post: AutoPost, ready: boolean) {
+    setBusy(ready ? '자동 게시 승인 상태로 바꾸는 중입니다' : '자동 게시에서 제외하는 중입니다')
+    const patch = {
+      status: ready ? 'ready' : 'draft',
+      scheduled_at: null,
+      updated_at: new Date().toISOString(),
+    }
+    const { data, error } = await supabase.from('auto_board_posts')
+      .update(patch)
+      .eq('id', post.id)
+      .select('*')
+      .single()
+    setBusy(null)
+    if (error) { alert(`상태 변경 실패: ${error.message}`); return }
+    const updated = data as AutoPost
+    patchLocal(post.id, updated)
+    if (ready && updated.status !== 'ready') {
+      setMsg(`자동 게시할 수 없습니다: ${updated.auto_publish_block_reason ?? '내용을 확인하세요.'}`)
+      return
+    }
+    setMsg(ready ? '자동 게시 승인 상태로 바꿨습니다.' : '자동 게시 대상에서 제외했습니다.')
   }
 
   async function reject(post: AutoPost) {
@@ -179,7 +232,7 @@ export default function AutoBoardPosts() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-bold text-gray-900">자동 게시 관리</h1>
-          <p className="text-sm text-gray-500 mt-1">자동 생성 글을 확인·수정한 뒤 직접 앱에 게시합니다.</p>
+          <p className="text-sm text-gray-500 mt-1">검사를 통과한 글을 예약 게시하고, 게시 전후 내용을 관리합니다.</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => void load()} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600">
@@ -193,9 +246,34 @@ export default function AutoBoardPosts() {
 
       {msg && <div className="mb-4 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700">{msg}</div>}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+      {settings && (
+        <section className={`mb-4 rounded-xl border p-4 ${settings.auto_publish_enabled ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${settings.auto_publish_enabled ? 'bg-green-500' : 'bg-amber-500'}`} />
+                <h2 className="font-bold text-gray-900">자동 게시 {settings.auto_publish_enabled ? '작동 중' : '일시정지'}</h2>
+              </div>
+              <p className="mt-1 text-sm text-gray-600">
+                매일 오전 10시부터 다음 날 오전 1시 직전까지 시간당 {settings.posts_per_hour_min}~{settings.posts_per_hour_max}건 · 승인 대기 목표 {settings.generation_batch_size}건
+              </p>
+            </div>
+            <button
+              onClick={() => void setAutoPublish(!settings.auto_publish_enabled)}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold text-white ${settings.auto_publish_enabled ? 'bg-gray-600' : 'bg-green-600'}`}
+            >
+              {settings.auto_publish_enabled ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+              {settings.auto_publish_enabled ? '자동 게시 일시정지' : '자동 게시 켜기'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">
         <Summary label="전체" value={posts.length} />
         <Summary label="검토 대기" value={count('draft')} />
+        <Summary label="승인됨" value={count('ready')} />
+        <Summary label="예약됨" value={count('scheduled')} />
         <Summary label="게시됨" value={count('published')} />
         <Summary label="반려·실패" value={count('rejected') + count('failed')} />
       </div>
@@ -221,7 +299,7 @@ export default function AutoBoardPosts() {
 
       <div className="tab-scroll flex items-center gap-2 mb-4 border-b border-gray-200">
         {([
-          ['all', '전체'], ['draft', '검토 대기'], ['published', '게시됨'],
+          ['all', '전체'], ['draft', '검토 대기'], ['ready', '승인됨'], ['scheduled', '예약됨'], ['published', '게시됨'],
           ['rejected', '반려됨'], ['failed', '실패'],
         ] as [Filter, string][]).map(([key, label]) => (
           <button key={key} onClick={() => setFilter(key)} className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-bold -mb-px border-b-2 ${filter === key ? 'border-pink-500 text-pink-600' : 'border-transparent text-gray-400'}`}>
@@ -242,6 +320,11 @@ export default function AutoBoardPosts() {
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className={`rounded-full px-2 py-1 font-bold ${post.status === 'published' ? 'bg-green-50 text-green-700' : post.status === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>{STATUS_LABEL[post.status]}</span>
                   <span className="text-gray-400">{new Date(post.created_at).toLocaleString('ko-KR')}</span>
+                  {post.scheduled_at && (
+                    <span className="inline-flex items-center gap-1 font-bold text-blue-600">
+                      <Clock3 size={13} /> 예약 {new Date(post.scheduled_at).toLocaleString('ko-KR')}
+                    </span>
+                  )}
                   {post.generation_notes && <span className="text-gray-400">{post.generation_notes}</span>}
                 </div>
                 {post.source_url && <a href={post.source_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">참고 자료 열기</a>}
@@ -265,8 +348,21 @@ export default function AutoBoardPosts() {
                 </div>
               </div>
 
+              {post.auto_publish_block_reason && (
+                <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  <ShieldAlert size={16} className="mt-0.5 shrink-0" />
+                  <span>자동 게시 제외: {post.auto_publish_block_reason}</span>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
                 <button onClick={() => void save(post)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700"><Save size={15} /> 수정 저장</button>
+                {post.status === 'draft' && !post.published_post_id && (
+                  <button onClick={() => void setReady(post, true)} className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 px-3 py-2 text-sm font-medium text-green-700"><PlayCircle size={15} /> 자동 게시 승인</button>
+                )}
+                {(post.status === 'ready' || post.status === 'scheduled') && !post.published_post_id && (
+                  <button onClick={() => void setReady(post, false)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 px-3 py-2 text-sm font-medium text-amber-700"><PauseCircle size={15} /> 자동 게시 제외</button>
+                )}
                 {!post.published_post_id && post.status !== 'rejected' && (
                   <button onClick={() => void publish(post)} className="inline-flex items-center gap-1.5 rounded-lg bg-pink-500 px-3 py-2 text-sm font-medium text-white"><Send size={15} /> 지금 게시</button>
                 )}
