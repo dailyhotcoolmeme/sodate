@@ -395,14 +395,21 @@ def _valid(draft: Draft, seen: set[str]) -> bool:
         f'{draft.title}\n{draft.content}',
     ):
         return False
+    if re.search(r'요[?!.~]*(?:\s*[ㅋㅎㅠㅜ]+)?(?:\s|$)', f'{draft.title}\n{draft.content}'):
+        return False
     if re.search(r'(?<!\d)1[4-9]\d(?!\d)', merged):
         return False
     if draft.kind == 'review':
         if len(draft.content) < 35:
             return False
-        if draft.content.rstrip().endswith('?'):
+        if '?' in draft.content:
             return False
-        if not re.search(r'(갔|다녀|했|봤|만났|였|었|왔|느낌|후기)', merged):
+        if re.search(r'(만나러|갈예정|가는데|어떨지|모르겠|고민중)', merged):
+            return False
+        if not re.search(
+            r'(다녀왔|가봤|갔다|갔어|갔음|만나봤|만났다|만났어|만났음|해봤|했더니|했는데|했어|했음|봤더니|봤는데|봤어|봤음|였는데|였어|였음|었는데|았는데|더라|좋았|괜찮았|편했|재밌었|나눠냈|챙겼)',
+            draft.content.replace(' ', ''),
+        ):
             return False
     if draft.kind == 'companion':
         # 소재에 없는 나이·성별·구체 지역을 만들어 넣은 결과는 버린다.

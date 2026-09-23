@@ -41,6 +41,8 @@ def test_valid_rejects_embedded_tag_and_fake_companion_details():
     assert not _valid(Draft('같이 갈 사람', '30대 남성인데 홍대 갈 사람', '일상', 'companion'), seen)
     assert _valid(Draft('혼자 갔다온 후기', '처음 가봤는데 생각보다 괜찮았음 ㅋㅋ 초반만 넘기니 대화도 재밌고 가길 잘한듯', '소개팅', 'review'), seen)
     assert not _valid(Draft('동행 구합니다', '같이 갈 사람 구해요', '일상', 'companion'), seen)
+    assert not _valid(Draft('평일 데이트 힘든가요?', '다들 어떠?', '소개팅', 'question'), seen)
+    assert not _valid(Draft('장거리 첫 만남', '만나러 가는데 실제로는 어떨지 모르겠음 연락은 재밌게 했는데 긴장된다', '썸연애', 'review'), seen)
 
 
 def test_nicknames_do_not_repeat_consecutively_or_over_twice():
