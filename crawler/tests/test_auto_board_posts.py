@@ -3,7 +3,19 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from auto_board_posts import Draft, _key, _nicknames, _plain, _valid
+from auto_board_posts import (
+    AVATAR_IDS,
+    AUTO_NICK_ADJ,
+    CASUAL_NICKNAMES,
+    Draft,
+    _avatars,
+    _key,
+    _kind_plan,
+    _kind_targets,
+    _nicknames,
+    _plain,
+    _valid,
+)
 
 
 def test_plain_removes_board_html():
@@ -21,7 +33,40 @@ def test_valid_rejects_foreign_artifacts_and_unknown_jamo():
     assert _valid(Draft('제목', '이거 ㄱㅊ? ㅋㅋ', '연애'), seen)
 
 
+def test_valid_rejects_embedded_tag_and_fake_companion_details():
+    seen: set[str] = set()
+    assert not _valid(Draft('로소 후기', '[리얼후기] 어제 다녀왔음', '소개팅', 'review'), seen)
+    assert not _valid(Draft('같이 갈 사람', '30대 남성인데 홍대 갈 사람', '일상', 'companion'), seen)
+    assert _valid(Draft('혼자 갔다온 후기', '처음 가봤는데 생각보다 괜찮았음 ㅋㅋ 초반만 넘기니 대화도 재밌고 가길 잘한듯', '소개팅', 'review'), seen)
+    assert not _valid(Draft('동행 구합니다', '같이 갈 사람 구해요', '일상', 'companion'), seen)
+
+
 def test_nicknames_do_not_repeat_consecutively_or_over_twice():
-    names = _nicknames(40)
+    names = _nicknames(60)
     assert all(a != b for a, b in zip(names, names[1:]))
     assert max(names.count(name) for name in set(names)) <= 2
+    automatic = [name for name in names if any(name.startswith(adj) for adj in AUTO_NICK_ADJ)]
+    casual = [name for name in names if name in CASUAL_NICKNAMES]
+    assert len(automatic) == 30
+    assert len(casual) == 30
+
+
+def test_avatars_are_real_presets_and_not_consecutive():
+    avatars = _avatars(60)
+    assert len(avatars) == 60
+    assert set(avatars) == set(AVATAR_IDS)
+    assert all(a != b for a, b in zip(avatars, avatars[1:]))
+
+
+def test_three_post_batch_always_contains_review_and_not_only_questions():
+    for _ in range(30):
+        kinds = _kind_plan(3)
+        assert 'review' in kinds
+        assert any(kind in {'casual', 'companion'} for kind in kinds)
+
+
+def test_full_generation_keeps_one_review_per_three_posts():
+    kinds = _kind_targets(60)
+    assert len(kinds) == 60
+    assert kinds.count('review') == 20
+    assert sum(kind in {'casual', 'companion'} for kind in kinds) == 20

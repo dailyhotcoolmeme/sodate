@@ -28,12 +28,29 @@ CF_ACCOUNT_ID = os.getenv('CF_ACCOUNT_ID', '4c0f5d706177b84ade4d424a08ec46e8')
 CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/meta/llama-4-scout-17b-16e-instruct')
 CF_AI_URL = f'https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{CF_MODEL}'
 
-NICKNAMES = [
+CASUAL_NICKNAMES = [
     'ㅇㅇ', 'ㅋㅋ', '궁금', '오잉', '퇴근하고싶다', '주말뭐하지', '아무거나',
     '그냥궁금', '오늘도출근', '집가고싶음', '소심이', '연애어렵다', '밥뭐먹지',
     '익명', '흠', 'ㄹㅇ', '모르겠다', '고민중', '지나가던사람', '두근두근',
     '직장인1', '주말순삭', '커피수혈', '배고픔', '잠이안옴', '월요일싫다',
 ]
+
+# 앱 최초 진입 시 자동 배정되는 닉네임과 동일한 조합 풀
+# (app/lib/reviewIdentity.ts). 일반 익명형과 절반씩 섞어 자동 글만 따로
+# 보이지 않게 한다.
+AUTO_NICK_ADJ = [
+    '느긋한', '설레는', '포근한', '다정한', '씩씩한', '엉뚱한', '새침한', '발랄한', '든든한', '나른한',
+    '상냥한', '명랑한', '수줍은', '활기찬', '차분한', '사랑스런', '귀여운', '온화한', '따뜻한', '재빠른',
+    '폭신한', '몽글한', '초롱한', '야무진', '싱그런', '보드란', '깜찍한', '해맑은', '느릿한', '반짝이는',
+]
+AUTO_NICK_NOUN = [
+    '너구리', '수달', '다람쥐', '고슴도치', '알파카', '펍귄', '여우', '토끼', '햄스터', '판다',
+    '코알라', '물개', '오리', '참새', '고양이', '강아지', '병아리', '고래', '거북이', '사슴',
+    '붕어빵', '마카롱', '복숭아', '딸기', '감자', '도넛', '푸딩', '참외', '귤', '만두', '곰젤리', '떡',
+    '구름', '별', '방울', '풍선', '단추', '도토리', '조약돌', '램프', '솜사탕', '우산',
+]
+
+AVATAR_IDS = [f'thumbs_{i:02d}' for i in range(1, 25)]
 
 BANNED = (
     '씨발', '시발', '개새끼', '병신', '지랄', '좆', '보지', '자지', '창녀',
@@ -49,41 +66,74 @@ TOPIC_MIX = """
 """.strip()
 
 TOPICS = ['소개팅', '썸연애', '로테이션소개팅', '2030일상', '밸런스게임']
+POST_KINDS = ['review', 'advice', 'question', 'casual', 'companion']
+KIND_LABELS = {
+    'review': '리얼후기',
+    'advice': '고민상담',
+    'question': '궁금해요',
+    'companion': '동행구함',
+}
 
 # 모델이 맥락 없는 상황을 억지로 만들지 않게, 실제 커뮤니티에서 답하기 쉬운 소재만 준다.
 # 문장과 결론은 모델이 새로 만들고, 이 목록은 소재 방향만 잡는다.
-SCENARIOS = [
-    '첫 소개팅에서 2차를 누가 먼저 제안하는지',
-    '소개팅 전 연락을 얼마나 자주 하는지',
-    '첫 만남 옷을 너무 꾸미면 부담스러운지',
-    '첫 만남 비용을 어떻게 나누는지',
-    '대화는 잘 되는데 상대가 질문을 안 하는 상황',
-    '소개팅 후 먼저 연락할지 기다릴지',
-    '애프터 식당 메뉴로 무엇이 무난한지',
-    '카톡 답장 속도 차이가 큰 썸',
-    '주말 데이트 장소가 매번 똑같은 고민',
-    '연애 초반 연락 빈도',
-    '친구가 소개해준 사람과 잘 안 됐을 때',
-    '로테이션 소개팅에 혼자 갈지 같이 갈지',
-    '로테이션 소개팅 첫 참가 전 준비할 것',
-    '로테이션 소개팅에서 기억에 남는 대화 주제',
-    '매칭 후 첫 연락을 뭐라고 시작할지',
-    '소개팅 상대와 취미가 하나도 안 겹치는 상황',
-    '데이트 중 휴대폰을 자주 보는 상대',
-    '사진과 실제 인상이 다를 때',
-    '직장인 평일 저녁 데이트가 피곤한지',
-    '비 오는 날 가기 좋은 데이트',
-    '혼자 전시나 팝업을 보러 가는 것',
-    '소개팅에서 술을 마시는 게 좋은지',
-    '친구들과 연애 얘기를 어디까지 공유하는지',
-    '썸 단계에서 생일 선물을 챙기는지',
-    '데이트 장소를 한쪽만 계속 정하는 상황',
-    '첫 만남에서 존댓말을 언제 놓는지',
-    '장거리 썸을 시작해도 될지',
-    '연락은 잘 되는데 약속을 안 잡는 상대',
-    '주말 약속이 취소돼 갑자기 할 일이 없는 상황',
-    '점심 메뉴를 못 고르는 직장인 가벼운 글',
-]
+SCENARIOS_BY_KIND = {
+    'review': [
+        '첫 로테이션 소개팅에 혼자 다녀온 느낌',
+        '소개팅에서 카페 후 자연스럽게 2차까지 간 후기',
+        '소셜링에서 처음 본 사람들과 대화해 본 후기',
+        '매칭 후 첫 연락을 주고받은 후기',
+        '애프터에서 식사하고 산책한 가벼운 후기',
+        '약속 잡기 전에 연락을 적게 했는데 만나니 괜찮았던 후기',
+        '취미가 안 겹쳐도 대화가 잘 됐던 소개팅 후기',
+        '비 오는 날 실내 데이트를 해본 후기',
+        '첫 만남에서 존댓말을 놓고 편해진 후기',
+        '평일 퇴근 후 짧게 만난 데이트 후기',
+    ],
+    'advice': [
+        '대화는 잘 되는데 상대가 질문을 안 하는 상황',
+        '소개팅 후 먼저 연락할지 기다릴지',
+        '카톡 답장 속도 차이가 큰 썸',
+        '연애 초반 연락 빈도',
+        '친구가 소개해준 사람과 잘 안 됐을 때',
+        '데이트 중 휴대폰을 자주 보는 상대',
+        '데이트 장소를 한쪽만 계속 정하는 상황',
+        '장거리 썸을 시작해도 될지',
+        '연락은 잘 되는데 약속을 안 잡는 상팀',
+        '썸 단계에서 생일 선물을 챙기는지',
+    ],
+    'question': [
+        '첫 소개팅에서 2차를 누가 먼저 제안하는지',
+        '소개팅 전 연락을 얼마나 자주 하는지',
+        '첫 만남 옷을 너무 꾸미면 부담스러운지',
+        '첫 만남 비용을 어떻게 나누는지',
+        '애프터 식당 메뉴로 무엇이 무난한지',
+        '로테이션 소개팅 첫 참가 전 준비할 것',
+        '매칭 후 첫 연락을 뭐라고 시작할지',
+        '소개팅에서 술을 마시는 게 좋은지',
+        '첫 만남에서 존댓말을 언제 놓는지',
+        '직장인 평일 저녁 데이트가 피곤한지',
+    ],
+    'casual': [
+        '주말 약속이 취소돼 갑자기 할 일이 없는 상황',
+        '점심 메뉴를 못 고르는 직장인 가벼운 글',
+        '비 오는 날 실내에서 할 것',
+        '혼자 전시나 팝업을 보러 가는 것',
+        '퇴근 후 밥 해먹기 귀찮은 날',
+        '주말 오전을 잠으로 다 보낸 얘기',
+        '친구들과 연애 얘기를 어디까지 공유하는지',
+        '최근 자주 먹는 간단한 간식',
+        '카페에서 하루 내내 노트북 하는 사람 얘기',
+        '월요일 출근 전에 드는 가벼운 생각',
+    ],
+    'companion': [
+        '주말에 혼자 전시를 보러 갈지 동행을 구할지',
+        '로테이션 소개팅에 혼자 가기 어색해 동행을 구하는 글',
+        '팝업스토어에 같이 갈 사람을 구하는 글',
+        '주말 산책이나 카페에 같이 갈 사람을 구하는 글',
+        '평일 저녁 저녁밥을 가볍게 같이 먹을 사람을 구하는 글',
+        '처음 가는 소셜링에 같이 신청할 사람을 구하는 글',
+    ],
+}
 
 SYSTEM_PROMPT = """당신은 한국의 20~30대 익명 커뮤니티에 올라갈 짧은 게시글 초안을 만든다.
 광고문·블로그·상담 답변처럼 반듯하게 쓰지 말고 실제 익명 게시판 이용자처럼 쓴다.
@@ -95,6 +145,7 @@ class Draft:
     title: str
     content: str
     topic: str
+    kind: str = 'question'
 
 
 def _plain(value: str) -> str:
@@ -142,13 +193,37 @@ def _existing_auto_titles(sb) -> set[str]:
     return {_key(r.get('title') or '') for r in rows}
 
 
-def _prompt(samples: list[dict[str, str]], count: int) -> str:
+def _kind_plan(count: int) -> list[str]:
+    """한 번에 3건을 만들 때 질문만 나열되지 않게 후기 1건을 보장한다."""
+    if count == 3:
+        kinds = ['review', random.choice(['advice', 'question']), random.choice(['casual', 'companion'])]
+    elif count == 2:
+        kinds = ['review', random.choice(['advice', 'question', 'casual', 'companion'])]
+    else:
+        kinds = [random.choices(POST_KINDS, weights=[30, 20, 20, 20, 10], k=1)[0]]
+    random.shuffle(kinds)
+    return kinds
+
+
+def _kind_targets(count: int) -> list[str]:
+    """전체 생성 건수를 3건씩 나눠 후기·질문·일상 비율을 끝까지 지킨다."""
+    targets: list[str] = []
+    remaining = count
+    while remaining > 0:
+        batch_size = min(3, remaining)
+        targets.extend(_kind_plan(batch_size))
+        remaining -= batch_size
+    return targets
+
+
+def _prompt(samples: list[dict[str, str]], kinds: list[str]) -> str:
+    count = len(kinds)
     compact = '\n'.join(
         f"- 제목: {s['title']}\n  내용: {s['content']}"
         for s in samples[:24]
     )
-    scenarios = random.sample(SCENARIOS, count)
-    seeds = '\n'.join(f'- {x}' for x in scenarios)
+    scenarios = [random.choice(SCENARIOS_BY_KIND[kind]) for kind in kinds]
+    seeds = '\n'.join(f'- {i + 1}번·{kind}: {scenario}' for i, (kind, scenario) in enumerate(zip(kinds, scenarios)))
     return f"""아래는 현재 모잇 익명 게시판의 실제 글이다. 문장을 복사하지 말고 말투와 길이만 참고해 새 글 {count}개를 만들어라.
 
 [실제 게시글 말투 참고]
@@ -158,8 +233,16 @@ def _prompt(samples: list[dict[str, str]], count: int) -> str:
 {TOPIC_MIX}
 
 [이번에 사용할 소재]
-아래 소재를 하나씩만 사용한다. 여기에 없는 사건·장소·직업·성별·나이 설정을 임의로 붙이지 않는다.
+아래 소재와 글 종류를 하나씩만 사용한다. 여기에 없는 사건·장소·직업·성별·나이 설정을 임의로 붙이지 않는다.
 {seeds}
+
+[글 종류·말머리]
+- review: 질문이 아니라 자신이 겪은 일을 자연스럽게 풀어쓴 후기. 시스템이 [리얼후기] 말머리를 별도로 붙인다. 끝을 굳이 질문으로 마치지 않는다.
+- advice: 상황을 풀어놓고 조언을 구하는 글. 시스템이 [고민상담] 말머리를 별도로 붙인다.
+- question: 가벼운 궁금증을 묻는 글. 시스템이 [궁금해요] 말머리를 별도로 붙인다.
+- companion: 같이 갈 사람을 구하는 글. 시스템이 [동행구함] 말머리를 별도로 붙인다. 연락처는 적지 않는다.
+- casual: 일상 잡담. 말머리를 붙이지 않는다.
+- 제목과 본문에 [리얼후기], [고민상담] 같은 말머리 문자를 직접 적지 않는다.
 
 [반드시 지킬 말투]
 - 짧게 끊고 말하듯 쓴다. 2~6문장이 기본이며 한두 줄짜리 글도 섞는다.
@@ -169,6 +252,9 @@ def _prompt(samples: list[dict[str, str]], count: int) -> str:
 - 맞춤법을 일부러 망가뜨리지는 말되 너무 반듯하게 다듬지 않는다.
 - `혹시 ~인가요?`, `여러분들은 어떠세요?`, `~하면 좋을 것 같아요` 같은 설문·상담문 말투를 반복하지 않는다.
 - 실제 사람이 폰으로 바로 쓴 것처럼 군더더기 없이 쓴다. 상황과 관계없는 설정을 억지로 붙이지 않는다.
+- 모든 글을 질문으로 끝내지 않는다. 특히 review는 느낀 점이나 소감으로 자연스럽게 끝낸다.
+- `~습니다`, `~해요`, `~인가요` 같은 존댓말 문체를 쓰지 않고 반말·혼잣말로 쓴다.
+- companion에는 소재에 없는 나이·성별·지역·직업·브랜드명·행사명·매장명을 절대 만들어 넣지 않는다.
 - 제목과 본문 끝맺음·문장 구조를 글마다 다르게 한다.
 - 실제 업체나 개인을 비방하거나 사실인 것처럼 지어내지 않는다.
 - 연락처, 실명, 성적·불법 내용, 광고는 쓰지 않는다.
@@ -178,10 +264,15 @@ def _prompt(samples: list[dict[str, str]], count: int) -> str:
 제목: 소개팅 잘되면 여자쪽에서 먼저 2차 말해도 ㄱㅊ?
 내용: 이번주에 소개팅 있는데 연락할때 느낌은 괜찮거든??\n\n카페에서 얘기 잘통하면 내가 먼저 밥먹자고 해볼까 하는데\n너무 맘에들어하는 티나는건가 ㅋㅋ\n\n남자들 입장에서 여자가 먼저 2차가자하면 어떰?\n걍 배 안고프냐고 물어보면 되나 ㅠ
 
+[후기 톤 예시]
+제목: 로소 혼자 갔다온 후기
+내용: 지난주에 처음 가봤는데 생각보다 안어색했음 ㅋㅋ\n\n초반엔 좀 뚝뚝했는데 몇 번 얘기하니 적응되더라\n혼자 갈까말까 고민했는데 가길 잘한듯
+
 서로 겹치지 않는 새 글을 JSON으로 반환해라."""
 
 
-def _call_ai(token: str, samples: list[dict[str, str]], count: int) -> list[Draft]:
+def _call_ai(token: str, samples: list[dict[str, str]], kinds: list[str]) -> list[Draft]:
+    count = len(kinds)
     schema = {
         'type': 'object',
         'properties': {
@@ -195,8 +286,9 @@ def _call_ai(token: str, samples: list[dict[str, str]], count: int) -> list[Draf
                         'title': {'type': 'string', 'minLength': 1, 'maxLength': 60},
                         'content': {'type': 'string', 'minLength': 1, 'maxLength': 1200},
                         'topic': {'type': 'string', 'enum': TOPICS},
+                        'kind': {'type': 'string', 'enum': POST_KINDS},
                     },
-                    'required': ['title', 'content', 'topic'],
+                    'required': ['title', 'content', 'topic', 'kind'],
                 },
             }
         },
@@ -205,7 +297,7 @@ def _call_ai(token: str, samples: list[dict[str, str]], count: int) -> list[Draf
     payload = {
         'messages': [
             {'role': 'system', 'content': SYSTEM_PROMPT},
-            {'role': 'user', 'content': _prompt(samples, count)},
+            {'role': 'user', 'content': _prompt(samples, kinds)},
         ],
         'temperature': 0.75,
         'max_tokens': 5000,
@@ -241,7 +333,7 @@ def _call_ai(token: str, samples: list[dict[str, str]], count: int) -> list[Draf
     if isinstance(result, dict) and result.get('choices'):
         raw = ((result['choices'][0].get('message') or {}).get('content'))
     parsed = json.loads(raw) if isinstance(raw, str) else raw
-    return [Draft(str(x['title']).strip(), str(x['content']).strip(), str(x['topic']).strip())
+    return [Draft(str(x['title']).strip(), str(x['content']).strip(), str(x['topic']).strip(), str(x['kind']).strip())
             for x in (parsed or {}).get('posts', [])]
 
 
@@ -250,10 +342,30 @@ def _valid(draft: Draft, seen: set[str]) -> bool:
     merged = f'{draft.title} {draft.content}'.lower().replace(' ', '')
     if not title_key or title_key in seen:
         return False
+    if draft.kind not in POST_KINDS:
+        return False
     if not (1 <= len(draft.title) <= 60 and 1 <= len(draft.content) <= 10_000):
         return False
     if any(word in merged for word in BANNED):
         return False
+    if any(label in merged for label in KIND_LABELS.values()):
+        return False
+    if re.search(
+        r'(습니다|합니다|구합니다|했어요|해요|있어요|없어요|같아요|인가요|어떠세요|줄래요|구해요)',
+        f'{draft.title}\n{draft.content}',
+    ):
+        return False
+    if draft.kind == 'review':
+        if len(draft.content) < 35:
+            return False
+        if draft.content.rstrip().endswith('?'):
+            return False
+        if not re.search(r'(갔|다녀|했|봤|만났|였|었|왔|느낌|후기)', merged):
+            return False
+    if draft.kind == 'companion':
+        # 소재에 없는 나이·성별·구체 지역을 만들어 넣은 결과는 버린다.
+        if re.search(r'(\d{2}대|\d{2}살|남성|여성|남자|여자|강남|홍대|신촌|성수|건대|잠실)', merged):
+            return False
     # 모델이 가끔 한글 대신 일본어·중국어 또는 의미 없는 초성을 섞는다.
     if re.search(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]', merged):
         return False
@@ -270,20 +382,62 @@ def _valid(draft: Draft, seen: set[str]) -> bool:
     return True
 
 
+def _automatic_nickname() -> str:
+    return f'{random.choice(AUTO_NICK_ADJ)}{random.choice(AUTO_NICK_NOUN)}{random.randint(10, 99)}'
+
+
 def _nicknames(count: int) -> list[str]:
-    pool = NICKNAMES[:]
-    random.shuffle(pool)
-    out: list[str] = []
-    counts: Counter[str] = Counter()
-    while len(out) < count:
-        nick = random.choice(pool)
-        if out and out[-1] == nick:
+    """앱 자동 배정형과 짧은 익명형을 가까이 1:1로 섞는다."""
+    automatic_count = count // 2
+    casual_count = count - automatic_count
+
+    automatic: list[str] = []
+    while len(automatic) < automatic_count:
+        nickname = _automatic_nickname()
+        if nickname not in automatic:
+            automatic.append(nickname)
+
+    casual: list[str] = []
+    pool = CASUAL_NICKNAMES[:]
+    while len(casual) < casual_count:
+        random.shuffle(pool)
+        for nickname in pool:
+            if casual.count(nickname) < 2:
+                casual.append(nickname)
+                if len(casual) == casual_count:
+                    break
+
+    out = automatic + casual
+    random.shuffle(out)
+    for i in range(1, len(out)):
+        if out[i] != out[i - 1]:
             continue
-        if counts[nick] >= 2:
-            continue
-        counts[nick] += 1
-        out.append(nick)
+        swap = next((j for j in range(i + 1, len(out)) if out[j] != out[i]), None)
+        if swap is not None:
+            out[i], out[swap] = out[swap], out[i]
     return out
+
+
+def _avatars(count: int) -> list[str]:
+    """24종을 고르게 섞고 같은 이미지가 연속해 나오지 않게 한다."""
+    out: list[str] = []
+    while len(out) < count:
+        pool = AVATAR_IDS[:]
+        random.shuffle(pool)
+        if out and pool[0] == out[-1]:
+            pool[0], pool[1] = pool[1], pool[0]
+        out.extend(pool[:count - len(out)])
+    return out
+
+
+def _active_tag_ids(sb) -> dict[str, str]:
+    rows = (
+        sb.table('board_tags')
+        .select('id,label')
+        .eq('is_active', True)
+        .execute().data or []
+    )
+    return {str(row.get('label') or '').strip('[] '): str(row['id']) for row in rows}
 
 
 def generate(count: int, dry_run: bool = False) -> list[dict]:
@@ -295,19 +449,30 @@ def generate(count: int, dry_run: bool = False) -> list[dict]:
     if len(samples) < 10:
         raise RuntimeError(f'말투 참고용 기존 게시글이 부족합니다({len(samples)}건)')
     seen = {_key(s['title']) for s in samples} | _existing_auto_titles(sb)
+    tag_ids = _active_tag_ids(sb)
 
     drafts: list[Draft] = []
+    target_kinds = Counter(_kind_targets(count))
     # 한 번에 너무 많이 시키면 말투가 반복되므로 세 건씩 나눠 만든다.
     attempts = 0
     max_attempts = max(5, count * 3)
     while len(drafts) < count and attempts < max_attempts:
         attempts += 1
-        needed = min(3, count - len(drafts))
-        generated = _call_ai(token, random.sample(samples, min(24, len(samples))), needed)
+        accepted_kinds = Counter(draft.kind for draft in drafts)
+        outstanding = [
+            kind
+            for kind, target in target_kinds.items()
+            for _ in range(target - accepted_kinds[kind])
+        ]
+        random.shuffle(outstanding)
+        kinds = outstanding[:3]
+        generated = _call_ai(token, random.sample(samples, min(24, len(samples))), kinds)
+        kind_budget = Counter(kinds)
         for draft in generated:
-            if _valid(draft, seen):
+            if kind_budget[draft.kind] > 0 and _valid(draft, seen):
                 drafts.append(draft)
                 seen.add(_key(draft.title))
+                kind_budget[draft.kind] -= 1
         if not generated:
             break
 
@@ -315,15 +480,17 @@ def generate(count: int, dry_run: bool = False) -> list[dict]:
         raise RuntimeError(f'검증을 통과한 초안이 부족합니다({len(drafts)}/{count})')
 
     rows = []
-    for nick, draft in zip(_nicknames(count), drafts[:count]):
+    for nick, avatar_id, draft in zip(_nicknames(count), _avatars(count), drafts[:count]):
         rows.append({
             'nickname': nick,
             'title': draft.title,
             'content': draft.content,
+            'avatar_id': avatar_id,
+            'tag_id': tag_ids.get(KIND_LABELS.get(draft.kind, '')),
             'source_type': 'existing_posts',
             'status': 'draft',
             'generation_model': CF_MODEL,
-            'generation_notes': f'기존 활성 게시글 {len(samples)}건의 말투 참고 · 주제 {draft.topic}',
+            'generation_notes': f'기존 활성 게시글 {len(samples)}건의 말투 참고 · {draft.kind} · 주제 {draft.topic}',
         })
 
     if dry_run:

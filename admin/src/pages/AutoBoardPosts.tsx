@@ -37,6 +37,7 @@ const STATUS_LABEL: Record<Status, string> = {
 }
 
 const EMPTY = { nickname: '', title: '', content: '', tag_id: '' }
+const randomAvatarId = () => `thumbs_${String(1 + Math.floor(Math.random() * 24)).padStart(2, '0')}`
 
 export default function AutoBoardPosts() {
   const [posts, setPosts] = useState<AutoPost[]>([])
@@ -76,6 +77,7 @@ export default function AutoBoardPosts() {
     setBusy('초안을 저장하는 중입니다')
     const { data, error } = await supabase.from('auto_board_posts').insert({
       nickname, title, content,
+      avatar_id: randomAvatarId(),
       tag_id: form.tag_id || null,
       source_type: 'manual',
       status: 'draft',
@@ -202,7 +204,7 @@ export default function AutoBoardPosts() {
         <div className="mb-4 rounded-xl border border-pink-200 bg-white p-4 space-y-3">
           <h2 className="text-sm font-bold">직접 초안 추가</h2>
           <div className="grid md:grid-cols-2 gap-3">
-            <input value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} placeholder="닉네임" className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+            <input value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} placeholder="닉네임" maxLength={12} className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             <select value={form.tag_id} onChange={(e) => setForm({ ...form, tag_id: e.target.value })} className="rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white">
               <option value="">말머리 없음</option>
               {tags.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
