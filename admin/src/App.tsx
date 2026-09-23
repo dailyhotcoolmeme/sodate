@@ -14,6 +14,7 @@ import Partners from './pages/Partners'
 import PartnerPage from './pages/PartnerPage'
 import Reviews from './pages/Reviews'
 import Board from './pages/Board'
+import AutoBoardPosts from './pages/AutoBoardPosts'
 import CrawlLogs from './pages/CrawlLogs'
 import Analytics from './pages/Analytics'
 import Trends from './pages/Trends'
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/partner-page" element={guard(authed, <PartnerPage />)} />
         <Route path="/reviews" element={guard(authed, <Reviews />)} />
         <Route path="/board" element={guard(authed, <Board />)} />
+        <Route path="/auto-board-posts" element={guard(authed, <AutoBoardPosts />)} />
         <Route path="/crawl-logs" element={guard(authed, <CrawlLogs />)} />
         <Route path="/analytics" element={guard(authed, <Analytics />)} />
         <Route path="/trends" element={guard(authed, <Trends />)} />

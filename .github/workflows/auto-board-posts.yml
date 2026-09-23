@@ -1,0 +1,40 @@
+name: Generate Community Post Drafts
+
+on:
+  schedule:
+    - cron: '10 20 * * *'  # 매일 오전 05:10 KST, 다음 날 사용할 초안을 미리 채운다
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'admin 대기함에 유지할 미게시 초안 수'
+        required: false
+        default: '60'
+
+concurrency:
+  group: auto-board-posts
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r crawler/requirements.txt
+
+      - name: Fill admin draft queue
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CF_WORKERS_AI_TOKEN: ${{ secrets.CF_WORKERS_AI_TOKEN }}
+        run: |
+          cd crawler
+          python auto_board_posts.py --fill-to "${{ github.event.inputs.target || '60' }}"

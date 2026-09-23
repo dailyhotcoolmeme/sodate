@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { logout } from '../lib/auth'
-import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut, MessageSquareWarning, MessagesSquare, Flame, Users, Wine, Star, Handshake, FileEdit } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Building2, FileText, BarChart3, LogOut, MessageSquareWarning, MessagesSquare, Flame, Users, Wine, Star, Handshake, FileEdit, WandSparkles } from 'lucide-react'
 
 // 메뉴 순서 = 쓰는 빈도. 매일 보는 것(일정·업체·후기)이 앞, 가끔 보는 것(분석·로그)이 뒤.
 // ⚠️ /events(옛 '이벤트')는 메뉴에서 뺐다 — /register와 같은 events 테이블을 다뤄
@@ -21,6 +21,7 @@ const NAV = [
   { to: '/partner-page', label: '제휴 소개 페이지', icon: FileEdit },
   { to: '/reviews', label: '소개팅 후기', icon: MessageSquareWarning },
   { to: '/board', label: '게시판 관리', icon: MessagesSquare },
+  { to: '/auto-board-posts', label: '자동 게시 관리', icon: WandSparkles },
   { to: '/trends', label: '커뮤니티 인기글', icon: Flame },
   { to: '/analytics', label: '분석', icon: BarChart3 },
   { to: '/crawl-logs', label: '크롤링 로그', icon: FileText },
