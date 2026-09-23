@@ -54,7 +54,7 @@ AVATAR_IDS = [f'thumbs_{i:02d}' for i in range(1, 25)]
 
 BANNED = (
     '씨발', '시발', '개새끼', '병신', '지랄', '좆', '보지', '자지', '창녀',
-    '성매매', '조건만남', '카톡아이디', '오픈채팅', '주식추천', '코인추천',
+    '성매매', '조건만남', '카톡아이디', '오픈채팅', '주식추천', '코인추천', '존나',
 )
 
 TOPIC_MIX = """
@@ -88,6 +88,16 @@ SCENARIOS_BY_KIND = {
         '비 오는 날 실내 데이트를 해본 후기',
         '첫 만남에서 존댓말을 놓고 편해진 후기',
         '평일 퇴근 후 짧게 만난 데이트 후기',
+        '첫 만남에 옷을 조금 과하게 입었지만 대화는 편했던 후기',
+        '첫 만남 비용을 자연스럽게 나눠 낸 후기',
+        '애프터 메뉴를 고민하다 가벼운 식사로 잘 끝낸 후기',
+        '만나는 동안 서로 폰을 안 봐서 대화가 편했던 후기',
+        '사진과 실제 인상은 달랐지만 만나니 더 괜찮았던 후기',
+        '친구 소개로 만난 사람과 초반은 어색했지만 점점 편해진 후기',
+        '썸 단계에서 작은 생일 선물을 주고 받은 후기',
+        '혼자 전시를 보고 카페까지 다녀온 후기',
+        '주말에 특별한 계획 없이 만났는데 오히려 편했던 데이트 후기',
+        '장거리로 연락하던 사람과 첫 만남을 가진 후기',
     ],
     'advice': [
         '대화는 잘 되는데 상대가 질문을 안 하는 상황',
@@ -124,6 +134,12 @@ SCENARIOS_BY_KIND = {
         '최근 자주 먹는 간단한 간식',
         '카페에서 하루 내내 노트북 하는 사람 얘기',
         '월요일 출근 전에 드는 가벼운 생각',
+        '퇴근하고 집에 왔는데 아무것도 하기 싫은 날',
+        '냉장고에 먹을 게 없어 배달을 고민하는 저녁',
+        '주말에 알람 없이 늦잠 자고 기분 좋았던 얘기',
+        '최근에 본 재미있는 영화나 드라마 얘기',
+        '저녁에 산책 나갔다가 밤공기가 좋았던 얘기',
+        '커피를 너무 마셔서 밤에 잠이 안 오는 얘기',
     ],
     'companion': [
         '주말에 혼자 전시를 보러 갈지 동행을 구할지',
@@ -132,6 +148,8 @@ SCENARIOS_BY_KIND = {
         '주말 산책이나 카페에 같이 갈 사람을 구하는 글',
         '평일 저녁 저녁밥을 가볍게 같이 먹을 사람을 구하는 글',
         '처음 가는 소셜링에 같이 신청할 사람을 구하는 글',
+        '주말에 가벼운 러닝을 같이 할 사람을 구하는 글',
+        '새로 개봉한 영화를 같이 볼 사람을 구하는 글',
     ],
 }
 
@@ -146,6 +164,7 @@ class Draft:
     content: str
     topic: str
     kind: str = 'question'
+    scenario: str = ''
 
 
 def _plain(value: str) -> str:
@@ -208,22 +227,41 @@ def _kind_plan(count: int) -> list[str]:
 def _kind_targets(count: int) -> list[str]:
     """전체 생성 건수를 3건씩 나눠 후기·질문·일상 비율을 끝까지 지킨다."""
     targets: list[str] = []
-    remaining = count
-    while remaining > 0:
-        batch_size = min(3, remaining)
-        targets.extend(_kind_plan(batch_size))
-        remaining -= batch_size
+    full_batches, remainder = divmod(count, 3)
+    for batch_index in range(full_batches):
+        batch = [
+            'review',
+            'advice' if batch_index % 2 == 0 else 'question',
+            'companion' if batch_index % 5 == 4 else 'casual',
+        ]
+        random.shuffle(batch)
+        targets.extend(batch)
+    if remainder:
+        targets.extend(_kind_plan(remainder))
     return targets
 
 
-def _prompt(samples: list[dict[str, str]], kinds: list[str]) -> str:
-    count = len(kinds)
+def _generation_requests(kinds: list[str]) -> list[tuple[str, str]]:
+    """같은 종류 안에서도 소재가 겹치지 않게 먼저 전체 계획을 짠다."""
+    pools = {kind: random.sample(items, len(items)) for kind, items in SCENARIOS_BY_KIND.items()}
+    positions: Counter[str] = Counter()
+    requests: list[tuple[str, str]] = []
+    for kind in kinds:
+        position = positions[kind]
+        if position and position % len(pools[kind]) == 0:
+            random.shuffle(pools[kind])
+        requests.append((kind, pools[kind][position % len(pools[kind])]))
+        positions[kind] += 1
+    return requests
+
+
+def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> str:
+    count = len(requests)
     compact = '\n'.join(
         f"- 제목: {s['title']}\n  내용: {s['content']}"
         for s in samples[:24]
     )
-    scenarios = [random.choice(SCENARIOS_BY_KIND[kind]) for kind in kinds]
-    seeds = '\n'.join(f'- {i + 1}번·{kind}: {scenario}' for i, (kind, scenario) in enumerate(zip(kinds, scenarios)))
+    seeds = '\n'.join(f'- {i + 1}번·{kind}: {scenario}' for i, (kind, scenario) in enumerate(requests))
     return f"""아래는 현재 모잇 익명 게시판의 실제 글이다. 문장을 복사하지 말고 말투와 길이만 참고해 새 글 {count}개를 만들어라.
 
 [실제 게시글 말투 참고]
@@ -235,6 +273,8 @@ def _prompt(samples: list[dict[str, str]], kinds: list[str]) -> str:
 [이번에 사용할 소재]
 아래 소재와 글 종류를 하나씩만 사용한다. 여기에 없는 사건·장소·직업·성별·나이 설정을 임의로 붙이지 않는다.
 {seeds}
+- 반드시 1번부터 순서대로 쓰고, 각 번호의 소재 핵심이 제목이나 본문에 드러나야 한다.
+- 소재에 로테이션 소개팅이 없으면 `로소`나 `로테이션`으로 바꿔 쓰지 않는다.
 
 [글 종류·말머리]
 - review: 질문이 아니라 자신이 겪은 일을 자연스럽게 풀어쓴 후기. 시스템이 [리얼후기] 말머리를 별도로 붙인다. 끝을 굳이 질문으로 마치지 않는다.
@@ -271,8 +311,8 @@ def _prompt(samples: list[dict[str, str]], kinds: list[str]) -> str:
 서로 겹치지 않는 새 글을 JSON으로 반환해라."""
 
 
-def _call_ai(token: str, samples: list[dict[str, str]], kinds: list[str]) -> list[Draft]:
-    count = len(kinds)
+def _call_ai(token: str, samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> list[Draft]:
+    count = len(requests)
     schema = {
         'type': 'object',
         'properties': {
@@ -297,7 +337,7 @@ def _call_ai(token: str, samples: list[dict[str, str]], kinds: list[str]) -> lis
     payload = {
         'messages': [
             {'role': 'system', 'content': SYSTEM_PROMPT},
-            {'role': 'user', 'content': _prompt(samples, kinds)},
+            {'role': 'user', 'content': _prompt(samples, requests)},
         ],
         'temperature': 0.75,
         'max_tokens': 5000,
@@ -351,9 +391,11 @@ def _valid(draft: Draft, seen: set[str]) -> bool:
     if any(label in merged for label in KIND_LABELS.values()):
         return False
     if re.search(
-        r'(습니다|합니다|구합니다|했어요|해요|있어요|없어요|같아요|인가요|어떠세요|줄래요|구해요)',
+        r'(습니다|합니다|구합니다|했어요|해요|있어요|없어요|같아요|더라구요|라고요|인가요|있나요|없나요|가나요|되나요|될까요|할까요|어떠세요|줄래요|구해요)',
         f'{draft.title}\n{draft.content}',
     ):
+        return False
+    if re.search(r'(?<!\d)1[4-9]\d(?!\d)', merged):
         return False
     if draft.kind == 'review':
         if len(draft.content) < 35:
@@ -452,27 +494,24 @@ def generate(count: int, dry_run: bool = False) -> list[dict]:
     tag_ids = _active_tag_ids(sb)
 
     drafts: list[Draft] = []
-    target_kinds = Counter(_kind_targets(count))
+    pending_requests = _generation_requests(_kind_targets(count))
     # 한 번에 너무 많이 시키면 말투가 반복되므로 세 건씩 나눠 만든다.
     attempts = 0
     max_attempts = max(5, count * 3)
-    while len(drafts) < count and attempts < max_attempts:
+    while pending_requests and attempts < max_attempts:
         attempts += 1
-        accepted_kinds = Counter(draft.kind for draft in drafts)
-        outstanding = [
-            kind
-            for kind, target in target_kinds.items()
-            for _ in range(target - accepted_kinds[kind])
-        ]
-        random.shuffle(outstanding)
-        kinds = outstanding[:3]
-        generated = _call_ai(token, random.sample(samples, min(24, len(samples))), kinds)
-        kind_budget = Counter(kinds)
-        for draft in generated:
-            if kind_budget[draft.kind] > 0 and _valid(draft, seen):
+        requests = pending_requests[:3]
+        generated = _call_ai(token, random.sample(samples, min(24, len(samples))), requests)
+        retry_requests: list[tuple[str, str]] = []
+        for index, (kind, scenario) in enumerate(requests):
+            draft = generated[index] if index < len(generated) else None
+            if draft is not None and draft.kind == kind and _valid(draft, seen):
+                draft.scenario = scenario
                 drafts.append(draft)
                 seen.add(_key(draft.title))
-                kind_budget[draft.kind] -= 1
+            else:
+                retry_requests.append((kind, scenario))
+        pending_requests = retry_requests + pending_requests[len(requests):]
         if not generated:
             break
 
@@ -490,7 +529,7 @@ def generate(count: int, dry_run: bool = False) -> list[dict]:
             'source_type': 'existing_posts',
             'status': 'draft',
             'generation_model': CF_MODEL,
-            'generation_notes': f'기존 활성 게시글 {len(samples)}건의 말투 참고 · {draft.kind} · 주제 {draft.topic}',
+            'generation_notes': f'기존 활성 게시글 {len(samples)}건의 말투 참고 · {draft.kind} · 주제 {draft.topic} · 소재 {draft.scenario}',
         })
 
     if dry_run:

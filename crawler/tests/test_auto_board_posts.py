@@ -6,9 +6,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from auto_board_posts import (
     AVATAR_IDS,
     AUTO_NICK_ADJ,
+    AUTO_NICK_NOUN,
     CASUAL_NICKNAMES,
     Draft,
     _avatars,
+    _generation_requests,
     _key,
     _kind_plan,
     _kind_targets,
@@ -50,6 +52,7 @@ def test_nicknames_do_not_repeat_consecutively_or_over_twice():
     casual = [name for name in names if name in CASUAL_NICKNAMES]
     assert len(automatic) == 30
     assert len(casual) == 30
+    assert '펍귄' in AUTO_NICK_NOUN
 
 
 def test_avatars_are_real_presets_and_not_consecutive():
@@ -70,4 +73,12 @@ def test_full_generation_keeps_one_review_per_three_posts():
     kinds = _kind_targets(60)
     assert len(kinds) == 60
     assert kinds.count('review') == 20
-    assert sum(kind in {'casual', 'companion'} for kind in kinds) == 20
+    assert kinds.count('advice') == 10
+    assert kinds.count('question') == 10
+    assert kinds.count('casual') == 16
+    assert kinds.count('companion') == 4
+
+    requests = _generation_requests(kinds)
+    for kind in set(kinds):
+        scenarios = [scenario for request_kind, scenario in requests if request_kind == kind]
+        assert len(scenarios) == len(set(scenarios))
