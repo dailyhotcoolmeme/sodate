@@ -114,6 +114,7 @@ def test_local_generator_makes_full_token_free_queue_with_unique_valid_posts():
     assert len(long_drafts) == 18
     assert all(len(draft.content) >= 160 for draft in long_drafts)
     assert all(not (a.is_long and b.is_long) for a, b in zip(drafts, drafts[1:]))
+    assert all('후기 후기' not in draft.title for draft in drafts)
     assert all(':)' not in f'{draft.title}{draft.content}' for draft in drafts)
     assert all('ㅠ' not in f'{draft.title}{draft.content}' for draft in drafts)
 

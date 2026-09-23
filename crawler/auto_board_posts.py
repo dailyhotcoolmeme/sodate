@@ -735,7 +735,12 @@ def _long_form_positions(kinds: list[str]) -> set[int]:
 
 
 def _local_title(kind: str, base: str) -> str:
-    if kind in {'review', 'companion'}:
+    if kind == 'review':
+        wrappers = LOCAL_TITLE_WRAPPERS[kind]
+        if '후기' in base:
+            wrappers = [wrapper for wrapper in wrappers if wrapper != '{base} 후기']
+        return random.choice(wrappers).format(base=base)
+    if kind == 'companion':
         return random.choice(LOCAL_TITLE_WRAPPERS[kind]).format(base=base)
     if kind == 'advice':
         return random.choice([
