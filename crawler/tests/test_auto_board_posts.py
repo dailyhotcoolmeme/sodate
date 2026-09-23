@@ -45,6 +45,7 @@ def test_nicknames_do_not_repeat_consecutively_or_over_twice():
     names = _nicknames(60)
     assert all(a != b for a, b in zip(names, names[1:]))
     assert max(names.count(name) for name in set(names)) <= 2
+    assert all(2 <= len(name) <= 12 for name in names)
     automatic = [name for name in names if any(name.startswith(adj) for adj in AUTO_NICK_ADJ)]
     casual = [name for name in names if name in CASUAL_NICKNAMES]
     assert len(automatic) == 30
