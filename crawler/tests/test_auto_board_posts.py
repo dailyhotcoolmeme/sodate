@@ -1,4 +1,5 @@
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,6 +15,7 @@ from auto_board_posts import (
     _key,
     _kind_plan,
     _kind_targets,
+    _local_drafts,
     _nicknames,
     _plain,
     _valid,
@@ -96,3 +98,16 @@ def test_full_generation_keeps_one_review_per_three_posts():
     for kind in set(kinds):
         scenarios = [scenario for request_kind, scenario in requests if request_kind == kind]
         assert len(scenarios) == len(set(scenarios))
+
+
+def test_local_generator_makes_full_token_free_queue_with_unique_valid_posts():
+    random.seed(20260923)
+    kinds = _kind_targets(90)
+    drafts = _local_drafts(kinds, set())
+
+    assert len(drafts) == 90
+    assert len({_key(draft.title) for draft in drafts}) == 90
+    assert all(_valid(draft, set()) for draft in drafts)
+    assert sum(draft.kind == 'review' for draft in drafts) == 30
+    assert all(':)' not in f'{draft.title}{draft.content}' for draft in drafts)
+    assert all('ㅠ' not in f'{draft.title}{draft.content}' for draft in drafts)

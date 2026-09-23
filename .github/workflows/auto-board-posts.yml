@@ -34,7 +34,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CF_WORKERS_AI_TOKEN: ${{ secrets.CF_WORKERS_AI_TOKEN }}
         run: |
           cd crawler
-          python auto_board_posts.py --fill-to "${{ github.event.inputs.target || '90' }}"
+          python auto_board_posts.py --generator local --fill-to "${{ github.event.inputs.target || '90' }}"
