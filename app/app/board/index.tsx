@@ -34,6 +34,7 @@ import {
 import { consumeBoardEntry } from '@/lib/boardEntry'
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from '@/lib/boardSearchHistory'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
+import { formatBoardDateTime } from '@/lib/boardDate'
 
 /**
  * 게시판 목록 — 번호 페이지 방식(오너 확정). 무한 스크롤이 아니다.
@@ -451,7 +452,7 @@ function PostRow({
           {AUTHOR_MENU_ENABLED
             ? <Text onPress={(e) => onAuthorPress(e.nativeEvent.pageX, e.nativeEvent.pageY)}>{post.nickname}</Text>
             : post.nickname}
-          {' · '}{formatWhen(post.created_at)}
+          {' · '}{formatBoardDateTime(post.created_at)}
         </Text>
         <Text style={styles.rowMeta}>·</Text>
         <View style={styles.rowVoteItem}>
@@ -591,15 +592,6 @@ function makeSearchModalStyles(colors: AppColors, topInset: number) {
     recentTermBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
     recentTerm: { flex: 1, fontSize: 14, color: colors.textPrimary },
   })
-}
-
-/** 연도 2자리-월-일(요일) 시:분:초 — 오너 지시(2026-08-01). */
-function formatWhen(iso: string): string {
-  const d = new Date(iso)
-  const days = ['일', '월', '화', '수', '목', '금', '토']
-  const p = (n: number) => String(n).padStart(2, '0')
-  const yy = String(d.getFullYear()).slice(-2)
-  return `${yy}-${p(d.getMonth() + 1)}-${p(d.getDate())}(${days[d.getDay()]}) ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
 /**

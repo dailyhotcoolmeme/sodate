@@ -39,6 +39,7 @@ import { youtubeThumbnail } from '@/lib/youtube'
 import { isInstagramUrl } from '@/lib/instagram'
 import type { BoardComment } from '@/lib/board'
 import { useRefreshIndicator } from '@/hooks/useRefreshIndicator'
+import { formatBoardDateTime } from '@/lib/boardDate'
 
 /** 댓글 입력칸과 등록 버튼의 한 줄 높이 */
 const COMPOSER_H = 38
@@ -551,7 +552,7 @@ export default function BoardPostScreen() {
                   </Text>
                 )
                 : post.nickname}
-              {' · '}{formatFull(post.created_at)} · 조회 {displayViewCount(post).toLocaleString()}
+              {' · '}{formatBoardDateTime(post.created_at)} · 조회 {displayViewCount(post).toLocaleString()}
             </Text>
             <View style={styles.metaActions}>
               {isMine ? (
@@ -937,7 +938,7 @@ function ReplyModal({
               맨 아래에 보여준다. 목록으로 안 돌아가도 뭐에 답하는지 알 수 있다. */}
           {!!target && (
             <View style={styles.targetBox}>
-              <Text style={styles.targetMeta}>{target.nickname} · {formatFull(target.created_at)}</Text>
+              <Text style={styles.targetMeta}>{target.nickname} · {formatBoardDateTime(target.created_at)}</Text>
               <Text style={styles.targetBody}>{target.content}</Text>
             </View>
           )}
@@ -1036,7 +1037,7 @@ function CommentRow({
             {AUTHOR_MENU_ENABLED
               ? <Text onPress={(e) => onAuthorPress(e.nativeEvent.pageX, e.nativeEvent.pageY)}>{c.nickname}</Text>
               : c.nickname}
-            {' · '}{formatFull(c.created_at)}
+            {' · '}{formatBoardDateTime(c.created_at)}
           </Text>
         </View>
         <View style={styles.commentManage}>
@@ -1083,12 +1084,6 @@ function CommentRow({
       )}
     </View>
   )
-}
-
-function formatFull(iso: string): string {
-  const d = new Date(iso)
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 function makeStyles(colors: AppColors) {
