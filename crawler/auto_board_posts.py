@@ -6,7 +6,7 @@
 실행:
   python auto_board_posts.py --count 12                 # 토큰 없는 로컬 조합 생성
   python auto_board_posts.py --count 3 --dry-run
-  python auto_board_posts.py --generator ai --count 3  # 수동 비상용 AI 생성
+  python auto_board_posts.py --generator cloudflare --count 3  # 수동 Cloudflare Workers AI 생성
 """
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from utils.supabase_client import get_supabase
 CF_ACCOUNT_ID = os.getenv('CF_ACCOUNT_ID', '4c0f5d706177b84ade4d424a08ec46e8')
 CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/meta/llama-4-scout-17b-16e-instruct')
 CF_AI_URL = f'https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{CF_MODEL}'
+CF_AI_PROVIDER = 'cloudflare-workers-ai'
 
 CASUAL_NICKNAMES = [
     'ㅇㅇ', 'ㅋㅋ', '궁금', '오잉', '퇴근하고싶다', '주말뭐하지', '아무거나',
@@ -414,7 +415,7 @@ def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> s
 서로 겹치지 않는 새 글을 JSON으로 반환해라."""
 
 
-def _call_ai(token: str, samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> list[Draft]:
+def _call_cloudflare_ai(token: str, samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> list[Draft]:
     count = len(requests)
     schema = {
         'type': 'object',
@@ -743,7 +744,7 @@ def generate_local(count: int, dry_run: bool = False) -> list[dict]:
     return saved
 
 
-def generate_ai(count: int, dry_run: bool = False) -> list[dict]:
+def generate_cloudflare(count: int, dry_run: bool = False) -> list[dict]:
     """오너가 수동으로 선택했을 때만 사용하는 AI 비상 생성 경로."""
     token = os.getenv('CF_WORKERS_AI_TOKEN')
     if not token:
@@ -763,7 +764,7 @@ def generate_ai(count: int, dry_run: bool = False) -> list[dict]:
     while pending_requests and attempts < max_attempts:
         attempts += 1
         requests = pending_requests[:3]
-        generated = _call_ai(token, random.sample(samples, min(24, len(samples))), requests)
+        generated = _call_cloudflare_ai(token, random.sample(samples, min(24, len(samples))), requests)
         retry_requests: list[tuple[str, str]] = []
         for index, (kind, scenario) in enumerate(requests):
             draft = generated[index] if index < len(generated) else None
@@ -795,7 +796,7 @@ def generate_ai(count: int, dry_run: bool = False) -> list[dict]:
             'tag_id': tag_ids.get(KIND_LABELS.get(draft.kind, '')),
             'source_type': 'existing_posts',
             'status': 'ready',
-            'generation_model': CF_MODEL,
+            'generation_model': f'{CF_AI_PROVIDER}:{CF_MODEL}',
             'generation_notes': f'기존 활성 게시글 {len(samples)}건의 말투 참고 · {draft.kind} · 주제 {draft.topic} · 소재 {draft.scenario}',
         })
 
@@ -823,8 +824,8 @@ def open_queue_count() -> int:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--count', type=int, default=12)
-    parser.add_argument('--generator', choices=['local', 'ai'], default='local',
-                        help='기본 local은 외부 AI 호출과 토큰 사용이 없습니다')
+    parser.add_argument('--generator', choices=['local', 'cloudflare'], default='local',
+                        help='기본 local은 토큰을 쓰지 않으며 AI 생성은 Cloudflare Workers AI만 사용합니다')
     parser.add_argument('--fill-to', type=int, default=0,
                         help='미게시 대기 글이 이 개수가 되도록 부족분만 생성')
     parser.add_argument('--dry-run', action='store_true')
@@ -839,7 +840,9 @@ def main() -> None:
             return
     if not 1 <= args.count <= 100:
         raise SystemExit('--count는 1~100이어야 합니다')
-    rows = generate_local(args.count, args.dry_run) if args.generator == 'local' else generate_ai(args.count, args.dry_run)
+    rows = (generate_local(args.count, args.dry_run)
+            if args.generator == 'local'
+            else generate_cloudflare(args.count, args.dry_run))
     print(f"{'생성 확인' if args.dry_run else '초안 저장'}: {len(rows)}건")
     for row in rows:
         print(f"- [{row['nickname']}] {row['title']}")

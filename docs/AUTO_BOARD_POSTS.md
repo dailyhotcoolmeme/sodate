@@ -103,7 +103,10 @@
 
 - 매일 05:10 KST 자동 보충은 `local-template-v1` 조합기만 사용한다.
 - 예약·게시·프로필 이미지 배정은 전부 DB에서 처리하므로 AI 토큰을 사용하지 않는다.
-- Workers AI 생성 경로는 자동 작업에서 분리한다. 오너가 별도로 지시해 `--generator ai`를 수동 실행할 때만 사용한다.
+- AI가 필요하면 다른 공급자는 사용하지 않고 현재 유료 플랜의 Cloudflare Workers AI만 사용한다.
+- Cloudflare Workers AI 생성 경로는 자동 작업에서 분리한다. 오너가 별도로 지시해 `--generator cloudflare`를 수동 실행할 때만 사용한다.
+- GitHub 수동 실행에서 생성 방식을 `cloudflare`로 선택했을 때만 `CF_WORKERS_AI_TOKEN`을 작업에 주입한다. 매일 정기 실행에는 AI 토큰을 주입하지 않는다.
+- AI 생성 결과에는 `cloudflare-workers-ai:<모델명>`을 기록해 어떤 공급자와 모델을 썼는지 admin과 DB에서 확인할 수 있게 한다.
 - 로컬 조합도 AI 결과와 같은 금칙어·시간·날씨·말투·말머리 검사를 통과해야 저장된다.
 
 ## 자동 게시 전환 조건
