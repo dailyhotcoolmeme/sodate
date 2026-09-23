@@ -522,11 +522,16 @@ def generate(count: int, dry_run: bool = False) -> list[dict]:
         if not generated:
             break
 
+    if not drafts:
+        raise RuntimeError(f'검증을 통과한 초안이 없습니다(0/{count})')
     if len(drafts) < count:
-        raise RuntimeError(f'검증을 통과한 초안이 부족합니다({len(drafts)}/{count})')
+        # 좋지 않은 글을 얇은 기준으로 억지 통과시키지 않는다. 이번에 통과한
+        # 글만 저장하면 다음 실행이 남은 부족분을 다시 채운다.
+        print(f'주의: 품질 검증 통과 {len(drafts)}/{count}건 — 통과한 초안만 저장합니다')
 
     rows = []
-    for nick, avatar_id, draft in zip(_nicknames(count), _avatars(count), drafts[:count]):
+    saved_count = len(drafts)
+    for nick, avatar_id, draft in zip(_nicknames(saved_count), _avatars(saved_count), drafts):
         rows.append({
             'nickname': nick,
             'title': draft.title,
