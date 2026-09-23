@@ -42,6 +42,7 @@ def test_valid_rejects_unapproved_emoticons_and_time_weather_context():
     assert not _valid(Draft('밤공기 좋네', '산책하니까 날씨 좋음', '일상'), seen)
     assert not _valid(Draft('점심 추천', '오늘 뭐먹지?', '일상'), seen)
     assert not _valid(Draft('제목', '너무 웃김 ㅋㅋㅋㅋ', '일상'), seen)
+    assert not _valid(Draft('장거리 썸 고민입니다', '거리 멀어도 시작해도 될까?', '연애'), seen)
     assert _valid(Draft('간식 추천', '간단하게 먹을만한거 추천좀 ㅋㅋ', '일상'), seen)
 
 

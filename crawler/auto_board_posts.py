@@ -406,7 +406,7 @@ def _valid(draft: Draft, seen: set[str]) -> bool:
     if re.search(r'\d{1,2}\s*시(?:에|쯤|부터|까지|\s|,|\?|!|$)', f'{draft.title}\n{draft.content}'):
         return False
     if re.search(
-        r'(습니다|합니다|구합니다|했어요|해요|있어요|없어요|같아요|더라구요|라고요|인가요|있나요|없나요|가나요|되나요|될까요|할까요|어떠세요|줄래요|구해요)',
+        r'(습니다|입니다|합니다|됩니다|구합니다|했어요|해요|있어요|없어요|같아요|더라구요|라고요|인가요|있나요|없나요|가나요|되나요|될까요|할까요|어떠세요|줄래요|구해요)',
         f'{draft.title}\n{draft.content}',
     ):
         return False
