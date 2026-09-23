@@ -18,6 +18,7 @@ from auto_board_posts import (
     _local_drafts,
     _nicknames,
     _plain,
+    _tag_ids_for_drafts,
     _valid,
 )
 
@@ -109,5 +110,25 @@ def test_local_generator_makes_full_token_free_queue_with_unique_valid_posts():
     assert len({_key(draft.title) for draft in drafts}) == 90
     assert all(_valid(draft, set()) for draft in drafts)
     assert sum(draft.kind == 'review' for draft in drafts) == 30
+    long_drafts = [draft for draft in drafts if draft.is_long]
+    assert len(long_drafts) == 18
+    assert all(len(draft.content) >= 160 for draft in long_drafts)
+    assert all(not (a.is_long and b.is_long) for a, b in zip(drafts, drafts[1:]))
     assert all(':)' not in f'{draft.title}{draft.content}' for draft in drafts)
     assert all('ㅠ' not in f'{draft.title}{draft.content}' for draft in drafts)
+
+
+def test_most_generated_posts_have_no_tag_even_when_kind_has_one():
+    random.seed(20260924)
+    drafts = _local_drafts(_kind_targets(90), set())
+    tag_ids = {
+        '리얼후기': 'review-id',
+        '고민상담': 'advice-id',
+        '궁금해요': 'question-id',
+        '동행구함': 'companion-id',
+    }
+    assigned = _tag_ids_for_drafts(drafts, tag_ids)
+
+    assert sum(tag_id is not None for tag_id in assigned) <= 23
+    assert sum(tag_id is None for tag_id in assigned) >= 67
+    assert all(tag_id is None for draft, tag_id in zip(drafts, assigned) if draft.kind == 'casual')

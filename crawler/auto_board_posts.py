@@ -76,6 +76,16 @@ KIND_LABELS = {
     'companion': '동행구함',
 }
 
+# 익명 게시판에서는 내용이 후기나 질문이어도 말머리를 생략하는 경우가 더 많다.
+# 종류별 확률을 적용하되 한 생성 묶음에서 전체 25%를 넘지 않게 한 번 더 제한한다.
+TAG_PROBABILITIES = {
+    'review': 0.28,
+    'advice': 0.20,
+    'question': 0.15,
+    'casual': 0.0,
+    'companion': 0.40,
+}
+
 # 모델이 맥락 없는 상황을 억지로 만들지 않게, 실제 커뮤니티에서 답하기 쉬운 소재만 준다.
 # 문장과 결론은 모델이 새로 만들고, 이 목록은 소재 방향만 잡는다.
 SCENARIOS_BY_KIND = {
@@ -249,6 +259,79 @@ LOCAL_COMPANION_CASES = [
     (('영화 같이 볼 사람', '영화 동행 구함'), '보고 싶은 영화 있는데 혼자 보기엔 살짝 심심함', '영화 보고 감상 조금 얘기하고 헤어질 사람 구함'),
 ]
 
+# 다섯 건 중 한 건가량은 읽을 만한 분량이 되도록 별도로 검수한 긴 글 풀이다.
+# 시각·날씨에 기대지 않고, 짧은 글을 억지로 반복해 늘리지 않은 독립 본문만 둔다.
+LOCAL_LONG_CASES = {
+    'review': [
+        (('로소 혼자 끝까지 해본', '혼자 간 로소 자세한 느낌'),
+         '로소 혼자 신청하고 가기 전까지 괜히 취소할까 몇 번 생각했음\n입구에서 혼자 기다릴 때가 제일 어색했고 막상 시작하니까 진행 따라가느라 정신 없더라\n\n처음 두 명이랑은 무슨 말 했는지도 잘 기억 안날 정도로 긴장했는데\n세 번째부터는 자주 묻는 질문도 생기고 내 얘기도 좀 편하게 했어\n짧게 얘기해서 아쉽다 싶은 사람도 있었고 반대로 빨리 끝나서 다행인 자리도 있었음\n\n끝나고 나니 혼자 간 건 아무도 신경 안쓰더라\n처음 가는 거면 시작 전 어색함만 버티면 생각보다 할만했어',
+         '로테이션소개팅'),
+        (('소개팅 대화 풀린 과정', '어색하다 편해진 소개팅'),
+         '소개팅 자리 앉았을 때 서로 긴장해서 대답만 짧게 오갔어\n이대로 끝나는 건가 싶어서 메뉴 얘기부터 그냥 편하게 꺼냈음\n\n상대가 먹는 거 좋아한다고 해서 자주 가는 곳 얘기하다가 여행이랑 취미까지 넘어갔고\n그때부터는 누가 질문하는지도 모르게 대화가 계속 이어지더라\n처음 인상만 보면 둘 다 조용한 사람인줄 알았는데 웃는 포인트도 비슷했어\n\n처음 몇 분 어색했다고 바로 안맞는다고 생각할 필요는 없는듯\n조금 풀리고 나서 보이는 분위기가 따로 있더라',
+         '소개팅'),
+        (('애프터 먼저 보낸 자세한 후기', '먼저 애프터 잡아본 얘기'),
+         '소개팅 끝나고 분위기는 괜찮았는데 상대가 먼저 연락할지 확신은 없었어\n괜히 기다리면서 의미부여할 것 같아서 내가 먼저 잘 들어갔냐고 보냈음\n\n답장 오고 나서는 만났을 때 했던 얘기 이어서 조금 주고받았고\n다시 보고 싶다고 너무 돌려 말하지 않고 편하게 말했어\n상대도 좋다고 해서 메뉴랑 장소만 가볍게 정했음\n\n먼저 보내면 마음이 더 커 보일까 걱정했는데 막상 별일 아니더라\n괜찮았던 사람한테는 눈치게임보다 표현하는 게 나은듯',
+         '소개팅'),
+        (('소셜링 혼자 적응한 과정', '낯가리는 사람 소셜링 후기'),
+         '낯가리는 편인데 소셜링을 혼자 가봤어\n이미 친해 보이는 사람들이 있으면 어쩌나 걱정했는데 대부분 처음 온 사람들이더라\n\n처음엔 옆사람이랑 인사만 하고 조용히 있었는데 진행자가 주제를 던져주니까 말할 게 생겼음\n한 사람이 자기 얘기 꺼내면 비슷한 경험 있는 사람들이 붙어서 대화가 이어졌고\n나도 듣다가 공감되는 부분에 한마디씩 하니까 금방 섞였어\n\n사교성 좋아야만 가는 자리는 아니었음\n말 많이 안해도 흐름 따라가다 보면 편해지더라',
+         '로테이션소개팅'),
+        (('혼술바 혼자 앉아본 과정', '혼자 간 혼술바 긴 후기'),
+         '혼술바는 혼자 가도 된다고 해도 들어가기 전엔 꽤 어색했어\n일단 한 잔 시키고 혼자 메뉴 보면서 앉아 있었음\n\n옆자리 사람이 메뉴 뭐가 괜찮냐고 물어서 짧게 대답했는데 그게 대화 시작이 됐어\n서로 왜 혼자 왔는지부터 좋아하는 술 얘기까지 자연스럽게 이어졌고\n계속 떠들어야 하는 분위기도 아니라 중간에 조용히 있어도 부담 없더라\n\n무조건 누군가 만나야 한다는 생각 없이 가면 괜찮은듯\n혼자 있어도 되고 대화가 생기면 그것도 재밌었어',
+         '로테이션소개팅'),
+        (('사진보다 대화가 중요했던 소개팅', '첫인상 뒤집힌 소개팅 얘기'),
+         '소개팅 사진만 봤을 때는 내 취향이랑 조금 다르다고 생각했어\n약속은 잡았으니 편하게 얘기나 해보자는 마음으로 나갔음\n\n실제로 만나니 표정이랑 말투가 사진에서 느낀 인상이랑 완전 달랐고\n내 얘기에 반응도 잘해주고 본인 얘기도 솔직하게 해서 대화가 편했어\n취미는 많이 안겹쳤는데 서로 모르는 걸 물어보는 재미가 있더라\n\n사진 한두 장으로 사람 느낌을 정해두는 게 별 의미 없다는 생각 들었음\n직접 대화해봐야 아는 부분이 훨씬 큰듯',
+         '소개팅'),
+    ],
+    'advice': [
+        (('소개팅 뒤 연락 흐름이 애매함', '연락은 오는데 관심인지 모르겠음'),
+         '소개팅에서는 대화도 잘됐고 헤어질 때도 분위기 괜찮았어\n상대가 먼저 잘 들어갔냐고 연락해서 나도 느낌 좋다고 생각했음\n\n근데 그 뒤로 연락은 계속 오는데 답장이 길지는 않고 질문도 거의 없어\n내가 하나 물으면 답하고 다른 얘기로 넘어가는 식이라 대화를 나만 끌고 가는 느낌임\n그렇다고 끊으려 하면 또 먼저 가벼운 얘기를 보내기는 해\n\n그냥 연락 스타일이 이런 건지 관심은 없는데 예의로 이어가는 건지 모르겠어\n한 번 더 만나자고 직접 물어보는 게 제일 확실할까?',
+         '소개팅'),
+        (('데이트 약속을 나만 잡는 느낌', '만날 장소 계속 나만 정함'),
+         '썸 타는 사람이랑 몇 번 만났는데 약속 정할 때마다 내가 먼저 얘기함\n상대는 만나자고 하면 좋다고 하고 실제로 만나면 분위기도 괜찮아\n\n근데 날짜부터 장소랑 메뉴까지 거의 내가 후보를 보내야 정해져\n뭐 하고 싶은지 물어봐도 아무거나 좋다고만 하니까 점점 힘 빠짐\n연락 자체는 먼저 올 때도 있어서 아예 관심 없는 것 같지는 않거든\n\n원래 계획 안세우는 성격이면 이 정도는 받아들여야 하나\n한 번 솔직하게 번갈아 정하자고 말해도 됨?',
+         '썸연애'),
+        (('답장 텀 차이 때문에 헷갈림', '연락 속도 다른 썸 고민'),
+         '연락 시작한 사람인데 대화할 때는 말도 잘통하고 답장 내용도 성의 있어\n근데 답 오는 간격이 짧을 때도 있고 한참 비어 있을 때도 있음\n\n바쁘다고 미리 말한 적은 있는데 텀이 길어지면 괜히 내가 말실수했나 생각하게 돼\n연락 횟수로 마음 판단하면 안된다는 건 아는데 아직 관계가 애매해서 더 신경쓰임\n내가 답장을 빨리 하는 편이라 체감 차이가 큰 걸 수도 있어\n\n이런 건 좀 더 만나보면서 보는 게 맞나\n연락 스타일을 대놓고 물어보면 너무 이른 느낌임?',
+         '썸연애'),
+        (('소개팅에서 침묵이 길었음', '대화 끊긴 소개팅 다시 볼지'),
+         '소개팅 상대가 나쁜 사람은 아니었고 말할 때는 편했어\n근데 둘 다 먼저 주제를 잘 꺼내는 편이 아니라 중간마다 침묵이 길게 생겼음\n\n조용해질 때마다 내가 질문을 찾느라 머리가 바빠서 상대 얘기에 집중도 잘 안되더라\n상대도 비슷하게 긴장한 것 같긴 했고 헤어질 때는 다음에 보자는 말도 했어\n첫 만남이라 그런 건지 원래 대화 결이 안맞는 건지 판단이 안됨\n\n외적인 호감은 있어서 한 번 더 보면 달라질까 싶어\n이 정도 어색함이면 다시 만나보는 편임?',
+         '소개팅'),
+        (('썸인데 호감 표현을 못하겠음', '좋아하는 티 어디까지 냄'),
+         '몇 번 만난 사람한테 호감은 있는데 내가 표현을 잘 못하는 편임\n상대가 먼저 만나자고도 하고 연락도 이어가는데 나도 좋다는 티를 내고 싶어\n\n막상 메시지 쓰면 너무 진지해 보일까봐 지우고 결국 평범한 답만 보내게 됨\n만나서는 잘 웃고 대화도 하는데 집에 가면 내가 관심 없어 보였을까 걱정돼\n부담 주는 고백을 하려는 건 아니고 다음에도 보고 싶다는 정도만 전하고 싶음\n\n그냥 헤어진 뒤에 재밌었다고 먼저 말하는 것부터 하면 되나\n자연스럽게 호감 표현하는 방법 뭐가 있음?',
+         '썸연애'),
+        (('친구 소개가 애매하게 끝남', '소개해준 친구한테 뭐라함'),
+         '친구가 연결해준 사람이랑 연락하고 한 번 만났는데 서로 크게 끌리지는 않은 것 같아\n대화가 불편한 건 아니었지만 다시 약속 잡을 정도의 느낌도 없었음\n\n상대랑은 부담 없이 여기까지 하자는 식으로 얘기가 된 상태야\n문제는 소개해준 친구가 계속 어땠냐고 물어보고 잘됐으면 하는 기대가 커 보여\n상대 얘기를 자세히 평가하는 건 예의 아닌 것 같고 그렇다고 얼버무리기도 애매함\n\n서로 좋은 사람이지만 인연은 아닌 것 같다고만 말하면 충분하겠지\n이럴 때 소개해준 사람한테 보통 어디까지 말함?',
+         '소개팅'),
+    ],
+    'question': [
+        (('소개팅 전 연락 기준 궁금', '만나기 전 카톡 어느 정도 함'),
+         '소개팅 약속은 잡았는데 만나기 전까지 연락을 얼마나 해야 할지 매번 애매함\n계속 얘기하면 실제로 만났을 때 할말이 줄어들 것 같고\n아예 필요한 얘기만 하면 관심 없어 보일까봐 신경쓰여\n\n가벼운 일상 얘기 정도는 이어가는 편인지\n장소랑 일정만 확인하고 만나는 편인지 사람마다 진짜 다르더라\n다들 소개팅 전에는 카톡 어느 정도 함?',
+         '소개팅'),
+        (('첫 만남 비용 나누는 방식', '소개팅 계산할 때 보통 어케함'),
+         '첫 만남 계산할 때 한 사람이 먼저 내면 다음 장소는 다른 사람이 내는 방식이 편하긴 하잖아\n근데 애프터가 없을 수도 있으니까 바로 나누는 게 깔끔하다는 얘기도 이해됨\n\n상대가 계산대로 가면 옆에서 바로 나눠 내겠다고 말하는지\n일단 두고 다음 카페에서 자연스럽게 내는지 궁금함\n괜히 계산 순간에 실랑이하는 것도 더 어색한 것 같아\n보통 어떤 방식이 제일 무난했음?',
+         '소개팅'),
+        (('로소 짧은 대화로 판단 가능함?', '로테이션 대화 시간 궁금'),
+         '로소는 여러 명을 만나는 대신 한 사람과 얘기하는 시간이 짧다고 들었어\n처음엔 누구나 긴장할 텐데 그 안에 서로 느낌을 알 수 있는지 궁금함\n\n질문 몇 개 하다 보면 바로 자리 바꿀 것 같고\n말이 천천히 풀리는 사람은 조금 불리할 수도 있을 것 같거든\n그래도 여러 사람을 비교해서 볼 수 있다는 건 괜찮아 보임\n가본 사람들은 짧아도 호감 가는 사람이 구분됐음?',
+         '로테이션소개팅'),
+        (('애프터 메뉴 고르는 기준', '두 번째 만남 음식 뭐가 편함'),
+         '애프터 약속 잡을 때 첫 만남보다 메뉴가 더 고민되는 것 같아\n너무 가벼우면 성의 없어 보일까 싶고 비싼 곳은 서로 부담될 수 있잖아\n\n먹기 불편한 음식은 대화가 끊기고\n조용한 곳만 찾으면 선택지가 확 줄어들더라\n상대가 딱히 못먹는 건 없다고 해서 더 고르기 어려움\n다들 두 번째 만남에는 어떤 메뉴가 제일 편했음?',
+         '소개팅'),
+    ],
+    'casual': [
+        (('취미가 오래 안가는 이유', '시작한 취미 자꾸 접게 됨'),
+         '뭔가 배워보고 싶어서 찾아볼 때는 엄청 재밌어 보이는데\n막상 장비 사고 몇 번 해보면 처음만큼 손이 안가더라\n\n실력이 빨리 안늘어서 그런가 싶다가도 잘해야만 취미인가 싶고\n혼자 하는 건 미루게 돼서 모임을 들어가면 오히려 부담될 때도 있음\n그래도 완전히 그만두면 산 물건이 아까워서 한 번씩 다시 꺼내봄\n\n꾸준히 하는 사람들은 재미 떨어지는 구간을 그냥 넘기는 건가\n오래 붙잡고 있는 취미 하나 있는 사람 좀 신기함'),
+        (('친구들이랑 취향 달라진 느낌', '친구랑 노는 방식이 달라짐'),
+         '오래 본 친구들이랑 사이가 안좋은 건 아닌데 만나서 하고 싶은 게 점점 달라지는 것 같아\n누구는 계속 새로운 곳 찾아다니고 싶어하고 누구는 익숙한 데서 얘기만 하는 걸 좋아함\n\n예전에는 아무거나 해도 재밌었는데 각자 취향이 확실해지니까 약속 하나 잡는 것도 오래 걸려\n그렇다고 취향 맞는 사람만 새로 만나는 건 또 다른 얘기고\n결국 중간 지점 찾다가 늘 비슷한 선택으로 끝남\n\n친한 거랑 같이 놀기 편한 건 조금 다른 문제인듯\n다들 오래된 친구랑 취향 달라지면 어떻게 맞춤?'),
+        (('사진첩 정리하다 포기함', '사진을 못지우는 이유'),
+         '사진이 너무 쌓여서 정리하려고 열었는데 삭제보다 구경을 더 오래 했어\n비슷하게 찍은 사진도 표정이 조금씩 달라서 하나만 고르기가 어렵더라\n\n스크린샷은 나중에 볼 것 같아서 남겨두고\n음식 사진은 왜 찍었는지 모르겠는데 지우려니 또 애매함\n정리 앱도 써봤는데 마지막에 내가 확인해야 하니까 결국 똑같았어\n\n용량 부족 알림 뜰 때만 잠깐 지우고 다시 쌓이는 중임\n사진 바로 정리하는 사람들은 찍고 곧바로 고르는 건가?'),
+        (('온라인 쇼핑 실패 줄이는 법', '옷 사진이랑 핏 너무 다름'),
+         '온라인으로 옷 보면 모델 사진은 괜찮은데 내가 입으면 느낌이 다른 경우가 많아\n사이즈표 재고 후기까지 다 읽어도 원단이나 핏은 직접 보기 전엔 모르겠더라\n\n반품 귀찮아서 그냥 입은 옷도 있는데 결국 손이 잘 안감\n매장 가면 입어볼 수는 있지만 선택지가 적고 돌아다니는 것도 꽤 힘들어\n편한 건 온라인인데 성공률은 매장이 더 높은 느낌임\n\n후기 사진 많은 것만 고르는 게 그나마 답인가\n온라인으로 옷 잘사는 사람은 뭘 제일 먼저 봄?'),
+        (('콘텐츠 고르다 끝나는 사람', '볼거 찾는 데 더 오래 걸림'),
+         '뭐 하나 보려고 목록 열면 선택지가 너무 많아서 예고편만 계속 넘기게 됨\n평점 찾아보고 후기 조금 읽다 보면 이미 흥미가 떨어져 있어\n\n결국 전에 봤던 거 다시 틀거나 짧은 영상만 보다 끝나는 경우가 많음\n새 작품은 초반에 집중해야 하는 게 은근 부담인 것 같아\n재밌다는 추천을 받아도 저장만 하고 시작은 잘 안하게 됨\n\n취향에 딱 맞는 걸 찾으려다 아무것도 못보는 느낌임\n그냥 첫 화면에 뜨는 거 바로 보는 사람이 오히려 잘 즐기는듯'),
+        (('물건 정리 기준이 어려움', '안쓰는 물건 못버리겠음'),
+         '정리하려고 꺼내보면 안쓰는 물건인데도 하나씩 이유가 생겨\n언젠가 필요할 것 같거나 선물 받은 거라 미안하거나 다시 살 수도 있다는 생각이 듦\n\n그러다 보니 버리는 건 몇 개 없고 꺼낸 것만 다시 넣게 돼\n수납함을 사면 잠깐 깔끔해지는데 물건 총량은 그대로라 금방 또 차더라\n진짜 필요한 것만 남기라는 말은 쉬운데 그 기준 잡는 게 제일 어려움\n\n오래 안쓴 건 바로 정리하는 규칙이라도 만들어야 하나\n미련 없이 버리는 사람들은 판단을 어떻게 함?'),
+    ],
+}
+
 LOCAL_TITLE_WRAPPERS = {
     'review': ['{base} 후기', '{base} 얘기', '{base} 솔직 느낌', '{base} 생각보다 괜찮았음', '{base} 은근 괜찮더라'],
     'advice': ['{base}', '{base} 이거 어케함?', '{base} 나만 고민됨?', '{base} 조언좀', '{base} 어떻게 생각함?'],
@@ -265,6 +348,7 @@ class Draft:
     topic: str
     kind: str = 'question'
     scenario: str = ''
+    is_long: bool = False
 
 
 def _plain(value: str) -> str:
@@ -377,15 +461,17 @@ def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> s
 - 소재에 로테이션 소개팅이 없으면 `로소`나 `로테이션`으로 바꿔 쓰지 않는다.
 
 [글 종류·말머리]
-- review: 질문이 아니라 자신이 겪은 일을 자연스럽게 풀어쓴 후기. 시스템이 [리얼후기] 말머리를 별도로 붙인다. 끝을 굳이 질문으로 마치지 않는다.
-- advice: 상황을 풀어놓고 조언을 구하는 글. 시스템이 [고민상담] 말머리를 별도로 붙인다.
-- question: 가벼운 궁금증을 묻는 글. 시스템이 [궁금해요] 말머리를 별도로 붙인다.
-- companion: 같이 갈 사람을 구하는 글. 시스템이 [동행구함] 말머리를 별도로 붙인다. 연락처는 적지 않는다.
+- review: 질문이 아니라 자신이 겪은 일을 자연스럽게 풀어쓴 후기. 끝을 굳이 질문으로 마치지 않는다.
+- advice: 상황을 풀어놓고 조언을 구하는 글.
+- question: 가벼운 궁금증을 묻는 글.
+- companion: 같이 갈 사람을 구하는 글. 연락처는 적지 않는다.
 - casual: 일상 잡담. 말머리를 붙이지 않는다.
+- 시스템이 일부 글에만 내용과 맞는 말머리를 별도로 붙인다. 글 종류와 관계없이 제목·본문만 자연스럽게 쓴다.
 - 제목과 본문에 [리얼후기], [고민상담] 같은 말머리 문자를 직접 적지 않는다.
 
 [반드시 지킬 말투]
-- 짧게 끊고 말하듯 쓴다. 2~6문장이 기본이며 한두 줄짜리 글도 섞는다.
+- 짧게 끊고 말하듯 쓴다. 대부분은 2~6문장으로 쓰되 전체의 약 20%는 상황과 생각이 이어지는 6~9문장 분량으로 쓴다.
+- 긴 글도 블로그처럼 정리하지 말고, 실제 익명 게시판에서 사정을 조금 자세히 풀어놓은 글처럼 문단을 나눈다.
 - ㅇㅇ, ㅋㅋ, ㅋㅋㅋ, ??, ㄱㅊ?, 추천좀, 어떰? 같은 표현을 문맥에 맞을 때만 쓴다.
 - 줄임말은 ㅇㅇ, ㅋㅋ, ㅋㅋㅋ, ㄱㅊ, ㄹㅇ, 추천좀, 어떰 정도만 쓴다. 알아볼 수 없는 초성이나 새 줄임말을 만들지 않는다.
 - `:)`, `ㅠ`, `ㅜ`, `ㅎㅎ`, 마침표는 쓰지 않는다. 웃음은 ㅋㅋ 또는 ㅋㅋㅋ만 쓴다.
@@ -607,6 +693,47 @@ def _active_tag_ids(sb) -> dict[str, str]:
     return {str(row.get('label') or '').strip('[] '): str(row['id']) for row in rows}
 
 
+def _tag_ids_for_drafts(drafts: list[Draft], tag_ids: dict[str, str]) -> list[str | None]:
+    """내용에 맞는 말머리도 소수만 붙이고, 한 묶음의 25%를 넘지 않는다."""
+    selected: list[int] = []
+    for index, draft in enumerate(drafts):
+        label = KIND_LABELS.get(draft.kind)
+        if label and tag_ids.get(label) and random.random() < TAG_PROBABILITIES[draft.kind]:
+            selected.append(index)
+
+    max_tagged = max(1, (len(drafts) + 3) // 4) if drafts else 0
+    if len(selected) > max_tagged:
+        selected = random.sample(selected, max_tagged)
+    selected_set = set(selected)
+    return [
+        tag_ids.get(KIND_LABELS.get(draft.kind, '')) if index in selected_set else None
+        for index, draft in enumerate(drafts)
+    ]
+
+
+def _long_form_positions(kinds: list[str]) -> set[int]:
+    """약 다섯 건마다 한 건을 긴 글로 고르되 서로 붙지 않게 흩어 놓는다."""
+    target = len(kinds) // 5
+    if target == 0:
+        return set()
+    candidates = [i for i, kind in enumerate(kinds) if kind in LOCAL_LONG_CASES]
+    random.shuffle(candidates)
+    selected: list[int] = []
+    for index in candidates:
+        if any(abs(index - chosen) < 3 for chosen in selected):
+            continue
+        selected.append(index)
+        if len(selected) == target:
+            break
+    if len(selected) < target:
+        for index in candidates:
+            if index not in selected:
+                selected.append(index)
+                if len(selected) == target:
+                    break
+    return set(selected)
+
+
 def _local_title(kind: str, base: str) -> str:
     if kind in {'review', 'companion'}:
         return random.choice(LOCAL_TITLE_WRAPPERS[kind]).format(base=base)
@@ -635,7 +762,23 @@ def _local_title(kind: str, base: str) -> str:
     ])
 
 
-def _local_draft(kind: str) -> Draft:
+def _local_draft(kind: str, long_form: bool = False) -> Draft:
+    if long_form and kind in LOCAL_LONG_CASES:
+        long_case = random.choice(LOCAL_LONG_CASES[kind])
+        if kind == 'casual':
+            titles, content = long_case
+            topic = '2030일상'
+        else:
+            titles, content, topic = long_case
+        base = random.choice(titles)
+        return Draft(
+            title=_local_title(kind, base),
+            content=content,
+            topic=topic,
+            kind=kind,
+            scenario=titles[0],
+            is_long=True,
+        )
     if kind == 'review':
         titles, first, second, third, topic = random.choice(LOCAL_REVIEW_CASES)
         base = random.choice(titles)
@@ -695,10 +838,11 @@ def _local_drafts(kinds: list[str], seen: set[str]) -> list[Draft]:
     }
     scenario_counts: Counter[str] = Counter()
     recent_scenarios: list[str] = []
-    for kind in kinds:
+    long_positions = _long_form_positions(kinds)
+    for position, kind in enumerate(kinds):
         max_per_scenario = (requested[kind] + case_counts[kind] - 1) // case_counts[kind]
         for _ in range(500):
-            draft = _local_draft(kind)
+            draft = _local_draft(kind, position in long_positions)
             if scenario_counts[draft.scenario] >= max_per_scenario:
                 continue
             if draft.scenario in recent_scenarios[-6:]:
@@ -720,19 +864,22 @@ def generate_local(count: int, dry_run: bool = False) -> list[dict]:
     seen = _existing_auto_titles(sb)
     tag_ids = _active_tag_ids(sb)
     drafts = _local_drafts(_kind_targets(count), seen)
+    assigned_tag_ids = _tag_ids_for_drafts(drafts, tag_ids)
 
     rows = []
-    for nick, avatar_id, draft in zip(_nicknames(len(drafts)), _avatars(len(drafts)), drafts):
+    for nick, avatar_id, draft, tag_id in zip(
+        _nicknames(len(drafts)), _avatars(len(drafts)), drafts, assigned_tag_ids,
+    ):
         rows.append({
             'nickname': nick,
             'title': draft.title,
             'content': draft.content,
             'avatar_id': avatar_id,
-            'tag_id': tag_ids.get(KIND_LABELS.get(draft.kind, '')),
+            'tag_id': tag_id,
             'source_type': 'original',
             'status': 'ready',
-            'generation_model': 'local-template-v1',
-            'generation_notes': f'토큰 없는 로컬 조합 · {draft.kind} · 주제 {draft.topic} · 소재 {draft.scenario}',
+            'generation_model': 'local-template-v2',
+            'generation_notes': f'토큰 없는 로컬 조합 · {draft.kind} · {"긴 글" if draft.is_long else "일반 글"} · 주제 {draft.topic} · 소재 {draft.scenario}',
         })
 
     if dry_run:
@@ -787,13 +934,16 @@ def generate_cloudflare(count: int, dry_run: bool = False) -> list[dict]:
 
     rows = []
     saved_count = len(drafts)
-    for nick, avatar_id, draft in zip(_nicknames(saved_count), _avatars(saved_count), drafts):
+    assigned_tag_ids = _tag_ids_for_drafts(drafts, tag_ids)
+    for nick, avatar_id, draft, tag_id in zip(
+        _nicknames(saved_count), _avatars(saved_count), drafts, assigned_tag_ids,
+    ):
         rows.append({
             'nickname': nick,
             'title': draft.title,
             'content': draft.content,
             'avatar_id': avatar_id,
-            'tag_id': tag_ids.get(KIND_LABELS.get(draft.kind, '')),
+            'tag_id': tag_id,
             'source_type': 'existing_posts',
             'status': 'ready',
             'generation_model': f'{CF_AI_PROVIDER}:{CF_MODEL}',
