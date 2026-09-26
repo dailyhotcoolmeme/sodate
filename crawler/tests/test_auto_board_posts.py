@@ -20,6 +20,7 @@ from auto_board_posts import (
     _local_drafts,
     _nicknames,
     _plain,
+    _parse_ai_json,
     _prompt,
     _tag_ids_for_drafts,
     _valid,
@@ -29,6 +30,11 @@ from auto_board_posts import (
 
 def test_plain_removes_board_html():
     assert _plain('<p>첫줄</p><br><p>둘째줄</p>') == '첫줄\n\n둘째줄'
+
+
+def test_ai_json_parser_accepts_code_fence_and_reasoning_prefix():
+    raw = '먼저 조건을 확인했습니다\n```json\n{"posts":[{"title":"제목"}]}\n```'
+    assert _parse_ai_json(raw)['posts'][0]['title'] == '제목'
 
 
 def test_title_key_ignores_spacing_and_symbols():

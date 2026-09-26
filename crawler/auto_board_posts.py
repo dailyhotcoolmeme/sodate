@@ -619,9 +619,28 @@ def _call_cloudflare_ai(token: str, samples: list[dict[str, str]], requests: lis
     # GPT-OSS 등 최신 모델은 Chat Completions 형태로 응답한다.
     if isinstance(result, dict) and result.get('choices'):
         raw = ((result['choices'][0].get('message') or {}).get('content'))
-    parsed = json.loads(raw) if isinstance(raw, str) else raw
+    parsed = _parse_ai_json(raw)
     return [Draft(str(x['title']).strip(), str(x['content']).strip(), str(x['topic']).strip(), str(x['kind']).strip())
             for x in (parsed or {}).get('posts', [])]
+
+
+def _parse_ai_json(raw: object) -> dict:
+    """모델이 JSON 앞뒤에 설명이나 코드펜스를 붙여도 첫 JSON 객체만 안전하게 읽는다."""
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError('Workers AI가 비어 있는 응답을 반환했습니다')
+
+    text = raw.strip()
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r'\{', text):
+        try:
+            parsed, _ = decoder.raw_decode(text[match.start():])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and isinstance(parsed.get('posts'), list):
+            return parsed
+    raise ValueError('Workers AI 응답에서 posts JSON 객체를 찾지 못했습니다')
 
 
 def _valid(draft: Draft, seen: set[str], seen_contents: list[str] | None = None) -> bool:
