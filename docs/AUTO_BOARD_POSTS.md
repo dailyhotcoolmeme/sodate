@@ -100,7 +100,7 @@
 
 ## 게시 흐름
 
-1. 정기 실행은 현재 유료 플랜의 Cloudflare Workers AI로 새 글을 만들고, 로컬 고정 본문은 수동 비상 생성에만 사용한다.
+1. 글 생성은 오너의 SuperGrok 웹 구독 범위에서 묶음으로 수행하고, 로컬 고정 본문은 수동 비상 생성에만 사용한다.
 2. 과거 공개·대기 글 전체와 제목·본문을 비교해 동일하거나 유사한 글은 버린다.
 3. 생성·말투·시간·날씨·말머리 검사를 통과한 결과를 `auto_board_posts`에 `ready`로 저장한다.
 4. 매일 09:40 KST에 10:00~다음 날 01:00 게시 시각을 배정한다.
@@ -110,12 +110,13 @@
 
 ## 토큰 사용 원칙
 
-- 매일 05:10 KST 자동 보충은 유료 플랜에 포함된 Cloudflare Workers AI만 사용한다.
+- Cloudflare Workers AI와 xAI API는 사용하지 않는다. 기존 GitHub AI 정기 생성 작업도 비활성화하고 스케줄을 제거했다.
+- SuperGrok 웹에서 `crawler/prompts/auto_board_supergrok.txt` 규칙으로 JSON을 생성한다.
+- Grok의 `응답 복사` 결과를 `crawler/supergrok_import_server.py`의 로컬 화면에 붙여 넣는다.
+- 가져오기 화면과 `crawler/import_supergrok_posts.py`는 일반 프로그램이며 AI를 호출하지 않는다.
 - 예약·게시·프로필 이미지 배정은 전부 DB에서 처리하므로 AI 토큰을 사용하지 않는다.
-- 다른 AI 공급자는 사용하지 않는다.
-- `CF_WORKERS_AI_TOKEN`은 정기 생성 작업과 오너가 수동으로 Cloudflare 생성을 선택한 작업에만 주입한다.
-- AI 생성 결과에는 `cloudflare-workers-ai:<모델명>`을 기록해 어떤 공급자와 모델을 썼는지 admin과 DB에서 확인할 수 있게 한다.
-- 정기 생성 모델은 Cloudflare가 JSON 출력을 공식 지원하는 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`를 사용한다.
+- 가져오기 과정에서 Codex가 글 본문을 읽거나 다시 작성하지 않는다.
+- 생성 결과에는 `generation_model=supergrok-web`을 기록해 admin과 DB에서 출처를 확인할 수 있게 한다.
 - 로컬 조합도 AI 결과와 같은 금칙어·시간·날씨·말투·말머리 검사를 통과해야 저장된다.
 - 제목이 달라도 본문이 같거나 문장 일부만 바꾼 유사 글이면 저장하지 않는다.
 - 검사를 통과한 새 글이 부족하면 반복 글을 억지로 채우지 않는다.

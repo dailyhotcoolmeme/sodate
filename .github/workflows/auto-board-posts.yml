@@ -1,20 +1,10 @@
-name: Generate Community Post Drafts
+name: Legacy Local Community Drafts
 
 on:
-  schedule:
-    - cron: '10 20 * * *'  # 매일 오전 05:10 KST, 다음 날 사용할 초안을 미리 채운다
   workflow_dispatch:
     inputs:
-      generator:
-        description: '생성 방식 (정기 실행은 Cloudflare Workers AI)'
-        required: false
-        default: 'local'
-        type: choice
-        options:
-          - local
-          - cloudflare
       target:
-        description: 'admin 대기함에 유지할 미게시 초안 수'
+        description: '비상용 로컬 초안 목표 수'
         required: false
         default: '90'
 
@@ -39,20 +29,9 @@ jobs:
         run: pip install -r crawler/requirements.txt
 
       - name: Fill admin draft queue without AI
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.generator != 'cloudflare'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           cd crawler
           python auto_board_posts.py --generator local --fill-to "${{ github.event.inputs.target || '90' }}"
-
-      - name: Fill admin draft queue with Cloudflare Workers AI
-        if: github.event_name == 'schedule' || github.event.inputs.generator == 'cloudflare'
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CF_WORKERS_AI_TOKEN: ${{ secrets.CF_WORKERS_AI_TOKEN }}
-        run: |
-          cd crawler
-          python auto_board_posts.py --generator cloudflare --fill-to "${{ github.event.inputs.target || '90' }}"
