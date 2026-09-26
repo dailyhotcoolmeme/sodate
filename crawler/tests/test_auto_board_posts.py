@@ -11,6 +11,7 @@ from auto_board_posts import (
     CASUAL_NICKNAMES,
     Draft,
     _avatars,
+    _ai_response_content,
     _content_key,
     _generation_requests,
     _key,
@@ -35,6 +36,11 @@ def test_plain_removes_board_html():
 def test_ai_json_parser_accepts_code_fence_and_reasoning_prefix():
     raw = '먼저 조건을 확인했습니다\n```json\n{"posts":[{"title":"제목"}]}\n```'
     assert _parse_ai_json(raw)['posts'][0]['title'] == '제목'
+
+
+def test_ai_response_uses_reasoning_content_when_content_is_empty():
+    result = {'choices': [{'message': {'content': '', 'reasoning_content': '{"posts":[]}'}}]}
+    assert _ai_response_content(result) == '{"posts":[]}'
 
 
 def test_title_key_ignores_spacing_and_symbols():

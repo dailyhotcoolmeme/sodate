@@ -615,13 +615,20 @@ def _call_cloudflare_ai(token: str, samples: list[dict[str, str]], requests: lis
     if not body.get('success'):
         raise RuntimeError(f"Workers AI 실패: {body.get('errors')}")
     result = body.get('result') or {}
-    raw = result.get('response') if isinstance(result, dict) else result
-    # GPT-OSS 등 최신 모델은 Chat Completions 형태로 응답한다.
-    if isinstance(result, dict) and result.get('choices'):
-        raw = ((result['choices'][0].get('message') or {}).get('content'))
+    raw = _ai_response_content(result)
     parsed = _parse_ai_json(raw)
     return [Draft(str(x['title']).strip(), str(x['content']).strip(), str(x['topic']).strip(), str(x['kind']).strip())
             for x in (parsed or {}).get('posts', [])]
+
+
+def _ai_response_content(result: object) -> object:
+    """Workers AI 모델별 응답 차이를 한곳에서 흡수한다."""
+    if not isinstance(result, dict):
+        return result
+    if result.get('choices'):
+        message = result['choices'][0].get('message') or {}
+        return message.get('content') or message.get('reasoning_content')
+    return result.get('response')
 
 
 def _parse_ai_json(raw: object) -> dict:
