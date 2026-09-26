@@ -650,7 +650,9 @@ def _parse_ai_json(raw: object) -> dict:
             return parsed
         if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
             return {'posts': parsed}
-    raise ValueError('Workers AI 응답에서 posts JSON 객체를 찾지 못했습니다')
+    # 생성문은 공개 게시 후보일 뿐 비밀이 아니므로, 실패 때 앞부분을 남겨
+    # 모델별 포맷 변경을 즉시 확인한다. 게시판 샘플이나 인증정보는 포함하지 않는다.
+    raise ValueError(f'Workers AI 응답에서 posts JSON 객체를 찾지 못했습니다: {text[:500]!r}')
 
 
 def _valid(draft: Draft, seen: set[str], seen_contents: list[str] | None = None) -> bool:
