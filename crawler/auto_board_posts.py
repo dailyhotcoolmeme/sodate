@@ -1014,7 +1014,7 @@ def generate_cloudflare(count: int, dry_run: bool = False) -> list[dict]:
         attempts += 1
         requests = pending_requests[:3]
         generated = _call_cloudflare_ai(token, random.sample(samples, min(24, len(samples))), requests)
-        retry_requests: list[tuple[str, str]] = []
+        retry_requests: list[tuple[str, str, bool]] = []
         for index, (kind, scenario, is_long) in enumerate(requests):
             draft = generated[index] if index < len(generated) else None
             if draft is not None:
@@ -1028,7 +1028,7 @@ def generate_cloudflare(count: int, dry_run: bool = False) -> list[dict]:
                 seen.add(_key(draft.title))
                 seen_contents.append(_content_key(draft.content))
             else:
-                retry_requests.append((kind, scenario))
+                retry_requests.append((kind, scenario, is_long))
         pending_requests = retry_requests + pending_requests[len(requests):]
         if not generated:
             break

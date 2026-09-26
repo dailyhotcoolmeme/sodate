@@ -20,6 +20,7 @@ from auto_board_posts import (
     _local_drafts,
     _nicknames,
     _plain,
+    _prompt,
     _tag_ids_for_drafts,
     _valid,
     _valid_generated_quality,
@@ -140,6 +141,14 @@ def test_cloudflare_quality_requires_length_and_matching_scenario():
     assert not _valid_generated_quality(short)
     assert not _valid_generated_quality(wrong)
     assert _valid_generated_quality(long_enough)
+
+
+def test_cloudflare_retry_request_keeps_length_flag_in_prompt():
+    prompt = _prompt(
+        [{'title': '샘플', 'content': '샘플 내용'}],
+        [('review', '혼술바에 혼자 다녀온 후기', True)],
+    )
+    assert 'review·긴 글' in prompt
 
 
 def test_local_generator_makes_token_free_batch_with_unique_valid_posts():
