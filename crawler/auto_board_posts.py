@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+from difflib import SequenceMatcher
 import html
 import json
 import os
@@ -29,6 +30,8 @@ CF_ACCOUNT_ID = os.getenv('CF_ACCOUNT_ID', '4c0f5d706177b84ade4d424a08ec46e8')
 CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/meta/llama-4-scout-17b-16e-instruct')
 CF_AI_URL = f'https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{CF_MODEL}'
 CF_AI_PROVIDER = 'cloudflare-workers-ai'
+
+OVERUSED_PHRASES = ('은근 궁금함',)
 
 CASUAL_NICKNAMES = [
     'ㅇㅇ', 'ㅋㅋ', '궁금', '오잉', '퇴근하고싶다', '주말뭐하지', '아무거나',
@@ -362,6 +365,28 @@ def _key(value: str) -> str:
     return re.sub(r'[^0-9a-z가-힣]', '', value.lower())
 
 
+def _content_key(value: str) -> str:
+    """줄바꿈·기호만 다른 동일 본문도 같은 글로 취급한다."""
+    return _key(_plain(value))
+
+
+def _is_similar_content(value: str, existing_keys: list[str]) -> bool:
+    """고정 문장 일부만 바꾼 재탕까지 저장 전에 거른다."""
+    candidate = _content_key(value)
+    if not candidate:
+        return True
+    for previous in existing_keys:
+        if candidate == previous:
+            return True
+        shortest = min(len(candidate), len(previous))
+        if shortest < 30:
+            continue
+        threshold = 0.9 if shortest < 70 else 0.82
+        if SequenceMatcher(None, candidate, previous).ratio() >= threshold:
+            return True
+    return False
+
+
 def _recent_samples(sb) -> list[dict[str, str]]:
     rows = (
         sb.table('board_posts')
@@ -394,6 +419,31 @@ def _existing_auto_titles(sb) -> set[str]:
     except Exception:
         return set()
     return {_key(r.get('title') or '') for r in rows}
+
+
+def _existing_auto_history(sb) -> tuple[set[str], list[str]]:
+    """공개 여부와 관계없이 과거 자동 글 전체를 중복 기준으로 사용한다."""
+    auto_rows = (
+        sb.table('auto_board_posts')
+        .select('title,content')
+        .order('created_at', desc=True)
+        .limit(1000)
+        .execute().data or []
+    )
+    board_rows = (
+        sb.table('board_posts')
+        .select('title,content')
+        .eq('is_notice', False)
+        .order('created_at', desc=True)
+        .limit(1000)
+        .execute().data or []
+    )
+    rows = auto_rows + board_rows
+    titles = {_key(row.get('title') or '') for row in rows if row.get('title')}
+    contents = list(dict.fromkeys(
+        _content_key(row.get('content') or '') for row in rows if row.get('content')
+    ))
+    return titles, contents
 
 
 def _kind_plan(count: int) -> list[str]:
@@ -483,6 +533,7 @@ def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> s
 - `~습니다`, `~해요`, `~인가요` 같은 존댓말 문체를 쓰지 않고 반말·혼잣말로 쓴다.
 - companion에는 소재에 없는 나이·성별·지역·직업·브랜드명·행사명·매장명을 절대 만들어 넣지 않는다.
 - 제목과 본문 끝맺음·문장 구조를 글마다 다르게 한다.
+- `은근 궁금함`은 제목과 본문 어디에도 쓰지 않는다.
 - 실제 업체나 개인을 비방하거나 사실인 것처럼 지어내지 않는다.
 - 연락처, 실명, 성적·불법 내용, 광고는 쓰지 않는다.
 - 기존 샘플과 같은 사건·제목을 다시 쓰지 않는다.
@@ -567,7 +618,7 @@ def _call_cloudflare_ai(token: str, samples: list[dict[str, str]], requests: lis
             for x in (parsed or {}).get('posts', [])]
 
 
-def _valid(draft: Draft, seen: set[str]) -> bool:
+def _valid(draft: Draft, seen: set[str], seen_contents: list[str] | None = None) -> bool:
     title_key = _key(draft.title)
     merged = f'{draft.title} {draft.content}'.lower().replace(' ', '')
     if not title_key or title_key in seen:
@@ -577,6 +628,8 @@ def _valid(draft: Draft, seen: set[str]) -> bool:
     if not (1 <= len(draft.title) <= 60 and 1 <= len(draft.content) <= 10_000):
         return False
     if any(word in merged for word in BANNED):
+        return False
+    if any(phrase.replace(' ', '') in merged for phrase in OVERUSED_PHRASES):
         return False
     if any(label in merged for label in KIND_LABELS.values()):
         return False
@@ -631,6 +684,8 @@ def _valid(draft: Draft, seen: set[str]) -> bool:
     if re.search(r'[\w.+-]+@[\w.-]+\.[a-z]{2,}', merged, re.I):
         return False
     if 'open.kakao.com' in merged:
+        return False
+    if seen_contents is not None and _is_similar_content(draft.content, seen_contents):
         return False
     return True
 
@@ -762,8 +817,8 @@ def _local_title(kind: str, base: str) -> str:
         base,
         f'다들 {base}',
         f'갑자기 궁금한데 {base}',
-        f'이거 은근 궁금함 {base}',
-        f'{base} 은근 궁금함',
+        f'{base} 나만 이럼?',
+        f'{base} 다들 어떰?',
     ])
 
 
@@ -831,7 +886,11 @@ def _local_draft(kind: str, long_form: bool = False) -> Draft:
     return Draft(title=title, content=content, topic=topic, kind=kind, scenario=titles[0])
 
 
-def _local_drafts(kinds: list[str], seen: set[str]) -> list[Draft]:
+def _local_drafts(
+    kinds: list[str],
+    seen: set[str],
+    seen_contents: list[str] | None = None,
+) -> list[Draft]:
     drafts: list[Draft] = []
     requested = Counter(kinds)
     case_counts = {
@@ -852,9 +911,11 @@ def _local_drafts(kinds: list[str], seen: set[str]) -> list[Draft]:
                 continue
             if draft.scenario in recent_scenarios[-6:]:
                 continue
-            if _valid(draft, seen):
+            if _valid(draft, seen, seen_contents):
                 drafts.append(draft)
                 seen.add(_key(draft.title))
+                if seen_contents is not None:
+                    seen_contents.append(_content_key(draft.content))
                 scenario_counts[draft.scenario] += 1
                 recent_scenarios.append(draft.scenario)
                 break
@@ -866,9 +927,9 @@ def _local_drafts(kinds: list[str], seen: set[str]) -> list[Draft]:
 def generate_local(count: int, dry_run: bool = False) -> list[dict]:
     """검수된 문장 조합만 사용해 외부 AI 호출 없이 자동 게시 후보를 만든다."""
     sb = get_supabase()
-    seen = _existing_auto_titles(sb)
+    seen, seen_contents = _existing_auto_history(sb)
     tag_ids = _active_tag_ids(sb)
-    drafts = _local_drafts(_kind_targets(count), seen)
+    drafts = _local_drafts(_kind_targets(count), seen, seen_contents)
     assigned_tag_ids = _tag_ids_for_drafts(drafts, tag_ids)
 
     rows = []
@@ -905,7 +966,8 @@ def generate_cloudflare(count: int, dry_run: bool = False) -> list[dict]:
     samples = _recent_samples(sb)
     if len(samples) < 10:
         raise RuntimeError(f'말투 참고용 기존 게시글이 부족합니다({len(samples)}건)')
-    seen = {_key(s['title']) for s in samples} | _existing_auto_titles(sb)
+    seen, seen_contents = _existing_auto_history(sb)
+    seen |= {_key(s['title']) for s in samples}
     tag_ids = _active_tag_ids(sb)
 
     drafts: list[Draft] = []
@@ -920,10 +982,11 @@ def generate_cloudflare(count: int, dry_run: bool = False) -> list[dict]:
         retry_requests: list[tuple[str, str]] = []
         for index, (kind, scenario) in enumerate(requests):
             draft = generated[index] if index < len(generated) else None
-            if draft is not None and draft.kind == kind and _valid(draft, seen):
+            if draft is not None and draft.kind == kind and _valid(draft, seen, seen_contents):
                 draft.scenario = scenario
                 drafts.append(draft)
                 seen.add(_key(draft.title))
+                seen_contents.append(_content_key(draft.content))
             else:
                 retry_requests.append((kind, scenario))
         pending_requests = retry_requests + pending_requests[len(requests):]

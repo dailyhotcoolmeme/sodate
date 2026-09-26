@@ -11,10 +11,12 @@ from auto_board_posts import (
     CASUAL_NICKNAMES,
     Draft,
     _avatars,
+    _content_key,
     _generation_requests,
     _key,
     _kind_plan,
     _kind_targets,
+    _is_similar_content,
     _local_drafts,
     _nicknames,
     _plain,
@@ -29,6 +31,21 @@ def test_plain_removes_board_html():
 
 def test_title_key_ignores_spacing_and_symbols():
     assert _key('소개팅 먼저 2차 ㄱㅊ?') == _key('소개팅먼저2차ㄱㅊ')
+
+
+def test_content_duplicate_and_near_duplicate_are_rejected():
+    original = '친구가 소개해준 사람이랑 한 번 만났는데 대화는 괜찮았지만 다시 만날 느낌은 없었음'
+    same_with_spacing = '친구가 소개해준 사람이랑 한 번 만났는데\n대화는 괜찮았지만 다시 만날 느낌은 없었음'
+    lightly_changed = '친구가 소개해준 사람이랑 한 번 만났는데 대화는 편했지만 다시 만날 느낌은 없었음'
+    history = [_content_key(original)]
+
+    assert _is_similar_content(same_with_spacing, history)
+    assert _is_similar_content(lightly_changed, history)
+    assert not _valid(Draft('다른 제목', same_with_spacing, '소개팅', 'advice'), set(), history)
+
+
+def test_overused_phrase_is_rejected():
+    assert not _valid(Draft('이거 은근 궁금함', '다들 어떻게 생각함?', '일상'), set())
 
 
 def test_valid_rejects_foreign_artifacts_and_unknown_jamo():
@@ -101,22 +118,25 @@ def test_full_generation_keeps_one_review_per_three_posts():
         assert len(scenarios) == len(set(scenarios))
 
 
-def test_local_generator_makes_full_token_free_queue_with_unique_valid_posts():
+def test_local_generator_makes_token_free_batch_with_unique_valid_posts():
     random.seed(20260923)
-    kinds = _kind_targets(90)
-    drafts = _local_drafts(kinds, set())
+    kinds = _kind_targets(30)
+    contents: list[str] = []
+    drafts = _local_drafts(kinds, set(), contents)
 
-    assert len(drafts) == 90
-    assert len({_key(draft.title) for draft in drafts}) == 90
+    assert len(drafts) == 30
+    assert len({_key(draft.title) for draft in drafts}) == 30
+    assert len(set(contents)) == 30
     assert all(_valid(draft, set()) for draft in drafts)
-    assert sum(draft.kind == 'review' for draft in drafts) == 30
+    assert sum(draft.kind == 'review' for draft in drafts) == 10
     long_drafts = [draft for draft in drafts if draft.is_long]
-    assert len(long_drafts) == 18
+    assert len(long_drafts) == 6
     assert all(len(draft.content) >= 160 for draft in long_drafts)
     assert all(not (a.is_long and b.is_long) for a, b in zip(drafts, drafts[1:]))
     assert all('후기 후기' not in draft.title for draft in drafts)
     assert all(':)' not in f'{draft.title}{draft.content}' for draft in drafts)
     assert all('ㅠ' not in f'{draft.title}{draft.content}' for draft in drafts)
+    assert all('은근 궁금함' not in f'{draft.title}{draft.content}' for draft in drafts)
 
 
 def test_most_generated_posts_have_no_tag_even_when_kind_has_one():

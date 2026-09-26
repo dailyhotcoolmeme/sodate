@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       generator:
-        description: '생성 방식 (정기 실행은 항상 local)'
+        description: '생성 방식 (정기 실행은 Cloudflare Workers AI)'
         required: false
         default: 'local'
         type: choice
@@ -39,7 +39,7 @@ jobs:
         run: pip install -r crawler/requirements.txt
 
       - name: Fill admin draft queue without AI
-        if: github.event_name == 'schedule' || github.event.inputs.generator != 'cloudflare'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.generator != 'cloudflare'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -48,7 +48,7 @@ jobs:
           python auto_board_posts.py --generator local --fill-to "${{ github.event.inputs.target || '90' }}"
 
       - name: Fill admin draft queue with Cloudflare Workers AI
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.generator == 'cloudflare'
+        if: github.event_name == 'schedule' || github.event.inputs.generator == 'cloudflare'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
