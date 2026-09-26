@@ -63,9 +63,15 @@ def test_valid_rejects_unapproved_emoticons_and_time_weather_context():
     assert not _valid(Draft('제목', '이거 어떻게 하지 ㅠ', '연애'), seen)
     assert not _valid(Draft('밤공기 좋네', '산책하니까 날씨 좋음', '일상'), seen)
     assert not _valid(Draft('점심 추천', '오늘 뭐먹지?', '일상'), seen)
+    assert not _valid(Draft('지난주 소개팅', '그때 대화는 괜찮았음', '소개팅'), seen)
+    assert not _valid(Draft('다음 달 소셜링', '한번 가볼까 고민중', '소개팅'), seen)
     assert not _valid(Draft('제목', '너무 웃김 ㅋㅋㅋㅋ', '일상'), seen)
     assert not _valid(Draft('장거리 썸 고민입니다', '거리 멀어도 시작해도 될까?', '연애'), seen)
     assert _valid(Draft('간식 추천', '간단하게 먹을만한거 추천좀 ㅋㅋ', '일상'), seen)
+
+
+def test_valid_rejects_invisible_filler_characters():
+    assert not _valid(Draft('제목', '첫 문장ㅤ둘째 문장', '일상'), set())
 
 
 def test_valid_rejects_embedded_tag_and_fake_companion_details():
@@ -141,6 +147,27 @@ def test_cloudflare_quality_requires_length_and_matching_scenario():
     assert not _valid_generated_quality(short)
     assert not _valid_generated_quality(wrong)
     assert _valid_generated_quality(long_enough)
+
+
+def test_cloudflare_quality_rejects_invented_gender_and_unbroken_long_post():
+    invented_gender = Draft(
+        '친구 소개 받은 사람 애매함',
+        '친구가 연결해준 남자랑 만나봤는데 대화는 무난했고 불편하진 않았음 근데 다시 약속 잡을 정도로 끌리진 않아서 친구한테 뭐라고 말해야 할지 고민됨',
+        '소개팅',
+        'advice',
+        '친구가 소개해준 사람과 한 번 만난 뒤 애매한 상황',
+    )
+    unbroken_long = Draft(
+        '혼술바 혼자 가본 후기',
+        '혼술바에 혼자 가봤는데 들어갈 때는 꽤 어색했음 한 잔 시키고 자리에 앉아 있으니 생각보다 혼자 온 사람도 보였고 굳이 계속 말을 하지 않아도 돼서 편했어 옆자리랑 가볍게 얘기가 시작됐는데 부담스럽지 않았고 대화가 끊겨도 각자 마시면 되니까 좋더라 처음부터 새로운 사람을 만나야겠다는 생각으로 가면 힘들 것 같고 그냥 한잔하면서 분위기 구경한다는 느낌이면 괜찮은 듯 혼자 갈까 고민했는데 한 번쯤은 가볼 만했음',
+        '로테이션소개팅',
+        'review',
+        '혼술바에 혼자 가서 옆자리 사람과 가볍게 대화한 후기',
+        True,
+    )
+
+    assert not _valid_generated_quality(invented_gender)
+    assert not _valid_generated_quality(unbroken_long)
 
 
 def test_cloudflare_retry_request_keeps_length_flag_in_prompt():

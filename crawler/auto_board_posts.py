@@ -18,6 +18,7 @@ import os
 import random
 import re
 import time
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 
@@ -27,7 +28,7 @@ from utils.supabase_client import get_supabase
 
 
 CF_ACCOUNT_ID = os.getenv('CF_ACCOUNT_ID', '4c0f5d706177b84ade4d424a08ec46e8')
-CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/openai/gpt-oss-120b')
+CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/zai-org/glm-4.7-flash')
 CF_AI_URL = f'https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{CF_MODEL}'
 CF_AI_PROVIDER = 'cloudflare-workers-ai'
 
@@ -525,6 +526,7 @@ def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str, bool]]
 [반드시 지킬 말투]
 - 짧게 끊고 말하듯 쓴다. `일반 글`은 최소 2문장, `긴 글`은 반드시 6~9문장·160자 이상으로 쓴다.
 - 긴 글도 블로그처럼 정리하지 말고, 실제 익명 게시판에서 사정을 조금 자세히 풀어놓은 글처럼 문단을 나눈다.
+- 빈칸처럼 보이는 특수문자로 문장을 나누지 말고 일반 줄바꿈만 쓴다. 긴 글은 3문단 이상으로 나눈다.
 - ㅇㅇ, ㅋㅋ, ㅋㅋㅋ, ??, ㄱㅊ?, 추천좀, 어떰? 같은 표현을 문맥에 맞을 때만 쓴다.
 - 줄임말은 ㅇㅇ, ㅋㅋ, ㅋㅋㅋ, ㄱㅊ, ㄹㅇ, 추천좀, 어떰 정도만 쓴다. 알아볼 수 없는 초성이나 새 줄임말을 만들지 않는다.
 - `:)`, `ㅠ`, `ㅜ`, `ㅎㅎ`, 마침표는 쓰지 않는다. 웃음은 ㅋㅋ 또는 ㅋㅋㅋ만 쓴다.
@@ -537,10 +539,11 @@ def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str, bool]]
 - companion에는 소재에 없는 나이·성별·지역·직업·브랜드명·행사명·매장명을 절대 만들어 넣지 않는다.
 - 제목과 본문 끝맺음·문장 구조를 글마다 다르게 한다.
 - `은근 궁금함`은 제목과 본문 어디에도 쓰지 않는다.
+- `어떻게 할까`, `어디까지 ~할까` 같은 제목 틀을 반복하지 않는다.
 - 실제 업체나 개인을 비방하거나 사실인 것처럼 지어내지 않는다.
 - 연락처, 실명, 성적·불법 내용, 광고는 쓰지 않는다.
 - 기존 샘플과 같은 사건·제목을 다시 쓰지 않는다.
-- 오늘·내일·어제·지금·방금·요일·주말·평일·아침·점심·퇴근·저녁·밤·새벽처럼 게시 시각에 따라 어색해지는 표현은 쓰지 않는다.
+- 오늘·내일·어제·지금·방금·지난주·이번주·다음주·지난달·이번달·다음달·요일·주말·평일·아침·점심·퇴근·저녁·밤·새벽처럼 게시 시각에 따라 어색해지는 표현은 쓰지 않는다.
 - 비·눈·날씨·기온·더위·추위·계절처럼 실제 날씨와 어긋날 수 있는 표현은 쓰지 않는다.
 - review는 소개팅·로소·로테이션 소개팅·소셜링·혼술바·매칭·애프터·친구 소개를 실제로 이용하거나 겪은 후기만 쓴다.
 
@@ -638,8 +641,15 @@ def _valid(draft: Draft, seen: set[str], seen_contents: list[str] | None = None)
         return False
     if re.search(r'(:\)|[ㅠㅜ]|ㅎ{2,}|[.]|ㅋ{4,})', f'{draft.title}\n{draft.content}'):
         return False
+    # 모델이 공백처럼 보이는 한글 채움 문자(U+3164)나 제어/서식 문자를
+    # 문장 구분자로 쓰면 앱에서 부자연스럽게 보이므로 저장 전에 버린다.
+    if '\u3164' in f'{draft.title}{draft.content}' or any(
+        unicodedata.category(char) in {'Cc', 'Cf'} and char not in {'\n', '\t'}
+        for char in f'{draft.title}{draft.content}'
+    ):
+        return False
     if re.search(
-        r'(오늘|내일|어제|지금|방금|이번\s*주|주말|평일|월요일|화요일|수요일|목요일|금요일|토요일|일요일|아침|오전|점심|퇴근|저녁|밤|새벽|비\s*오|비가|비와|눈\s*오|눈이|눈와|날씨|기온|더위|추위|밤공기|계절|시간째)',
+        r'(오늘|내일|어제|지금|방금|지난\s*(?:주|달)|이번\s*(?:주|달)|다음\s*(?:주|달)|주말|평일|월요일|화요일|수요일|목요일|금요일|토요일|일요일|아침|오전|점심|퇴근|저녁|밤|새벽|비\s*오|비가|비와|눈\s*오|눈이|눈와|날씨|기온|더위|추위|밤공기|계절|시간째)',
         f'{draft.title}\n{draft.content}',
     ):
         return False
@@ -708,9 +718,16 @@ def _valid_generated_quality(draft: Draft) -> bool:
         minimum = 160
     if len(draft.content) < minimum:
         return False
+    if draft.is_long and len([part for part in draft.content.split('\n\n') if part.strip()]) < 3:
+        return False
 
     merged = _key(f'{draft.title} {draft.content}')
     scenario = _key(draft.scenario)
+    # 소재에 없는 성별을 AI가 임의로 붙이면 실제 경험처럼 보이는 허위 설정이 된다.
+    if not re.search(r'(남자|여자|남성|여성)', scenario) and re.search(
+        r'(남자|여자|남성|여성)', merged,
+    ):
+        return False
     required_groups = [
         (('혼술바',), ('혼술바',)),
         (('소셜링',), ('소셜링',)),
