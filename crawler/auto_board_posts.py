@@ -28,7 +28,7 @@ from utils.supabase_client import get_supabase
 
 
 CF_ACCOUNT_ID = os.getenv('CF_ACCOUNT_ID', '4c0f5d706177b84ade4d424a08ec46e8')
-CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/zai-org/glm-4.7-flash')
+CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/qwen/qwen3-30b-a3b-fp8')
 CF_AI_URL = f'https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{CF_MODEL}'
 CF_AI_PROVIDER = 'cloudflare-workers-ai'
 
@@ -540,6 +540,7 @@ def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str, bool]]
 - 제목과 본문 끝맺음·문장 구조를 글마다 다르게 한다.
 - `은근 궁금함`은 제목과 본문 어디에도 쓰지 않는다.
 - `어떻게 할까`, `어디까지 ~할까` 같은 제목 틀을 반복하지 않는다.
+- 제목은 30자 안팎으로 짧게 쓰고 본문 내용을 제목에 전부 설명하지 않는다.
 - 실제 업체나 개인을 비방하거나 사실인 것처럼 지어내지 않는다.
 - 연락처, 실명, 성적·불법 내용, 광고는 쓰지 않는다.
 - 기존 샘플과 같은 사건·제목을 다시 쓰지 않는다.
@@ -657,7 +658,7 @@ def _valid(draft: Draft, seen: set[str], seen_contents: list[str] | None = None)
         return False
     if draft.kind not in POST_KINDS:
         return False
-    if not (1 <= len(draft.title) <= 60 and 1 <= len(draft.content) <= 10_000):
+    if not (1 <= len(draft.title) <= 40 and 1 <= len(draft.content) <= 10_000):
         return False
     if any(word in merged for word in BANNED):
         return False
@@ -675,7 +676,7 @@ def _valid(draft: Draft, seen: set[str], seen_contents: list[str] | None = None)
     ):
         return False
     if re.search(
-        r'(오늘|내일|어제|지금|방금|지난\s*(?:주|달)|이번\s*(?:주|달)|다음\s*(?:주|달)|주말|평일|월요일|화요일|수요일|목요일|금요일|토요일|일요일|아침|오전|점심|퇴근|저녁|밤|새벽|비\s*오|비가|비와|눈\s*오|눈이|눈와|날씨|기온|더위|추위|밤공기|계절|시간째)',
+        r'(오늘|내일|어제|지금|방금|지난번|최근|며칠\s*전|지난\s*(?:주|달)|이번\s*(?:주|달)|다음\s*(?:주|달)|주말|평일|월요일|화요일|수요일|목요일|금요일|토요일|일요일|아침|오전|점심|퇴근|저녁|밤|새벽|비\s*오|비가|비와|눈\s*오|눈이|눈와|날씨|기온|더위|추위|밤공기|계절|시간째)',
         f'{draft.title}\n{draft.content}',
     ):
         return False
@@ -744,11 +745,15 @@ def _valid_generated_quality(draft: Draft) -> bool:
         minimum = 160
     if len(draft.content) < minimum:
         return False
+    if len([line for line in draft.content.splitlines() if line.strip()]) < 2:
+        return False
     if draft.is_long and len([part for part in draft.content.split('\n\n') if part.strip()]) < 3:
         return False
 
     merged = _key(f'{draft.title} {draft.content}')
     scenario = _key(draft.scenario)
+    if draft.kind == 'casual' and draft.topic != '2030일상':
+        return False
     # 소재에 없는 성별을 AI가 임의로 붙이면 실제 경험처럼 보이는 허위 설정이 된다.
     if not re.search(r'(남자|여자|남성|여성)', scenario) and re.search(
         r'(남자|여자|남성|여성)', merged,

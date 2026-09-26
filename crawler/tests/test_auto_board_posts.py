@@ -77,6 +77,7 @@ def test_valid_rejects_unapproved_emoticons_and_time_weather_context():
     assert not _valid(Draft('점심 추천', '오늘 뭐먹지?', '일상'), seen)
     assert not _valid(Draft('지난주 소개팅', '그때 대화는 괜찮았음', '소개팅'), seen)
     assert not _valid(Draft('다음 달 소셜링', '한번 가볼까 고민중', '소개팅'), seen)
+    assert not _valid(Draft('제목', '지난번에 한번 가봤음', '일상'), seen)
     assert not _valid(Draft('제목', '너무 웃김 ㅋㅋㅋㅋ', '일상'), seen)
     assert not _valid(Draft('장거리 썸 고민입니다', '거리 멀어도 시작해도 될까?', '연애'), seen)
     assert _valid(Draft('간식 추천', '간단하게 먹을만한거 추천좀 ㅋㅋ', '일상'), seen)
@@ -150,7 +151,7 @@ def test_cloudflare_quality_requires_length_and_matching_scenario():
     )
     long_enough = Draft(
         '혼술바 혼자 가본 후기',
-        '혼술바 혼자 가봤는데 처음 들어갈 때만 어색했어 한 잔 시키고 앉아 있으니 옆자리랑 자연스럽게 얘기가 이어졌고 계속 말하지 않아도 돼서 편했음',
+        '혼술바 혼자 가봤는데 처음 들어갈 때만 어색했어\n한 잔 시키고 앉아 있으니 옆자리랑 자연스럽게 얘기가 이어졌고 계속 말하지 않아도 돼서 편했음',
         '로테이션소개팅',
         'review',
         '혼술바에서 대화한 후기',
@@ -159,6 +160,26 @@ def test_cloudflare_quality_requires_length_and_matching_scenario():
     assert not _valid_generated_quality(short)
     assert not _valid_generated_quality(wrong)
     assert _valid_generated_quality(long_enough)
+
+
+def test_cloudflare_quality_rejects_one_line_body_and_wrong_casual_topic():
+    one_line = Draft(
+        '옷 살 때 온라인 매장 어디가 나음',
+        '온라인으로 사는 게 편한데 사진이랑 핏이 달라서 매장도 가게 되고 결국 둘 다 섞어서 사는 중',
+        '2030일상',
+        'casual',
+        '옷을 살 때 온라인과 매장 중 어디를 선호하는지',
+    )
+    wrong_topic = Draft(
+        '옷 살 때 온라인 매장 어디가 나음',
+        '온라인으로 사는 게 편하긴 함\n근데 핏 때문에 매장도 가게 되더라',
+        '썸연애',
+        'casual',
+        '옷을 살 때 온라인과 매장 중 어디를 선호하는지',
+    )
+
+    assert not _valid_generated_quality(one_line)
+    assert not _valid_generated_quality(wrong_topic)
 
 
 def test_cloudflare_quality_rejects_invented_gender_and_unbroken_long_post():
