@@ -28,7 +28,7 @@ from utils.supabase_client import get_supabase
 
 
 CF_ACCOUNT_ID = os.getenv('CF_ACCOUNT_ID', '4c0f5d706177b84ade4d424a08ec46e8')
-CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/qwen/qwen3-30b-a3b-fp8')
+CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/meta/llama-3.3-70b-instruct-fp8-fast')
 CF_AI_URL = f'https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{CF_MODEL}'
 CF_AI_PROVIDER = 'cloudflare-workers-ai'
 
