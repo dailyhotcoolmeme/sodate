@@ -37,6 +37,9 @@ def test_ai_json_parser_accepts_code_fence_and_reasoning_prefix():
     raw = '먼저 조건을 확인했습니다\n```json\n{"posts":[{"title":"제목"}]}\n```'
     assert _parse_ai_json(raw)['posts'][0]['title'] == '제목'
 
+    array_raw = '<think>조건 확인</think>\n```json\n[{"title":"배열 제목"}]\n```'
+    assert _parse_ai_json(array_raw)['posts'][0]['title'] == '배열 제목'
+
 
 def test_ai_response_uses_reasoning_content_when_content_is_empty():
     result = {'choices': [{'message': {'content': '', 'reasoning_content': '{"posts":[]}'}}]}

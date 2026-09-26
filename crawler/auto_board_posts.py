@@ -641,13 +641,15 @@ def _parse_ai_json(raw: object) -> dict:
 
     text = raw.strip()
     decoder = json.JSONDecoder()
-    for match in re.finditer(r'\{', text):
+    for match in re.finditer(r'[\[{]', text):
         try:
             parsed, _ = decoder.raw_decode(text[match.start():])
         except json.JSONDecodeError:
             continue
         if isinstance(parsed, dict) and isinstance(parsed.get('posts'), list):
             return parsed
+        if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
+            return {'posts': parsed}
     raise ValueError('Workers AI 응답에서 posts JSON 객체를 찾지 못했습니다')
 
 
