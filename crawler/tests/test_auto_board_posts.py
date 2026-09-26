@@ -22,6 +22,7 @@ from auto_board_posts import (
     _plain,
     _tag_ids_for_drafts,
     _valid,
+    _valid_generated_quality,
 )
 
 
@@ -114,8 +115,31 @@ def test_full_generation_keeps_one_review_per_three_posts():
 
     requests = _generation_requests(kinds)
     for kind in set(kinds):
-        scenarios = [scenario for request_kind, scenario in requests if request_kind == kind]
+        scenarios = [scenario for request_kind, scenario, _ in requests if request_kind == kind]
         assert len(scenarios) == len(set(scenarios))
+    assert sum(is_long for _, _, is_long in requests) == 12
+
+
+def test_cloudflare_quality_requires_length_and_matching_scenario():
+    short = Draft('혼술바 후기', '괜찮았음', '로테이션소개팅', 'review', '혼술바 후기')
+    wrong = Draft(
+        '소개팅 사진보다 실물이 나았음',
+        '사진이랑 실제 인상이 달랐는데 만나서 얘기해보니 반응도 좋고 대화도 잘 이어져서 편했어 다음에도 한 번 더 보고 싶다는 생각이 들었음',
+        '소개팅',
+        'review',
+        '혼술바에서 대화한 후기',
+    )
+    long_enough = Draft(
+        '혼술바 혼자 가본 후기',
+        '혼술바 혼자 가봤는데 처음 들어갈 때만 어색했어 한 잔 시키고 앉아 있으니 옆자리랑 자연스럽게 얘기가 이어졌고 계속 말하지 않아도 돼서 편했음',
+        '로테이션소개팅',
+        'review',
+        '혼술바에서 대화한 후기',
+    )
+
+    assert not _valid_generated_quality(short)
+    assert not _valid_generated_quality(wrong)
+    assert _valid_generated_quality(long_enough)
 
 
 def test_local_generator_makes_token_free_batch_with_unique_valid_posts():

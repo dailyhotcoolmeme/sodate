@@ -27,7 +27,7 @@ from utils.supabase_client import get_supabase
 
 
 CF_ACCOUNT_ID = os.getenv('CF_ACCOUNT_ID', '4c0f5d706177b84ade4d424a08ec46e8')
-CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/meta/llama-4-scout-17b-16e-instruct')
+CF_MODEL = os.getenv('AUTO_BOARD_AI_MODEL', '@cf/openai/gpt-oss-120b')
 CF_AI_URL = f'https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{CF_MODEL}'
 CF_AI_PROVIDER = 'cloudflare-workers-ai'
 
@@ -475,27 +475,30 @@ def _kind_targets(count: int) -> list[str]:
     return targets
 
 
-def _generation_requests(kinds: list[str]) -> list[tuple[str, str]]:
+def _generation_requests(kinds: list[str]) -> list[tuple[str, str, bool]]:
     """같은 종류 안에서도 소재가 겹치지 않게 먼저 전체 계획을 짠다."""
     pools = {kind: random.sample(items, len(items)) for kind, items in SCENARIOS_BY_KIND.items()}
     positions: Counter[str] = Counter()
-    requests: list[tuple[str, str]] = []
-    for kind in kinds:
+    requests: list[tuple[str, str, bool]] = []
+    for index, kind in enumerate(kinds):
         position = positions[kind]
         if position and position % len(pools[kind]) == 0:
             random.shuffle(pools[kind])
-        requests.append((kind, pools[kind][position % len(pools[kind])]))
+        requests.append((kind, pools[kind][position % len(pools[kind])], index % 5 == 4))
         positions[kind] += 1
     return requests
 
 
-def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> str:
+def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str, bool]]) -> str:
     count = len(requests)
     compact = '\n'.join(
         f"- 제목: {s['title']}\n  내용: {s['content']}"
         for s in samples[:24]
     )
-    seeds = '\n'.join(f'- {i + 1}번·{kind}: {scenario}' for i, (kind, scenario) in enumerate(requests))
+    seeds = '\n'.join(
+        f'- {i + 1}번·{kind}·{"긴 글" if is_long else "일반 글"}: {scenario}'
+        for i, (kind, scenario, is_long) in enumerate(requests)
+    )
     return f"""아래는 현재 모잇 익명 게시판의 실제 글이다. 문장을 복사하지 말고 말투와 길이만 참고해 새 글 {count}개를 만들어라.
 
 [실제 게시글 말투 참고]
@@ -520,7 +523,7 @@ def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> s
 - 제목과 본문에 [리얼후기], [고민상담] 같은 말머리 문자를 직접 적지 않는다.
 
 [반드시 지킬 말투]
-- 짧게 끊고 말하듯 쓴다. 대부분은 2~6문장으로 쓰되 전체의 약 20%는 상황과 생각이 이어지는 6~9문장 분량으로 쓴다.
+- 짧게 끊고 말하듯 쓴다. `일반 글`은 최소 2문장, `긴 글`은 반드시 6~9문장·160자 이상으로 쓴다.
 - 긴 글도 블로그처럼 정리하지 말고, 실제 익명 게시판에서 사정을 조금 자세히 풀어놓은 글처럼 문단을 나눈다.
 - ㅇㅇ, ㅋㅋ, ㅋㅋㅋ, ??, ㄱㅊ?, 추천좀, 어떰? 같은 표현을 문맥에 맞을 때만 쓴다.
 - 줄임말은 ㅇㅇ, ㅋㅋ, ㅋㅋㅋ, ㄱㅊ, ㄹㅇ, 추천좀, 어떰 정도만 쓴다. 알아볼 수 없는 초성이나 새 줄임말을 만들지 않는다.
@@ -552,7 +555,7 @@ def _prompt(samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> s
 서로 겹치지 않는 새 글을 JSON으로 반환해라."""
 
 
-def _call_cloudflare_ai(token: str, samples: list[dict[str, str]], requests: list[tuple[str, str]]) -> list[Draft]:
+def _call_cloudflare_ai(token: str, samples: list[dict[str, str]], requests: list[tuple[str, str, bool]]) -> list[Draft]:
     count = len(requests)
     schema = {
         'type': 'object',
@@ -681,12 +684,44 @@ def _valid(draft: Draft, seen: set[str], seen_contents: list[str] | None = None)
     # 전화번호·이메일·카카오 오픈채팅 주소는 초안 단계에서 바로 버린다.
     if re.search(r'01[016789][-. ]?\d{3,4}[-. ]?\d{4}', merged):
         return False
+    if re.search(r'\d[\d,]*\s*(?:원|만원)', f'{draft.title}\n{draft.content}'):
+        return False
     if re.search(r'[\w.+-]+@[\w.-]+\.[a-z]{2,}', merged, re.I):
         return False
     if 'open.kakao.com' in merged:
         return False
     if seen_contents is not None and _is_similar_content(draft.content, seen_contents):
         return False
+    return True
+
+
+def _valid_generated_quality(draft: Draft) -> bool:
+    """AI가 소재만 받아 한 줄 답변이나 다른 사건을 만든 경우를 차단한다."""
+    minimum = {
+        'review': 70,
+        'advice': 60,
+        'question': 40,
+        'casual': 40,
+        'companion': 45,
+    }[draft.kind]
+    if draft.is_long:
+        minimum = 160
+    if len(draft.content) < minimum:
+        return False
+
+    merged = _key(f'{draft.title} {draft.content}')
+    scenario = _key(draft.scenario)
+    required_groups = [
+        (('혼술바',), ('혼술바',)),
+        (('소셜링',), ('소셜링',)),
+        (('로테이션', '로소'), ('로테이션', '로소')),
+        (('애프터',), ('애프터',)),
+        (('매칭',), ('매칭',)),
+        (('소개팅',), ('소개팅',)),
+    ]
+    for scenario_words, content_words in required_groups:
+        if any(word in scenario for word in scenario_words):
+            return any(word in merged for word in content_words)
     return True
 
 
@@ -980,10 +1015,15 @@ def generate_cloudflare(count: int, dry_run: bool = False) -> list[dict]:
         requests = pending_requests[:3]
         generated = _call_cloudflare_ai(token, random.sample(samples, min(24, len(samples))), requests)
         retry_requests: list[tuple[str, str]] = []
-        for index, (kind, scenario) in enumerate(requests):
+        for index, (kind, scenario, is_long) in enumerate(requests):
             draft = generated[index] if index < len(generated) else None
-            if draft is not None and draft.kind == kind and _valid(draft, seen, seen_contents):
+            if draft is not None:
                 draft.scenario = scenario
+                draft.is_long = is_long
+            if (draft is not None
+                    and draft.kind == kind
+                    and _valid_generated_quality(draft)
+                    and _valid(draft, seen, seen_contents)):
                 drafts.append(draft)
                 seen.add(_key(draft.title))
                 seen_contents.append(_content_key(draft.content))
