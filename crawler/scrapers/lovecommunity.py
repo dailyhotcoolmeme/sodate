@@ -142,31 +142,9 @@ class LovecommunityLoco(BaseScraper):
                             page.wait_for_load_state('domcontentloaded', timeout=10000)
                             time.sleep(1.5)
 
-                        # 예약위젯(load_option.cm)에서 실제 가격 조회.
-                        # ⚠️(2026-07-25 발견) 정적페이지 텍스트엔 진짜 가격이 없어(JS위젯
-                        # 전용) price가 항상 None으로 저장돼 admin '해야할것'에 쌓이던 버그.
-                        try:
-                            widget = gender_soldout_loco(page, idx)
-                        except Exception as e:
-                            self.logger.warning(f'Loco idx={idx} 위젯 가격 조회 실패: {e}')
-                            widget = {}
-
-                        # ⚠️ 참가자 현황("🍷 8월 15일(토) 18:30~21:00 사당❤️")은 상세 본문이
-                        #    다 그려진 뒤에야 DOM에 들어온다. networkidle + sleep(2)만으로는
-                        #    그 전에 page.content()를 떠서 조용히 0건이 됐다 — 2026-08-14 실측:
-                        #    같은 코드가 로컬에선 17건, Actions에선 8/12부터 계속 0건이었다.
-                        #    날짜 헤더가 실제로 보일 때까지 명시적으로 기다린다.
-                        try:
-                            page.wait_for_function(
-                                r"() => /🍷\s*\d{1,2}월\s*\d{1,2}일/.test(document.body.innerText)",
-                                timeout=15000,
-                            )
-                        except Exception:
-                            # 오픈 예정 상품처럼 원래 현황이 없는 경우도 있어 계속 진행한다.
-                            self.logger.warning(f'Loco idx={idx} 참가자 현황이 안 떴다 — 그대로 파싱 시도')
-
-                        soup = BeautifulSoup(page.content(), 'html.parser')
-                        new_events = self._parse_product_page(soup, idx, widget)
+                        widget, new_events = self._read_product_with_empty_retry(
+                            page, idx, product_url
+                        )
 
                         # 예약 위젯에는 앞으로 열릴 날짜가 있는데, 상세 본문에는 날짜·시간
                         # 명단이 없으면 정확한 시작 시각을 알 수 없다. 이 경우 19:00처럼
@@ -233,6 +211,56 @@ class LovecommunityLoco(BaseScraper):
                 self.logger.debug(f"날짜 범위 초과 스킵 ({ev.event_date}): {ev.source_url}")
         self.logger.info(f'Loco 총 {len(filtered)}개 이벤트 (필터 전: {len(unique)}개)')
         return filtered
+
+    def _read_loaded_product(self, page, idx: str) -> tuple[dict, list[EventModel]]:
+        """이미 열린 상품의 예약위젯과 동적 본문을 읽는다.
+
+        빈 DOM도 예외 없이 정상 응답처럼 보이는 imweb 특성 때문에 호출부가 0건일 때
+        페이지 전체를 한 번 다시 열 수 있도록, 읽기 단계를 작게 분리했다.
+        """
+        # 예약위젯(load_option.cm)에서 실제 가격 조회.
+        # 정적페이지 텍스트엔 진짜 가격이 없어(JS위젯 전용) 이 값이 필요하다.
+        try:
+            widget = gender_soldout_loco(page, idx)
+        except Exception as e:
+            self.logger.warning(f'Loco idx={idx} 위젯 가격 조회 실패: {e}')
+            widget = {}
+
+        # 참가자 현황은 상세 본문이 다 그려진 뒤에야 DOM에 들어온다.
+        try:
+            page.wait_for_function(
+                r"() => /🍷\s*\d{1,2}월\s*\d{1,2}일/.test(document.body.innerText)",
+                timeout=15000,
+            )
+        except Exception:
+            # 오픈 예정 상품처럼 원래 현황이 없는 경우도 있어 호출부에서 재시도 후 판단한다.
+            self.logger.warning(f'Loco idx={idx} 참가자 현황이 안 떴다 — 그대로 파싱 시도')
+
+        soup = BeautifulSoup(page.content(), 'html.parser')
+        return widget, self._parse_product_page(soup, idx, widget)
+
+    def _read_product_with_empty_retry(
+        self, page, idx: str, product_url: str
+    ) -> tuple[dict, list[EventModel]]:
+        """예외 없는 빈 동적 본문이면 같은 상품을 한 번만 새로 열어 재시도한다."""
+        widget, events = self._read_loaded_product(page, idx)
+        if events:
+            return widget, events
+
+        # 2026-09-27: Actions에서 idx=1 본문 위젯이 예외 없이 빈 채로 끝나
+        # 3회 연속 5건을 통째로 놓쳤다. URL 열기 자체는 성공했으므로 기존의
+        # goto 예외 재시도가 작동하지 않았다. 그래도 0건이면 추정하거나
+        # 만들어내지 않고 기존의 50% 부분수집 안전판에 맡겨 DB 일정을 보존한다.
+        self.logger.warning(
+            f'Loco idx={idx} 0건 — 동적 본문 빈 응답 가능성, 페이지를 새로 열어 재시도'
+        )
+        page.goto(product_url, timeout=20000)
+        try:
+            page.wait_for_load_state('networkidle', timeout=10000)
+        except Exception:
+            self.logger.debug(f'Loco idx={idx} 재시도 networkidle 대기 초과(계속 진행)')
+        time.sleep(2)
+        return self._read_loaded_product(page, idx)
 
     def _collect_product_idxs(self, page) -> list[str]:
         """상품 목록 페이지에서 idx 수집 (party/?idx= 형식)"""
