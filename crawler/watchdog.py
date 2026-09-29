@@ -105,6 +105,29 @@ def _has_active_run(fname: str) -> bool:
     return False
 
 
+def _latest_success_run(fname: str) -> dict | None:
+    """마지막 성공 실행을 찾되 GitHub의 status 필터 빈 응답 오탐을 한 번 검증한다.
+
+    2026-09-29 실제로 crawl.yml 성공 실행이 여러 건 있는데도
+    ``runs?status=success``가 잠깐 빈 배열을 돌려 "성공 이력 없음" 긴급 메일이
+    발송됐다. 필터 결과가 비었을 때 최근 실행 원본을 다시 읽어 성공 결론이 있는지
+    확인하면, 진짜 무기록은 그대로 잡으면서 GitHub API의 일시적 빈 응답만 거른다.
+    """
+    data = _gh_get(f'{fname}/runs?status=success&per_page=1')
+    runs = data.get('workflow_runs') or []
+    if runs:
+        return runs[0]
+
+    # status 필터가 빈 결과를 반환한 경우에만 한 번 더 확인한다. 최근 30회 안에도
+    # 성공이 없다면 실제 장애로 판단한다.
+    fallback = _gh_get(f'{fname}/runs?per_page=30')
+    return next(
+        (run for run in (fallback.get('workflow_runs') or [])
+         if run.get('conclusion') == 'success'),
+        None,
+    )
+
+
 def check_heartbeats() -> list[dict]:
     """워크플로별 마지막 성공 실행이 예상 주기 안인지 확인(트리거 종류 무관 — 수동실행도 정상 신호).
     갭 발견 시 알림뿐 아니라 workflow_dispatch로 즉시 재발화까지 시도(자가복구)."""
@@ -112,15 +135,13 @@ def check_heartbeats() -> list[dict]:
     now = datetime.now(timezone.utc)
     for fname, (label, max_gap_min, dispatch_inputs) in HEARTBEATS.items():
         try:
-            data = _gh_get(f'{fname}/runs?status=success&per_page=1')
-            runs = data.get('workflow_runs') or []
+            last = _latest_success_run(fname)
         except Exception as e:
             issues.append({'level': 'WARN', 'msg': f'{label}: GH API 조회 실패({str(e)[:60]})'})
             continue
-        if not runs:
+        if not last:
             issues.append({'level': 'ERROR', 'msg': f'{label}: 성공 실행 이력이 아예 없음'})
             continue
-        last = runs[0]
         finished = last.get('updated_at') or last.get('run_started_at')
         try:
             finished_dt = datetime.fromisoformat(finished.replace('Z', '+00:00'))
