@@ -4,7 +4,8 @@ export interface Env {
 
 const REPO = 'dailyhotcoolmeme/sodate';
 
-// GitHub 자체 schedule 트리거가 원인불명으로 몇 시간씩 안 도는 사고(2026-07-25) 대응용.
+// 정기 실행의 단일 정본. GitHub 자체 schedule은 원인불명으로 몇 시간씩 안 도는 사고가
+// 있었고, 둘을 동시에 켜면 concurrency가 중복을 제거하지 않고 순차 실행해 비용만 두 배가 됐다.
 // Cloudflare cron이 event.cron에 매칭된 크론 표현식 문자열을 그대로 넘겨준다.
 // crawl.yml의 20시(evening) 슬롯은 slot='evening' 입력을 같이 넘겨야 마감알림 스텝이
 // 정상 실행됨(안 넘기면 crawl.yml이 "임시 재시도"로 간주해 마감알림을 스킵 — 중복발송 방지용).

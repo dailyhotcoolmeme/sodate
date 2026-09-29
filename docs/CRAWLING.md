@@ -14,7 +14,7 @@ GitHub Actions (스케줄)  →  crawler/*.py  →  Supabase events 표  →  �
 
 | 무엇 | 파일 | 언제 도나 |
 |---|---|---|
-| 일정 수집(본체) | `crawler/main.py` | 매일 08:00·20:00 KST (`crawl.yml`) |
+| 일정 수집(본체) | `crawler/main.py` | 매일 08:00·20:00 KST (Cloudflare `sodate-scheduler` → `crawl.yml`) |
 | 마감·가격 갱신 | `crawler/refresh_soldout.py` | **10분마다** (`refresh-soldout.yml`) |
 | imweb 아닌 곳 갱신 | 〃 | 15분마다 (`refresh-nonimweb.yml`) |
 | 감시(워치독) | `crawler/watchdog.py` | **20분마다** (`watchdog.yml`) |
