@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import watchdog
 
 
-def test_latest_success_falls_back_when_status_filter_is_temporarily_empty():
+def test_latest_success_uses_recent_runs_when_status_filter_is_temporarily_empty():
     success = {
         'conclusion': 'success',
         'updated_at': '2026-09-29T00:00:00Z',
@@ -28,6 +28,24 @@ def test_latest_success_falls_back_when_status_filter_is_temporarily_empty():
     assert gh_get.call_count == 2
 
 
+def test_latest_success_replaces_stale_filtered_result_with_newer_recent_success():
+    stale = {
+        'conclusion': 'success',
+        'updated_at': '2026-09-11T00:00:00Z',
+    }
+    newest = {
+        'conclusion': 'success',
+        'updated_at': '2026-09-29T00:00:00Z',
+    }
+    responses = [
+        {'workflow_runs': [stale]},
+        {'workflow_runs': [newest, {'conclusion': 'failure'}]},
+    ]
+
+    with patch.object(watchdog, '_gh_get', side_effect=responses):
+        assert watchdog._latest_success_run('crawl.yml') == newest
+
+
 def test_latest_success_reports_none_when_both_queries_have_no_success():
     responses = [
         {'workflow_runs': []},
@@ -40,11 +58,12 @@ def test_latest_success_reports_none_when_both_queries_have_no_success():
         assert watchdog._latest_success_run('crawl.yml') is None
 
 
-def test_latest_success_does_not_make_fallback_request_when_filtered_query_works():
+def test_latest_success_uses_filtered_result_if_recent_query_fails():
     success = {'conclusion': 'success', 'updated_at': '2026-09-29T00:00:00Z'}
-    with patch.object(
-        watchdog, '_gh_get', return_value={'workflow_runs': [success]}
-    ) as gh_get:
+    with patch.object(watchdog, '_gh_get', side_effect=[
+        {'workflow_runs': [success]},
+        RuntimeError('temporary API failure'),
+    ]) as gh_get:
         assert watchdog._latest_success_run('crawl.yml') == success
 
-    gh_get.assert_called_once_with('crawl.yml/runs?status=success&per_page=1')
+    assert gh_get.call_count == 2

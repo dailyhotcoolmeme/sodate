@@ -106,26 +106,39 @@ def _has_active_run(fname: str) -> bool:
 
 
 def _latest_success_run(fname: str) -> dict | None:
-    """마지막 성공 실행을 찾되 GitHub의 status 필터 빈 응답 오탐을 한 번 검증한다.
+    """GitHub의 필터 결과와 최근 실행 원본을 교차해 진짜 마지막 성공을 찾는다.
 
     2026-09-29 실제로 crawl.yml 성공 실행이 여러 건 있는데도
-    ``runs?status=success``가 잠깐 빈 배열을 돌려 "성공 이력 없음" 긴급 메일이
-    발송됐다. 필터 결과가 비었을 때 최근 실행 원본을 다시 읽어 성공 결론이 있는지
-    확인하면, 진짜 무기록은 그대로 잡으면서 GitHub API의 일시적 빈 응답만 거른다.
+    ``runs?status=success``가 (1) 잠깐 빈 배열, (2) 16일 전의 오래된 성공을 최신처럼
+    돌려줬다. (2) 때문에 워치독이 메인 크롤을 계속 재발화했고 연숲 Apify 한도까지
+    불필요하게 소진했다. 최근 실행 원본도 매번 대조하고 둘 중 시각이 최신인 성공을
+    선택한다. 한쪽 조회만 실패하면 다른 쪽 결과로 계속 감시한다.
     """
-    data = _gh_get(f'{fname}/runs?status=success&per_page=1')
-    runs = data.get('workflow_runs') or []
-    if runs:
-        return runs[0]
+    filtered_error = None
+    try:
+        data = _gh_get(f'{fname}/runs?status=success&per_page=1')
+        candidates = list(data.get('workflow_runs') or [])
+    except Exception as e:
+        filtered_error = e
+        candidates = []
 
-    # status 필터가 빈 결과를 반환한 경우에만 한 번 더 확인한다. 최근 30회 안에도
-    # 성공이 없다면 실제 장애로 판단한다.
-    fallback = _gh_get(f'{fname}/runs?per_page=30')
-    return next(
-        (run for run in (fallback.get('workflow_runs') or [])
-         if run.get('conclusion') == 'success'),
-        None,
-    )
+    try:
+        recent = _gh_get(f'{fname}/runs?per_page=30')
+        candidates.extend(
+            run for run in (recent.get('workflow_runs') or [])
+            if run.get('conclusion') == 'success'
+        )
+    except Exception:
+        if not candidates and filtered_error is not None:
+            raise filtered_error
+
+    if not candidates:
+        return None
+
+    def finished(run: dict) -> str:
+        return run.get('updated_at') or run.get('run_started_at') or ''
+
+    return max(candidates, key=finished)
 
 
 def check_heartbeats() -> list[dict]:
