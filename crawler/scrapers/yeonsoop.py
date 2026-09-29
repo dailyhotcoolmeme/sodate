@@ -127,7 +127,9 @@ class YeonsoopScraper(BaseScraper):
             raise RuntimeError('APIFY_TOKEN 미설정 — 인스타 캡션을 받을 수 없다')
         r = httpx.post(
             f'https://api.apify.com/v2/acts/{APIFY_ACTOR}/run-sync-get-dataset-items',
-            params={'token': token},
+            # 토큰을 URL 쿼리에 넣으면 httpx 예외 문자열과 crawl_logs.error_message에
+            # 그대로 남는다. Apify가 권장하는 Bearer 헤더를 써서 로그 유출을 막는다.
+            headers={'Authorization': f'Bearer {token}'},
             json={
                 'directUrls': [f'https://www.instagram.com/{HANDLE}/'],
                 'resultsType': 'posts',
@@ -137,7 +139,15 @@ class YeonsoopScraper(BaseScraper):
             },
             timeout=300,
         )
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            if status == 402:
+                raise RuntimeError(
+                    'Apify HTTP 402 Payment Required — 사용량/결제 한도 확인 필요'
+                ) from None
+            raise RuntimeError(f'Apify HTTP {status} — 게시물 조회 실패') from None
         items = r.json()
         if not isinstance(items, list):
             raise RuntimeError(f'Apify 응답 형식이 예상과 다름: {str(items)[:200]}')
