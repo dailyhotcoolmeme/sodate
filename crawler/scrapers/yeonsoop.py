@@ -73,7 +73,7 @@ _LINE_DEADLINE = _label(r'신\s*청\s*기\s*한')
 _MD_KOR = re.compile(r'(\d{1,2})\s*월\s*(\d{1,2})\s*일')
 _MD_SLASH = re.compile(r'(\d{1,2})\s*[/.]\s*(\d{1,2})')
 _HHMM = re.compile(r'(\d{1,2})\s*:\s*(\d{2})')
-_AMPM = re.compile(r'(오전|오후)\s*(\d{1,2})\s*시')
+_AMPM = re.compile(r'(오전|오후)\s*(\d{1,2})(?:\s*:\s*(\d{2}))?\s*시?')
 _WON = re.compile(r'([\d][\d,]*)\s*원')
 _BIRTH_RANGE = re.compile(r'(\d{2})\s*년생\s*[~\-–]\s*(\d{2})\s*년생')
 _STATION = re.compile(r'([가-힣A-Za-z0-9]{1,10}?)역')
@@ -166,14 +166,16 @@ class YeonsoopScraper(BaseScraper):
             return None
 
         hour, minute = None, None
-        if (t := _HHMM.search(line)):
-            hour, minute = int(t.group(1)), int(t.group(2))
-        elif (t := _AMPM.search(line)):
-            hour, minute = int(t.group(2)), 0
+        # "오후 2:30시"를 일반 HH:MM으로 먼저 읽으면 02:30이 된다.
+        # 오전/오후 표기가 있으면 그쪽을 우선해 24시간제로 바꾼다.
+        if (t := _AMPM.search(line)):
+            hour, minute = int(t.group(2)), int(t.group(3) or 0)
             if t.group(1) == '오후' and hour < 12:
                 hour += 12
             elif t.group(1) == '오전' and hour == 12:
                 hour = 0
+        elif (t := _HHMM.search(line)):
+            hour, minute = int(t.group(1)), int(t.group(2))
         if hour is None or not (0 <= hour <= 23 and 0 <= minute <= 59):
             return None
 
