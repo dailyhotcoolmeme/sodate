@@ -94,8 +94,8 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
     # 같은 날짜시간에 세션을 두면 충돌 — 충돌나면 모호하므로 evt단독매칭에서 제외해
     # 엉뚱한 상품 행에 업데이트가 새는 것을 막는다(프립처럼 상품이 많으면 흔함).
     dbevs = sb.table('events').select(
-        'id,source_url,seats_left_male,seats_left_female,is_closed,price_male,price_female'
-    ).eq('company_id', cid).eq('is_active', True).execute().data
+        'id,source_url,seats_left_male,seats_left_female,is_closed,price_male,price_female,price_detail'
+    ).eq('company_id', cid).eq('is_active', True).eq('verified', False).execute().data
     # 바뀐 필드만 쓰려고 현재값을 같이 읽는다(쿼리 수는 그대로). docs/disk-io-fix-design.md
     cur_by_id = {e['id']: e for e in dbevs}
     by_evt, by_url = {}, {}
@@ -139,13 +139,17 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
             upd['price_male'] = d['price_male']
         if d.get('price_female') is not None:
             upd['price_female'] = d['price_female']
+        # 앱은 상세 가격표를 우선 표시한다. 원본에서 확인된 티어도 함께 갱신하되,
+        # 수집 실패로 없는 가격표를 기존 값 위에 쓰지는 않는다.
+        if d.get('price_detail') is not None:
+            upd['price_detail'] = d['price_detail']
         # 값이 실제로 바뀐 필드만 골라 쓴다 — 안 바뀌었으면 write 자체를 건너뛴다
         # (Disk IO 절감의 핵심). "안 씀 = DB가 이미 맞음"이라 앱이 보는 값은 동일하다.
         upd = changed_fields(cur_by_id.get(eid, {}), upd)
         if not upd:
             continue
         try:
-            sb.table('events').update(upd, returning=MINIMAL).eq('id', eid).execute()
+            sb.table('events').update(upd, returning=MINIMAL).eq('id', eid).eq('verified', False).execute()
             updated += 1
         except Exception as e:
             # 이 행 하나 실패로 나머지 업체 전체가 못 도는 것 방지 — 로그만 남기고 계속.
@@ -159,12 +163,12 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
     # 나타나면 위 upd에서 is_closed가 자동으로 풀린다). 사이트가 잠깐 죽거나 목록을
     # 절반만 긁어온 부분 실패로 멀쩡한 일정을 통째로 마감 처리하지 않도록, 이번에 절반
     # 이상 재확인됐을 때만 진행한다(base_scraper.py의 DELETE_STALE 안전장치와 동일 기준).
-    unmatched = [e for e in dbevs if e['id'] not in matched_ids]
+    unmatched = [e for e in dbevs if e['id'] not in matched_ids and not e.get('is_closed')]
     if unmatched:
         if dbevs and len(matched_ids) >= len(dbevs) * 0.5:
             for e in unmatched:
                 try:
-                    sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', e['id']).execute()
+                    sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', e['id']).eq('verified', False).execute()
                 except Exception as ex:
                     print(f'  마감 처리 실패(스킵): {e["id"]} - {str(ex)[:100]}')
             print(f'  이번 조회에서 안 잡힘 → 마감 처리 {len(unmatched)}건')
@@ -195,7 +199,7 @@ def _refresh_frip_soon(sb, cid, days: int) -> int:
     rows = (
         sb.table('events')
         .select('id,source_url,event_date,seats_left_male,seats_left_female,is_closed')
-        .eq('company_id', cid).eq('is_active', True)
+        .eq('company_id', cid).eq('is_active', True).eq('verified', False)
         .gte('event_date', now.isoformat()).lte('event_date', horizon)
         .execute()
     ).data or []
@@ -261,7 +265,7 @@ def _refresh_frip_soon(sb, cid, days: int) -> int:
                 if not upd:
                     continue
                 try:
-                    sb.table('events').update(upd, returning=MINIMAL).eq('id', eid).execute()
+                    sb.table('events').update(upd, returning=MINIMAL).eq('id', eid).eq('verified', False).execute()
                     updated += 1
                 except Exception as ex:
                     print(f'  [frip] 갱신 실패(스킵) {eid}: {str(ex)[:80]}')
@@ -284,7 +288,7 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
     rows = (
         sb.table('events')
         .select('id,source_url,seats_left_male,seats_left_female,is_closed,participant_stats')
-        .eq('company_id', cid).eq('is_active', True)
+        .eq('company_id', cid).eq('is_active', True).eq('verified', False)
         .gte('event_date', now.isoformat()).lte('event_date', horizon)
         .execute()
     ).data or []
@@ -315,7 +319,7 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
                 continue
             if resp.status_code == 404:
                 try:
-                    sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', eid).execute()
+                    sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', eid).eq('verified', False).execute()
                     closed_missing += 1
                 except Exception as ex:
                     print(f'  [munto] 마감 처리 실패(스킵) {eid}: {str(ex)[:80]}')
@@ -365,7 +369,7 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
             if not upd:
                 continue
             try:
-                sb.table('events').update(upd, returning=MINIMAL).eq('id', eid).execute()
+                sb.table('events').update(upd, returning=MINIMAL).eq('id', eid).eq('verified', False).execute()
                 updated += 1
             except Exception as ex:
                 print(f'  [munto] 갱신 실패(스킵) {eid}: {str(ex)[:80]}')
@@ -429,7 +433,7 @@ def refresh(slugs=None, days=None, part='all'):
             q = sb.table('events').select(
                 'id,source_url,event_date,price_male,price_female,seats_left_male,'
                 'seats_left_female,is_closed,price_detail'
-            ).eq('company_id', cid).eq('is_active', True).gte('event_date', now.isoformat())
+            ).eq('company_id', cid).eq('is_active', True).eq('verified', False).gte('event_date', now.isoformat())
             if horizon:
                 q = q.lte('event_date', horizon)
             ev = q.execute().data
@@ -464,7 +468,7 @@ def refresh(slugs=None, days=None, part='all'):
                         for e in evs:
                             if not e.get('is_closed'):
                                 try:
-                                    sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', e['id']).execute()
+                                    sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', e['id']).eq('verified', False).execute()
                                     updated += 1
                                 except Exception as ex:
                                     print(f'[{slug}] idx={idx} 마감처리 실패(스킵): {str(ex)[:100]}')
@@ -509,7 +513,7 @@ def refresh(slugs=None, days=None, part='all'):
                     upd = changed_fields(e, upd)
                     if upd:
                         try:
-                            sb.table('events').update(upd, returning=MINIMAL).eq('id', e['id']).execute()
+                            sb.table('events').update(upd, returning=MINIMAL).eq('id', e['id']).eq('verified', False).execute()
                             updated += 1
                         except Exception as ex:
                             # 이 이벤트 하나 실패로 나머지 idx·업체 전체가 못 도는 것 방지
