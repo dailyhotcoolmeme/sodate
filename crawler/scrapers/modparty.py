@@ -70,6 +70,7 @@ class ModpartyScraper(BaseScraper):
         self._uid = os.getenv('MODPARTY_ID', '')
         self._pw = os.getenv('MODPARTY_PW', '')
         self._booking_counts: dict[str, dict] = {}  # {prod_no: {date_code: row}}
+        self.collection_complete = True
 
     def scrape(self) -> list[EventModel]:
         if not self._uid or not self._pw:
@@ -718,8 +719,12 @@ class ModpartyScraper(BaseScraper):
                 if tt:
                     event_date = event_date.replace(hour=tt[0], minute=tt[1])
                 else:
-                    event_date = event_date.replace(hour=19, minute=0)  # 저녁 파티 기본
-                    self.logger.warning(f'모드파티 idx={idx} 시간 파싱 실패(19:00 기본): {data.get("time_text")}')
+                    # 시간 미공지/추출 실패는 19시로 추측하지 않는다. 이 회차가
+                    # 빠졌다는 이유로 기존 일정을 삭제·마감하지 않도록 보존한다.
+                    self.collection_complete = False
+                    self.DELETE_STALE = False
+                    self.logger.warning(f'모드파티 idx={idx} {date_code} 시간 미확인 — 저장 스킵, 기존 일정 보존')
+                    continue
 
                 # 좌석·품절: 상품페이지 "남 X/Y 여 X/Y"(날짜별) 우선, 없으면 booking_counts.
                 # date_code 가 seats 쪽에서만 왔을 수 있어(booking_counts 는 지금 항상 비어

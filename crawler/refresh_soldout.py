@@ -109,7 +109,8 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
                 by_evt[key] = e['id']
         by_url[e['source_url']] = e['id']
     try:
-        evs = ScraperClass().scrape()
+        scraper = ScraperClass()
+        evs = scraper.scrape()
     except Exception as e:
         print(f'  스크래퍼 실행 실패: {str(e)[:60]}')
         return 0
@@ -165,7 +166,8 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
     # 이상 재확인됐을 때만 진행한다(base_scraper.py의 DELETE_STALE 안전장치와 동일 기준).
     unmatched = [e for e in dbevs if e['id'] not in matched_ids and not e.get('is_closed')]
     if unmatched:
-        if dbevs and len(matched_ids) >= len(dbevs) * 0.5:
+        if (getattr(scraper, 'collection_complete', True)
+                and dbevs and len(matched_ids) >= len(dbevs) * 0.5):
             for e in unmatched:
                 try:
                     sb.table('events').update({'is_closed': True}, returning=MINIMAL).eq('id', e['id']).eq('verified', False).execute()
@@ -174,7 +176,7 @@ def _refresh_via_scraper(sb, cid, ScraperClass) -> int:
             print(f'  이번 조회에서 안 잡힘 → 마감 처리 {len(unmatched)}건')
         else:
             print(
-                f'  재확인 {len(matched_ids)}/{len(dbevs)}건뿐 — 부분 실패 의심, '
+                f'  재확인 {len(matched_ids)}/{len(dbevs)}건 — 부분 수집/시간 미확인, '
                 f'마감 처리 건너뜀({len(unmatched)}건 보존)'
             )
     return updated
