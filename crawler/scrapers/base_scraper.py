@@ -62,6 +62,8 @@ class BaseScraper(ABC):
     # 기본은 가격/좌석을 크롤러가 안 쓴다(관리자 전용). 단, 업체 공식 소스에서
     # 정확히 뽑는 스크래퍼는 WRITES_PRICE=True 로 가격을 채운다(예: 모드파티).
     WRITES_PRICE = False
+    # 성별 옵션 조회 실패 시 None은 가격 삭제가 아니다(모드파티).
+    PRESERVE_MISSING_PRICES = False
 
     # True면 이번 크롤에 없는 미검증 이벤트를 삭제한다(매진·삭제된 옛 회차 자동 정리).
     # 업체 공식 소스에서 전체 일정을 안정적으로 뽑는 스크래퍼만 켠다(예: 모드파티).
@@ -256,6 +258,10 @@ class BaseScraper(ABC):
                 _strip += ['price_male', 'price_female']
             for _k in _strip:
                 data.pop(_k, None)
+            if self.PRESERVE_MISSING_PRICES:
+                for _k in ('price_male', 'price_female', 'price_detail'):
+                    if data.get(_k) is None:
+                        data.pop(_k, None)
 
             # ⚠️ 크롤러가 값을 안 준(None) 성별 나이표시는 upsert에서 제외 → 기존값(스크래퍼/관리자 입력) 보존.
             #    (age_male/female를 세팅 안 하는 스크래퍼가 기존 나이를 None으로 덮어써 지우던 버그 방지)

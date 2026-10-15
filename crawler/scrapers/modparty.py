@@ -21,6 +21,7 @@ from utils.imweb_options import parse_gender_tickets_html
 class ModpartyScraper(BaseScraper):
     # 업체 공식 소스(임베드 JSON)에서 가격을 정확히 뽑으므로 크롤러가 가격을 채운다.
     WRITES_PRICE = True
+    PRESERVE_MISSING_PRICES = True
     # booking_counts로 전체 일정을 안정적으로 뽑으므로, 사라진 옛 회차는 자동 삭제한다.
     DELETE_STALE = True
     # 상품 페이지의 '남 X/Y 여 X/Y'를 날짜별로 파싱해 좌석/품절을 채운다.
@@ -165,16 +166,7 @@ class ModpartyScraper(BaseScraper):
                         )
                         # 성별 실가격+매진+티어(정가/얼리버드): 예약위젯 옵션 AJAX
                         gp = self._extract_gender_prices(page, idx)
-                        if gp.get('남성'):
-                            data['price_male'] = gp['남성']['price']
-                            data['male_sold'] = gp['남성']['soldout']
-                            if gp['남성']['tiers']:
-                                data.setdefault('price_detail', {})['male'] = gp['남성']['tiers']
-                        if gp.get('여성'):
-                            data['price_female'] = gp['여성']['price']
-                            data['female_sold'] = gp['여성']['soldout']
-                            if gp['여성']['tiers']:
-                                data.setdefault('price_detail', {})['female'] = gp['여성']['tiers']
+                        data['prices_by_date'] = gp
                     except Exception as e:
                         self.logger.warning(f'모드파티 상품 idx={idx} 상세 수집 실패: {e}')
 
@@ -469,7 +461,7 @@ class ModpartyScraper(BaseScraper):
         써왔다 — 정상가 79,000원인데 슈퍼얼리버드 49,000원이 표시되고, 전 티어 품절(사이트
         SOLDOUT 배지)인데도 마감이 반영 안 됐다. utils/imweb_options.py 의 공용 규칙
         (정가 우선 표시·전 티어 품절일 때만 마감)으로 다시 짰다.
-        반환: {'남성': {'price':P,'soldout':B,'tiers':dict|None}, '여성': {...}}"""
+        반환: {'MMDD': parse_gender_tickets_html 결과}. 회차별 할인·품절을 섞지 않는다."""
         out: dict = {}
         try:
             h1 = self._load_option_html(page, idx, [])
@@ -478,17 +470,12 @@ class ModpartyScraper(BaseScraper):
             if not (oc1_m and dates):
                 return out
             oc1 = oc1_m.group(1)
-            for vc, vn in dates[:4]:
-                if '남성' in out and '여성' in out:
-                    break
+            for vc, vn in dates:
                 h2 = self._load_option_html(page, idx, [(oc1, vc, vn)])
                 parsed = parse_gender_tickets_html(h2)
-                if parsed['male'] and '남성' not in out:
-                    p, s = parsed['male']
-                    out['남성'] = {'price': p, 'soldout': s, 'tiers': parsed['male_tiers']}
-                if parsed['female'] and '여성' not in out:
-                    p, s = parsed['female']
-                    out['여성'] = {'price': p, 'soldout': s, 'tiers': parsed['female_tiers']}
+                md = self.DATE_PATTERN.search(vn)
+                if md:
+                    out[f'{int(md.group(1)):02d}{int(md.group(2)):02d}'] = parsed
             return out
         except Exception as e:
             self.logger.warning(f'모드파티 성별가격 추출 실패 idx={idx}: {str(e)[:60]}')
@@ -655,27 +642,6 @@ class ModpartyScraper(BaseScraper):
                 age_male = age_female = None
                 age_min, age_max, age_label = self._parse_age_group(scan)
 
-            # 성별 실가격(예약위젯). 한 성별 옵션이 없으면 그 성별 매진으로 본다.
-            base = data.get('price')
-            if not base:
-                pmatch = self.PRICE_PATTERN.search(text)
-                if pmatch:
-                    val = int(pmatch.group(1).replace(',', ''))
-                    if val >= 10000:
-                        base = val
-            price_male = data.get('price_male')
-            price_female = data.get('price_female')
-            # 매진(대기신청)은 위젯 옵션명으로 판별 — 가격은 있음.
-            male_sold = bool(data.get('male_sold'))
-            female_sold = bool(data.get('female_sold'))
-            if price_male is None and price_female is None:
-                price_male = price_female = base   # 추출 실패 → base 폴백
-                male_sold = female_sold = False
-            elif price_male is None:
-                price_male = base
-            elif price_female is None:
-                price_female = base
-
             theme = ['와인'] if '와인' in scan else ['일반']
             if '요리' in scan or '쿡' in scan:
                 theme = ['쿠킹']
@@ -726,6 +692,24 @@ class ModpartyScraper(BaseScraper):
                     self.logger.warning(f'모드파티 idx={idx} {date_code} 시간 미확인 — 저장 스킵, 기존 일정 보존')
                     continue
 
+                # 상품 대표가격은 회차·성별 실가격이 아니다. 옵션 수집이 불완전하면
+                # 가격 전체를 미확인으로 남기고, 저장 경로에서 기존 가격표를 보존한다.
+                prices = (data.get('prices_by_date') or {}).get(date_code, {})
+                male, female = prices.get('male'), prices.get('female')
+                price_male = price_female = None
+                price_detail = None
+                male_sold = bool(male[1]) if male is not None else False
+                female_sold = bool(female[1]) if female is not None else False
+                if male is not None and female is not None:
+                    price_male, male_sold = male
+                    price_female, female_sold = female
+                    price_detail = {
+                        gender: prices[f'{gender}_tiers'] for gender in ('male', 'female')
+                        if prices.get(f'{gender}_tiers') is not None
+                    } or None
+                else:
+                    self.logger.warning(f'모드파티 idx={idx} {date_code} 성별가격 미확인 — 기존 가격 보존')
+
                 # 좌석·품절: 상품페이지 "남 X/Y 여 X/Y"(날짜별) 우선, 없으면 booking_counts.
                 # date_code 가 seats 쪽에서만 왔을 수 있어(booking_counts 는 지금 항상 비어
                 # 있다) 직접 인덱싱하면 KeyError — 없으면 빈 dict(아래 seat 블록이 채운다).
@@ -775,7 +759,7 @@ class ModpartyScraper(BaseScraper):
                         location_detail=data.get('location_detail'),
                         price_male=price_male,
                         price_female=price_female,
-                        price_detail=data.get('price_detail'),
+                        price_detail=price_detail,
                         gender_ratio=None,
                         source_url=unique_url,
                         thumbnail_urls=[img_url] if img_url else [],
