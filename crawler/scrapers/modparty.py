@@ -706,7 +706,7 @@ class ModpartyScraper(BaseScraper):
                     price_detail = {
                         gender: prices[f'{gender}_tiers'] for gender in ('male', 'female')
                         if prices.get(f'{gender}_tiers') is not None
-                    } or None
+                    }  # 단일 가격 확인 시 빈 dict로 옛 티어 해제(None은 수집 실패용).
                 else:
                     self.logger.warning(f'모드파티 idx={idx} {date_code} 성별가격 미확인 — 기존 가격 보존')
 

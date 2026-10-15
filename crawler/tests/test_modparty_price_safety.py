@@ -55,6 +55,17 @@ def test_confirmed_soldout_is_kept_even_if_other_gender_option_is_missing():
     assert events[0].seats_left_female is None
 
 
+def test_confirmed_flat_prices_clear_old_tiers_instead_of_preserving_them():
+    _, events = build({'male': (30000, False), 'female': (20000, False)})
+    assert events[0].price_detail == {}
+    db = DB([row(1)])
+    db.rows[0].update(source_url=events[0].source_url,
+                      price_detail={'male': {'regular': 59000}})
+    _refresh_via_scraper(db, 'company', lambda: SimpleNamespace(scrape=lambda: events))
+    assert db.rows[0]['price_male'] == 30000
+    assert db.rows[0]['price_detail'] == {}
+
+
 def test_all_date_options_are_read_without_reusing_first_date_tiers(monkeypatch):
     s = ModpartyScraper()
     h1 = "_form_select_wrap_Oabcdef123456 'O111111111111', '10월17일(토)' 'O222222222222', '11월14일(토)'"
