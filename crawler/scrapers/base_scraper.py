@@ -567,6 +567,13 @@ class BaseScraper(ABC):
                 status = 'failed'
                 error_msg = '수집 0건 — 기존 일정이 있는데 아무것도 못 가져옴(사이트 지연·파싱 깨짐 의심)'
                 self.logger.error(f"[{self.company_slug}] {error_msg}")
+            elif (events and not result['new'] and not result['updated']
+                  and not result.get('failed') and self._has_upcoming_events()):
+                # 과거/저장 범위 밖의 공고만 파싱되면 발견 수는 양수여도 기존
+                # 미래 일정은 전혀 재확인하지 못했다. 이를 성공으로 숨기지 않는다.
+                status = 'failed'
+                error_msg = f'발견 {len(events)}건이나 반영 0건 — 기존 미래 일정 재확인 실패(날짜·시간 필터/원본 수집 확인 필요)'
+                self.logger.error(f"[{self.company_slug}] {error_msg}")
 
             # ⚠️ 저장 실패는 크롤 실패로 기록한다 — 안 그러면 "성공"으로 남아 워치독이
             #    못 잡는다(2026-08-31: 프립 246건이 저장 안 됐는데 로그는 성공이었다).

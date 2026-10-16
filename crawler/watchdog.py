@@ -555,7 +555,7 @@ def check_empty_crawls(sb) -> list[dict]:
         comps = {c['id']: c['name'] for c in sb.table('companies').select('id,name').execute().data}
         logs = (
             sb.table('crawl_logs')
-            .select('company_id,status,events_found,executed_at')
+            .select('company_id,status,events_found,events_new,events_updated,executed_at')
             .gte('executed_at', since)
             .order('executed_at', desc=True)
             .execute()
@@ -573,6 +573,23 @@ def check_empty_crawls(sb) -> list[dict]:
                 'company': comps.get(cid, cid),
                 'msg': f"{comps.get(cid, cid)}: 최근 크롤이 0건인데 성공으로 기록됨 — 사이트 변경·파싱 깨짐 의심",
             })
+        elif (lg.get('status') == 'success' and (lg.get('events_found') or 0) > 0
+              and lg.get('events_new') == 0 and lg.get('events_updated') == 0):
+            # 기존 로그도 검사한다. 발견 건수만 있고 날짜/시간 필터 등으로
+            # 전량 제외되면 실패가 성공으로 덮여 연속 실패 감시까지 사라졌다.
+            try:
+                upcoming = (sb.table('events').select('id')
+                            .eq('company_id', cid).eq('is_active', True)
+                            .gte('event_date', datetime.now(timezone.utc).isoformat())
+                            .limit(1).execute()).data or []
+            except Exception as e:
+                issues.append({'level': 'WARN', 'msg': f'미래 일정 재확인 점검 실패({str(e)[:60]})'})
+                continue
+            if upcoming:
+                issues.append({
+                    'level': 'ERROR', 'company': comps.get(cid, cid),
+                    'msg': f"{comps.get(cid, cid)}: 발견 {lg['events_found']}건이나 반영 0건인데 성공으로 기록됨 — 기존 미래 일정 재확인 실패",
+                })
 
     # ⚠️ 여기에 status='failed'를 함께 보지 않아 생긴 사고(2026-08-13 전수조사):
     #    워치독의 모든 점검이 'success'인 기록만 골라 보고 있었다. 그래서 크롤러가 아예
@@ -661,7 +678,7 @@ def check_failing_crawls(sb, comps: dict) -> list[dict]:
     try:
         logs = (
             sb.table('crawl_logs')
-            .select('company_id,status,executed_at')
+            .select('company_id,status,events_found,events_new,events_updated,executed_at')
             .gte('executed_at', since)
             .order('executed_at', desc=True)
             .limit(2000)
@@ -675,7 +692,9 @@ def check_failing_crawls(sb, comps: dict) -> list[dict]:
     for lg in logs:
         cid = lg['company_id']
         latest_any.setdefault(cid, lg)
-        if lg.get('status') == 'success':
+        false_success = ((lg.get('events_found') or 0) > 0
+                         and lg.get('events_new') == 0 and lg.get('events_updated') == 0)
+        if lg.get('status') == 'success' and not false_success:
             latest_ok.setdefault(cid, lg)
 
     now = datetime.now(timezone.utc)
