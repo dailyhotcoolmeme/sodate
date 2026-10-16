@@ -403,6 +403,7 @@ class BaseScraper(ABC):
                             self.supabase.table('events')
                             .update(changed)
                             .eq('source_url', event.source_url)
+                            .eq('verified', False)
                             .execute()
                         )
                         # 방금 읽어서 존재를 아는 행이라, 갱신 결과가 비면 반영 실패다.

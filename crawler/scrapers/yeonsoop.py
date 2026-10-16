@@ -1,11 +1,14 @@
-"""연숲(yeon_soop_) — 인스타그램만 쓰는 업체 스크래퍼.
+"""연숲(yeon_soop_) — 인스타 캡션 + 무료 로컬 포스터 OCR 스크래퍼.
 
 ## 왜 다른 업체와 방식이 다른가
 
-연숲은 웹사이트가 없다. 일정 공지가 인스타 게시물 캡션에만 올라온다.
+연숲은 웹사이트가 없다. 최근 일정 공지는 캡션 없이 이미지에만 올라온다.
 인스타의 로그인 없는 조회 API(web_profile_info)는 2026-09-01 기준 막혀 있어
 (`400 Asset asset://laser.provider/... has been deleted`) 우리가 직접 못 받는다.
-그래서 **Apify 유료 액터(apify/instagram-scraper)로 캡션을 받아 파싱한다.**
+그래서 **기존 Apify 정기 수집으로 게시물/이미지 주소를 받고**, 캡션에 일정이
+없으면 Tesseract 한국어 OCR 두 방식으로 같은 이미지의 명시된 날짜·시간·역을
+대조한다. OCR은 로컬 실행이므로 AI 토큰/외부 OCR API 비용이 없다.
+복구 검증은 --reuse-last-run으로 18시간 이내 기존 결과만 읽어 추가 액터 실행을 막는다.
 실측 비용은 게시물 50건 요청 1회에 $0.027 — 하루 2회 정기 크롤 기준 월 $1.6 수준이다.
 
 ## 이 업체의 캡션 생김새
@@ -21,7 +24,7 @@
     ✓ 장소: 선릉역 도보 5분 거리 프라이빗 공간
     ✓ 참가비: 얼리버드 특가 48,000원 (8/31까지, 이후 정가 53,000원)
 
-'일시'와 '참가비'가 둘 다 있는 게시물만 모집 공고로 본다. 후기·마감안내·
+'캡션 파서'는 '일시'와 '참가비'가 둘 다 있어야 모집 공고로 본다. 후기·마감안내·
 참가자현황 같은 글은 이 조건에서 자연히 걸러진다(실측 10건 중 공고는 3건).
 
 ## source_url 을 인스타 게시물 주소로 쓰는 이유
@@ -42,6 +45,8 @@ import httpx
 from .base_scraper import BaseScraper, KST
 from models.event import EventModel
 from utils.security import tidy_socialing_desc
+from utils.date_filter import is_within_one_month
+from utils.poster_ocr import PosterOCR
 
 APIFY_ACTOR = 'shu8hvrXbJbY3Eb9W'  # apify/instagram-scraper
 HANDLE = 'yeon_soop_'
@@ -73,7 +78,7 @@ _LINE_DEADLINE = _label(r'신\s*청\s*기\s*한')
 _MD_KOR = re.compile(r'(\d{1,2})\s*월\s*(\d{1,2})\s*일')
 _MD_SLASH = re.compile(r'(\d{1,2})\s*[/.]\s*(\d{1,2})')
 _HHMM = re.compile(r'(\d{1,2})\s*:\s*(\d{2})')
-_AMPM = re.compile(r'(오전|오후)\s*(\d{1,2})(?:\s*:\s*(\d{2}))?\s*시?')
+_AMPM = re.compile(r'(오전|오후)\s*(\d{1,2})(?:\s*:\s*(\d{2})|\s*시(?:\s*(\d{1,2})\s*분)?)?')
 _WON = re.compile(r'([\d][\d,]*)\s*원')
 _BIRTH_RANGE = re.compile(r'(\d{2})\s*년생\s*[~\-–]\s*(\d{2})\s*년생')
 _STATION = re.compile(r'([가-힣A-Za-z0-9]{1,10}?)역')
@@ -105,6 +110,7 @@ def _strip_hashtags(caption: str) -> str:
 class YeonsoopScraper(BaseScraper):
     # 업체가 자기 공지에 직접 적은 금액이라 정본으로 본다.
     WRITES_PRICE = True
+    PRESERVE_MISSING_PRICES = True
     # 대상 년생("90년생 ~ 01년생")도 업체 공지가 정본 → None 도 기록해 옛 값을 지운다.
     WRITES_AGE = False
     # 정원을 남녀로 나눠 적지 않는다("50명 내외") → 좌석·정원은 건드리지 않는다.
@@ -125,6 +131,23 @@ class YeonsoopScraper(BaseScraper):
         token = os.environ.get('APIFY_TOKEN')
         if not token:
             raise RuntimeError('APIFY_TOKEN 미설정 — 인스타 캡션을 받을 수 없다')
+        if os.environ.get('YEONSOOP_REUSE_LAST_RUN') == '1':
+            # 복구 검증용: 이미 완료된 결과만 GET. 유료 액터를 새로 실행하지 않는다.
+            headers = {'Authorization': f'Bearer {token}'}
+            meta = httpx.get(f'https://api.apify.com/v2/actors/{APIFY_ACTOR}/runs/last',
+                             params={'status': 'SUCCEEDED'}, headers=headers, timeout=30)
+            if meta.status_code != 200:
+                raise RuntimeError(f'기존 인스타 실행 조회 실패 HTTP {meta.status_code}')
+            run = meta.json()['data']
+            finished = datetime.fromisoformat(run['finishedAt'].replace('Z', '+00:00'))
+            age = datetime.now(timezone.utc) - finished
+            if age < timedelta(0) or age > timedelta(hours=18):
+                raise RuntimeError('기존 인스타 수집 결과가 18시간보다 오래됨 — 재사용 중단')
+            res = httpx.get(f"https://api.apify.com/v2/datasets/{run['defaultDatasetId']}/items",
+                            params={'clean': 'true'}, headers=headers, timeout=30)
+            if res.status_code != 200 or not isinstance(res.json(), list):
+                raise RuntimeError(f'기존 인스타 자료 조회 실패 HTTP {res.status_code}')
+            return res.json()
         r = httpx.post(
             f'https://api.apify.com/v2/acts/{APIFY_ACTOR}/run-sync-get-dataset-items',
             # 토큰을 URL 쿼리에 넣으면 httpx 예외 문자열과 crawl_logs.error_message에
@@ -169,7 +192,9 @@ class YeonsoopScraper(BaseScraper):
         # "오후 2:30시"를 일반 HH:MM으로 먼저 읽으면 02:30이 된다.
         # 오전/오후 표기가 있으면 그쪽을 우선해 24시간제로 바꾼다.
         if (t := _AMPM.search(line)):
-            hour, minute = int(t.group(2)), int(t.group(3) or 0)
+            hour, minute = int(t.group(2)), int(t.group(3) or t.group(4) or 0)
+            if not 1 <= hour <= 12:
+                return None
             if t.group(1) == '오후' and hour < 12:
                 hour += 12
             elif t.group(1) == '오전' and hour == 12:
@@ -302,6 +327,60 @@ class YeonsoopScraper(BaseScraper):
 
     # ------------------------------------------------------------------ 실행
 
+    def _parse_poster_text(self, text: str, post: dict) -> Optional[dict]:
+        """한 이미지 안의 명시된 일시·역·모임 종류만 결합한다. 다른 이미지 값은 섞지 않는다."""
+        posted = datetime.fromisoformat(post['timestamp'].replace('Z', '+00:00')).astimezone(KST).replace(tzinfo=None)
+        dates = set()
+        for line in text.splitlines():
+            if not (_MD_KOR.search(line) or _MD_SLASH.search(line)):
+                continue
+            # 1:30만 있으면 오전/오후 추측 금지. 13~23시 표기는 명백한 24시간제다.
+            clock = _HHMM.search(line)
+            if not _AMPM.search(line) and not (clock and 13 <= int(clock.group(1)) <= 23):
+                continue
+            if (date := self._parse_datetime(line, posted)):
+                dates.add(date)
+        stations = set(_STATION.findall(text))
+        compact = re.sub(r'\s+', '', text)
+        if len(dates) != 1 or len(stations) != 1 or not _DATING.search(compact):
+            return None
+        date = next(iter(dates))
+        if not is_within_one_month(date):
+            return None
+        station = next(iter(stations)) + '역'
+        prices = []
+        for line in text.splitlines():
+            if re.match(r'^\s*참가비\s*[:：]?', line):
+                amounts = set(_WON.findall(line))
+                if len(amounts) == 1:
+                    prices.append(int(next(iter(amounts)).replace(',', '')))
+        price = prices[0] if len(set(prices)) == 1 and 10000 <= prices[0] <= 300000 else None
+        return dict(
+            external_id=post.get('shortCode'), title=f'{station} 로테이션 소개팅',
+            event_date=date, location_region=station, location_detail=station,
+            price_male=price, price_female=price, event_type='dating',
+            source_url=post.get('url') or f"https://www.instagram.com/p/{post['shortCode']}/",
+            posted_at=posted,
+            _poster=True,
+        )
+
+    def _parse_posters(self, post: dict, reader: PosterOCR) -> list[dict]:
+        out = []
+        urls = post.get('images') or ([post['displayUrl']] if post.get('displayUrl') else [])
+        for url in dict.fromkeys(urls[:8]):
+            try:
+                a, b = (self._parse_poster_text(t, post) for t in reader.read(url))
+                # 서로 다른 레이아웃 인식 두 번의 날짜·장소가 일치해야 저장 후보다.
+                if not a or not b or (a['event_date'], a['location_region']) != (b['event_date'], b['location_region']):
+                    continue
+                if a['price_male'] != b['price_male']:
+                    a['price_male'] = a['price_female'] = None
+                out.append(a)
+            except Exception as exc:
+                # 서명 URL/토큰/참석자 내용은 오류 로그에 출력하지 않는다.
+                self.logger.warning(f"포스터 인식 스킵 {post.get('shortCode')}: {type(exc).__name__}")
+        return out
+
     def scrape(self) -> list[EventModel]:
         posts = self._fetch_posts()
         self.logger.info(f'인스타 게시물 {len(posts)}건 수신')
@@ -309,22 +388,68 @@ class YeonsoopScraper(BaseScraper):
         # (GitHub Actions 러너는 UTC 라 datetime.now() 를 그냥 쓰면 9시간 어긋난다).
         now = datetime.now(timezone.utc).astimezone(KST).replace(tzinfo=None)
 
-        parsed = [p for p in (self._parse_post(post, now) for post in posts) if p]
+        parsed = []
+        reader = PosterOCR()
+        for post in posts:
+            if post.get('ownerUsername') not in (None, HANDLE):
+                continue
+            caption = self._parse_post(post, now)
+            if caption and is_within_one_month(caption['event_date']):
+                parsed.append(caption)
+                continue
+            # 최근 공지만 이미지 판독한다. 과거 후기까지 불필요하게 OCR하지 않는다.
+            posted = datetime.fromisoformat(post['timestamp'].replace('Z', '+00:00')).astimezone(KST).replace(tzinfo=None)
+            if now - timedelta(days=45) <= posted <= now:
+                parsed.extend(self._parse_posters(post, reader))
 
         # 같은 회차를 여러 번 올린다 → (종류, 일시, 지역)이 같으면 한 회차로 본다.
         # 대표는 **가장 먼저 올린 게시물** — 재공지가 붙어도 source_url 이 안 바뀐다.
         by_key: dict[tuple, dict] = {}
         for p in parsed:
-            key = (p['event_type'], p['event_date'], p['location_region'])
-            if key not in by_key or p['posted_at'] < by_key[key]['posted_at']:
+            key = (p['event_type'], p['event_date'], p['location_region'].removesuffix('역'))
+            if (key not in by_key or p['posted_at'] < by_key[key]['posted_at']
+                or (p['source_url'] == by_key[key]['source_url']
+                    and by_key[key].get('price_male') is None and p.get('price_male') is not None)):
                 by_key[key] = p
         if len(parsed) != len(by_key):
             self.logger.info(f'중복 공지 {len(parsed) - len(by_key)}건 합침 → 회차 {len(by_key)}건')
 
+        # 포스터에 없는 마감·나이·설명은 기존 값을 보존한다. 같은 회차의 재공지
+        # URL이 달라도 기존 대표 주소를 유지해 중복 일정이 생기지 않도록 한다.
+        image_rows = []
+        if any(p.get('_poster') for p in by_key.values()):
+            image_rows = self._select_all('*', company_id=self.get_company_id())
         events = []
         for p in by_key.values():
             p.pop('posted_at')
+            if p.pop('_poster', False):
+                matches = [row for row in image_rows
+                           if row['source_url'] == p['source_url'] or (
+                               datetime.fromisoformat(row['event_date'].replace('Z', '+00:00')).astimezone(KST).replace(tzinfo=None) == p['event_date']
+                               and row.get('event_type', 'dating') == p['event_type']
+                               and (row.get('location_region') or '').removesuffix('역') == p['location_region'].removesuffix('역'))]
+                if len(matches) > 1:
+                    self.logger.warning('동일 회차의 기존 행이 여러 개 — 임의 매칭하지 않고 보존')
+                    continue
+                if matches:
+                    old = matches[0]
+                    p['source_url'] = old['source_url']
+                    for field in ('title', 'description', 'location_detail', 'age_range_min',
+                                  'age_range_max', 'age_male', 'age_female', 'is_closed'):
+                        if field in old:
+                            p[field] = old[field]
             events.append(EventModel(thumbnail_urls=[PROFILE_IMAGE], **p))
 
         self.logger.info(f'모집 공고 {len(events)}건 파싱')
         return events
+
+
+if __name__ == '__main__':
+    import sys
+    # 수동 검증은 기존 자료 재사용만 허용한다. 잘못된 인자가 유료 실행으로
+    # 떨어지는 것을 막고, 정기 main.py 경로의 하루 2회 호출은 그대로 유지한다.
+    if sys.argv[1:] != ['--reuse-last-run']:
+        raise SystemExit('사용법: python -m scrapers.yeonsoop --reuse-last-run')
+    os.environ['YEONSOOP_REUSE_LAST_RUN'] = '1'
+    result = YeonsoopScraper().run()
+    raise SystemExit(0 if result['status'] == 'success' else 1)

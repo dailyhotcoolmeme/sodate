@@ -10,6 +10,10 @@ on:
       slot:
         description: "정기 슬롯 재현용(evening=20시 마감알림 포함). 비우면 마감알림 스킵(워치독 임시 재시도용)"
         required: false
+      yeonsoop_replay:
+        description: "연숲만 기존 18시간 이내 자료로 복구 검증(유료 재수집 없음)"
+        type: boolean
+        default: false
 
 # Cloudflare 정기 실행과 워치독 자가복구가 겹쳐도 동시에 DB를 쓰지 않도록 직렬화한다.
 concurrency:
@@ -18,6 +22,7 @@ concurrency:
 
 jobs:
   crawl:
+    if: ${{ inputs.yeonsoop_replay != true }}
     runs-on: ubuntu-22.04
     # ⚠️(2026-07-25) 후기수집 분리 후에도 실측 29분46초로 30분 한도를 간신히 통과 —
     # 여유 없이 안전마진 0에 가까워 조금만 느려져도 다시 타임아웃 재발. 45분으로 확대.
@@ -95,6 +100,10 @@ jobs:
           sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           playwright install chromium --with-deps
 
+      - name: Install free Korean poster OCR (rest only)
+        if: matrix.group == 'rest'
+        run: sudo apt-get install -y tesseract-ocr tesseract-ocr-kor
+
       - name: Run crawlers
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -126,7 +135,7 @@ jobs:
   # 크롤 3그룹이 모두 끝난 뒤 한 번만 도는 뒷정리(검증·푸시 발송·마감알림).
   post:
     needs: crawl
-    if: always()          # 한 그룹이 잘려도 나머지 결과에 대한 알림은 나가야 한다
+    if: ${{ always() && inputs.yeonsoop_replay != true }}
     runs-on: ubuntu-22.04
     # 실측 20분(설치 4분 + QA·가격점검 + 푸시 큐 소진)으로 한도에 딱 붙었다 → 여유를 준다.
     timeout-minutes: 35
@@ -278,3 +287,28 @@ jobs:
         run: |
           echo "::error::크롤링 실패 — 크롤 결과: ${{ needs.crawl.result }}. Supabase crawl_logs 및 GitHub Actions 로그를 확인하세요."
           exit 1
+
+  yeonsoop_replay:
+    if: ${{ inputs.yeonsoop_replay == true }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies and free Korean OCR
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-kor
+          cd crawler
+          pip install -r requirements.txt
+      - name: Replay existing collection through normal scraper save path
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        run: |
+          cd crawler
+          python -m scrapers.yeonsoop --reuse-last-run
