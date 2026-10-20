@@ -131,3 +131,60 @@ def test_same_post_price_slide_is_preferred_over_header_without_price():
 def test_existing_event_update_keeps_verified_guard_at_write_time():
     code = inspect.getsource(BaseScraper.save_events)
     assert ".eq('source_url', event.source_url)\n                            .eq('verified', False)" in code
+
+
+def owner_row():
+    date, _, _ = source()
+    return dict(id='owner', verified=True, is_active=True,
+                title='오너 확인 일정', event_date=date.isoformat(),
+                location_region='언주역', price_male=48000, price_female=48000,
+                source_url='https://form.naver.com/response/confirmed')
+
+
+def profile_response(row, clock='1:30', station='언주역', date_offset=0):
+    import html
+    date = datetime.fromisoformat(row['event_date']) + timedelta(days=date_offset)
+    text = f'(@yeon_soop_) on Instagram: "💚{date.month}/{date.day}(토) {station} {clock}\n신청은 프로필링크"'
+    return SimpleNamespace(text=f'<meta name="description" content="{html.escape(text, quote=True)}">',
+                           raise_for_status=lambda: None)
+
+
+def test_profile_only_reconfirms_existing_verified_event_without_writes():
+    s = scraper(); row = owner_row()
+    s.get_company_id = lambda: 'c'
+    s._select_all = MagicMock(return_value=[row])
+    with patch('scrapers.yeonsoop.httpx.get', return_value=profile_response(row)):
+        events = s._reconfirm_owner_events()
+    s._select_all.assert_called_once_with('*', company_id='c', verified=True, is_active=True)
+    assert len(events) == 1 and events[0].event_date.hour == 13
+    assert events[0].source_url == row['source_url'] and events[0].price_male == 48000
+
+
+@pytest.mark.parametrize('kwargs', [dict(clock='2:30'), dict(clock='1:30am'),
+                                  dict(clock='오전 1:30'), dict(station='사당역'), dict(date_offset=1)])
+def test_changed_profile_does_not_reconfirm_owner_schedule(kwargs):
+    s = scraper(); row = owner_row()
+    s.get_company_id = lambda: 'c'; s._select_all = lambda *a, **kw: [row]
+    with patch('scrapers.yeonsoop.httpx.get', return_value=profile_response(row, **kwargs)):
+        assert s._reconfirm_owner_events() == []
+
+
+def test_profile_never_creates_events_without_owner_row():
+    s = scraper(); s.get_company_id = lambda: 'c'; s._select_all = lambda *a, **kw: []
+    with patch('scrapers.yeonsoop.httpx.get') as request:
+        assert s._reconfirm_owner_events() == []
+    request.assert_not_called()
+
+
+def test_provider_error_item_uses_confirmed_profile_instead_of_timestamp_keyerror():
+    s = scraper(); row = owner_row()
+    s._fetch_posts = lambda: [dict(error='no_items')]
+    s._reconfirm_owner_events = lambda: [__import__('models.event', fromlist=['EventModel']).EventModel(**row)]
+    assert len(s.scrape()) == 1
+
+
+def test_provider_error_without_source_confirmation_still_fails():
+    s = scraper(); s._fetch_posts = lambda: [dict(error='no_items')]
+    s._reconfirm_owner_events = lambda: []
+    with pytest.raises(RuntimeError, match='정상 게시물'):
+        s.scrape()

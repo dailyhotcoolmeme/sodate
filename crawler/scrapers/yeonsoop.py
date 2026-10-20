@@ -41,6 +41,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
+from bs4 import BeautifulSoup
 
 from .base_scraper import BaseScraper, KST
 from models.event import EventModel
@@ -381,6 +382,67 @@ class YeonsoopScraper(BaseScraper):
                 self.logger.warning(f"포스터 인식 스킵 {post.get('shortCode')}: {type(exc).__name__}")
         return out
 
+    def _reconfirm_owner_events(self) -> list[EventModel]:
+        """공개 프로필과 기존 오너 확인 일시를 대조만 한다. 새 일정/시각을 추정하지 않는다."""
+        try:
+            rows = self._select_all('*', company_id=self.get_company_id(),
+                                    verified=True, is_active=True)
+            now = datetime.now(KST)
+            rows = [r for r in rows if datetime.fromisoformat(
+                r['event_date'].replace('Z', '+00:00')) >= now]
+            if not rows:
+                return []
+            response = httpx.get(f'https://www.instagram.com/{HANDLE}/', timeout=25,
+                                 follow_redirects=False)
+            response.raise_for_status()
+            meta = BeautifulSoup(response.text, 'html.parser').find('meta', attrs={'name': 'description'})
+            text = meta.get('content', '') if meta else ''
+            marker = f'(@{HANDLE}) on Instagram: "'
+            if marker not in text:
+                return []
+            bio = text.split(marker, 1)[1].rsplit('"', 1)[0]
+            events = []
+            for row in rows:
+                date = datetime.fromisoformat(row['event_date'].replace('Z', '+00:00')).astimezone(KST)
+                if not is_within_one_month(date.replace(tzinfo=None)):
+                    continue
+                matching = []
+                for line in bio.splitlines():
+                    dates = list(_MD_SLASH.finditer(line))
+                    clocks = list(_HHMM.finditer(line))
+                    stations = _STATION.findall(line)
+                    if len(dates) != 1 or len(clocks) != 1 or len(stations) != 1:
+                        continue
+                    md, clock = dates[0], clocks[0]
+                    if (int(md[1]), int(md[2])) != (date.month, date.day):
+                        continue
+                    if stations[0] != row['location_region'].removesuffix('역'):
+                        continue
+                    hour, minute = int(clock[1]), int(clock[2])
+                    # 명시된 오전/오후 또는 24시간제는 그대로 비교한다.
+                    # 모호한 1:30의 오후 여부는 이미 verified인 해당 행에서만 가져온다.
+                    if _AMPM.search(line):
+                        parsed = self._parse_datetime(line, date.replace(tzinfo=None))
+                        same_clock = parsed is not None and (parsed.hour, parsed.minute) == (date.hour, date.minute)
+                    elif re.search(r'(?<![A-Za-z])(?:am|pm)\b', line, re.I):
+                        suffix = re.search(r'(?<![A-Za-z])(am|pm)\b', line, re.I)[1].lower()
+                        same_clock = 1 <= hour <= 12 and (hour % 12 + (12 if suffix == 'pm' else 0), minute) == (date.hour, date.minute)
+                    else:
+                        same_clock = minute == date.minute and (hour == date.hour or (1 <= hour <= 12 and hour == (date.hour % 12 or 12)))
+                    if same_clock:
+                        matching.append(line)
+                if len(matching) == 1:
+                    # 동일 회차가 여러 행이면 임의로 고르지 않는다.
+                    peers = [r for r in rows if r['event_date'] == row['event_date']
+                             and r.get('location_region') == row.get('location_region')]
+                    if len(peers) == 1:
+                        events.append(EventModel(**{**row, 'event_date': date.replace(tzinfo=None)}))
+            self.logger.info(f'공식 프로필에서 오너 확인 일정 {len(events)}건 재확인 (검증 행 수정 없음)')
+            return events
+        except Exception as exc:
+            self.logger.warning(f'공식 프로필 대조 실패: {type(exc).__name__}')
+            return []
+
     def scrape(self) -> list[EventModel]:
         posts = self._fetch_posts()
         self.logger.info(f'인스타 게시물 {len(posts)}건 수신')
@@ -390,7 +452,15 @@ class YeonsoopScraper(BaseScraper):
 
         parsed = []
         reader = PosterOCR()
+        invalid_posts = 0
         for post in posts:
+            # Apify는 HTTP 200에도 error=no_items 같은 상태 항목을 반환한다.
+            # 이를 게시물로 읽어 timestamp KeyError로 중단하지 않는다.
+            try:
+                datetime.fromisoformat(post['timestamp'].replace('Z', '+00:00'))
+            except (KeyError, TypeError, ValueError, AttributeError):
+                invalid_posts += 1
+                continue
             if post.get('ownerUsername') not in (None, HANDLE):
                 continue
             caption = self._parse_post(post, now)
@@ -440,6 +510,12 @@ class YeonsoopScraper(BaseScraper):
                             p[field] = old[field]
             events.append(EventModel(thumbnail_urls=[PROFILE_IMAGE], **p))
 
+        if not events:
+            events = self._reconfirm_owner_events()
+        if invalid_posts:
+            self.logger.warning(f'게시물이 아닌 인스타 응답 {invalid_posts}건 제외')
+            if not events:
+                raise RuntimeError('인스타 수집 서비스가 정상 게시물을 반환하지 않음 — 공식 프로필 대조도 불가')
         self.logger.info(f'모집 공고 {len(events)}건 파싱')
         return events
 
