@@ -568,6 +568,10 @@ class BaseScraper(ABC):
                 status = 'failed'
                 error_msg = '수집 0건 — 기존 일정이 있는데 아무것도 못 가져옴(사이트 지연·파싱 깨짐 의심)'
                 self.logger.error(f"[{self.company_slug}] {error_msg}")
+            elif not events and getattr(self, 'empty_source_confirmed', False):
+                # 원본 조회 성공 + 알려진 비일정 버튼만 존재 + DB 미래 일정 없음.
+                # 성공의 근거를 로그에 남겨 파싱 실패 0건과 구분한다.
+                error_msg = 'NO_PUBLISHED_EVENTS: 원본 목록 정상 조회, 게시된 신청 회차 없음'
             elif (events and not result['new'] and not result['updated']
                   and not result.get('failed') and self._has_upcoming_events()):
                 # 과거/저장 범위 밖의 공고만 파싱되면 발견 수는 양수여도 기존

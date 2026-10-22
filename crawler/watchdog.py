@@ -555,7 +555,7 @@ def check_empty_crawls(sb) -> list[dict]:
         comps = {c['id']: c['name'] for c in sb.table('companies').select('id,name').execute().data}
         logs = (
             sb.table('crawl_logs')
-            .select('company_id,status,events_found,events_new,events_updated,executed_at')
+            .select('company_id,status,events_found,events_new,events_updated,error_message,executed_at')
             .gte('executed_at', since)
             .order('executed_at', desc=True)
             .execute()
@@ -568,6 +568,17 @@ def check_empty_crawls(sb) -> list[dict]:
         latest.setdefault(lg['company_id'], lg)
     for cid, lg in latest.items():
         if lg.get('status') == 'success' and (lg.get('events_found') or 0) == 0:
+            if (lg.get('error_message') or '').startswith('NO_PUBLISHED_EVENTS:'):
+                # 모집 공백은 운영 과제(미래 일정 0)로 유지하되 장애 방치로 보내지 않는다.
+                # 로그 이후 새 일정이 들어왔으면 이 예외를 적용하지 않는다.
+                try:
+                    future = (sb.table('events').select('id').eq('company_id', cid)
+                              .gte('event_date', datetime.now(timezone.utc).isoformat())
+                              .limit(1).execute()).data or []
+                    if not future:
+                        continue
+                except Exception:
+                    pass  # 확인 불가일 때는 종전처럼 경보를 유지한다.
             issues.append({
                 'level': 'ERROR',
                 'company': comps.get(cid, cid),

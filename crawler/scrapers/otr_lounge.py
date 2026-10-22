@@ -54,9 +54,15 @@ class OtrLoungeScraper(BaseScraper):
         super().__init__('otr-lounge')
 
     def scrape(self) -> list[EventModel]:
+        self.empty_source_confirmed = False
         buttons = self._fetch_buttons()
         if not buttons:
             return []
+        # 실제 원본이 정상 조회됐고, 알려진 비일정 버튼만 남은 경우에 한정한다.
+        # 새 형식/알 수 없는 버튼/조회 실패는 이 표식을 붙이지 않아 계속 경보 대상이다.
+        self.empty_source_confirmed = len(buttons) == 3 and set(buttons) == {
+            '참가자 현황✨', '📸 [인스타그램] @otr.lounge_', '💬 [카카오톡] 공식 카카오톡 채널',
+        }
 
         events: list[EventModel] = []
         now = datetime.now()
