@@ -1,7 +1,7 @@
 -- company_admin_stats의 "상세 이미지 있음" 판정이 admin이 등록한 company_image_types만
 -- 봐서, 파이낸스라운지처럼 크롤러가 attendee_image_url(참석자 명단)을 채우는 업체는
 -- 실제로 이미지가 있어도 9건 전부 "이미지 없음"으로 오판됐다(2026-08-11).
-create or replace view public.company_admin_stats as
+create or replace view public.company_admin_stats with (security_invoker = true) as
 select
   c.id as company_id,
   coalesce(e.upcoming_events, 0::bigint) as upcoming_events,
@@ -52,3 +52,7 @@ left join lateral (
   from crawl_logs
   where crawl_logs.company_id = c.id
 ) l on true;
+
+-- 관리자 세션 검증 후 서버 키로만 조회한다. 새 구축에서도 공개하지 않는다.
+revoke all on table public.company_admin_stats from public, anon, authenticated;
+grant select on table public.company_admin_stats to service_role;

@@ -48,6 +48,57 @@ class MigrationGrantsTests(unittest.TestCase):
     def test_split_ignores_nested_comments_and_semicolons(self):
         self.assertEqual(len(statements("/* outer /* nested ; */ */ select ';'; select 2;")), 2)
 
+    def test_admin_view_migration_is_narrow(self):
+        sql = (ROOT / 'migrations/20261023022526_lock_down_company_admin_stats.sql').read_text()
+        commands = statements(sql)
+        self.assertEqual(len(commands), 4)
+        self.assertTrue(commands[0].lower().startswith('alter view public.company_admin_stats set (security_invoker = true)'))
+        self.assertTrue(commands[1].lower().startswith('revoke all on table public.company_admin_stats from public, anon, authenticated'))
+        self.assertTrue(commands[2].lower().startswith('grant select on table public.company_admin_stats to service_role'))
+
+    @unittest.skipUnless(os.environ.get('GRANTS_TEST_DB_URL'), 'requires disposable PostgreSQL database')
+    def test_admin_view_access_in_postgres(self):
+        url = os.environ['GRANTS_TEST_DB_URL']
+        self.assertIn(urlsplit(url).hostname, {'localhost', '127.0.0.1', '::1'})
+        sql = '''BEGIN;
+        CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
+        GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+        CREATE TABLE public.stats_fixture(id int);
+        INSERT INTO public.stats_fixture VALUES (1), (2);
+        ALTER TABLE public.stats_fixture ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY fixture_anon ON public.stats_fixture FOR SELECT TO anon USING(id=1);
+        GRANT SELECT ON public.stats_fixture TO anon, authenticated, service_role;
+        CREATE VIEW public.company_admin_stats AS SELECT * FROM public.stats_fixture;
+        GRANT SELECT ON public.company_admin_stats TO anon, authenticated, service_role;
+        '''
+        sql += (ROOT / 'migrations/20261023022526_lock_down_company_admin_stats.sql').read_text()
+        sql += '''
+        SET LOCAL ROLE service_role;
+        DO $$ BEGIN
+          IF (SELECT count(*) FROM public.company_admin_stats) <> 2 THEN
+            RAISE EXCEPTION 'Admin statistics changed'; END IF;
+        END $$;
+        RESET ROLE;
+        DO $$ DECLARE role_name text; BEGIN
+          IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid='public.company_admin_stats'::regclass
+            AND 'security_invoker=true'=ANY(reloptions)) THEN
+            RAISE EXCEPTION 'Invoker option missing'; END IF;
+          FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+            IF has_table_privilege(role_name, 'public.company_admin_stats','SELECT') THEN
+              RAISE EXCEPTION 'Public grant remains'; END IF;
+            EXECUTE format('SET LOCAL ROLE %I', role_name);
+            BEGIN
+              PERFORM * FROM public.company_admin_stats;
+              RAISE EXCEPTION 'Public request unexpectedly succeeded';
+            EXCEPTION WHEN insufficient_privilege THEN NULL;
+            END;
+            RESET ROLE;
+          END LOOP;
+        END $$;
+        ROLLBACK;'''
+        result = subprocess.run(['psql', url, '-X', '-v', 'ON_ERROR_STOP=1', '-q'], input=sql, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     @unittest.skipUnless(os.environ.get('GRANTS_TEST_DB_URL'), 'requires disposable PostgreSQL database')
     def test_postgres_without_default_grants(self):
         self.assertIn(urlsplit(os.environ['GRANTS_TEST_DB_URL']).hostname, {'localhost', '127.0.0.1', '::1'}, 'Only disposable local/CI PostgreSQL is allowed')
