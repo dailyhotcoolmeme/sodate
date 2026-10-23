@@ -18,3 +18,8 @@ create index alert_subs_active_idx on public.alert_subscriptions(is_active);
 create trigger alert_subs_updated_at
   before update on public.alert_subscriptions
   for each row execute function public.update_updated_at();
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.alert_subscriptions enable row level security;
+grant select, insert, update, delete on table public.alert_subscriptions to service_role;
+revoke all on table public.alert_subscriptions from anon, authenticated;

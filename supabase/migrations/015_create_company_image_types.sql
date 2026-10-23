@@ -23,3 +23,8 @@ alter table company_image_types enable row level security;
 drop policy if exists cit_public_read on company_image_types;
 create policy cit_public_read on company_image_types
   for select using (true);
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.company_image_types enable row level security;
+grant select, insert, update, delete on table public.company_image_types to service_role;
+grant select on table public.company_image_types to anon, authenticated;

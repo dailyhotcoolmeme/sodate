@@ -43,3 +43,8 @@ create unique index events_unique_source_url on public.events(source_url);
 create trigger events_updated_at
   before update on public.events
   for each row execute function public.update_updated_at();
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.events enable row level security;
+grant select, insert, update, delete on table public.events to service_role;
+grant select on table public.events to anon, authenticated;

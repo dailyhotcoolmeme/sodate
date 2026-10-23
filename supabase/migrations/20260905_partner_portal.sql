@@ -71,3 +71,8 @@ comment on column public.events.is_partner_direct is
 
 create index if not exists events_partner_direct_idx on public.events(is_partner_direct)
   where is_partner_direct = true;
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.partner_accounts enable row level security;
+grant select, insert, update, delete on table public.partner_accounts to service_role;
+revoke all on table public.partner_accounts from anon, authenticated;

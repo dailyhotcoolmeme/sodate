@@ -13,3 +13,8 @@ create table public.crawl_logs (
 create index crawl_logs_company_idx  on public.crawl_logs(company_id);
 create index crawl_logs_status_idx   on public.crawl_logs(status);
 create index crawl_logs_executed_idx on public.crawl_logs(executed_at desc);
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.crawl_logs enable row level security;
+grant select, insert, update, delete on table public.crawl_logs to service_role;
+grant select on table public.crawl_logs to anon, authenticated;

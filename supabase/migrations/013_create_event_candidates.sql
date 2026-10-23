@@ -21,3 +21,8 @@ create index if not exists event_candidates_registered_idx on public.event_candi
 
 -- events 에 출처 구분 추가 (크롤링 데이터 무시/수동 구분용)
 alter table public.events add column if not exists source text default 'manual';
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.event_candidates enable row level security;
+grant select, insert, update, delete on table public.event_candidates to service_role;
+revoke all on table public.event_candidates from anon, authenticated;

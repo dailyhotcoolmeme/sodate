@@ -106,3 +106,11 @@ $$;
 
 revoke all on function public.publish_auto_board_post(uuid) from public, anon, authenticated;
 grant execute on function public.publish_auto_board_post(uuid) to service_role;
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.auto_board_posts enable row level security;
+grant select, insert, update, delete on table public.auto_board_posts to service_role;
+revoke all on table public.auto_board_posts from anon, authenticated;
+alter table public.auto_board_post_settings enable row level security;
+grant select, insert, update, delete on table public.auto_board_post_settings to service_role;
+revoke all on table public.auto_board_post_settings from anon, authenticated;

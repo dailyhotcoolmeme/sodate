@@ -67,6 +67,7 @@
 - **Supabase 프로젝트가 2026-09-04 에 바뀌었다** — ref `kmakdtcavtheaqobktlj`. 옛 ref 쓰지 말 것
 - **미디어는 전부 Cloudflare R2.** Supabase Storage 안 쓴다
 - 자격증명은 **이미 다 저장돼 있다**(`~/.config/sodate/README.md`). 오너에게 다시 묻지 말 것
+- **새 public 테이블은 생성 SQL 안에 RLS와 명시적 권한을 함께 작성한다.** 서버는 필요한 CRUD, 앱 공개 자료만 SELECT(기존 열 단위 제한 유지). 관리자 전용은 anon/authenticated에 열지 않는다. `python3 supabase/check_data_api_grants.py`로 검사한다. 2026-10-30 이후 자동 권한 부여에 의존하지 말 것.
 
 ---
 

@@ -58,3 +58,8 @@ alter table public.companies
 
 create index events_featured_idx on public.events(is_featured, featured_until);
 create index events_display_order_idx on public.events(display_order);
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.analytics_events enable row level security;
+grant select, insert, update, delete on table public.analytics_events to service_role;
+grant insert on table public.analytics_events to anon;

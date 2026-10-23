@@ -100,3 +100,9 @@ where not exists (select 1 from public.banners where menu = 'board');
 alter table public.companies add column if not exists socials jsonb not null default '{}'::jsonb;
 comment on column public.companies.socials is
   '표시용 링크 {homepage, instagram, facebook, tiktok, youtube, x, threads, naverblog, kakao}. 비면 아이콘을 안 그린다.';
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.banners enable row level security;
+grant select, insert, update, delete on table public.banners to service_role;
+alter table public.banner_settings enable row level security;
+grant select, insert, update, delete on table public.banner_settings to service_role;

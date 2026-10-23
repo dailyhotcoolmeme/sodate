@@ -36,3 +36,8 @@ insert into public.companies (slug, name, base_url, crawl_url, crawl_type, regio
 ('lovematching', '러브매칭', 'https://lovematching.kr', 'https://lovematching.kr/schedule', 'static', array['강남','역삼','홍대','신촌','을지로'], '2022년부터 운영, JTBC/CBS 출연 이력'),
 ('yeonin', '연인어때', 'https://yeonin.co.kr', 'https://yeonin.co.kr/schedule', 'static', array['강남','수원','대전','천안'], '서류/사진 검증 시스템 운영'),
 ('emotional-orange', '에모셔널오렌지', 'https://emotional0ranges.com', 'https://emotional0ranges.com/shop', 'static', array['강남','수원','한남'], '최대 12명 소개팅');
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.companies enable row level security;
+grant select, insert, update, delete on table public.companies to service_role;
+grant select on table public.companies to anon, authenticated;

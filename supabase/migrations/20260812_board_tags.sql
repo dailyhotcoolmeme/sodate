@@ -26,3 +26,7 @@ create policy board_tags_read on public.board_tags for select using (true);
 -- (board_settings 와 같은 방식 — 별도 쓰기 정책 없음 = anon/authenticated 는 쓰기 불가).
 grant select on public.board_tags to anon, authenticated;
 grant select (tag_id) on public.board_posts to anon, authenticated;
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.board_tags enable row level security;
+grant select, insert, update, delete on table public.board_tags to service_role;

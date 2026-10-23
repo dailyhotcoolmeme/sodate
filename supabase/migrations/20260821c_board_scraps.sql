@@ -24,3 +24,8 @@ alter table public.board_scraps enable row level security;
 -- write 도 정책 없음 → Edge Function(service_role, RLS 우회)만 넣고 지운다.
 
 revoke select on public.board_scraps from anon, authenticated;
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.board_scraps enable row level security;
+grant select, insert, update, delete on table public.board_scraps to service_role;
+revoke all on table public.board_scraps from anon, authenticated;

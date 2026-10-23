@@ -260,3 +260,21 @@ grant select (id, post_id, parent_id, nickname, content,
 
 -- 투표 집계는 board_posts 에 이미 있으므로 앱이 이 표를 직접 읽을 이유가 없다.
 drop policy if exists board_votes_read on public.board_votes;
+
+-- Data API 2026-10-30: no implicit grants; keep app/server access explicit.
+alter table public.board_settings enable row level security;
+grant select, insert, update, delete on table public.board_settings to service_role;
+grant select on table public.board_settings to anon, authenticated;
+alter table public.board_posts enable row level security;
+grant select, insert, update, delete on table public.board_posts to service_role;
+alter table public.board_comments enable row level security;
+grant select, insert, update, delete on table public.board_comments to service_role;
+alter table public.board_votes enable row level security;
+grant select, insert, update, delete on table public.board_votes to service_role;
+revoke all on table public.board_votes from anon, authenticated;
+alter table public.board_reports enable row level security;
+grant select, insert, update, delete on table public.board_reports to service_role;
+revoke all on table public.board_reports from anon, authenticated;
+alter table public.board_blocks enable row level security;
+grant select, insert, update, delete on table public.board_blocks to service_role;
+revoke all on table public.board_blocks from anon, authenticated;
