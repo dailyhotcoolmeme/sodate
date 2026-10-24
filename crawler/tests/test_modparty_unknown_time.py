@@ -1,10 +1,19 @@
 from datetime import datetime, timedelta
 
 import pytest
+from unittest.mock import MagicMock
 
 from scrapers.modparty import ModpartyScraper
 from refresh_soldout import _refresh_via_scraper
 from tests.test_refresh_scraper_safety import DB, row
+
+
+@pytest.fixture(autouse=True)
+def isolated_database(monkeypatch):
+    """Time parsing must be testable without any live database credentials."""
+    client = MagicMock()
+    client.table.side_effect = AssertionError('Unexpected DB access in parser test')
+    monkeypatch.setattr('scrapers.base_scraper.get_supabase', lambda: client)
 
 
 @pytest.mark.parametrize('time_text', [None, '미정 (10월 17일)'])

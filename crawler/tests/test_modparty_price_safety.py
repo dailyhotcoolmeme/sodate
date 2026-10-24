@@ -10,6 +10,14 @@ from tests.test_refresh_scraper_safety import DB, row
 from refresh_soldout import _refresh_via_scraper
 
 
+@pytest.fixture(autouse=True)
+def isolated_database(monkeypatch):
+    """Parser tests must not require credentials or connect to the production DB."""
+    client = MagicMock()
+    client.table.side_effect = AssertionError('Unexpected DB access in parser test')
+    monkeypatch.setattr('scrapers.base_scraper.get_supabase', lambda: client)
+
+
 def build(prices):
     scraper = ModpartyScraper()
     date = (datetime.now() + timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
