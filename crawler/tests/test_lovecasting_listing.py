@@ -52,6 +52,14 @@ def test_missing_gender_price_is_preserved_not_borrowed():
     assert s.PRESERVE_MISSING_PRICES
 
 
+def test_unknown_listing_never_uses_invented_time_fallback():
+    s = scraper()
+    s._parse_listing_page = lambda _: []
+    s._fetch_and_parse = MagicMock(side_effect=AssertionError('Guessed time fallback'))
+    assert s._scrape_category('category') == []
+    s._fetch_and_parse.assert_not_called()
+
+
 def test_partial_category_disables_deletion_and_closure():
     s = scraper()
     s._scrape_category = MagicMock(side_effect=[[MagicMock(event_date=datetime.now()+timedelta(days=7))], []])

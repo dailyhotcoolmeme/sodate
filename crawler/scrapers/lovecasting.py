@@ -83,32 +83,10 @@ class LovecastingScraper(BaseScraper):
             self.logger.info(f'러브캐스팅 {category_url} — {len(events)}개 이벤트 (목록 직접 파싱)')
             return events
 
-        # 2차: 페이지 본문 직접 파싱 (기존 방식)
-        events = self._fetch_and_parse('러브캐스팅', category_url)
-        if events:
-            self.logger.info(f'러브캐스팅 {category_url} — {len(events)}개 이벤트 파싱')
-            return events
-
-        # 3차: 신청 링크들 수집 → 개별 파싱
-        post_links = self._collect_links_static(category_url)
-        if not post_links:
-            self.logger.info(f'정적 수집 실패, Playwright 시도: {category_url}')
-            post_links = self._collect_links_playwright(category_url)
-
-        self.logger.info(f'러브캐스팅 {category_url} — {len(post_links)}개 링크 발견')
-        for title, url in post_links[:8]:
-            try:
-                # URL 자체에 날짜 정보가 있는 경우 URL에서 직접 파싱
-                ev = self._event_from_url(title, url)
-                if ev:
-                    events.append(ev)
-                    continue
-                parsed = self._fetch_and_parse(title, url)
-                events.extend(parsed)
-                time.sleep(0.5)
-            except Exception as e:
-                self.logger.warning(f'게시물 파싱 실패 {url}: {e}')
-        return events
+        # 정적/브라우저 목록 둘 다 명시된 날짜·시각을 못 읽으면 실패를 유지한다.
+        # 옛 본문/URL 폴백은 시각이 없어도 14시 등으로 만들므로 저장 경로에서 쓰지 않는다.
+        self.logger.warning(f'공식 목록에서 유효 회차를 확인하지 못함: {category_url}')
+        return []
 
     # ─── 목록 페이지 직접 파싱 (카드 구조) ────────────────────────────────────
     # 사이트 구조: 각 카드에 날짜, 제목, 접수 현황(N명 접수중), 남/여 나이대가 포함
