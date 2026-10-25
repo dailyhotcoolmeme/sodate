@@ -18,6 +18,10 @@ on:
         description: "오프더레코드 공식 링크 목록만 재확인(유료 수집/후속 알림 작업 없음)"
         type: boolean
         default: false
+      lovecasting_recheck:
+        description: "러브캐스팅만 공식 목록 재수집(다른 업체·유료 수집·후속 알림 없음)"
+        type: boolean
+        default: false
 
 # Cloudflare 정기 실행과 워치독 자가복구가 겹쳐도 동시에 DB를 쓰지 않도록 직렬화한다.
 concurrency:
@@ -26,7 +30,7 @@ concurrency:
 
 jobs:
   crawl:
-    if: ${{ inputs.yeonsoop_replay != true && inputs.otr_recheck != true }}
+    if: ${{ inputs.yeonsoop_replay != true && inputs.otr_recheck != true && inputs.lovecasting_recheck != true }}
     runs-on: ubuntu-22.04
     # ⚠️(2026-07-25) 후기수집 분리 후에도 실측 29분46초로 30분 한도를 간신히 통과 —
     # 여유 없이 안전마진 0에 가까워 조금만 느려져도 다시 타임아웃 재발. 45분으로 확대.
@@ -139,7 +143,7 @@ jobs:
   # 크롤 3그룹이 모두 끝난 뒤 한 번만 도는 뒷정리(검증·푸시 발송·마감알림).
   post:
     needs: crawl
-    if: ${{ always() && inputs.yeonsoop_replay != true && inputs.otr_recheck != true }}
+    if: ${{ always() && inputs.yeonsoop_replay != true && inputs.otr_recheck != true && inputs.lovecasting_recheck != true }}
     runs-on: ubuntu-22.04
     # 실측 20분(설치 4분 + QA·가격점검 + 푸시 큐 소진)으로 한도에 딱 붙었다 → 여유를 준다.
     timeout-minutes: 35
@@ -293,7 +297,7 @@ jobs:
           exit 1
 
   yeonsoop_replay:
-    if: ${{ inputs.yeonsoop_replay == true && inputs.otr_recheck != true }}
+    if: ${{ inputs.yeonsoop_replay == true && inputs.otr_recheck != true && inputs.lovecasting_recheck != true }}
     runs-on: ubuntu-22.04
     timeout-minutes: 12
     steps:
@@ -318,7 +322,7 @@ jobs:
           python -m scrapers.yeonsoop --reuse-last-run
 
   otr_recheck:
-    if: ${{ inputs.otr_recheck == true }}
+    if: ${{ inputs.otr_recheck == true && inputs.lovecasting_recheck != true }}
     runs-on: ubuntu-22.04
     timeout-minutes: 8
     steps:
@@ -334,3 +338,23 @@ jobs:
         run: |
           cd crawler
           python -c "from scrapers.otr_lounge import OtrLoungeScraper; r = OtrLoungeScraper().run(); raise SystemExit(0 if r['status'] == 'success' else 1)"
+
+  lovecasting_recheck:
+    if: ${{ inputs.lovecasting_recheck == true }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: |
+          pip install -r crawler/requirements.txt
+          playwright install chromium --with-deps
+      - name: Recheck only Lovecasting through normal storage path
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          python -c "from scrapers.lovecasting import LovecastingScraper; r = LovecastingScraper().run(); raise SystemExit(0 if r['status'] == 'success' else 1)"

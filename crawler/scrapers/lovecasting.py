@@ -20,6 +20,7 @@ class LovecastingScraper(BaseScraper):
     # 상품 본문에서 가격을 직접 뽑음 → DB 기록.
     # (2026-07-25 발견: 플래그 없어 base_scraper가 매번 벗겨내 admin '해야할것'행)
     WRITES_PRICE = True
+    PRESERVE_MISSING_PRICES = True
     # 매 크롤마다 전체 일정을 전수 확인(크롤↔DB 100% 일치 검증, 2026-07-28) →
     # 업체가 시간·회차를 바꿨을 때 옛 회차가 유령으로 남지 않게 정리한다.
     DELETE_STALE = True
@@ -52,11 +53,18 @@ class LovecastingScraper(BaseScraper):
 
     def scrape(self) -> list[EventModel]:
         events = []
+        self.collection_complete = True
+        self.DELETE_STALE = type(self).DELETE_STALE
         for schedule_url in self.SCHEDULE_URLS:
             try:
                 page_events = self._scrape_category(schedule_url)
+                if not page_events:
+                    self.collection_complete = False
+                    self.DELETE_STALE = False
                 events.extend(page_events)
             except Exception as e:
+                self.collection_complete = False
+                self.DELETE_STALE = False
                 self.logger.warning(f'카테고리 크롤링 실패 {schedule_url}: {e}')
         filtered = []
         for ev in events:
@@ -119,9 +127,18 @@ class LovecastingScraper(BaseScraper):
 
     def _parse_listing_page(self, category_url: str) -> list[EventModel]:
         """러브캐스팅 목록 페이지에서 이벤트 카드 파싱.
-        Playwright 사용 — 나이대와 접수 현황까지 추출.
+        서버 렌더링 목록 우선, 실패하면 Playwright로 재확인.
         """
         events: list[EventModel] = []
+        try:
+            response = httpx.get(category_url, timeout=20, follow_redirects=True,
+                                 headers={'User-Agent': 'Mozilla/5.0'})
+            response.raise_for_status()
+            events = self._extract_cards_from_soup(BeautifulSoup(response.text, 'html.parser'), category_url)
+            if events:
+                return events
+        except Exception as e:
+            self.logger.warning(f'정적 카드 조회 실패 {category_url}: {e}')
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
@@ -156,7 +173,11 @@ class LovecastingScraper(BaseScraper):
         # 각 이벤트 블록 탐지: 날짜 + 나이대 정보가 함께 있는 컨테이너
         # 사이트는 각 카드가 별도 div 안에 있음
         # 구조: 날짜줄 / 제목 / 접수현황 / [남 나이대 + 가격 / 여 나이대 + 가격]
-        card_containers = soup.select('div.meeting-item, div.post-item, article.post, .entry, div[class*="item"], div[class*="card"], div[class*="post"]')
+        card_containers = soup.select('div.meeting-item, div.post-item, article.post, .entry, div.elementor-widget-wrap, div[class*="item"], div[class*="card"], div[class*="post"]')
+        # Elementor의 icon-list-item 메뉴가 후보를 채워 실제 카드 탐색을 막았다.
+        # 정확히 한 회차의 날짜/시각을 가진 컨테이너만 사용해 다른 회차와 섞지 않는다.
+        card_containers = [card for card in card_containers
+                           if len(self.CARD_DATE_RE.findall(card.get_text(' ', strip=True))) == 1]
 
         if not card_containers:
             # fallback: 날짜 패턴을 포함하는 상위 요소 탐색
@@ -193,8 +214,6 @@ class LovecastingScraper(BaseScraper):
                     hour = 0
                 try:
                     event_date = datetime(current_year, mo, d, hour, minute)
-                    if event_date < now:
-                        event_date = datetime(current_year + 1, mo, d, hour, minute)
                     card_date_line = m.group(0)
                 except ValueError:
                     event_date = None
@@ -210,10 +229,12 @@ class LovecastingScraper(BaseScraper):
             # 제목 추출 (링크 텍스트 우선)
             title_text = ''
             link = card.find('a')
-            if link:
-                title_text = link.get_text(strip=True)
+            title_text = next((a.get_text(strip=True) for a in card.find_all('a')
+                               if a.get_text(strip=True)), '')
             if not title_text:
-                title_text = lines[0] if lines else ''
+                title_text = next((line for line in lines
+                                   if not self.CARD_DATE_RE.search(line)
+                                   and ('미팅' in line or '소개팅' in line)), lines[0])
 
             post_url = category_url
             if link and link.get('href'):
@@ -259,7 +280,14 @@ class LovecastingScraper(BaseScraper):
                     price_female = int(raw.replace(',', ''))
 
             # fallback 가격
-            if price_male is None and price_female is None:
+            # 새 카드의 "가격 → 성별·나이" 순서. 기존 정규식은 줄을 넘어
+            # 남성 나이 뒤의 여성 가격을 남성 가격으로 잡을 수 있다.
+            prefix_prices = {gender: int(raw.replace(',', '')) for raw, gender in
+                             re.findall(r'([\d,]+)원\s*([남여])\s*\d{2,3}\s*세', full_ctx)}
+            if prefix_prices:
+                price_male = prefix_prices.get('남')
+                price_female = prefix_prices.get('여')
+            if not prefix_prices and price_male is None and price_female is None:
                 prices_raw = self.PRICE_PATTERN.findall(full_ctx)
                 for raw in prices_raw:
                     val = int(raw.replace(',', ''))
@@ -316,6 +344,8 @@ class LovecastingScraper(BaseScraper):
                     participant_stats={'total_applicants': total_applicants} if total_applicants else None,
                 ))
             except Exception:
+                self.collection_complete = False
+                self.DELETE_STALE = False
                 continue
 
         return events
@@ -342,6 +372,7 @@ class LovecastingScraper(BaseScraper):
         try:
             resp = httpx.get(url, timeout=10, follow_redirects=True,
                              headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'})
+            resp.raise_for_status()
             soup = BeautifulSoup(resp.text, 'html.parser')
             # 썸네일
             og = soup.select_one('meta[property="og:image"]')
