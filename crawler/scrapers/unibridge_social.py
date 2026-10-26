@@ -16,7 +16,7 @@ import json
 import re
 from datetime import datetime
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 
@@ -53,6 +53,8 @@ def _parse_kor_hour(phrase: str) -> Optional[int]:
     if not m:
         return None
     h = int(m.group(1))
+    if not 1 <= h <= 12 or not any(p in phrase for p in ('오전', '오후', '저녁', '밤')):
+        return None
     if '오전' in phrase:
         return 0 if h == 12 else h
     return 12 if h == 12 else h + 12  # 오후/저녁/밤 전부 PM 취급
@@ -65,6 +67,7 @@ def _year_for(yy: int) -> int:
 class UnibridgeSocialScraper(BaseScraper):
     # 폼 '참가비 안내' 문항에서 남/여 실제 참가비를 직접 파싱 → 정본으로 채운다.
     WRITES_PRICE = True
+    PRESERVE_MISSING_PRICES = True
     # 구글폼의 '일정선택' 문항이 곧 전체 일정 정본이라(업체가 회차를 내리면 선택지에서
     # 바로 사라진다) 이번 크롤에 없는 회차는 지워도 안전하다. 켜기 전엔 내려간 회차가
     # 계속 남아 있었다(2026-08-14: 8/15 합정·8/19 건대가 폼에서 빠졌는데도 앱에 노출).
@@ -75,6 +78,8 @@ class UnibridgeSocialScraper(BaseScraper):
         super().__init__('unibridge-social')
 
     def scrape(self) -> list[EventModel]:
+        self.collection_complete = True
+        self.DELETE_STALE = type(self).DELETE_STALE
         form_urls = self._active_form_urls()
         if not form_urls:
             self.logger.warning('유니브리지소셜 활성 폼을 하나도 못 찾음')
@@ -86,17 +91,21 @@ class UnibridgeSocialScraper(BaseScraper):
         for form_url in form_urls:
             try:
                 r = httpx.get(form_url, timeout=20, follow_redirects=True)
+                r.raise_for_status()
                 m = re.search(r'var FB_PUBLIC_LOAD_DATA_ = (\[.*?\]);', r.text, re.S)
                 if not m:
+                    self._incomplete()
                     continue
                 items = json.loads(m.group(1))[1][1]
             except Exception as e:
+                self._incomplete()
                 self.logger.warning(f'폼 파싱 실패 {form_url}: {e}')
                 continue
 
             schedule_item = next((it for it in items if it[1] == '일정선택'), None)
             price_item = next((it for it in items if it[1] == '참가비 안내'), None)
             if not schedule_item:
+                self._incomplete()
                 continue
 
             price_male = price_female = None
@@ -111,25 +120,32 @@ class UnibridgeSocialScraper(BaseScraper):
             try:
                 options = schedule_item[4][0][1]
             except Exception:
+                self._incomplete()
                 continue
 
             for opt in options:
                 text = opt[0] if opt else ''
                 sm = _SCHEDULE_ITEM_RE.search(text)
                 if not sm:
+                    if re.search(r'\d{1,2}/\d{1,2}', text):
+                        self._incomplete()
                     continue  # 구분선("--------") 등은 매칭 안 되어 자동으로 걸러짐
                 month, day = int(sm.group(1)), int(sm.group(2))
                 region_raw = sm.group(3).strip()
                 hour = _parse_kor_hour(sm.group(4))
-                if hour is None or not (1 <= month <= 12 and 1 <= day <= 31):
+                minute_match = re.search(r'시\s*(\d{1,2})분', sm.group(4))
+                minute = int(minute_match.group(1)) if minute_match else 0
+                if hour is None or not (1 <= month <= 12 and 1 <= day <= 31) or not 0 <= minute <= 59:
+                    self._incomplete()
                     continue
 
                 try:
-                    event_date = datetime(now.year, month, day, hour, 0)
+                    event_date = datetime(now.year, month, day, hour, minute)
                 except ValueError:
+                    self._incomplete()
                     continue
                 if event_date < now.replace(hour=0, minute=0, second=0, microsecond=0):
-                    event_date = datetime(now.year + 1, month, day, hour, 0)
+                    continue  # 지난 회차를 근거 없이 내년으로 만들지 않는다.
 
                 region = resolve_region(region_phrase=region_raw)
                 # 마감 판정 — '마감'이라는 글자만 보고 정하면 안 된다.
@@ -159,7 +175,7 @@ class UnibridgeSocialScraper(BaseScraper):
 
                 # 폼 하나에 여러 회차가 섞여있어 회차 식별용 fragment로 유일성 확보(다른 스크래퍼와 동일 관례).
                 # 아웃링크는 신청폼이 아니라 인스타 본계정으로(오너 지시 2026-08-11).
-                frag = f'e={month:02d}{day:02d}_{hour:02d}00_{quote(region_raw)}'
+                frag = f'e={month:02d}{day:02d}_{hour:02d}{minute:02d}_{quote(region_raw)}'
                 title = sanitize_text(f'[유니브리지소셜] {region} 로테이션 소개팅', 80)
 
                 try:
@@ -178,10 +194,15 @@ class UnibridgeSocialScraper(BaseScraper):
                         thumbnail_urls=[DEFAULT_THUMBNAIL],
                     ))
                 except Exception as e:
+                    self._incomplete()
                     self.logger.warning(f'유니브리지소셜 이벤트 생성 실패 {text!r}: {e}')
 
         self.logger.info(f'유니브리지소셜 {len(events)}개 이벤트 파싱')
         return events
+
+    def _incomplete(self):
+        self.collection_complete = False
+        self.DELETE_STALE = False
 
     def _active_form_urls(self) -> list[str]:
         """링크 모음(litt.ly)의 forms.gle 링크 중 마감(closedform)이 아닌 것만 최종 URL로 반환."""
@@ -193,11 +214,14 @@ class UnibridgeSocialScraper(BaseScraper):
             r.raise_for_status()
             html = r.text
         except Exception as e:
+            self._incomplete()
             self.logger.error(f'유니브리지소셜 링크 모음 로드 실패({LINK_HUB_URL}): {e}')
             return []
 
-        short_links = sorted(set(re.findall(r'https://forms\.gle/[A-Za-z0-9_-]+', html)))
+        short_links = sorted(set(re.findall(
+            r'https://(?:forms\.gle/[A-Za-z0-9_-]+|docs\.google\.com/forms/d/(?:e/)?[A-Za-z0-9_-]+/viewform)', html)))
         if not short_links:
+            self._incomplete()
             # 업체가 링크 구조를 또 바꾼 상황. 조용히 0건으로 끝나면 이번처럼 며칠씩 모른다.
             self.logger.error(
                 f'유니브리지소셜 링크 모음에 신청폼이 하나도 없음 — 업체가 링크를 또 바꿨는지 확인 필요({LINK_HUB_URL})'
@@ -210,9 +234,14 @@ class UnibridgeSocialScraper(BaseScraper):
                 r = httpx.get(link, follow_redirects=True, timeout=15)
                 r.raise_for_status()
                 final = str(r.url)
-                if 'closedform' in final:
+                parsed = urlsplit(final)
+                if parsed.scheme != 'https' or parsed.hostname != 'docs.google.com' or not parsed.path.startswith('/forms/d/'):
+                    raise ValueError('신청폼이 아닌 응답 주소')
+                if parsed.path.endswith('/closedform'):
                     continue
-                active.append(final)
+                if final not in active:
+                    active.append(final)
             except Exception as e:
+                self._incomplete()
                 self.logger.warning(f'폼 링크 확인 실패 {link}: {e}')
         return active
