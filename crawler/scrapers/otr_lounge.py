@@ -9,9 +9,8 @@
    브라우저 없이 httpx만으로 읽힌다(fly.linkcdn.cc). 바이오보다 오히려 더 완전하다 —
    바이오는 인스타가 '...'로 잘라 보내서 뒷 회차가 안 보였다.
 
-⚠️ 지역: linkfly 버튼에는 지명이 없다(바이오에만 있었다). 노션·네이버폼·인스타 게시물까지
-   확인했지만 회차별 지역을 얻을 방법이 없다. 이 업체는 종로·을지로만 운영하고 둘을
-   하나의 지명으로 봐도 무방하다는 오너 확인(2026-08-14)에 따라 REGION 고정값을 쓴다.
+지역은 linkfly 일정 버튼의 명시된 지명을 우선한다. 지명 없는 예전 형식에만
+오너 확인(2026-08-14)의 종로/을지로 기본값을 쓴다.
 """
 import json
 import re
@@ -55,6 +54,8 @@ class OtrLoungeScraper(BaseScraper):
 
     def scrape(self) -> list[EventModel]:
         self.empty_source_confirmed = False
+        self.collection_complete = True
+        self.DELETE_STALE = True
         buttons = self._fetch_buttons()
         if not buttons:
             return []
@@ -76,6 +77,17 @@ class OtrLoungeScraper(BaseScraper):
             month, day, hour, minute = (int(m.group(1)), int(m.group(2)),
                                         int(m.group(3)), int(m.group(4)))
             note = (m.group(5) or '').strip()
+            # 새 버튼: "11.14(토) 14:00 연남동 (얼리버드 할인)".
+            # 시간 뒤, 괄호 앞의 지명을 읽는다. 모르는 문구를 기본 지역으로 덮지 않는다.
+            location_text = label[m.end(4):].split('(', 1)[0].strip()
+            region = {'종로': '종로', '을지로': '을지로',
+                      '연남동': '연남', '연남': '연남'}.get(location_text)
+            if location_text and region is None:
+                self.collection_complete = False
+                self.DELETE_STALE = False
+                self.logger.error(f'오프더레코드 미확인 지역 — 기존 일정 보존: {location_text}')
+                continue
+            region = region or REGION
             if not (1 <= month <= 12 and 1 <= day <= 31 and 0 <= hour <= 23):
                 continue
 
@@ -95,10 +107,10 @@ class OtrLoungeScraper(BaseScraper):
             seen.add(frag)
 
             events.append(EventModel(
-                title=sanitize_text(f'[오프더레코드] {REGION} 로테이션 소개팅', 80),
+                title=sanitize_text(f'[오프더레코드] {region} 로테이션 소개팅', 80),
                 description=sanitize_text(note, 1000) if note else None,
                 event_date=event_date,
-                location_region=REGION,
+                location_region=region,
                 source_url=f'{PROFILE_URL}#{frag}',
                 is_closed='마감' in note,
                 thumbnail_urls=[DEFAULT_THUMBNAIL],

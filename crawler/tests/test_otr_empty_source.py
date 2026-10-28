@@ -26,6 +26,28 @@ def test_only_exact_known_nonschedule_list_confirms_empty_source():
     assert s.scrape() == [] and s.empty_source_confirmed is False
 
 
+@pytest.mark.parametrize('place,expected', [('종로','종로'), ('연남동','연남'),
+                                          ('을지로','을지로'), ('','종로/을지로')])
+def test_explicit_schedule_region_overrides_legacy_default(place, expected):
+    s = scraper([f'11.14(토) 14:00 {place} (얼리버드 할인)'])
+    events = s.scrape()
+    assert len(events) == 1
+    assert events[0].location_region == expected
+    assert expected in events[0].title
+    assert events[0].source_url.endswith('#e=1114_1400')
+    assert events[0].event_date.hour == 14
+    assert s.collection_complete is True
+
+
+def test_unknown_region_is_partial_and_cannot_delete_missing_events():
+    s = scraper(['11.8(일) 13:00 종로', '11.14(토) 14:00 새장소'])
+    assert len(s.scrape()) == 1
+    assert s.collection_complete is False and s.DELETE_STALE is False
+    s._fetch_buttons = lambda: ['11.14(토) 14:00 연남동']
+    assert len(s.scrape()) == 1
+    assert s.collection_complete is True and s.DELETE_STALE is True
+
+
 @pytest.mark.parametrize('buttons', [[], KNOWN[:2], KNOWN+['10월 31일 신규 신청'], ['접속 오류']])
 def test_missing_unknown_or_changed_buttons_keep_alert_path(buttons):
     s = scraper(buttons)
