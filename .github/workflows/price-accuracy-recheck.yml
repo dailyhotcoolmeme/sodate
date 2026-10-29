@@ -1,6 +1,12 @@
 name: Price Accuracy Recheck
 on:
   workflow_dispatch:
+    inputs:
+      vendor:
+        description: '검증 범위'
+        type: choice
+        default: all
+        options: [all, modparty]
 jobs:
   check:
     runs-on: ubuntu-22.04
@@ -18,11 +24,16 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           MODPARTY_ID: ${{ secrets.MODPARTY_ID }}
           MODPARTY_PW: ${{ secrets.MODPARTY_PW }}
+          PRICE_CHECK_VENDOR: ${{ inputs.vendor }}
         run: |
           cd crawler
           python -u - <<'PY'
-          from price_accuracy_check import check_nonimweb_live, get_supabase
-          issues = check_nonimweb_live(get_supabase())
+          import os
+          import price_accuracy_check as qa
+          if os.environ.get('PRICE_CHECK_VENDOR') == 'modparty':
+              vendors = qa._nonimweb_scrapers()
+              qa._nonimweb_scrapers = lambda: {'modparty': vendors['modparty']}
+          issues = qa.check_nonimweb_live(qa.get_supabase())
           for issue in issues:
               print(issue, flush=True)
           print('PRICE_RECHECK_COMPLETE', flush=True)
