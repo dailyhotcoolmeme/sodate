@@ -1,0 +1,28 @@
+name: Price Accuracy Recheck
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r crawler/requirements.txt
+      - run: playwright install --with-deps chromium
+      - name: Read-only nonimweb price comparison through scheduled QA function
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd crawler
+          python -u - <<'PY'
+          from price_accuracy_check import check_nonimweb_live, get_supabase
+          issues = check_nonimweb_live(get_supabase())
+          for issue in issues:
+              print(issue, flush=True)
+          print('PRICE_RECHECK_COMPLETE', flush=True)
+          raise SystemExit(1 if issues else 0)
+          PY

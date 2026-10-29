@@ -836,7 +836,24 @@ class FripScraper(BaseScraper):
 
     # ─── 메인 변환 (상품 → 일정별 이벤트 목록) ─────────────────────────────────
 
-    def _product_to_events(self, node: dict, client: httpx.Client) -> list[EventModel]:
+    def sample_prices(self, source_urls: list[str]) -> list[EventModel]:
+        """가격 검증 전용: 지정한 상품·회차만 조회하며 저장 경로에는 넘기지 않는다."""
+        self.collection_complete = False
+        self.DELETE_STALE = False
+        targets = set(source_urls)
+        product_ids = list(dict.fromkeys(
+            m.group(1) for url in source_urls
+            if (m := re.fullmatch(re.escape(FRIP_BASE) + r'/products/(\d+)#evt=\d{12}(?:-.+)?', url))
+        ))
+        events = []
+        with httpx.Client(timeout=20) as client:
+            for pid in product_ids:
+                events.extend(self._product_to_events(
+                    {'id': pid, '_category': MEETING_CATEGORY_ID}, client, targets))
+        return [e for e in events if e.source_url in targets]
+
+    def _product_to_events(self, node: dict, client: httpx.Client,
+                           target_urls: Optional[set[str]] = None) -> list[EventModel]:
         """상품 하나의 모든 일정을 이벤트로. 상품정보(제목·설명·지역·썸네일)는 1회,
         일정별 selectItems로 나이/성별가격/잔여석을 뽑아 각각 이벤트 생성."""
         try:
@@ -892,9 +909,15 @@ class FripScraper(BaseScraper):
                 if event_date < now_utc or event_date > horizon:
                     continue
                 sid = sc['id']
-                select_items = self._fetch_select_items(product_id, sid, client)
                 kst = event_date.astimezone(KST)
                 anchor = kst.strftime("%Y%m%d%H%M")
+                if target_urls is not None and not any(
+                    u == f'{FRIP_BASE}/products/{product_id}#evt={anchor}'
+                    or u.startswith(f'{FRIP_BASE}/products/{product_id}#evt={anchor}-')
+                    for u in target_urls
+                ):
+                    continue
+                select_items = self._fetch_select_items(product_id, sid, client)
 
                 # 한 일정에 지점이 여러 개면(예: 사당+수원 각각 가격) 지점별로 분리 → 각각 이벤트.
                 # 지점 1개(또는 0개)면 분리 안 함(전체 옵션 사용) — 가격옵션에 지점 키워드가

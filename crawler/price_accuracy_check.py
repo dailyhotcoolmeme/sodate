@@ -20,6 +20,7 @@ ERROR가 있으면 exit(1) → GitHub Actions에서 이 step이 실패로 표시
 """
 import re
 import sys
+import httpx
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -174,6 +175,23 @@ def check_imweb_live(sb, pg) -> list[dict]:
     return issues
 
 
+def _munto_sample_prices(rows: list[dict]) -> list[dict]:
+    """문토 가격은 상세 API 단일 price. 전체 목록·멤버를 다시 수집하지 않는다."""
+    from scrapers.munto import MUNTO_API_BASE, _get
+    result = []
+    with httpx.Client(timeout=15) as client:
+        for row in rows:
+            url = row['source_url']
+            match = re.fullmatch(r'https://www\.munto\.kr/ko/socialing\?id=(\d+)', url)
+            if not match:
+                continue
+            data = _get(client, f'{MUNTO_API_BASE}/socialing/{match.group(1)}')
+            if data and data.get('price') is not None:
+                price = int(data['price'])
+                result.append(dict(source_url=url, price_male=price, price_female=price))
+    return result
+
+
 def check_nonimweb_live(sb) -> list[dict]:
     """비imweb(프립·문토 등): 각 스크래퍼 scrape() 재사용해 업체별 표본만큼 대조."""
     issues = []
@@ -188,8 +206,16 @@ def check_nonimweb_live(sb) -> list[dict]:
                            .eq('company_id', cid).eq('is_active', True)
                            .gte('event_date', (now + timedelta(minutes=20)).isoformat()))
         by_url = {e['source_url']: e for e in dbevs}
+        if not by_url:
+            continue
         try:
-            evs = ScraperClass().scrape()
+            sample = sorted(dbevs, key=lambda e: e['source_url'])[:SAMPLE_PER_VENDOR]
+            if slug == 'frip':
+                evs = ScraperClass().sample_prices([e['source_url'] for e in sample])
+            elif slug == 'munto':
+                evs = _munto_sample_prices(sample)
+            else:
+                evs = ScraperClass().scrape()
         except Exception as e:
             issues.append({'level': 'WARN', 'company': slug, 'msg': f'스크래퍼 실행 실패: {str(e)[:60]}'})
             continue
@@ -197,7 +223,7 @@ def check_nonimweb_live(sb) -> list[dict]:
         for ev in evs:
             if checked >= SAMPLE_PER_VENDOR:
                 break
-            d = ev.model_dump() if hasattr(ev, 'model_dump') else ev.__dict__
+            d = ev if isinstance(ev, dict) else (ev.model_dump() if hasattr(ev, 'model_dump') else ev.__dict__)
             row = by_url.get(d.get('source_url'))
             if not row:
                 continue
@@ -211,6 +237,9 @@ def check_nonimweb_live(sb) -> list[dict]:
             if lf is not None and lf != row['price_female']:
                 issues.append({'level': 'ERROR', 'company': slug,
                                 'msg': f"라이브 여{lf} != DB {row['price_female']} | {row['source_url'][:70]}"})
+        print(f'  [{slug}] 라이브 가격 대조 {checked}건', flush=True)
+        if checked == 0:
+            issues.append({'level': 'WARN', 'company': slug, 'msg': '라이브 가격 대조 0건 — 검증 미완료'})
     return issues
 
 
