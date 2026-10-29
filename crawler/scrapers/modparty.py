@@ -73,7 +73,17 @@ class ModpartyScraper(BaseScraper):
         self._booking_counts: dict[str, dict] = {}  # {prod_no: {date_code: row}}
         self.collection_complete = True
 
-    def scrape(self) -> list[EventModel]:
+    def sample_prices(self, source_urls: list[str]) -> list[EventModel]:
+        ids = {m.group(1) for url in source_urls if (m := re.search(r'[?&]idx=(\d+)', url))}
+        targets = set(source_urls)
+        return [e for e in self.scrape(product_ids=ids) if e.source_url in targets]
+
+    def scrape(self, *, product_ids: Optional[set[str]] = None) -> list[EventModel]:
+        if product_ids is not None:
+            self.collection_complete = False
+            self.DELETE_STALE = False
+            if not product_ids:
+                return []
         if not self._uid or not self._pw:
             self.logger.warning('MODPARTY_ID / MODPARTY_PW 환경변수 없음 — 스킵')
             return []
@@ -134,6 +144,8 @@ class ModpartyScraper(BaseScraper):
                 #    에서 판정한다. 상품 수만큼 상세 조회가 늘어 크롤 시간이 길어지지만,
                 #    "일정이 전부 안 보이는 것"보다는 낫다.
                 future_prods = set(product_data.keys()) | self._future_booking_prods()
+                if product_ids is not None:
+                    future_prods &= product_ids
                 self.logger.info(f'모드파티 대상 상품 {len(future_prods)}개 (목록 전체)')
 
                 # ── 대상 상품 상세페이지에서 제목/이미지/본문/가격 보강 ──

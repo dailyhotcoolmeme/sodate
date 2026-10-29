@@ -15,6 +15,22 @@ def test_munto_price_only_uses_requested_detail_and_preserves_free_price():
         assert get.call_args.args[1].endswith('/socialing/123')
 
 
+def test_modparty_sample_selects_exact_product_ids_and_never_saves():
+    from scrapers.modparty import ModpartyScraper
+    s = ModpartyScraper.__new__(ModpartyScraper)
+    url = 'https://modparty.co.kr/shop_view/?idx=123#evt=202611141400'
+    s.scrape = MagicMock(return_value=[SimpleNamespace(source_url=url), SimpleNamespace(source_url='other')])
+    assert len(s.sample_prices([url])) == 1
+    s.scrape.assert_called_once_with(product_ids={'123'})
+
+
+def test_empty_modparty_sample_is_partial_without_browser_or_db_access():
+    from scrapers.modparty import ModpartyScraper
+    s = ModpartyScraper.__new__(ModpartyScraper)
+    assert s.scrape(product_ids=set()) == []
+    assert s.collection_complete is False and s.DELETE_STALE is False
+
+
 def test_frip_target_price_skips_other_schedule_options():
     s = FripScraper.__new__(FripScraper)
     s.logger = MagicMock()
