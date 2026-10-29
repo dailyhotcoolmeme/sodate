@@ -240,6 +240,9 @@ def check_nonimweb_live(sb) -> list[dict]:
         print(f'  [{slug}] 라이브 가격 대조 {checked}건', flush=True)
         if checked == 0:
             issues.append({'level': 'WARN', 'company': slug, 'msg': '라이브 가격 대조 0건 — 검증 미완료'})
+        elif slug in ('frip', 'munto') and checked < len(sample):
+            issues.append({'level': 'WARN', 'company': slug,
+                           'msg': f'라이브 가격 대조 {checked}/{len(sample)}건 — 일부 검증 미완료'})
     return issues
 
 

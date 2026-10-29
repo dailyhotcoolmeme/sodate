@@ -31,6 +31,11 @@ def test_frip_target_price_skips_other_schedule_options():
     assert s._fetch_select_items.call_count == 1
     assert s._fetch_select_items.call_args.args[1] == 'target'
     assert s.collection_complete is False and s.DELETE_STALE is False
+    # 정기 수집 경로는 표본 제한 없이 모든 회차의 옵션을 계속 확인한다.
+    s._fetch_select_items.reset_mock()
+    from scrapers.frip import MEETING_CATEGORY_ID
+    s._product_to_events({'id': '123', '_category': MEETING_CATEGORY_ID}, MagicMock())
+    assert s._fetch_select_items.call_count == 2
 
 
 def test_audit_caps_heavy_vendor_requests_before_scraping_and_reports_missing_samples():
