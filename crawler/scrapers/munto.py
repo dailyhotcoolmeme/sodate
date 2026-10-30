@@ -561,7 +561,7 @@ class MuntoScraper(BaseScraper):
         if not details:
             return 0
         changed = 0
-        for row in self._select_all('id,source_url,event_date', company_id=self.get_company_id(),
+        for row in self._select_all('id,source_url,event_date,price_male,price_female', company_id=self.get_company_id(),
                                     verified=False, is_active=True):
             source = details.get(row['source_url'])
             if not source or not source.get('startDate'):
@@ -574,6 +574,12 @@ class MuntoScraper(BaseScraper):
                 if original == current:
                     continue
                 update = {'event_date': original.astimezone(timezone.utc).isoformat()}
+                price = int(source['price']) if source.get('price') is not None else None
+                if price is not None and price < 0:
+                    continue
+                for field in ('price_male', 'price_female'):
+                    if row.get(field) != price:
+                        update[field] = price
                 if source.get('name'):
                     update['title'] = sanitize_text(f"[문토] {source['name']}", 80)
                 result = (self.supabase.table('events').update(update)
