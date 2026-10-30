@@ -544,10 +544,52 @@ class MuntoScraper(BaseScraper):
         except Exception:
             return None
         if r.status_code == 200:
+            try:
+                if not hasattr(self, '_missing_source_details'):
+                    self._missing_source_details = {}
+                self._missing_source_details[source_url] = r.json()
+            except ValueError:
+                return None
             return False
         if r.status_code in (404, 410):
             return True
         return None
+
+    def _refresh_missing_dates(self) -> int:
+        """목록 밖이지만 살아 있는 기존 회차의 날짜 변경도 원본대로 반영한다."""
+        details = getattr(self, '_missing_source_details', {})
+        if not details:
+            return 0
+        changed = 0
+        for row in self._select_all('id,source_url,event_date', company_id=self.get_company_id(),
+                                    verified=False, is_active=True):
+            source = details.get(row['source_url'])
+            if not source or not source.get('startDate'):
+                continue
+            try:
+                original = datetime.fromisoformat(source['startDate'].replace('Z', '+00:00'))
+                if original.tzinfo is None:
+                    continue  # 시간대 없는 원본은 추측하지 않는다.
+                current = datetime.fromisoformat(row['event_date'].replace('Z', '+00:00'))
+                if original == current:
+                    continue
+                update = {'event_date': original.astimezone(timezone.utc).isoformat()}
+                if source.get('name'):
+                    update['title'] = sanitize_text(f"[문토] {source['name']}", 80)
+                result = (self.supabase.table('events').update(update)
+                          .eq('id', row['id']).eq('source_url', row['source_url'])
+                          .eq('verified', False).eq('event_date', row['event_date']).execute())
+                changed += len(result.data or [])
+            except Exception as e:
+                self.logger.warning(f'문토 목록 밖 날짜 갱신 실패 — 기존 값 보존: {row["id"]}: {e}')
+        self.logger.info(f'문토 목록 밖 원본 날짜 변경 {changed}건 반영')
+        return changed
+
+    def save_events(self, events: list[EventModel]) -> dict:
+        self._missing_source_details = {}
+        result = super().save_events(events)
+        self._refresh_missing_dates()
+        return result
 
     def _fetch_list(self, client, category_id: int, min_expected: int) -> list:
         """공식 API 최대 200개, offset으로 끝까지 조회. 일부 실패 시 기존 일정 보존."""
