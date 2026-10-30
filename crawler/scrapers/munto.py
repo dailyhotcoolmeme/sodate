@@ -550,26 +550,48 @@ class MuntoScraper(BaseScraper):
         return None
 
     def _fetch_list(self, client, category_id: int, min_expected: int) -> list:
-        """카테고리 목록 조회. ⚠️ 문토 API가 간헐적으로 빈 목록(0개)이나 극소수만 돌려준다
-        (2026-07-31: 최근 6회 중 1회 0개, 1회 8개). 그대로 두면 그 회차 갱신이 통째로
-        건너뛰어지므로, 평소치보다 비정상적으로 적으면 몇 번 다시 부른다."""
-        socialings: list = []
-        for attempt in range(3):
-            list_data = _get(
-                client,
-                f'{MUNTO_API_BASE}/socialing/section',
-                params={'type': 'default', 'categoryId': category_id, 'limit': 300}
-            )
-            socialings = (list_data or {}).get('socialings', []) or []
-            if len(socialings) >= min_expected:
-                break
-            self.logger.warning(
-                f'문토 목록(cat {category_id})이 {len(socialings)}개뿐 — 재시도 {attempt + 1}/3'
-            )
-            time.sleep(3 * (attempt + 1))
-        return socialings
+        """공식 API 최대 200개, offset으로 끝까지 조회. 일부 실패 시 기존 일정 보존."""
+        result, seen, offset = [], set(), 0
+        for _ in range(50):
+            page = None
+            for attempt in range(3):
+                data = _get(client, f'{MUNTO_API_BASE}/socialing/section', params={
+                    'type': 'default', 'categoryId': category_id, 'limit': 200, 'offset': offset})
+                if isinstance(data, dict) and isinstance(data.get('socialings'), list):
+                    page = data
+                    if offset > 0 or len(data['socialings']) >= min_expected:
+                        break
+                if attempt < 2:
+                    time.sleep(3 * (attempt + 1))
+            items = (page or {}).get('socialings', [])
+            if page is None or (offset == 0 and len(items) < min_expected):
+                self.collection_complete = False
+                self.DELETE_STALE = False
+                self.logger.error(f'문토 목록 부분 실패 cat={category_id} offset={offset} — 기존 일정 보존')
+            if page is None:
+                return result
+            new = [item for item in items if item.get('id') not in seen]
+            if any(not item.get('id') for item in items) or (items and not new):
+                self.collection_complete = False
+                self.DELETE_STALE = False
+                self.logger.error(f'문토 목록 페이지 진행 불가 cat={category_id} offset={offset}')
+                return result
+            result.extend(new)
+            seen.update(item['id'] for item in new)
+            if not page.get('hasMore'):
+                return result
+            if not items:
+                self.collection_complete = False
+                self.DELETE_STALE = False
+                return result
+            offset += len(items)
+        self.collection_complete = False
+        self.DELETE_STALE = False
+        return result
 
     def scrape(self) -> list[EventModel]:
+        self.collection_complete = True
+        self.DELETE_STALE = True
         events: list[EventModel] = []
 
         # 소개팅·소셜링 아이템을 하나의 파싱 경로로 처리한다(같은 문토 API 구조).
@@ -592,6 +614,8 @@ class MuntoScraper(BaseScraper):
 
                 detail = _get(client, f'{MUNTO_API_BASE}/socialing/{socialing_id}')
                 if not detail:
+                    self.collection_complete = False
+                    self.DELETE_STALE = False
                     self.logger.warning(f'문토 상세 조회 실패: {socialing_id}')
                     return
 
@@ -743,6 +767,8 @@ class MuntoScraper(BaseScraper):
                 time.sleep(0.3)
 
             except Exception as e:
+                self.collection_complete = False
+                self.DELETE_STALE = False
                 self.logger.warning(f'문토 이벤트 파싱 실패 id={item.get("id")}: {e}')
 
         try:
@@ -764,6 +790,8 @@ class MuntoScraper(BaseScraper):
                         process_item(client, item, 'socialing', cat_name)
 
         except Exception as e:
+            self.collection_complete = False
+            self.DELETE_STALE = False
             self.logger.error(f'문토 크롤링 실패: {e}')
 
         # 중복 제거
