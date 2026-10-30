@@ -7,9 +7,35 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import watchdog
+from datetime import datetime, timedelta, timezone
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_recent_failed_crawl_keeps_alarm_without_repeating_paid_full_crawl():
+    now = datetime.now(timezone.utc)
+    with patch.object(watchdog, 'HEARTBEATS', {'crawl.yml':('main',960,{})}), \
+         patch.object(watchdog, '_latest_success_run', return_value={'updated_at':(now-timedelta(days=2)).isoformat()}), \
+         patch.object(watchdog, '_has_active_run', return_value=False), \
+         patch.object(watchdog, '_gh_get', return_value={'workflow_runs':[{'conclusion':'failure','created_at':(now-timedelta(hours=1)).isoformat()}]}), \
+         patch.object(watchdog, '_gh_dispatch') as dispatch:
+        issues = watchdog.check_heartbeats()
+    dispatch.assert_not_called()
+    assert issues[0]['level'] == 'ERROR'
+    assert '실패' in issues[0]['msg']
+
+
+def test_missing_scheduled_crawl_still_dispatches_once():
+    now = datetime.now(timezone.utc)
+    old = (now-timedelta(days=2)).isoformat()
+    with patch.object(watchdog, 'HEARTBEATS', {'crawl.yml':('main',960,{})}), \
+         patch.object(watchdog, '_latest_success_run', return_value={'updated_at':old}), \
+         patch.object(watchdog, '_has_active_run', return_value=False), \
+         patch.object(watchdog, '_gh_get', return_value={'workflow_runs':[{'conclusion':'failure','created_at':old}]}), \
+         patch.object(watchdog, '_gh_dispatch', return_value=True) as dispatch:
+        watchdog.check_heartbeats()
+    dispatch.assert_called_once_with('crawl.yml', {})
 
 
 def test_main_crawl_has_only_cloudflare_as_regular_scheduler():

@@ -170,6 +170,21 @@ def check_heartbeats() -> list[dict]:
                     'msg': f'{label}: 마지막 성공이 {gap_min:.0f}분 전이지만 지금 실행 중 — 재발화 안 함',
                 })
                 continue
+            if fname == 'crawl.yml':
+                # 실행이 시작돼 실패한 것은 스케줄 중단이 아니다. 업체 오류를 전체
+                # 재수집으로 반복 복구하면 정상 업체와 유료 Apify까지 계속 호출한다.
+                try:
+                    runs = _gh_get(f'{fname}/runs?per_page=1').get('workflow_runs') or []
+                    recent = runs[0] if runs else {}
+                    started = recent.get('created_at') or recent.get('run_started_at')
+                    age = (now - datetime.fromisoformat(started.replace('Z', '+00:00'))).total_seconds() / 60 if started else None
+                    if recent.get('conclusion') == 'failure' and age is not None and 0 <= age < max_gap_min:
+                        issues.append({'level': 'ERROR', 'msg':
+                            f'{label}: 최근 실행이 실패함 — 스케줄 중단이 아니므로 전체 자동 재실행 보류. 실패 업체 복구 필요'})
+                        continue
+                except Exception:
+                    issues.append({'level': 'WARN', 'msg': f'{label}: 최근 실행 확인 실패 — 전체 자동 재실행 보류'})
+                    continue
             dispatched = _gh_dispatch(fname, dispatch_inputs)
             issues.append({
                 'level': 'ERROR',
