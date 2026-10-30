@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 import scrapers.munto as module
+import pytest
 
 
 def scraper():
@@ -8,6 +9,18 @@ def scraper():
     s.collection_complete = True
     s.DELETE_STALE = True
     return s
+
+
+@pytest.mark.parametrize('detail,male,female,expected', [
+    ({'status':'RECRUITING'},0,0,True),
+    ({'status':'RECRUITING'},1,0,False),
+    ({'status':'RECRUITING'},None,None,False),
+    ({'status':'RECRUITING'},0,None,False),
+    ({'status':'CLOSED'},None,None,True),
+    ({'status':'RECRUITING','stopRecruit':True},3,3,True),
+])
+def test_full_crawl_and_refresh_share_confirmed_soldout_rule(detail,male,female,expected):
+    assert module._munto_closed(detail,male,female) is expected
 
 
 def test_limit_200_and_offset_follow_even_short_page_has_more(monkeypatch):

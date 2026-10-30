@@ -75,6 +75,14 @@ API_HEADERS = {
 }
 
 
+def _munto_closed(detail: dict, male_seats: Optional[int], female_seats: Optional[int]) -> bool:
+    """명시적 마감 또는 양쪽 좌석 소진. 정원 미상(None)은 매진으로 추측하지 않는다."""
+    return bool(detail.get('status') in ('CLOSED', 'CONFIRM', 'CANCEL')
+                or detail.get('stopRecruit', False)
+                or (male_seats is not None and female_seats is not None
+                    and male_seats <= 0 and female_seats <= 0))
+
+
 def _get(client: httpx.Client, url: str, **kwargs) -> Optional[dict]:
     """GET 요청 후 JSON 반환. 실패 시 None."""
     try:
@@ -763,8 +771,7 @@ class MuntoScraper(BaseScraper):
                         participant_stats['total_count'] = male_current + female_current
 
                 # 마감 여부
-                status = detail.get('status', '')
-                is_closed = status in ('CLOSED', 'CONFIRM', 'CANCEL') or detail.get('stopRecruit', False)
+                is_closed = _munto_closed(detail, seats_left_male, seats_left_female)
 
                 # 포맷 — 소개팅만 로테이션/소개팅 구분. 소셜링은 없음(카테고리로 대체).
                 if event_type == 'dating':

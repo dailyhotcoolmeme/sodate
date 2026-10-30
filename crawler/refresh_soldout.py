@@ -283,7 +283,7 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
 
     마감·좌석 계산은 전체 크롤(MuntoScraper.scrape)과 같은 규칙을 그대로 쓴다.
     """
-    from scrapers.munto import MUNTO_API_BASE, _get, _build_participant_stats
+    from scrapers.munto import MUNTO_API_BASE, _get, _build_participant_stats, _munto_closed
 
     now = datetime.now(timezone.utc)
     horizon = (now + timedelta(days=days)).isoformat()
@@ -352,14 +352,11 @@ def _refresh_munto_soon(sb, cid, days: int) -> int:
             if total_cap:
                 stats['total_capacity'] = int(total_cap)
                 stats['total_count'] = male_current + female_current
-            closed = detail.get('status', '') in ('CLOSED', 'CONFIRM', 'CANCEL') \
-                or bool(detail.get('stopRecruit', False))
             if sm is not None and sm < 0:
                 sm = 0
             if sf is not None and sf < 0:
                 sf = 0
-            if not closed and sm is not None and sf is not None and sm <= 0 and sf <= 0:
-                closed = True
+            closed = _munto_closed(detail, sm, sf)
             # ⚠️(2026-09-04) 여기만 changed_fields 를 안 거치고 무조건 썼다. 8/21 에 다른
             #    경로는 전부 '바뀐 것만 쓰기'로 바꿨는데 이 블록만 빠져서, 15분마다 임박
             #    일정을 값이 그대로여도 다시 썼다(시간당 449건, events 누적 수정 90만 건).
