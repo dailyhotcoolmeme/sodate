@@ -49,6 +49,33 @@ class YeongyulScraper(BaseScraper):
 
     def __init__(self):
         super().__init__('yeongyul')
+        self.collection_complete = True
+
+    def _list_links(self, page, url: str) -> list[str]:
+        """빈 응답/일시 오류는 한 번 재조회하고, 계속 실패하면 기존 일정을 보존한다."""
+        for attempt in range(2):
+            try:
+                response = page.goto(url, timeout=20000, wait_until='domcontentloaded')
+                if response is None or response.status >= 400:
+                    raise RuntimeError(f'목록 HTTP {response.status if response else "응답 없음"}')
+                try:
+                    page.wait_for_load_state('networkidle', timeout=8000)
+                except Exception:
+                    pass
+                time.sleep(2)
+                found = page.eval_on_selector_all(
+                    'a[href*="ab-"]',
+                    'els => [...new Set(els.map(e => e.href))].filter(h => /ab-\\d{4,}-\\d{3,}/.test(h))'
+                )
+                if found:
+                    return found
+                raise RuntimeError('목록 게시글 링크 0건')
+            except Exception as exc:
+                reason = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
+                self.logger.warning(f'괜찮소 목록 조회 {attempt + 1}/2 실패: {reason}')
+        self.collection_complete = False
+        self.DELETE_STALE = False
+        raise RuntimeError('괜찮소 목록 재조회 실패 — 부분 수집, 기존 일정 보존')
 
     @classmethod
     def _canonical_url(cls, href: str) -> Optional[str]:
@@ -62,6 +89,8 @@ class YeongyulScraper(BaseScraper):
         return f'{cls.BASE_URL}/{m.group(0)}'
 
     def scrape(self) -> list[EventModel]:
+        self.collection_complete = True
+        self.DELETE_STALE = True
         events: list[EventModel] = []
         try:
             with sync_playwright() as p:
@@ -76,13 +105,7 @@ class YeongyulScraper(BaseScraper):
                 #    1쪽만 읽고 있어서 26건 중 4건만 가져오고 있었다 — 워치독이
                 #    «3회 연속 적게 들어옴»으로 잡아낸 원인이 이것이다.
                 #    쪽 번호 파라미터 이름은 사이트가 바꿀 수 있으니 목록에서 직접 읽어낸다.
-                page.goto(self.LIST_URL, timeout=20000)
-                # networkidle 을 못 기다려도 크롤을 죽이지 않는다(2026-09-05).
-                try:
-                    page.wait_for_load_state('networkidle', timeout=10000)
-                except Exception:
-                    self.logger.info('연결 목록 페이지 로딩이 느려 기다리지 않고 진행')
-                time.sleep(2)
+                first_links = self._list_links(page, self.LIST_URL)
 
                 # 쪽 넘김 주소 모으기(1쪽은 현재 페이지). 순서·중복 정리.
                 page_urls: list[str] = [self.LIST_URL]
@@ -96,28 +119,26 @@ class YeongyulScraper(BaseScraper):
                         if h not in page_urls:
                             page_urls.append(h)
                 except Exception as e:
+                    self.collection_complete = False
+                    self.DELETE_STALE = False
                     self.logger.warning(f'괜찮소 쪽 목록 조회 실패(1쪽만 진행): {str(e)[:60]}')
                 if len(page_urls) > 1:
                     self.logger.info(f'괜찮소 목록 {len(page_urls)}쪽')
 
                 # 이벤트 링크 수집 — 모든 쪽을 합친다.
                 raw_links: list[str] = []
+                if len(page_urls) > 12:
+                    self.collection_complete = False
+                    self.DELETE_STALE = False
                 for i, u in enumerate(page_urls[:12]):   # 안전 상한
                     if i:   # 1쪽은 이미 열려 있다
                         try:
-                            page.goto(u, timeout=20000)
-                            try:
-                                page.wait_for_load_state('networkidle', timeout=8000)
-                            except Exception:
-                                pass
-                            time.sleep(1.5)
+                            found = self._list_links(page, u)
                         except Exception as e:
                             self.logger.warning(f'괜찮소 {i+1}쪽 열기 실패(건너뜀): {str(e)[:60]}')
                             continue
-                    found = page.eval_on_selector_all(
-                        'a[href*="ab-"]',
-                        'els => [...new Set(els.map(e => e.href))].filter(h => /ab-\\d{4,}-\\d{3,}/.test(h))'
-                    )
+                    else:
+                        found = first_links
                     raw_links.extend(found)
                 # canonical URL로 정규화 후 set으로 중복 제거 (쿼리스트링/모바일 변형 href 통합)
                 event_links: list[str] = []
@@ -204,10 +225,14 @@ class YeongyulScraper(BaseScraper):
                         if ev:
                             events.append(ev)
                     except Exception as e:
+                        self.collection_complete = False
+                        self.DELETE_STALE = False
                         self.logger.warning(f'괜찮소 {url} 파싱 실패: {e}')
 
                 browser.close()
         except Exception as e:
+            self.collection_complete = False
+            self.DELETE_STALE = False
             self.logger.error(f'괜찮소 크롤링 실패: {e}')
 
         filtered = []

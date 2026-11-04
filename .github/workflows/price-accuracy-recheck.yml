@@ -6,7 +6,7 @@ on:
         description: '검증 범위'
         type: choice
         default: all
-        options: [all, modparty]
+        options: [all, modparty, yeongyul]
 jobs:
   check:
     runs-on: ubuntu-22.04
@@ -30,9 +30,10 @@ jobs:
           python -u - <<'PY'
           import os
           import price_accuracy_check as qa
-          if os.environ.get('PRICE_CHECK_VENDOR') == 'modparty':
+          vendor = os.environ.get('PRICE_CHECK_VENDOR')
+          if vendor in ('modparty', 'yeongyul'):
               vendors = qa._nonimweb_scrapers()
-              qa._nonimweb_scrapers = lambda: {'modparty': vendors['modparty']}
+              qa._nonimweb_scrapers = lambda: {vendor: vendors[vendor]}
           issues = qa.check_nonimweb_live(qa.get_supabase())
           for issue in issues:
               print(issue, flush=True)
