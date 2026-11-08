@@ -40,6 +40,11 @@ DEFAULT_THUMBNAIL = 'https://sodate-admin.pages.dev/media/thumbnails/finance-lou
 _SCHEDULE_RE = re.compile(
     r'^(\d{1,2})\.(\d{1,2})\s+(\d{1,2})시(반)?\s*([가-힣]*)\s*(?:\(([^)]*)\))?\s*$'
 )
+# 노션 원본의 지역 먼저 표기. 날짜 뒤 마침표와 분 단위도 원문 그대로 읽는다.
+_REGION_FIRST_RE = re.compile(
+    r'^(\d{1,2})\.(\d{1,2})\.?\s+([가-힣]+)\s+(\d{1,2})시'
+    r'(?:\s*(반|\d{1,2}분))?\s*(?:\(([^)]*)\))?\s*$'
+)
 # "96-00" 같은 출생연도 범위 힌트(짧은 두자리 연도)
 _BIRTH_RANGE_RE = re.compile(r'\b(\d{2})-(\d{2})\b')
 # "남95-00 / 여97-02"처럼 성별마다 출생연도가 다른 경우 — 위 \b는 "남"(한글도 \w 취급)
@@ -66,14 +71,16 @@ class FinanceLoungeScraper(BaseScraper):
 
         for i, block in enumerate(blocks):
             text = block['text']
-            m = _SCHEDULE_RE.match(text)
-            if not m:
+            if m := _SCHEDULE_RE.match(text):
+                month_text, day_text, hour_text, minutes, region_raw, note = m.groups()
+            elif m := _REGION_FIRST_RE.match(text):
+                month_text, day_text, region_raw, hour_text, minutes, note = m.groups()
+            else:
                 continue
 
-            month, day, hour = int(m.group(1)), int(m.group(2)), int(m.group(3))
-            minute = 30 if m.group(4) else 0
-            region_raw = (m.group(5) or '').strip()
-            note = (m.group(6) or '').strip()
+            month, day, hour = int(month_text), int(day_text), int(hour_text)
+            minute = 30 if minutes == '반' else int(minutes[:-1]) if minutes else 0
+            note = (note or '').strip()
             if not region_raw:
                 # 지역 미공지 회차("8.22 11시" 처럼 아직 업데이트 전) — 지역은 DB 필수값이라 스킵
                 self.logger.debug(f'지역 미공지로 스킵: {text!r}')
