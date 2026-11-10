@@ -77,7 +77,7 @@ _LINE_TARGET = _label(r'대\s*상')
 _LINE_DEADLINE = _label(r'신\s*청\s*기\s*한')
 
 _MD_KOR = re.compile(r'(\d{1,2})\s*월\s*(\d{1,2})\s*일')
-_MD_SLASH = re.compile(r'(\d{1,2})\s*[/.]\s*(\d{1,2})')
+_MD_SLASH = re.compile(r'(?<!\d)(\d{1,2})\s*[/.]\s*(\d{1,2})(?!\d)')
 _HHMM = re.compile(r'(\d{1,2})\s*:\s*(\d{2})')
 _EN_AMPM = re.compile(r'(?<!\d)(\d{1,2})\s*:\s*(\d{2})\s*(am|pm)\b', re.I)
 _AMPM = re.compile(r'(오전|오후)\s*(\d{1,2})(?:\s*:\s*(\d{2})|\s*시(?:\s*(\d{1,2})\s*분)?)?')
@@ -381,10 +381,15 @@ class YeonsoopScraper(BaseScraper):
                 texts = reader.read(url)
                 a, b = (self._parse_poster_text(t, post) for t in texts)
                 # 이탤릭 숫자가 깨진 영문 시각 포스터는 크기를 정규화해 다시 판독한다.
-                normalized = a is None and b is None and all(_EN_AMPM.search(t) for t in texts)
+                normalized = not (a and b) and all(_EN_AMPM.search(t) for t in texts)
                 if normalized:
+                    prior = a or b
                     a, b = (self._parse_poster_text(t, post)
                             for t in reader.read(url, normalize_size=True))
+                    if prior and a and (prior['event_date'], prior['location_region']) != (
+                        a['event_date'], a['location_region']
+                    ):
+                        continue
                 # 서로 다른 레이아웃 인식 두 번의 날짜·장소가 일치해야 저장 후보다.
                 if not a or not b or (a['event_date'], a['location_region']) != (b['event_date'], b['location_region']):
                     continue
