@@ -14,9 +14,10 @@ class PosterOCR:
         self.urls = {}
         self.attempts = 0
 
-    def read(self, url: str) -> tuple[str, str]:
-        if url in self.urls:
-            return self.urls[url]
+    def read(self, url: str, *, normalize_size: bool = False) -> tuple[str, str]:
+        url_key = (url, normalize_size)
+        if url_key in self.urls:
+            return self.urls[url_key]
         if self.attempts >= 80:
             raise ValueError('한 회차 포스터 판독 상한 초과')
         self.attempts += 1
@@ -34,14 +35,18 @@ class PosterOCR:
                 body.extend(chunk)
                 if len(body) > 12 * 1024 * 1024:
                     raise ValueError('포스터 용량 초과')
-        key = hashlib.sha256(body).hexdigest()
+        key = (hashlib.sha256(body).hexdigest(), normalize_size)
         if key in self.cache:
-            self.urls[url] = self.cache[key]
+            self.urls[url_key] = self.cache[key]
             return self.cache[key]
         with Image.open(io.BytesIO(body)) as original:
             if original.width * original.height > 16_000_000:
                 raise ValueError('포스터 해상도 초과')
+            if normalize_size:
+                original.thumbnail((700, 700), Image.Resampling.BICUBIC)
             image = ImageOps.autocontrast(original.convert('L'))
+            if normalize_size:
+                image = image.resize((image.width * 2, image.height * 2), Image.Resampling.LANCZOS)
             # 작은 글씨의 '원'이 축소 시 다른 문자로 읽힌 실측이 있어 원본 해상도 유지.
             buffer = io.BytesIO()
             image.save(buffer, format='PNG')
@@ -53,5 +58,5 @@ class PosterOCR:
             )
             texts.append(result.stdout.decode('utf-8'))
         self.cache[key] = tuple(texts)
-        self.urls[url] = self.cache[key]
+        self.urls[url_key] = self.cache[key]
         return self.cache[key]

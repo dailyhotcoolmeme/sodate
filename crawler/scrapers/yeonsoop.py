@@ -79,6 +79,7 @@ _LINE_DEADLINE = _label(r'신\s*청\s*기\s*한')
 _MD_KOR = re.compile(r'(\d{1,2})\s*월\s*(\d{1,2})\s*일')
 _MD_SLASH = re.compile(r'(\d{1,2})\s*[/.]\s*(\d{1,2})')
 _HHMM = re.compile(r'(\d{1,2})\s*:\s*(\d{2})')
+_EN_AMPM = re.compile(r'(?<!\d)(\d{1,2})\s*:\s*(\d{2})\s*(am|pm)\b', re.I)
 _AMPM = re.compile(r'(오전|오후)\s*(\d{1,2})(?:\s*:\s*(\d{2})|\s*시(?:\s*(\d{1,2})\s*분)?)?')
 _WON = re.compile(r'([\d][\d,]*)\s*원')
 _BIRTH_RANGE = re.compile(r'(\d{2})\s*년생\s*[~\-–]\s*(\d{2})\s*년생')
@@ -200,6 +201,11 @@ class YeonsoopScraper(BaseScraper):
                 hour += 12
             elif t.group(1) == '오전' and hour == 12:
                 hour = 0
+        elif (t := _EN_AMPM.search(line)):
+            hour, minute = int(t.group(1)), int(t.group(2))
+            if not 1 <= hour <= 12:
+                return None
+            hour = hour % 12 + (12 if t.group(3).lower() == 'pm' else 0)
         elif (t := _HHMM.search(line)):
             hour, minute = int(t.group(1)), int(t.group(2))
         if hour is None or not (0 <= hour <= 23 and 0 <= minute <= 59):
@@ -337,7 +343,9 @@ class YeonsoopScraper(BaseScraper):
                 continue
             # 1:30만 있으면 오전/오후 추측 금지. 13~23시 표기는 명백한 24시간제다.
             clock = _HHMM.search(line)
-            if not _AMPM.search(line) and not (clock and 13 <= int(clock.group(1)) <= 23):
+            if not (_AMPM.search(line) or _EN_AMPM.search(line)) and not (
+                clock and 13 <= int(clock.group(1)) <= 23
+            ):
                 continue
             if (date := self._parse_datetime(line, posted)):
                 dates.add(date)
@@ -370,11 +378,17 @@ class YeonsoopScraper(BaseScraper):
         urls = post.get('images') or ([post['displayUrl']] if post.get('displayUrl') else [])
         for url in dict.fromkeys(urls[:8]):
             try:
-                a, b = (self._parse_poster_text(t, post) for t in reader.read(url))
+                texts = reader.read(url)
+                a, b = (self._parse_poster_text(t, post) for t in texts)
+                # 이탤릭 숫자가 깨진 영문 시각 포스터는 크기를 정규화해 다시 판독한다.
+                normalized = a is None and b is None and all(_EN_AMPM.search(t) for t in texts)
+                if normalized:
+                    a, b = (self._parse_poster_text(t, post)
+                            for t in reader.read(url, normalize_size=True))
                 # 서로 다른 레이아웃 인식 두 번의 날짜·장소가 일치해야 저장 후보다.
                 if not a or not b or (a['event_date'], a['location_region']) != (b['event_date'], b['location_region']):
                     continue
-                if a['price_male'] != b['price_male']:
+                if normalized or a['price_male'] != b['price_male']:
                     a['price_male'] = a['price_female'] = None
                 out.append(a)
             except Exception as exc:

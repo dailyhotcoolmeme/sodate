@@ -37,6 +37,22 @@ def test_confirmed_poster_needs_no_caption_or_other_image():
     assert candidate['price_male'] == candidate['price_female'] == 58000
 
 
+def test_english_pm_poster_retries_unreadable_dates_without_guessing_price():
+    date, post, _ = source()
+    text = f"연숲 로테이션 소개팅\n{date:%m/%d}(토) 1:30PM 언주역\n참가비 58,000원"
+    reader = MagicMock()
+    reader.read.side_effect = [
+        ('로테이션 소개팅 1:30PM 언주역', '소개팅 1:30PM 언주역'),
+        (text, text),
+    ]
+    candidates = scraper()._parse_posters(post, reader)
+    assert len(candidates) == 1
+    assert candidates[0]['event_date'] == date.replace(tzinfo=None)
+    assert candidates[0]['location_region'] == '언주역'
+    assert candidates[0]['price_male'] is None
+    reader.read.assert_called_with(post['images'][0], normalize_size=True)
+
+
 @pytest.mark.parametrize('replacement', ['1:30', '1시 30분'])
 def test_ambiguous_meridiem_is_never_guessed(replacement):
     _, post, text = source()
