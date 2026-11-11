@@ -380,12 +380,16 @@ class YeonsoopScraper(BaseScraper):
             try:
                 texts = reader.read(url)
                 a, b = (self._parse_poster_text(t, post) for t in texts)
+                if not (a and b):
+                    self._log_poster_signals(post, 'original', texts)
                 # 이탤릭 숫자가 깨진 영문 시각 포스터는 크기를 정규화해 다시 판독한다.
                 normalized = not (a and b) and all(_EN_AMPM.search(t) for t in texts)
                 if normalized:
                     prior = a or b
-                    a, b = (self._parse_poster_text(t, post)
-                            for t in reader.read(url, normalize_size=True))
+                    texts = reader.read(url, normalize_size=True)
+                    a, b = (self._parse_poster_text(t, post) for t in texts)
+                    if not (a and b):
+                        self._log_poster_signals(post, 'normalized', texts)
                     if prior and a and (prior['event_date'], prior['location_region']) != (
                         a['event_date'], a['location_region']
                     ):
@@ -400,6 +404,14 @@ class YeonsoopScraper(BaseScraper):
                 # 서명 URL/토큰/참석자 내용은 오류 로그에 출력하지 않는다.
                 self.logger.warning(f"포스터 인식 스킵 {post.get('shortCode')}: {type(exc).__name__}")
         return out
+
+    def _log_poster_signals(self, post: dict, stage: str, texts: tuple[str, str]):
+        # 날짜/시각/역의 파싱 신호만 기록한다. 서명 URL이나 포스터 본문은 남기지 않는다.
+        for mode, text in zip(('6', '4'), texts):
+            self.logger.info('포스터 판독 %s %s psm=%s dates=%s clocks=%s stations=%s dating=%s',
+                             post.get('shortCode'), stage, mode,
+                             _MD_SLASH.findall(text)[:4], _EN_AMPM.findall(text)[:4],
+                             _STATION.findall(text)[:4], bool(_DATING.search(re.sub(r'\s+', '', text))))
 
     def _reconfirm_owner_events(self) -> list[EventModel]:
         """공개 프로필과 기존 오너 확인 일시를 대조만 한다. 새 일정/시각을 추정하지 않는다."""
