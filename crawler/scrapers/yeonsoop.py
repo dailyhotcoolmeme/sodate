@@ -379,6 +379,7 @@ class YeonsoopScraper(BaseScraper):
         for url in dict.fromkeys(urls[:8]):
             try:
                 texts = reader.read(url)
+                original_texts = texts
                 a, b = (self._parse_poster_text(t, post) for t in texts)
                 if not (a and b):
                     self._log_poster_signals(post, 'original', texts)
@@ -402,6 +403,8 @@ class YeonsoopScraper(BaseScraper):
                         continue
                 # 서로 다른 레이아웃 인식 두 번의 날짜·장소가 일치해야 저장 후보다.
                 if not a or not b or (a['event_date'], a['location_region']) != (b['event_date'], b['location_region']):
+                    if normalized and (confirmed := self._corroborate_poster(post, original_texts)):
+                        out.append(confirmed)
                     continue
                 if normalized or a['price_male'] != b['price_male']:
                     a['price_male'] = a['price_female'] = None
@@ -410,6 +413,58 @@ class YeonsoopScraper(BaseScraper):
                 # 서명 URL/토큰/참석자 내용은 오류 로그에 출력하지 않는다.
                 self.logger.warning(f"포스터 인식 스킵 {post.get('shortCode')}: {type(exc).__name__}")
         return out
+
+    def _get_profile_bio(self) -> str:
+        if hasattr(self, '_cached_profile_bio'):
+            return self._cached_profile_bio
+        self._cached_profile_bio = ''
+        try:
+            response = httpx.get(f'https://www.instagram.com/{HANDLE}/', timeout=25,
+                                 follow_redirects=False)
+            response.raise_for_status()
+            meta = BeautifulSoup(response.text, 'html.parser').find('meta', attrs={'name': 'description'})
+            text = meta.get('content', '') if meta else ''
+            marker = f'(@{HANDLE}) on Instagram: "'
+            if marker in text:
+                self._cached_profile_bio = text.split(marker, 1)[1].rsplit('"', 1)[0]
+        except Exception as exc:
+            self.logger.warning('공식 프로필 대조 실패: %s', type(exc).__name__)
+        return self._cached_profile_bio
+
+    def _corroborate_poster(self, post: dict, texts: tuple[str, str]) -> Optional[dict]:
+        """같은 이미지의 명시된 일시/역을 공식 프로필의 완전한 공고와 교차 검증한다."""
+        bio = self._get_profile_bio()
+        kind = _DATING.search(re.sub(r'\s+', '', bio))
+        if not kind:
+            return None
+        posted = datetime.fromisoformat(post['timestamp'].replace('Z', '+00:00')).astimezone(KST).replace(tzinfo=None)
+        dates, stations = set(), set()
+        for text in texts:
+            stations.update(_STATION.findall(text))
+            for line in text.splitlines():
+                if (_MD_SLASH.search(line) or _MD_KOR.search(line)) and (
+                    _EN_AMPM.search(line) or _AMPM.search(line)
+                ):
+                    if date := self._parse_datetime(line, posted):
+                        dates.add(date)
+        if len(dates) != 1 or len(stations) != 1 or not any(
+            _DATING.search(re.sub(r'\s+', '', t)) for t in texts
+        ):
+            return None
+        matches = []
+        for line in bio.splitlines():
+            candidate = self._parse_poster_text(kind.group() + '\n' + line, post)
+            if candidate and dates == {candidate['event_date']} and stations == {
+                candidate['location_region'].removesuffix('역')
+            }:
+                matches.append(candidate)
+        if len(matches) != 1:
+            return None
+        candidate = matches[0]
+        candidate['price_male'] = candidate['price_female'] = None
+        self.logger.info('공식 프로필과 같은 이미지의 일시·역 교차 확인: %s %s %s',
+                         post.get('shortCode'), candidate['event_date'], candidate['location_region'])
+        return candidate
 
     def _log_poster_signals(self, post: dict, stage: str, texts: tuple[str, str], modes=('6', '4')):
         # 날짜/시각/역의 파싱 신호만 기록한다. 서명 URL이나 포스터 본문은 남기지 않는다.
@@ -481,6 +536,7 @@ class YeonsoopScraper(BaseScraper):
             return []
 
     def scrape(self) -> list[EventModel]:
+        self.__dict__.pop('_cached_profile_bio', None)
         posts = self._fetch_posts()
         self.logger.info(f'인스타 게시물 {len(posts)}건 수신')
         # 얼리버드·신청기한 판정 기준시각. 캡션의 날짜가 전부 KST 표기라 KST 로 맞춘다

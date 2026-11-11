@@ -22,7 +22,28 @@ def source():
 def scraper():
     s = YeonsoopScraper.__new__(YeonsoopScraper)
     s.logger = MagicMock()
+    s._get_profile_bio = lambda: ''
     return s
+
+
+def test_profile_and_same_poster_must_agree_on_explicit_date_time_station():
+    date, post, _ = source()
+    s = scraper()
+    s._get_profile_bio = lambda: f'로테이션 소개팅\n{date:%m/%d}(토) 오후 1:30 언주역\n{date+timedelta(days=1):%m/%d} 오후 2시 언주역'
+    texts = (f'로테이션 소개팅\n{date:%m/%d}(토) 1:30PM', '소개팅 언주역')
+    found = s._corroborate_poster(post, texts)
+    assert found['event_date'] == date.replace(tzinfo=None)
+    assert found['price_male'] is None and found['source_url'] == post['url']
+    for changed in (
+        (texts[0].replace('1:30PM', '1:30'), texts[1]),
+        (texts[0].replace('1:30PM', '2:30PM'), texts[1]),
+        (texts[0], '소개팅 사당역'),
+        (texts[0], '소개팅 언주역 사당역'),
+        ('로테이션 소개팅', texts[1]),
+    ):
+        assert s._corroborate_poster(post, changed) is None
+    s._get_profile_bio = lambda: f'로테이션 소개팅\n{date:%m/%d} 1:30 언주역'
+    assert s._corroborate_poster(post, texts) is None
 
 
 def test_korean_hour_minute_is_not_truncated_to_hour():
