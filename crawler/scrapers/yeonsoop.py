@@ -428,7 +428,8 @@ class YeonsoopScraper(BaseScraper):
             if marker in text:
                 self._cached_profile_bio = text.split(marker, 1)[1].rsplit('"', 1)[0]
         except Exception as exc:
-            self.logger.warning('공식 프로필 대조 실패: %s', type(exc).__name__)
+            self.logger.warning('공식 프로필 대조 실패: %s HTTP=%s', type(exc).__name__,
+                                getattr(getattr(exc, 'response', None), 'status_code', None))
         return self._cached_profile_bio
 
     def _corroborate_poster(self, post: dict, texts: tuple[str, str]) -> Optional[dict]:
