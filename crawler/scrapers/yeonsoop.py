@@ -385,14 +385,20 @@ class YeonsoopScraper(BaseScraper):
                 # 이탤릭 숫자가 깨진 영문 시각 포스터는 크기를 정규화해 다시 판독한다.
                 normalized = not (a and b) and any(_EN_AMPM.search(t) for t in texts)
                 if normalized:
-                    prior = a or b
+                    prior = [p for p in (a, b) if p]
                     texts = reader.read(url, normalize_size=True)
                     a, b = (self._parse_poster_text(t, post) for t in texts)
                     if not (a and b):
                         self._log_poster_signals(post, 'normalized', texts)
-                    if prior and a and (prior['event_date'], prior['location_region']) != (
-                        a['event_date'], a['location_region']
-                    ):
+                        # 사진 배경 포스터는 열/문단 인식이 일시·역을 누락한다.
+                        # 원본의 자동 레이아웃/흩어진 텍스트 방식으로 각각 다시 읽는다.
+                        prior.extend(p for p in (a, b) if p)
+                        texts = reader.read(url, layout='poster')
+                        a, b = (self._parse_poster_text(t, post) for t in texts)
+                        if not (a and b):
+                            self._log_poster_signals(post, 'poster', texts, modes=('3', '11'))
+                    if a and any((p['event_date'], p['location_region']) != (
+                        a['event_date'], a['location_region']) for p in prior):
                         continue
                 # 서로 다른 레이아웃 인식 두 번의 날짜·장소가 일치해야 저장 후보다.
                 if not a or not b or (a['event_date'], a['location_region']) != (b['event_date'], b['location_region']):
@@ -405,9 +411,9 @@ class YeonsoopScraper(BaseScraper):
                 self.logger.warning(f"포스터 인식 스킵 {post.get('shortCode')}: {type(exc).__name__}")
         return out
 
-    def _log_poster_signals(self, post: dict, stage: str, texts: tuple[str, str]):
+    def _log_poster_signals(self, post: dict, stage: str, texts: tuple[str, str], modes=('6', '4')):
         # 날짜/시각/역의 파싱 신호만 기록한다. 서명 URL이나 포스터 본문은 남기지 않는다.
-        for mode, text in zip(('6', '4'), texts):
+        for mode, text in zip(modes, texts):
             self.logger.info('포스터 판독 %s %s psm=%s dates=%s clocks=%s stations=%s dating=%s',
                              post.get('shortCode'), stage, mode,
                              _MD_SLASH.findall(text)[:4], _EN_AMPM.findall(text)[:4],

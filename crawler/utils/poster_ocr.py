@@ -14,8 +14,10 @@ class PosterOCR:
         self.urls = {}
         self.attempts = 0
 
-    def read(self, url: str, *, normalize_size: bool = False) -> tuple[str, str]:
-        url_key = (url, normalize_size)
+    def read(self, url: str, *, normalize_size: bool = False, layout: str = 'column') -> tuple[str, str]:
+        if layout not in ('column', 'poster'):
+            raise ValueError('지원하지 않는 OCR 레이아웃')
+        url_key = (url, normalize_size, layout)
         if url_key in self.urls:
             return self.urls[url_key]
         if self.attempts >= 80:
@@ -35,7 +37,7 @@ class PosterOCR:
                 body.extend(chunk)
                 if len(body) > 12 * 1024 * 1024:
                     raise ValueError('포스터 용량 초과')
-        key = (hashlib.sha256(body).hexdigest(), normalize_size)
+        key = (hashlib.sha256(body).hexdigest(), normalize_size, layout)
         if key in self.cache:
             self.urls[url_key] = self.cache[key]
             return self.cache[key]
@@ -51,7 +53,7 @@ class PosterOCR:
             buffer = io.BytesIO()
             image.save(buffer, format='PNG')
         texts = []
-        for mode in ('6', '4'):
+        for mode in (('3', '11') if layout == 'poster' else ('6', '4')):
             result = subprocess.run(
                 ['tesseract', 'stdin', 'stdout', '-l', 'kor+eng', '--psm', mode],
                 input=buffer.getvalue(), capture_output=True, timeout=30, check=True,
