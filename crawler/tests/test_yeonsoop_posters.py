@@ -53,6 +53,16 @@ def test_english_pm_poster_retries_unreadable_dates_without_guessing_price():
     reader.read.assert_called_with(post['images'][0], normalize_size=True)
 
 
+def test_one_ocr_missing_clock_still_retries_but_requires_two_matching_results():
+    date, post, _ = source()
+    text = f"연숲 로테이션 소개팅\n{date:%m/%d}(토) 1:30PM 언주역"
+    reader = MagicMock()
+    reader.read.side_effect = [(text.replace('언주역', ''), '소개팅 언주역'), (text, text)]
+    assert len(scraper()._parse_posters(post, reader)) == 1
+    reader.read.side_effect = [(text.replace('언주역', ''), '소개팅 언주역'), (text, '소개팅 언주역')]
+    assert scraper()._parse_posters(post, reader) == []
+
+
 @pytest.mark.parametrize('replacement', ['1:30', '1시 30분'])
 def test_ambiguous_meridiem_is_never_guessed(replacement):
     _, post, text = source()

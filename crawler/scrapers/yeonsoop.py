@@ -383,7 +383,7 @@ class YeonsoopScraper(BaseScraper):
                 if not (a and b):
                     self._log_poster_signals(post, 'original', texts)
                 # 이탤릭 숫자가 깨진 영문 시각 포스터는 크기를 정규화해 다시 판독한다.
-                normalized = not (a and b) and all(_EN_AMPM.search(t) for t in texts)
+                normalized = not (a and b) and any(_EN_AMPM.search(t) for t in texts)
                 if normalized:
                     prior = a or b
                     texts = reader.read(url, normalize_size=True)
