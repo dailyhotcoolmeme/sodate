@@ -74,6 +74,7 @@ _LINE_DATE = _label(r'일\s*시')
 _LINE_PLACE = _label(r'장\s*소')
 _LINE_PRICE = _label(r'참\s*가\s*비')
 _LINE_TARGET = _label(r'대\s*상')
+_LINE_APPLY = _label(r'신\s*청')
 _LINE_DEADLINE = _label(r'신\s*청\s*기\s*한')
 
 _MD_KOR = re.compile(r'(\d{1,2})\s*월\s*(\d{1,2})\s*일')
@@ -278,9 +279,18 @@ class YeonsoopScraper(BaseScraper):
 
         date_line = _LINE_DATE.search(body)
         price_line = _LINE_PRICE.search(body)
-        # 일시와 참가비가 둘 다 있어야 모집 공고다. 후기·마감안내는 여기서 걸린다.
-        if not date_line or not price_line:
+        if not date_line:
             return None
+        if not price_line:
+            # 공식 계정의 가격 미공개 공고는 장소와 신청 안내까지 갖춰야 한다.
+            places = _LINE_PLACE.findall(body)
+            times = _LINE_DATE.findall(body)
+            if (post.get('ownerUsername') != HANDLE or len(times) != 1 or len(places) != 1
+                    or not _LINE_APPLY.search(body) or not re.search(r'(?<!\S)#로테이션소개팅(?!\S)', caption)
+                    or not (_AMPM.search(times[0]) or _EN_AMPM.search(times[0]))
+                    or len(_STATION.findall(places[0])) != 1):
+                return None
+            return self._parse_poster_text(f'로테이션 소개팅\n{times[0]}\n{places[0]}', post)
 
         posted = datetime.fromisoformat(post['timestamp'].replace('Z', '+00:00'))
         posted_kst = posted.astimezone(KST).replace(tzinfo=None)

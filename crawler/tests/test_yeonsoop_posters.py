@@ -19,6 +19,20 @@ def source():
     return date, post, text
 
 
+def test_official_caption_without_price_requires_complete_recruitment_details():
+    date, post, _ = source()
+    caption = (f'▪️ 일시: {date.month}월 {date.day}일 오후 1:30\n'
+               '▪️ 장소: 언주역 인근\n▪️ 신청: 프로필 링크 클릭\n\n#로테이션소개팅')
+    s = scraper()
+    parsed = s._parse_post(dict(post, caption=caption), datetime.now())
+    assert parsed['event_date'] == date.replace(tzinfo=None)
+    assert parsed['price_male'] is None and parsed['price_female'] is None
+    assert parsed['_poster']  # 기존 일정의 마감·나이 등 보존 경로
+    for incomplete in (caption.replace('오후 ', ''), caption.replace('언주역', '서울'),
+                       caption.replace('신청:', '후기:'), caption.replace('#로테이션소개팅', '')):
+        assert s._parse_post(dict(post, caption=incomplete), datetime.now()) is None
+
+
 def scraper():
     s = YeonsoopScraper.__new__(YeonsoopScraper)
     s.logger = MagicMock()
