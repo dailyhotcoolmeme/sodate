@@ -11,6 +11,33 @@ def scraper():
     return s
 
 
+@pytest.mark.parametrize('name,body,excluded', [
+    ('[사주팔자] 하이명리 상담(1만원)+궁합소개팅',
+     '사주상담 1명 30분. 궁합 소개팅(단, 추후에 알맞은 궁합 발견시) 혜택', True),
+    ('타로 상담 + 매칭', '나중에 궁합이 맞는 분을 소개팅으로 연결합니다', True),
+    ('사주 소개팅', '남녀 각 8명이 사주를 보고 로테이션 소개팅을 진행합니다', False),
+    ('사주상담과 소개팅', '상담 후 현장 참가자들과 로테이션 소개팅을 진행합니다', False),
+    ('로테이션 소개팅', '추후 매칭 결과를 안내합니다', False),
+])
+def test_consultation_benefit_is_not_a_scheduled_dating_event(name, body, excluded):
+    assert module._is_consultation_with_future_matching(name, body) is excluded
+
+
+def test_crawl_excludes_consultation_before_collecting_members(monkeypatch):
+    item = {'id': 708927, 'name': '[사주팔자] 하이명리 상담+궁합소개팅'}
+    detail = {**item, 'introduce': '사주상담은 1:1. 궁합 소개팅은 추후 알맞은 분 발견시'}
+    requested = []
+    def get(client, url, **kwargs):
+        requested.append(url)
+        assert url.endswith('/socialing/708927')
+        return detail
+    monkeypatch.setattr(module, '_get', get)
+    s = scraper()
+    s._fetch_list = lambda client, category, minimum: [item] if category == 12 else []
+    assert s.scrape() == []
+    assert len(requested) == 1
+
+
 @pytest.mark.parametrize('detail,male,female,expected', [
     ({'status':'RECRUITING'},0,0,True),
     ({'status':'RECRUITING'},1,0,False),

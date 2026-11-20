@@ -36,6 +36,17 @@ DATING_CATEGORY_ID = 12
 # 소개팅 관련 키워드 (제목/태그 필터링용)
 DATING_KEYWORDS = ['소개팅', '미팅', '로테이션', '만남살롱', '커플', '썸', '솔로', '매칭']
 
+
+def _is_consultation_with_future_matching(name: str, introduce: str) -> bool:
+    """상담 상품에 추후 소개팅 혜택만 붙은 공고는 현재 소개팅 일정에서 제외한다."""
+    title = re.sub(r'\s+', '', name)
+    body = re.sub(r'\s+', '', introduce)
+    consultation_title = re.search(r'사주|타로|명리|운세', title) and re.search(r'상담|수업|강의', title)
+    future_matching = re.search(
+        r'(?:추후|나중에).{0,35}(?:궁합|매칭|소개팅)|(?:궁합|매칭|소개팅).{0,35}(?:추후|나중에)', body
+    )
+    return bool(consultation_title and future_matching)
+
 # 소셜링(취미 모임) 카테고리 — 2026-08-21 문토 API 실측. {categoryId: socialing_category}.
 #   event_type='socialing' 으로 저장돼 소셜링 탭에 뜬다. 소개팅 키워드 필터를 면제(전부 통과).
 #   파티·솔로파티(9)는 성격이 미팅에 가까워 소셜링에서 제외(소개팅 쪽 별도 검토). 친목(8)·cat6 제외.
@@ -673,6 +684,12 @@ class MuntoScraper(BaseScraper):
                     self.collection_complete = False
                     self.DELETE_STALE = False
                     self.logger.warning(f'문토 상세 조회 실패: {socialing_id}')
+                    return
+
+                if event_type == 'dating' and _is_consultation_with_future_matching(
+                    detail.get('name') or name, detail.get('introduce') or ''
+                ):
+                    self.logger.info('문토 상담 상품 제외(추후 매칭 혜택): %s', socialing_id)
                     return
 
                 time.sleep(0.5)  # API 부하 방지
