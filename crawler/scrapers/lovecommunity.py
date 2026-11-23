@@ -26,6 +26,7 @@ from utils.security import sanitize_text
 from utils.date_filter import KST, is_within_one_month
 from utils.region import resolve_region
 from utils.imweb_options import gender_soldout_loco
+from utils.loco_poster import read_roster_schedules
 
 
 class LovecommunityLoco(BaseScraper):
@@ -237,6 +238,20 @@ class LovecommunityLoco(BaseScraper):
             self.logger.warning(f'Loco idx={idx} 참가자 현황이 안 떴다 — 그대로 파싱 시도')
 
         soup = BeautifulSoup(page.content(), 'html.parser')
+        # 실제 이미지에 적힌 일시를 기존 본문 파서에 전달한다. 다른 지점/상품과 혼합 금지.
+        title = soup.find('meta', property='og:title')
+        venue = re.search(r'^\[?(수원|사당)(?:\]|\s)', title.get('content', '') if title else '')
+        region = venue.group(1) if venue else None
+        if region:
+            now = datetime.now(KST).replace(tzinfo=None)
+            schedules = read_roster_schedules(soup, now, self.logger)
+            for venue, dt in sorted(schedules):
+                if venue != region or (dt.month, dt.day) not in widget:
+                    continue
+                line = soup.new_tag('p')
+                line.string = f'{dt.month}월 {dt.day}일 {dt:%H:%M}'
+                soup.append(line)
+                self.logger.info('로꼬 명단 시각 대조 일치: %s %s', venue, dt.isoformat())
         return widget, self._parse_product_page(soup, idx, widget)
 
     def _read_product_with_empty_retry(
