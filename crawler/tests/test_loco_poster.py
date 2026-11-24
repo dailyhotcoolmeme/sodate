@@ -70,3 +70,29 @@ def test_auto_layout_recovers_sadang_only_with_two_agreeing_reads():
         ('수원', datetime(2026, 11, 27, 19, 30)), ('사당', datetime(2026, 11, 27, 19, 30))}
     assert agreed_schedule(('', sadang, ''), NOW) == set()
     assert agreed_schedule((sadang, sadang, sadang.replace('19:30', '20:30')), NOW) == set()
+
+
+def test_tiled_roster_merges_by_mode_instead_of_counting_duplicate_tiles():
+    from unittest.mock import MagicMock, patch
+    from types import SimpleNamespace
+    from bs4 import BeautifulSoup
+    from utils.loco_poster import read_roster_schedules
+    soup = BeautifulSoup('<div class="fr-view"><img src="https://cdn.imweb.me/upload/roster.jpg"></div>', 'html.parser')
+    image = MagicMock(width=1080, height=5400)
+    sadang = '직장인 와인파티 실시간 명단\n11.27(금) 사당점 19:30-22:00'
+    suwon = '직장인 와인파티 실시간 명단\n11.27(금) 수원점 19:30-22:00'
+    initial = [suwon, sadang + '\n' + suwon, '']
+    calls = []
+    def recognize(args, **kwargs):
+        calls.append(args)
+        text = initial[len(calls)-1] if len(calls) <= 3 else sadang + '\n' + suwon
+        return SimpleNamespace(stdout=text.encode())
+    with patch('utils.loco_poster.shutil.which', return_value='/bin/tesseract'), \
+         patch('utils.loco_poster.httpx.get') as get, \
+         patch('utils.loco_poster.Image.open', return_value=image), \
+         patch('utils.loco_poster.subprocess.run', side_effect=recognize):
+        get.return_value.content = b'image'
+        assert read_roster_schedules(soup, NOW, MagicMock()) == {
+            ('사당', datetime(2026, 11, 27, 19, 30)), ('수원', datetime(2026, 11, 27, 19, 30))}
+    assert image.crop.called
+    assert agreed_schedule((sadang + '\n' + sadang, '', ''), NOW) == set()

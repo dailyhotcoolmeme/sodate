@@ -74,6 +74,21 @@ def read_roster_schedules(soup, now, logger):
                     third = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'kor+eng',
                         '--psm', '3'], capture_output=True, check=True, timeout=35).stdout.decode('utf-8')
                     texts += (third,)
+                    candidates = set().union(*(schedule_lines(t, now) for t in texts))
+                    if candidates - agreed_schedule(texts, now):
+                        # 긴 합성 이미지의 작은 상단 글씨를 각 방식으로 분할 재독한다.
+                        # 타일 개수가 아니라 분할 방식별로 합쳐 한 표만 인정한다.
+                        merged = list(texts)
+                        for top in range(0, im.height, im.width):
+                            bottom = min(im.height, top + im.width * 2)
+                            if bottom - top < im.width:
+                                continue
+                            im.crop((0, top, im.width, bottom)).convert('RGB').save(path, format='PNG')
+                            for index, mode in enumerate(('6', '4')):
+                                tile = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'kor+eng',
+                                    '--psm', mode], capture_output=True, check=True, timeout=35).stdout.decode('utf-8')
+                                merged[index] += '\n' + tile
+                        texts = tuple(merged)
             compact = tuple(re.sub(r'\s+', '', text) for text in texts)
             headers = tuple('와인파티' in text and '실시간' in text for text in compact)
             agreed = agreed_schedule(texts, now)
