@@ -64,8 +64,16 @@ def read_roster_schedules(soup, now, logger):
                 texts = tuple(subprocess.run(['tesseract', str(path), 'stdout', '-l', 'kor+eng',
                     '--psm', mode], capture_output=True, check=True, timeout=35).stdout.decode('utf-8')
                     for mode in ('6', '4'))
-            if all('와인파티' in text and '실시간' in text for text in texts):
-                result.update(agreed_schedule(texts, now))
+            compact = tuple(re.sub(r'\s+', '', text) for text in texts)
+            headers = tuple('와인파티' in text and '실시간' in text for text in compact)
+            agreed = agreed_schedule(texts, now)
+            logger.info('로꼬 OCR 대조: file=%s header_raw=%s header_compact=%s dates=%s agreed=%s',
+                        Path(urlparse(url).path).name,
+                        tuple('와인파티' in t and '실시간' in t for t in texts), headers,
+                        tuple(len(schedule_lines(t, now)) for t in texts),
+                        sorted((venue, dt.isoformat()) for venue, dt in agreed))
+            if all(headers):
+                result.update(agreed)
         except Exception as error:
             logger.warning('로꼬 명단 OCR 실패: %s', type(error).__name__)
     return result

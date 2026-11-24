@@ -242,6 +242,7 @@ class LovecommunityLoco(BaseScraper):
         title = soup.find('meta', property='og:title')
         venue = re.search(r'^\[?(수원|사당)(?:\]|\s)', title.get('content', '') if title else '')
         region = venue.group(1) if venue else None
+        self.logger.info('로꼬 상품 지점 대조: idx=%s region=%s', idx, region)
         if region:
             now = datetime.now(KST).replace(tzinfo=None)
             schedules = read_roster_schedules(soup, now, self.logger)

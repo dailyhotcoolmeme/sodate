@@ -41,3 +41,23 @@ def test_loaded_product_uses_only_its_venue_and_available_widget_dates():
          patch('scrapers.lovecommunity.datetime', clock):
         _, events = scraper._read_loaded_product(page, '1')
     assert [(e.event_date, e.price_male) for e in events] == [(datetime(2026, 11, 27, 19, 30), 59000)]
+
+
+def test_roster_heading_spacing_does_not_discard_matching_source_schedules():
+    from unittest.mock import MagicMock, patch
+    from types import SimpleNamespace
+    from bs4 import BeautifulSoup
+    from utils.loco_poster import read_roster_schedules
+    soup = BeautifulSoup('<div class="fr-view"><img src="https://cdn.imweb.me/upload/roster.jpg"></div>', 'html.parser')
+    image = MagicMock(width=1080, height=5400)
+    texts = ('직장인 와인 파티 실시간 명단\n' + TEXT,
+             '직장인 와인파티 실 시간 명단\n' + TEXT)
+    responses = [SimpleNamespace(stdout=t.encode()) for t in texts]
+    with patch('utils.loco_poster.shutil.which', return_value='/bin/tesseract'), \
+         patch('utils.loco_poster.httpx.get') as get, \
+         patch('utils.loco_poster.Image.open', return_value=image), \
+         patch('utils.loco_poster.subprocess.run', side_effect=responses):
+        get.return_value.content = b'image'
+        assert read_roster_schedules(soup, NOW, MagicMock()) == {
+            ('사당', datetime(2026, 11, 27, 19, 30)),
+            ('수원', datetime(2026, 11, 28, 18, 30))}
