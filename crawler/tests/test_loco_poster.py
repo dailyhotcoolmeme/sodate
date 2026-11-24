@@ -61,3 +61,12 @@ def test_roster_heading_spacing_does_not_discard_matching_source_schedules():
         assert read_roster_schedules(soup, NOW, MagicMock()) == {
             ('사당', datetime(2026, 11, 27, 19, 30)),
             ('수원', datetime(2026, 11, 28, 18, 30))}
+
+
+def test_auto_layout_recovers_sadang_only_with_two_agreeing_reads():
+    suwon = '11.27(금) 수원점 19:30-22:00'
+    sadang = '11.27(금) 사당점 19:30-22:00'
+    assert agreed_schedule((suwon, suwon + '\n' + sadang, sadang), NOW) == {
+        ('수원', datetime(2026, 11, 27, 19, 30)), ('사당', datetime(2026, 11, 27, 19, 30))}
+    assert agreed_schedule(('', sadang, ''), NOW) == set()
+    assert agreed_schedule((sadang, sadang, sadang.replace('19:30', '20:30')), NOW) == set()

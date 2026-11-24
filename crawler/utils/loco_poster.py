@@ -1,5 +1,6 @@
 """공식 로꼬 명단 이미지의 동일 줄 일시·지점만 두 OCR 결과로 대조한다."""
 import io
+from collections import Counter
 import re
 import shutil
 import subprocess
@@ -34,10 +35,13 @@ def schedule_lines(text, now):
 
 
 def agreed_schedule(texts, now):
-    first, second = (schedule_lines(t, now) for t in texts)
-    # 다른 방식이 같은 날짜/지점의 상충 시각을 읽었으면 그 회차는 제외한다
-    return {pair for pair in first & second if len({dt for region, dt in first | second
+    readings = [schedule_lines(text, now) for text in texts]
+    votes = Counter(pair for reading in readings for pair in reading)
+    # 적어도 두 분할 방식에서 일치해야 한다. 어느 방식이든 상충한 시각은 저장 금지.
+    return {pair for pair, count in votes.items() if count >= 2 and len({dt
+            for reading in readings for region, dt in reading
             if region == pair[0] and dt.date() == pair[1].date()}) == 1}
+
 
 
 def read_roster_schedules(soup, now, logger):
@@ -64,6 +68,12 @@ def read_roster_schedules(soup, now, logger):
                 texts = tuple(subprocess.run(['tesseract', str(path), 'stdout', '-l', 'kor+eng',
                     '--psm', mode], capture_output=True, check=True, timeout=35).stdout.decode('utf-8')
                     for mode in ('6', '4'))
+                if schedule_lines(texts[0], now) != schedule_lines(texts[1], now):
+                    # 세로로 합친 명단에서 psm6가 상단 사당 블록만 놓치는 실측 회귀.
+                    # 자동 문단 분할도 읽어 두 방식 이상 일치하는 회차만 복구한다.
+                    third = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'kor+eng',
+                        '--psm', '3'], capture_output=True, check=True, timeout=35).stdout.decode('utf-8')
+                    texts += (third,)
             compact = tuple(re.sub(r'\s+', '', text) for text in texts)
             headers = tuple('와인파티' in text and '실시간' in text for text in compact)
             agreed = agreed_schedule(texts, now)
@@ -72,7 +82,7 @@ def read_roster_schedules(soup, now, logger):
                         tuple('와인파티' in t and '실시간' in t for t in texts), headers,
                         tuple(len(schedule_lines(t, now)) for t in texts),
                         sorted((venue, dt.isoformat()) for venue, dt in agreed))
-            if all(headers):
+            if sum(headers) >= 2:
                 result.update(agreed)
         except Exception as error:
             logger.warning('로꼬 명단 OCR 실패: %s', type(error).__name__)
