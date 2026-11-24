@@ -96,3 +96,10 @@ def test_tiled_roster_merges_by_mode_instead_of_counting_duplicate_tiles():
             ('사당', datetime(2026, 11, 27, 19, 30)), ('수원', datetime(2026, 11, 27, 19, 30))}
     assert image.crop.called
     assert agreed_schedule((sadang + '\n' + sadang, '', ''), NOW) == set()
+
+
+def test_clock_spacing_does_not_change_numerical_values():
+    a = '11.27(금) 사당점 19:30-22:00'
+    b = '11.27(금) 사당점 19 : 30-22: 00'
+    assert agreed_schedule((a, b), NOW) == {('사당', datetime(2026, 11, 27, 19, 30))}
+    assert agreed_schedule((a, b.replace('19 : 30', '19 : 00')), NOW) == set()

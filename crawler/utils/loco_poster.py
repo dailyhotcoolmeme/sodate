@@ -1,5 +1,6 @@
 """공식 로꼬 명단 이미지의 동일 줄 일시·지점만 두 OCR 결과로 대조한다."""
 import io
+import csv
 from collections import Counter
 import re
 import shutil
@@ -12,7 +13,7 @@ from urllib.parse import urlparse
 import httpx
 from PIL import Image
 
-LINE = re.compile(r'(\d{1,2})[./](\d{1,2})\s*\(([월화수목금토일])\)\s*(사당|수원)점\s*(\d{1,2}):(\d{2})\s*[-~–]\s*\d{1,2}:\d{2}')
+LINE = re.compile(r'(\d{1,2})[./](\d{1,2})\s*\(([월화수목금토일])\)\s*(사당|수원)점\s*(\d{1,2})\s*:\s*(\d{2})\s*[-~–]\s*\d{1,2}\s*:\s*\d{2}')
 
 
 def schedule_lines(text, now):
@@ -89,6 +90,30 @@ def read_roster_schedules(soup, now, logger):
                                     '--psm', mode], capture_output=True, check=True, timeout=35).stdout.decode('utf-8')
                                 merged[index] += '\n' + tile
                         texts = tuple(merged)
+                        if candidates - agreed_schedule(texts, now):
+                            # 실제 OCR 단어 좌표에서 시각이 있는 줄만 찾아 확대 문맥으로 재독.
+                            # 위치는 데이터가 아닌 원본의 글자 좌표다. 지점/날짜/시각은 여전히
+                            # 같은 줄에서 두 분할 방식이 모두 읽어야 한다.
+                            im.convert('RGB').save(path, format='PNG')
+                            tsv = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'kor+eng',
+                                '--psm', '4', 'tsv'], capture_output=True, check=True, timeout=35).stdout.decode('utf-8')
+                            rows = list(csv.DictReader(io.StringIO(tsv), delimiter='\t'))
+                            padding = max(20, im.width // 25)
+                            bands = []
+                            for row in rows:
+                                if not re.search(r'\d{1,2}\s*:\s*\d{2}', row.get('text', '')):
+                                    continue
+                                top, height = int(row['top']), int(row['height'])
+                                if not any(abs(top - previous[0]) < padding for previous in bands):
+                                    bands.append((top, height))
+                            for top, height in bands[:12]:
+                                im.crop((0, max(0, top-padding), im.width,
+                                         min(im.height, top+height+padding))).convert('RGB').save(path, format='PNG')
+                                for index, mode in enumerate(('6', '4')):
+                                    band = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'kor+eng',
+                                        '--psm', mode], capture_output=True, check=True, timeout=35).stdout.decode('utf-8')
+                                    merged[index] += '\n' + band
+                            texts = tuple(merged)
             compact = tuple(re.sub(r'\s+', '', text) for text in texts)
             headers = tuple('와인파티' in text and '실시간' in text for text in compact)
             agreed = agreed_schedule(texts, now)
