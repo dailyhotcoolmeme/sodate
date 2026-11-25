@@ -419,6 +419,12 @@ class BaseScraper(ABC):
                 )
                 # 해당 이벤트만 스킵하고 계속 진행
 
+        if getattr(self, 'partial_reason', None):
+            # 확인된 회차는 위의 공통 저장·verified 보호·변경 필드 비교를 거쳤다.
+            # 나머지는 과거/미래 여부와 무관하게 삭제·R2 정리하지 않는다.
+            self.logger.warning(f'[{self.company_slug}] 부분 수집 — 기존 일정 정리 전부 생략')
+            return {'new': new_count, 'updated': updated_count, 'deleted': 0, 'failed': failed_count}
+
         # 지난 일정 정리 — 앱에 안 보이는데 DB에만 쌓여 스테일 판정(아래)의 분모를 왜곡한다.
         # 하루 여유를 둬서 당일 밤 일정이 시간대 오차로 지워지는 걸 막는다. verified는 보존.
         try:
@@ -594,6 +600,10 @@ class BaseScraper(ABC):
                 else:
                     error_msg = msg
                     self.logger.warning(f"[{self.company_slug}] {msg}")
+
+            if status == 'success' and getattr(self, 'partial_reason', None):
+                status = 'partial'
+                error_msg = self.partial_reason
 
             self.log_result(
                 status=status,

@@ -738,14 +738,20 @@ def check_failing_crawls(sb, comps: dict) -> list[dict]:
         else:
             detail = '최근 14일 내 성공 기록 없음'
             persisted = 14.0
+        if lg.get('status') == 'partial':
+            processed = (lg.get('events_new') or 0) + (lg.get('events_updated') or 0)
+            message = (f'{comps.get(cid, cid)}: 일부 일정만 확인됨 — {processed}건 처리, '
+                       f'미확인 일정은 보존 중. {detail.replace("마지막 성공", "마지막 전체 수집 성공")}')
+        else:
+            message = (f'{comps.get(cid, cid)}: 크롤이 계속 실패 중 — {detail}. '
+                       '그동안 이 업체 일정은 갱신되지 않고 그대로 노출됩니다(사이트 변경·로그인 만료 의심)')
         issues.append({
             'level': 'ERROR',
             'action': 'owner',
             'company': comps.get(cid, cid),
             # 방치 일수의 정본. 알림 이력(first_seen_at)은 지문이 바뀌면 리셋되므로 믿지 않는다.
             'persisted_days': persisted,
-            'msg': f'{comps.get(cid, cid)}: 크롤이 계속 실패 중 — {detail}. '
-                   f'그동안 이 업체 일정은 갱신되지 않고 그대로 노출됩니다(사이트 변경·로그인 만료 의심)',
+            'msg': message,
         })
     return issues
 

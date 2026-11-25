@@ -75,6 +75,7 @@ class LovecommunityLoco(BaseScraper):
 
     def scrape(self) -> list[EventModel]:
         events: list[EventModel] = []
+        self.partial_reason = None
         now = datetime.now(KST).replace(tzinfo=None)
         try:
             with sync_playwright() as p:
@@ -100,6 +101,8 @@ class LovecommunityLoco(BaseScraper):
 
                 idxs = self._collect_product_idxs(page)
                 self.logger.info(f'Loco 상품 {len(idxs)}개 발견')
+                if not idxs:
+                    self.partial_reason = 'Loco 상품 목록 확인 실패'
 
                 # 2. 각 상품 페이지 파싱 (/party/?idx=N 형식 사용)
                 # ⚠️(2026-09-05) 상품 하나가 실패하면 조용히 빠져서 건수가 17건 → 7건으로
@@ -178,6 +181,7 @@ class LovecommunityLoco(BaseScraper):
                         self.logger.warning(f'Loco 상품 idx={idx} 파싱 실패: {e}')
 
                 if skipped:
+                    self.partial_reason = f'Loco 상품 일부 조회 실패: idx={",".join(skipped)}'
                     self.logger.warning(
                         f'Loco 상품 {len(idxs)}개 중 {len(skipped)}개 못 가져옴 '
                         f'(idx={",".join(skipped)}) — 이만큼 일정이 빠집니다'
@@ -190,12 +194,13 @@ class LovecommunityLoco(BaseScraper):
                     )
                     self.logger.error(
                         'Loco 예약 위젯에는 미래 일정이 있지만 상세 본문에 정확한 날짜·시간 '
-                        f'정보가 없음: {details} — 추정 저장하지 않고 이번 수집을 실패 처리'
+                        f'정보가 없음: {details} — 확인된 회차만 저장하고 기존 일정 전부 보존'
                     )
-                    events = []
+                    self.partial_reason = f'Loco 원본 시각 미확인: {details}'
 
                 browser.close()
         except Exception as e:
+            self.partial_reason = f'Loco 원본 조회 중단: {type(e).__name__}'
             self.logger.error(f'Loco 크롤링 실패: {e}')
 
         # 중복 제거
