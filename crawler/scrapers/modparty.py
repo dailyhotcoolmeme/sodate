@@ -163,11 +163,14 @@ class ModpartyScraper(BaseScraper):
                         # httpx 로 안정적으로 받는다. 페이지 이동 자체는 아래 성별
                         # 가격 조회(_extract_gender_prices)가 같은 세션 컨텍스트에서
                         # /shop/load_option.cm 을 상대경로로 호출하므로 그대로 둔다.
+                        detail_status = None
                         try:
-                            detail_html = httpx.get(
+                            detail_response = httpx.get(
                                 detail_url, timeout=15, verify=False, follow_redirects=True,
                                 headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'},
-                            ).text
+                            )
+                            detail_html = detail_response.text
+                            detail_status = detail_response.status_code
                         except Exception:
                             detail_html = None
                         page.goto(detail_url, timeout=15000)
@@ -179,6 +182,10 @@ class ModpartyScraper(BaseScraper):
                         # 성별 실가격+매진+티어(정가/얼리버드): 예약위젯 옵션 AJAX
                         gp = self._extract_gender_prices(page, idx)
                         data['prices_by_date'] = gp
+                        if product_ids is not None:
+                            self.logger.info('모드파티 표본 원본 idx=%s HTTP=%s 날짜=%s 시각표기=%s 가격옵션날짜=%s',
+                                             idx, detail_status, sorted(data.get('badge_dates') or []),
+                                             bool(data.get('time_text')), sorted(gp))
                     except Exception as e:
                         self.logger.warning(f'모드파티 상품 idx={idx} 상세 수집 실패: {e}')
 
