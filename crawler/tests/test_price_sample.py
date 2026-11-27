@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import price_accuracy_check as qa
 from scrapers.frip import FripScraper, FRIP_BASE
 
@@ -28,6 +30,38 @@ def test_empty_modparty_sample_is_partial_without_browser_or_db_access():
     from scrapers.modparty import ModpartyScraper
     s = ModpartyScraper.__new__(ModpartyScraper)
     assert s.scrape(product_ids=set()) == []
+    assert s.collection_complete is False and s.DELETE_STALE is False
+
+
+@pytest.mark.parametrize('time_text, expected_count', [('⏰ 19:30~21:30', 1), ('시각 미정', 0)])
+def test_modparty_sample_reads_requested_detail_even_when_list_has_no_products(time_text, expected_count):
+    from scrapers.modparty import ModpartyScraper
+    s = ModpartyScraper.__new__(ModpartyScraper)
+    s._uid, s._pw, s._booking_counts = 'test-user', 'test-password', {}
+    s.logger = MagicMock()
+    date = datetime.now() + timedelta(days=7)
+    code = date.strftime('%m%d')
+    url = f'{s.BASE_URL}/shop_view/?idx=123#evt={date:%Y%m%d}1930'
+    html = (f'<meta property="og:title" content="강남 와인 소개팅">'
+            f'<p>{date.month}/{date.day}({s._WD[date.weekday()]})</p><p>{time_text}</p>')
+    page = MagicMock()
+    page.url = s.BASE_URL
+    page.content.return_value = ''  # 목록/브라우저 렌더가 비어도 상세 HTTP 원본 사용
+    playwright = MagicMock()
+    browser = playwright.__enter__.return_value.chromium.launch.return_value
+    browser.new_context.return_value.new_page.return_value = page
+    with patch('scrapers.modparty.sync_playwright', return_value=playwright), \
+         patch('scrapers.modparty.httpx.get', return_value=SimpleNamespace(text=html, status_code=200)) as get, \
+         patch.object(s, '_fetch_booking_counts'), \
+         patch.object(s, '_extract_gender_prices', return_value={code: {'male': (44000, False), 'female': (33000, False)}}), \
+         patch.object(s, 'save_events', side_effect=AssertionError('표본은 DB 저장 금지')):
+        events = s.sample_prices([url])
+    assert len(events) == expected_count
+    if events:
+        assert (events[0].price_male, events[0].price_female) == (44000, 33000)
+        assert events[0].event_date.hour == 19 and events[0].event_date.minute == 30
+    assert get.call_args.args[0] == url.split('#')[0]
+    assert [c.args[0] for c in page.goto.call_args_list] == [s.LOGIN_URL, url.split('#')[0]]
     assert s.collection_complete is False and s.DELETE_STALE is False
 
 

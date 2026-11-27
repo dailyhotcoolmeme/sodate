@@ -122,7 +122,14 @@ class ModpartyScraper(BaseScraper):
 
                 # ── 상품 목록(싱글 메뉴 + 쇼핑 리스트) 수집 ──
                 product_data: dict[str, dict] = {}
-                for list_url in (self.SINGLE_URL, self.SHOP_LIST_URL):
+                # 표본은 DB가 지정한 상품 상세를 직접 확인한다. 목록이 지연 로드되거나
+                # 비어도 이미 아는 대상까지 누락시키지 않는다. 값은 상세 원본에서만 채운다.
+                if product_ids is not None:
+                    product_data = {
+                        idx: {'url': f'{self.BASE_URL}/shop_view/?idx={idx}'}
+                        for idx in product_ids
+                    }
+                for list_url in (() if product_ids is not None else (self.SINGLE_URL, self.SHOP_LIST_URL)):
                     try:
                         page.goto(list_url, timeout=20000)
                         page.wait_for_load_state('domcontentloaded', timeout=10000)
@@ -146,7 +153,8 @@ class ModpartyScraper(BaseScraper):
                 future_prods = set(product_data.keys()) | self._future_booking_prods()
                 if product_ids is not None:
                     future_prods &= product_ids
-                self.logger.info(f'모드파티 대상 상품 {len(future_prods)}개 (목록 전체)')
+                scope = '지정 표본' if product_ids is not None else '목록 전체'
+                self.logger.info(f'모드파티 대상 상품 {len(future_prods)}개 ({scope})')
 
                 # ── 대상 상품 상세페이지에서 제목/이미지/본문/가격 보강 ──
                 for idx in future_prods:
