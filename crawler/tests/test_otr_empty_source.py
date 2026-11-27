@@ -48,6 +48,25 @@ def test_unknown_region_is_partial_and_cannot_delete_missing_events():
     assert s.collection_complete is True and s.DELETE_STALE is True
 
 
+def test_source_region_before_time_is_collected_alongside_existing_format():
+    s = scraper(['12.4(금) 을지로 20:00 (얼리버드+평일 할인)', '12.6(일) 13:00 종로 (얼리버드 할인)'])
+    events = s.scrape()
+    assert len(events) == 2
+    event = next(e for e in events if e.location_region == '을지로')
+    assert (event.event_date.month, event.event_date.day, event.event_date.hour, event.event_date.minute) == (12, 4, 20, 0)
+    assert event.source_url.endswith('#e=1204_2000')
+    assert event.description == '얼리버드+평일 할인'
+    assert event.price_male is None and event.price_female is None
+    assert s.collection_complete is True
+
+
+@pytest.mark.parametrize('label', ['12.4(금) 을지로 시각미정', '12.4(금) 을지로 20:00 종로'])
+def test_unknown_time_or_conflicting_locations_cannot_delete_missing_events(label):
+    s = scraper(['12.6(일) 13:00 종로', label])
+    assert len(s.scrape()) == 1
+    assert s.collection_complete is False and s.DELETE_STALE is False
+
+
 @pytest.mark.parametrize('buttons', [[], KNOWN[:2], KNOWN+['10월 31일 신규 신청'], ['접속 오류']])
 def test_missing_unknown_or_changed_buttons_keep_alert_path(buttons):
     s = scraper(buttons)

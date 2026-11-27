@@ -38,7 +38,9 @@ REGION = '종로/을지로'
 
 # "💌 [신청] 8.17(월) 13:00" / "💌 [신청] 8.17(월) 16:30(마감)"
 _SCHEDULE_RE = re.compile(
-    r'(\d{1,2})\.(\d{1,2})\s*\([월화수목금토일]\)\s*(\d{1,2}):(\d{2})\s*(?:\(([^)]*)\))?'
+    r'(?P<month>\d{1,2})\.(?P<day>\d{1,2})\s*\([월화수목금토일]\)\s*'
+    r'(?:(?P<before>[^\d():]+?)\s+)?(?P<hour>\d{1,2}):(?P<minute>\d{2})'
+    r'\s*(?P<after>[^()]*?)\s*(?:\((?P<note>[^)]*)\))?$'
 )
 
 
@@ -72,14 +74,21 @@ class OtrLoungeScraper(BaseScraper):
         for label in buttons:
             m = _SCHEDULE_RE.search(label)
             if not m:
+                if re.search(r'\d{1,2}\.\d{1,2}\s*\([월화수목금토일]\)', label):
+                    self.collection_complete = False
+                    self.DELETE_STALE = False
+                    self.logger.warning(f'오프더레코드 미확인 일정 형식 — 기존 일정 보존: {label}')
                 continue   # 인스타·카카오 등 일정이 아닌 버튼
 
-            month, day, hour, minute = (int(m.group(1)), int(m.group(2)),
-                                        int(m.group(3)), int(m.group(4)))
-            note = (m.group(5) or '').strip()
+            month, day, hour, minute = (int(m.group(key)) for key in ('month', 'day', 'hour', 'minute'))
+            note = (m.group('note') or '').strip()
             # 새 버튼: "11.14(토) 14:00 연남동 (얼리버드 할인)".
             # 시간 뒤, 괄호 앞의 지명을 읽는다. 모르는 문구를 기본 지역으로 덮지 않는다.
-            location_text = label[m.end(4):].split('(', 1)[0].strip()
+            before = (m.group('before') or '').strip()
+            after = (m.group('after') or '').strip()
+            location_text = before or after
+            if before and after and before != after:
+                location_text = f'{before} / {after}'  # 서로 다른 지명은 아래 보호 경로로 보낸다.
             region = {'종로': '종로', '을지로': '을지로',
                       '연남동': '연남', '연남': '연남'}.get(location_text)
             if location_text and region is None:
