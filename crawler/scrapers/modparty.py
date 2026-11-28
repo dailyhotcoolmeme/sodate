@@ -177,22 +177,31 @@ class ModpartyScraper(BaseScraper):
                                 detail_url, timeout=15, verify=False, follow_redirects=True,
                                 headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'},
                             )
-                            detail_html = detail_response.text
                             detail_status = detail_response.status_code
+                            detail_html = detail_response.text if 200 <= detail_status < 300 else None
                         except Exception:
                             detail_html = None
-                        page.goto(detail_url, timeout=15000)
+                        browser_response = page.goto(detail_url, timeout=15000)
                         page.wait_for_load_state('domcontentloaded', timeout=8000)
                         page.wait_for_timeout(1500)
+                        browser_status = browser_response.status if browser_response else None
+                        if not detail_html:
+                            if browser_status is None or not 200 <= browser_status < 300:
+                                self.collection_complete = False
+                                self.DELETE_STALE = False
+                                self.logger.warning('모드파티 idx=%s 원본 응답 미확인 HTTP=%s 브라우저=%s — 기존 일정 보존',
+                                                    idx, detail_status, browser_status)
+                                continue
+                            detail_html = page.content()
                         self._enrich_from_detail(
-                            data, BeautifulSoup(detail_html or page.content(), 'html.parser')
+                            data, BeautifulSoup(detail_html, 'html.parser')
                         )
                         # 성별 실가격+매진+티어(정가/얼리버드): 예약위젯 옵션 AJAX
                         gp = self._extract_gender_prices(page, idx)
                         data['prices_by_date'] = gp
                         if product_ids is not None:
-                            self.logger.info('모드파티 표본 원본 idx=%s HTTP=%s 날짜=%s 시각표기=%s 가격옵션날짜=%s',
-                                             idx, detail_status, sorted(data.get('badge_dates') or []),
+                            self.logger.info('모드파티 표본 원본 idx=%s HTTP=%s 브라우저=%s 날짜=%s 시각표기=%s 가격옵션날짜=%s',
+                                             idx, detail_status, browser_status, sorted(data.get('badge_dates') or []),
                                              bool(data.get('time_text')), sorted(gp))
                     except Exception as e:
                         self.logger.warning(f'모드파티 상품 idx={idx} 상세 수집 실패: {e}')

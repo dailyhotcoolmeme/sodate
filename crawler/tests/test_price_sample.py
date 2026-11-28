@@ -34,7 +34,8 @@ def test_empty_modparty_sample_is_partial_without_browser_or_db_access():
 
 
 @pytest.mark.parametrize('time_text, expected_count', [('⏰ 19:30~21:30', 1), ('시각 미정', 0)])
-def test_modparty_sample_reads_requested_detail_even_when_list_has_no_products(time_text, expected_count):
+@pytest.mark.parametrize('http_status,browser_status', [(200, 200), (403, 200), (403, 403)])
+def test_modparty_sample_reads_requested_detail_even_when_list_has_no_products(time_text, expected_count, http_status, browser_status):
     from scrapers.modparty import ModpartyScraper
     s = ModpartyScraper.__new__(ModpartyScraper)
     s._uid, s._pw, s._booking_counts = 'test-user', 'test-password', {}
@@ -46,17 +47,18 @@ def test_modparty_sample_reads_requested_detail_even_when_list_has_no_products(t
             f'<p>{date.month}/{date.day}({s._WD[date.weekday()]})</p><p>{time_text}</p>')
     page = MagicMock()
     page.url = s.BASE_URL
-    page.content.return_value = ''  # 목록/브라우저 렌더가 비어도 상세 HTTP 원본 사용
+    page.content.return_value = html if browser_status == 200 else '<h1>Forbidden</h1>'
+    page.goto.return_value = SimpleNamespace(status=browser_status)
     playwright = MagicMock()
     browser = playwright.__enter__.return_value.chromium.launch.return_value
     browser.new_context.return_value.new_page.return_value = page
     with patch('scrapers.modparty.sync_playwright', return_value=playwright), \
-         patch('scrapers.modparty.httpx.get', return_value=SimpleNamespace(text=html, status_code=200)) as get, \
+         patch('scrapers.modparty.httpx.get', return_value=SimpleNamespace(text=html if http_status == 200 else '<h1>Forbidden</h1>', status_code=http_status)) as get, \
          patch.object(s, '_fetch_booking_counts'), \
          patch.object(s, '_extract_gender_prices', return_value={code: {'male': (44000, False), 'female': (33000, False)}}), \
          patch.object(s, 'save_events', side_effect=AssertionError('표본은 DB 저장 금지')):
         events = s.sample_prices([url])
-    assert len(events) == expected_count
+    assert len(events) == (expected_count if http_status == 200 or browser_status == 200 else 0)
     if events:
         assert (events[0].price_male, events[0].price_female) == (44000, 33000)
         assert events[0].event_date.hour == 19 and events[0].event_date.minute == 30
